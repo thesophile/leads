@@ -27,3 +27,148 @@
   background: rgba(15, 23, 42, 0.14);
   border-radius: 999px;
 }
+
+/* Real Rich Text Editor typography and element styles */
+.rich-editor-content {
+  outline: none;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rich-editor-content ul {
+  list-style-type: disc !important;
+  padding-left: 1.5rem !important;
+  margin: 0.4rem 0 !important;
+}
+.rich-editor-content ol {
+  list-style-type: decimal !important;
+  padding-left: 1.5rem !important;
+  margin: 0.4rem 0 !important;
+}
+.rich-editor-content li {
+  margin-bottom: 0.2rem !important;
+}
+.rich-editor-content h3 {
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  margin: 0.5rem 0 0.25rem 0 !important;
+}
+.rich-editor-content h4 {
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+  margin: 0.4rem 0 0.2rem 0 !important;
+}
+.rich-editor-content p {
+  margin: 0.3rem 0 !important;
+  line-height: 1.55 !important;
+}
+.rich-editor-content a {
+  color: #2563eb !important;
+  text-decoration: underline !important;
+  font-weight: 500 !important;
+}
+.rich-editor-content table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 0.5rem 0 !important;
+  font-size: 11px !important;
+}
+.rich-editor-content th {
+  background-color: #f1f5f9 !important;
+  font-weight: 600 !important;
+  border: 1px solid #cbd5e1 !important;
+  padding: 6px 8px !important;
+}
+.rich-editor-content td {
+  border: 1px solid #cbd5e1 !important;
+  padding: 5px 8px !important;
+}
+
+/* ReactQuill Snow Theme Customization */
+.quill {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+.ql-toolbar.ql-snow {
+  border-top-left-radius: 0.5rem !important;
+  border-top-right-radius: 0.5rem !important;
+  border-color: #cbd5e1 !important;
+  background: #f8fafc;
+  padding: 6px 8px !important;
+}
+.ql-container.ql-snow {
+  border-bottom-left-radius: 0.5rem !important;
+  border-bottom-right-radius: 0.5rem !important;
+  border-color: #cbd5e1 !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  min-height: 140px;
+}
+.ql-editor {
+  min-height: 140px;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 12px !important;
+  line-height: 1.55;
+  color: #1e293b;
+}
+
+/* Tall Variant for Proposal in Detail */
+.quill-tall .ql-container.ql-snow {
+  min-height: 220px;
+}
+.quill-tall .ql-editor {
+  min-height: 220px;
+  max-height: 360px;
+}
+
+.ql-editor.ql-blank::before {
+  color: #94a3b8;
+  font-style: normal;
+  font-size: 12px;
+}
+
+/* Dedicated Print Styles for Order & Proposal Forms */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 6mm;
+  }
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  aside, nav, header, .print-hidden, [role="navigation"] {
+    display: none !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .print-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 275mm !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+  }
+  .print-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+}

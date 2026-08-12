@@ -1,0 +1,1203 @@
+import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import ReactQuill from 'react-quill-new'
+import 'react-quill-new/dist/quill.snow.css'
+import Layout from '../../Layout/Layout'
+import { PROPOSAL_TEMPLATES } from './proposalTemplates'
+
+const QUILL_MODULES = {
+  toolbar: [
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    [{ header: [2, 3, 4, false] }],
+    ['link', 'blockquote'],
+    ['clean'],
+  ],
+}
+
+const QUILL_FORMATS = [
+  'header',
+  'bold',
+  'italic',
+  'underline',
+  'strike',
+  'list',
+  'bullet',
+  'link',
+  'blockquote',
+]
+
+// Realistic initial dataset for quotations and proposals
+const INITIAL_QUOTATIONS_DATA = [
+  {
+    id: 'QT-2026-001',
+    leadId: 'TC-103',
+    customer: 'Dr. Manzoor Ali',
+    company: 'MANZOOR SUPER SPECIALITY HOSPITAL',
+    mobile: '9447118234',
+    email: 'admin@manzoorhospital.org',
+    category: 'Hospital',
+    city: 'Trivandrum',
+    bdm: 'Alex Joseph',
+    qtnBy: 'Priya Sharma',
+    staff: 'Priya Sharma',
+    date: '12 Aug 2026',
+    status: 'Pending Approval',
+    total: '1,45,000',
+    discount: '10,000',
+    netAmount: '1,35,000',
+    currency: 'INR (₹)',
+    source: 'Google Search',
+    proposalScope: `<h3>Hospital CRM & OPD Automation Suite</h3>
+<p>Complete deployment of 10 multi-doctor concurrent licenses including OPD patient registration and billing POS.</p>`,
+    termsConditions: `<p>50% advance on sign-off, 50% upon deployment.</p>`,
+    remarks: 'Submitted custom quotation for MD approval. Special discount applied.',
+  },
+  {
+    id: 'QT-2026-002',
+    leadId: 'TC-108',
+    customer: 'Suresh Kumar',
+    company: 'KALYAN GRAND RESIDENCY',
+    mobile: '9847229911',
+    email: 'gm@kalyangrand.com',
+    category: 'Convention Center',
+    city: 'Kochi',
+    bdm: 'Shanu VR',
+    qtnBy: 'NIMISHA DAVIS',
+    staff: 'NIMISHA DAVIS',
+    date: '12 Aug 2026',
+    status: 'Approved',
+    total: '88,500',
+    discount: '5,000',
+    netAmount: '83,500',
+    currency: 'INR (₹)',
+    source: 'Official Website',
+    proposalScope: `<h3>Banquet & Convention Reservation Portal</h3>
+<p>End-to-end event scheduling, billing, and catering management system.</p>`,
+    termsConditions: `<p>Payment: 100% advance before cloud deployment. Validity: 15 Days.</p>`,
+    remarks: 'Approved by Super Admin. Order execution underway.',
+  },
+  {
+    id: 'QT-2026-003',
+    leadId: 'TC-101',
+    customer: 'Dr. Sarah Ahmed',
+    company: 'NEW LIFE MATERNITY HOSPITAL',
+    mobile: '8714546783',
+    email: 'info@newlifehospital.com',
+    category: 'Hospital',
+    city: 'Calicut',
+    bdm: 'Alex Joseph',
+    qtnBy: 'Priya Sharma',
+    staff: 'Priya Sharma',
+    date: '11 Aug 2026',
+    status: 'Not Sent',
+    total: '2,10,000',
+    discount: '0',
+    netAmount: '2,10,000',
+    currency: 'INR (₹)',
+    source: 'Customer Referral',
+    proposalScope: `<h3>Maternity Hospital OPD & Patient Records Suite</h3>
+<p>Multi-branch cloud connectivity for 3 maternity clinic branches.</p>`,
+    termsConditions: `<p>30 Days validity. Free migration of historical patient records.</p>`,
+    remarks: 'Received from Telecalling. Draft proposal not sent yet.',
+  },
+  {
+    id: 'QT-2026-004',
+    leadId: 'TC-105',
+    customer: 'Kabeer Khan',
+    company: 'ROYAL PALACE CONVENTION CENTRE',
+    mobile: '9567112004',
+    email: 'events@royalpalace.com',
+    category: 'Convention Center',
+    city: 'Thrissur',
+    bdm: 'Shanu VR',
+    qtnBy: 'Ananya Nair',
+    staff: 'Ananya Nair',
+    date: '10 Aug 2026',
+    status: 'Rejected',
+    total: '95,000',
+    discount: '5,000',
+    netAmount: '90,000',
+    currency: 'INR (₹)',
+    source: 'Instagram Campaign',
+    proposalScope: `<p>Smart venue booking with online advance payment gateway integration.</p>`,
+    termsConditions: `<p>Payment terms exceeded requested budget ceiling.</p>`,
+    remarks: 'Rejected by MD due to discount terms. Revision requested.',
+  },
+  {
+    id: 'QT-2026-005',
+    leadId: 'TC-102',
+    customer: 'Rahul Menon',
+    company: 'SHADES.IN LUXURY EYEWEAR',
+    mobile: '9845123991',
+    email: 'contact@shades.in',
+    category: 'Cosmetics Store',
+    city: 'Kochi',
+    bdm: 'Alex Joseph',
+    qtnBy: 'Alex Joseph',
+    staff: 'Alex Joseph',
+    date: '09 Aug 2026',
+    status: 'Sent to Client',
+    total: '55,000',
+    discount: '8,000',
+    netAmount: '47,000',
+    currency: 'INR (₹)',
+    source: 'Facebook Ads',
+    proposalScope: `<p>Retail POS, barcode generation and stock inventory sync.</p>`,
+    termsConditions: `<p>Custom discount approved for 2 years cloud subscription.</p>`,
+    remarks: 'Approved proposal sent directly to client via WhatsApp and email.',
+  },
+  {
+    id: 'QT-2026-006',
+    leadId: 'TC-110',
+    customer: 'Meera Nambiar',
+    company: 'AYURVEDA WELLNESS SANCTUARY',
+    mobile: '9746221100',
+    email: 'meera@ayursanctuary.in',
+    category: 'Clinic',
+    city: 'Palakkad',
+    bdm: 'Shanu VR',
+    qtnBy: 'NIMISHA DAVIS',
+    staff: 'NIMISHA DAVIS',
+    date: '08 Aug 2026',
+    status: 'Not Sent',
+    total: '1,20,000',
+    discount: '15,000',
+    netAmount: '1,05,000',
+    currency: 'INR (₹)',
+    source: 'Google Search',
+    proposalScope: `<p>Ayurvedic therapy appointment booking and recurring package tracker.</p>`,
+    termsConditions: `<p>Scope revised to include SMS reminders package.</p>`,
+    remarks: 'Fresh lead from Telecaller Sariga. Proposal needs to be drafted.',
+  },
+]
+
+const STAFF_LIST = [
+  'All Staff',
+  'NIMISHA DAVIS',
+  'Priya Sharma',
+  'Alex Joseph',
+  'Ananya Nair',
+  'Shanu VR',
+]
+
+const STATUS_LIST = [
+  'All Status',
+  'Not Sent',
+  'Pending Approval',
+  'Approved',
+  'Rejected',
+  'Sent to Client',
+]
+
+const SOURCES = [
+  'Google Search',
+  'Official Website',
+  'Instagram Campaign',
+  'Facebook Ads',
+  'Customer Referral',
+  'Direct Walk-in',
+  'Telecalling Outreach',
+]
+
+const CURRENCIES = [
+  'INR (₹)',
+  'USD ($)',
+  'AED (د.إ)',
+  'EUR (€)',
+  'SAR (﷼)',
+]
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  )
+}
+
+function PhoneCallIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  )
+}
+
+function FileTextIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
+    </svg>
+  )
+}
+
+function PlusIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
+function CheckCircleIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  )
+}
+
+function UndoIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7v6h6" />
+      <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
+    </svg>
+  )
+}
+
+function EyeIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function PencilIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  )
+}
+
+function MoreVerticalIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="5" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="19" r="2" />
+    </svg>
+  )
+}
+
+function SendIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  )
+}
+
+export default function Managequotation() {
+  const navigate = useNavigate()
+  const [quotationsList, setQuotationsList] = useState(INITIAL_QUOTATIONS_DATA)
+  const [selectedStaff, setSelectedStaff] = useState('All Staff')
+  const [selectedStatus, setSelectedStatus] = useState('All Status')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [openDropdownId, setOpenDropdownId] = useState(null)
+
+  function handleViewProposal(quote) {
+    navigate(`/quotations/preview/${quote.id}`, { state: { proposal: quote } })
+  }
+
+  function handleSendForApprovalDirect(quoteId, e) {
+    e.stopPropagation()
+    setQuotationsList((prev) =>
+      prev.map((item) =>
+        item.id === quoteId
+          ? {
+              ...item,
+              status: 'Pending Approval',
+            }
+          : item
+      )
+    )
+    setOpenDropdownId(null)
+    alert('Proposal has been submitted for Super Admin Approval!')
+  }
+
+  function handleRowStatusChange(quoteId, newStatus) {
+    setQuotationsList((prev) =>
+      prev.map((item) =>
+        item.id === quoteId
+          ? {
+              ...item,
+              status: newStatus,
+            }
+          : item
+      )
+    )
+  }
+
+  // "New Proposal" Modal State (matching user's reference screenshot)
+  const [proposalModalOpen, setProposalModalOpen] = useState(false)
+  const [editingProposalId, setEditingProposalId] = useState(null)
+  
+  const [bdm, setBdm] = useState('Alex Joseph')
+  const [qtnBy, setQtnBy] = useState('Priya Sharma')
+  const [customerPerson, setCustomerPerson] = useState('')
+  const [companyName, setCompanyName] = useState('')
+  const [mobileNum, setMobileNum] = useState('')
+  const [categoryName, setCategoryName] = useState('Hospital')
+  
+  const [scopeHtml, setScopeHtml] = useState('')
+  const [termsHtml, setTermsHtml] = useState('')
+  
+  const [totalVal, setTotalVal] = useState('1,45,000')
+  const [discountVal, setDiscountVal] = useState('10,000')
+  const [sourceVal, setSourceVal] = useState('Google Search')
+  const [currencyVal, setCurrencyVal] = useState('INR (₹)')
+  const [remarksVal, setRemarksVal] = useState('')
+  const [submitMessage, setSubmitMessage] = useState('')
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+
+  function handleSelectTemplate(templateId) {
+    setSelectedTemplateId(templateId)
+    const tpl = PROPOSAL_TEMPLATES.find((t) => t.id === templateId)
+    if (tpl) {
+      setScopeHtml(tpl.scopeHtml)
+      setTermsHtml(tpl.detailHtml)
+      setCategoryName(tpl.category)
+      setTotalVal(tpl.defaultTotal)
+      setDiscountVal(tpl.defaultDiscount)
+      setCurrencyVal(tpl.currency || 'INR (₹)')
+    }
+  }
+
+  // Filtered dataset
+  const filteredQuotations = useMemo(() => {
+    return quotationsList.filter((item) => {
+      const matchesStaff =
+        selectedStaff === 'All Staff' || item.staff === selectedStaff || item.bdm === selectedStaff
+
+      const matchesStatus =
+        selectedStatus === 'All Status' || item.status === selectedStatus
+
+      const matchesSearch =
+        item.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.mobile.includes(searchQuery) ||
+        item.staff.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.id.toLowerCase().includes(searchQuery.toLowerCase())
+
+      return matchesStaff && matchesStatus && matchesSearch
+    })
+  }, [quotationsList, selectedStaff, selectedStatus, searchQuery])
+
+  // Status Metrics
+  const notSentCount = useMemo(
+    () => quotationsList.filter((q) => q.status === 'Not Sent').length,
+    [quotationsList]
+  )
+  const pendingApprovalCount = useMemo(
+    () => quotationsList.filter((q) => q.status === 'Pending Approval').length,
+    [quotationsList]
+  )
+  const approvedCount = useMemo(
+    () => quotationsList.filter((q) => q.status === 'Approved').length,
+    [quotationsList]
+  )
+  const rejectedCount = useMemo(
+    () => quotationsList.filter((q) => q.status === 'Rejected').length,
+    [quotationsList]
+  )
+
+  // Open "New Proposal" Modal
+  function handleOpenNewProposalModal(quote = null) {
+    if (quote) {
+      setEditingProposalId(quote.id)
+      setBdm(quote.bdm || quote.staff || 'Alex Joseph')
+      setQtnBy(quote.qtnBy || quote.staff || 'Priya Sharma')
+      setCustomerPerson(quote.customer || '')
+      setCompanyName(quote.company || '')
+      setMobileNum(quote.mobile || '')
+      setCategoryName(quote.category || 'Hospital')
+      setScopeHtml(quote.proposalScope || `<p>Enter detailed deliverables, software features and module breakdown...</p>`)
+      setTermsHtml(quote.termsConditions || `<p>1. 50% Advance with Order confirmation.<br>2. 50% on completion.<br>3. Validity: 15 Days.</p>`)
+      setTotalVal(quote.total || quote.amount?.replace('₹', '') || '1,00,000')
+      setDiscountVal(quote.discount || '0')
+      setSourceVal(quote.source || 'Google Search')
+      setCurrencyVal(quote.currency || 'INR (₹)')
+      setRemarksVal(quote.notes || quote.remarks || '')
+    } else {
+      // Clean new proposal
+      setEditingProposalId(null)
+      setBdm('Alex Joseph')
+      setQtnBy('Priya Sharma')
+      setCustomerPerson('')
+      setCompanyName('')
+      setMobileNum('')
+      setCategoryName('General')
+      setScopeHtml(`<h3>Software Solution & Module Scope</h3>
+<p>Provide scope description, user licenses, modules and installation details...</p>`)
+      setTermsHtml(`<h4>Commercial Terms & Conditions</h4>
+<ol>
+  <li>50% Advance with Order Confirmation.</li>
+  <li>40% upon Cloud / Onsite Installation.</li>
+  <li>10% upon Final Handover & Training.</li>
+</ol>`)
+      setTotalVal('1,00,000')
+      setDiscountVal('0')
+      setSourceVal('Google Search')
+      setCurrencyVal('INR (₹)')
+      setRemarksVal('')
+    }
+    setProposalModalOpen(true)
+  }
+
+  // Handle Proposal Submission for Approval
+  function handleSubmitProposal(e) {
+    e.preventDefault()
+
+    const currentScope = scopeHtml
+    const currentTerms = termsHtml
+
+    if (editingProposalId) {
+      // Update existing
+      setQuotationsList((prev) =>
+        prev.map((item) =>
+          item.id === editingProposalId
+            ? {
+                ...item,
+                bdm,
+                qtnBy,
+                customer: customerPerson || item.customer,
+                company: companyName || item.company,
+                mobile: mobileNum || item.mobile,
+                total: totalVal,
+                discount: discountVal,
+                netAmount: totalVal,
+                currency: currencyVal,
+                source: sourceVal,
+                proposalScope: currentScope,
+                termsConditions: currentTerms,
+                remarks: remarksVal,
+                status: 'Pending Approval', // Transitions to approval state
+              }
+            : item
+        )
+      )
+      setSubmitMessage('✓ Custom Proposal submitted for Super Admin Approval!')
+    } else {
+      // Create new
+      const newProposal = {
+        id: `QT-2026-${String(quotationsList.length + 1).padStart(3, '0')}`,
+        leadId: `LEAD-${Date.now().toString().slice(-4)}`,
+        customer: customerPerson || 'New Contact',
+        company: companyName || 'New Client Enterprise',
+        mobile: mobileNum || '9800000000',
+        email: 'info@client.com',
+        category: categoryName,
+        city: 'Kerala',
+        bdm,
+        qtnBy,
+        staff: qtnBy,
+        date: 'Today',
+        status: 'Pending Approval',
+        total: totalVal,
+        discount: discountVal,
+        netAmount: totalVal,
+        currency: currencyVal,
+        source: sourceVal,
+        proposalScope: currentScope,
+        termsConditions: currentTerms,
+        remarks: remarksVal,
+      }
+      setQuotationsList([newProposal, ...quotationsList])
+      setSubmitMessage('✓ New Proposal created and sent for Approval!')
+    }
+
+    setTimeout(() => {
+      setSubmitMessage('')
+      setProposalModalOpen(false)
+    }, 1200)
+  }
+
+  // Quick Action: Super Admin Instant Approve
+  function handleApproveQuotation(quoteId, e) {
+    e.stopPropagation()
+    setQuotationsList((prev) =>
+      prev.map((item) =>
+        item.id === quoteId
+          ? {
+              ...item,
+              status: 'Approved',
+              remarks: `${item.remarks || ''} (Approved by Admin for Client Delivery)`.trim(),
+            }
+          : item
+      )
+    )
+  }
+
+  function handleRevertQuotation(quoteId, e) {
+    e.stopPropagation()
+    if (window.confirm('Are you sure you want to revert this quotation back to Telecalling?')) {
+      setQuotationsList((prev) => prev.filter((item) => item.id !== quoteId))
+    }
+  }
+
+  return (
+    <Layout>
+      <div className="space-y-5">
+        {/* Top Header Card */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+              Manage Quotation & Proposals
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Prepare custom commercial proposals, submit for approval, and track client quotations.
+            </p>
+          </div>
+
+          {/* Action Buttons & Status Metrics */}
+          <div className="flex flex-wrap items-center gap-2.5">
+
+            {/* Quick Metrics */}
+            <div className="flex items-center gap-1.5">
+              <div className="rounded-xl border border-purple-200/80 bg-purple-50/60 px-2.5 py-1.5 text-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Not Sent</span>
+                <span className="text-xs font-bold text-purple-700 ml-1">
+                  {notSentCount}
+                </span>
+              </div>
+              <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-2.5 py-1.5 text-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Approval</span>
+                <span className="text-xs font-bold text-amber-700 ml-1">
+                  {pendingApprovalCount}
+                </span>
+              </div>
+              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-2.5 py-1.5 text-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Approved</span>
+                <span className="text-xs font-bold text-emerald-700 ml-1">
+                  {approvedCount}
+                </span>
+              </div>
+              <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 px-2.5 py-1.5 text-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Rejected</span>
+                <span className="text-xs font-bold text-rose-700 ml-1">
+                  {rejectedCount}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Table Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          {/* Table Toolbar (Staff Filter + Status Filter + Search) */}
+          <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              {/* Left Controls */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Staff Filter */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Staff:
+                  </span>
+                  <select
+                    value={selectedStaff}
+                    onChange={(e) => setSelectedStaff(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                  >
+                    {STAFF_LIST.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status Filter */}
+                <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Status:
+                  </span>
+                  <select
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                  >
+                    {STATUS_LIST.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Right Search Box */}
+              <div className="flex items-center">
+                <div className="relative flex-1 sm:w-60">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search customer, company..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-l-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  aria-label="Search"
+                  className="flex h-[34px] w-9 items-center justify-center rounded-r-lg bg-brand-600 text-white transition hover:bg-brand-700 cursor-pointer"
+                >
+                  <SearchIcon />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quotations Table */}
+          <div className="overflow-x-auto mt-3">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
+                  <th className="pb-2.5 pr-2 font-semibold w-40">Customer</th>
+                  <th className="pb-2.5 pr-2 font-semibold w-60">Company</th>
+                  <th className="pb-2.5 pr-2 font-semibold w-28">Mobile</th>
+                  <th className="pb-2.5 pr-2 font-semibold w-32">Staff</th>
+                  <th className="pb-2.5 pr-2 font-semibold w-24">Date</th>
+                  <th className="pb-2.5 pr-2 font-semibold w-36">Status</th>
+                  <th className="pb-2.5 pr-2 font-semibold text-left w-36">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredQuotations.length > 0 ? (
+                  filteredQuotations.map((quote) => (
+                    <tr
+                      key={quote.id}
+                      className="text-slate-600 hover:bg-slate-50/60 transition-colors"
+                    >
+                      {/* Customer */}
+                      <td className="py-2.5 pr-3">
+                        <p className="font-semibold text-slate-900 text-xs">
+                          {quote.customer}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {quote.category}
+                        </p>
+                      </td>
+
+                      {/* Company */}
+                      <td className="py-2.5 pr-3">
+                        <p className="font-semibold text-slate-900 text-xs">
+                          {quote.company}
+                        </p>
+                        {quote.city && (
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            {quote.city}
+                          </p>
+                        )}
+                      </td>
+
+                      {/* Mobile */}
+                      <td className="py-2.5 pr-3">
+                        <a
+                          href={`tel:${quote.mobile}`}
+                          className="font-mono text-xs text-slate-800 hover:text-brand-600 font-medium inline-flex items-center gap-1"
+                          title="Click to Call"
+                        >
+                          <PhoneCallIcon className="h-3 w-3 text-slate-400" />
+                          <span>{quote.mobile}</span>
+                        </a>
+                      </td>
+
+                      {/* Staff */}
+                      <td className="py-2.5 pr-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span>{quote.staff || quote.qtnBy}</span>
+                        </span>
+                      </td>
+
+                      {/* Date */}
+                      <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
+                        {quote.date}
+                      </td>
+
+                      {/* Status Badge */}
+                      <td className="py-2.5 pr-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
+                            quote.status === 'Not Sent'
+                              ? 'border-purple-200 bg-purple-50 text-purple-700'
+                              : quote.status === 'Pending Approval'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700'
+                              : quote.status === 'Approved'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : quote.status === 'Rejected'
+                              ? 'border-rose-200 bg-rose-50 text-rose-700'
+                              : 'border-blue-200 bg-blue-50 text-blue-700'
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              quote.status === 'Not Sent'
+                                ? 'bg-purple-500'
+                                : quote.status === 'Pending Approval'
+                                ? 'bg-amber-500 animate-pulse'
+                                : quote.status === 'Approved'
+                                ? 'bg-emerald-500'
+                                : quote.status === 'Rejected'
+                                ? 'bg-rose-500'
+                                : 'bg-blue-500'
+                            }`}
+                          />
+                          <span>{quote.status}</span>
+                        </span>
+                      </td>
+
+                      {/* Action: 3-Dot Action Menu */}
+                      <td className="py-2.5 pr-3 text-left">
+                        <div className="relative inline-block text-left">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setOpenDropdownId(openDropdownId === quote.id ? null : quote.id)
+                            }}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
+                            title="Quotation Actions"
+                          >
+                            <MoreVerticalIcon className="h-4 w-4" />
+                          </button>
+
+                          {/* Floating Dropdown Menu */}
+                          {openDropdownId === quote.id && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-30"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setOpenDropdownId(null)
+                                }}
+                              />
+                              <div className="absolute right-0 z-40 mt-1.5 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setOpenDropdownId(null)
+                                    handleViewProposal(quote)
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                                >
+                                  <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
+                                  <span>View Proposal</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setOpenDropdownId(null)
+                                    handleOpenNewProposalModal(quote)
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
+                                >
+                                  <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
+                                  <span>Edit Proposal</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleSendForApprovalDirect(quote.id, e)}
+                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                                >
+                                  <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
+                                  <span>Send for Approval</span>
+                                </button>
+
+                                <div className="my-1 border-t border-slate-100" />
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setOpenDropdownId(null)
+                                    handleRevertQuotation(quote.id, e)
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                >
+                                  <UndoIcon className="h-3.5 w-3.5 text-rose-600" />
+                                  <span>Revert to Telecalling</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                      No quotation records found matching the criteria.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Static Pagination Footer */}
+          <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-[11px]">
+            <span className="text-slate-400 font-medium">
+              Showing 1 to {filteredQuotations.length} of {filteredQuotations.length} entries
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 transition-colors font-medium cursor-pointer"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="w-6 h-6 flex items-center justify-center rounded-md bg-brand-50 text-brand-600 font-bold border border-brand-200/60"
+              >
+                1
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 transition-colors font-medium cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Quotation History Card (Matching Old Software Screenshot) */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-3">
+            <FileTextIcon className="h-4 w-4 text-slate-500" />
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+              Quotation History
+            </h3>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
+                  <th className="pb-2.5 pr-2 font-semibold">QTN ID</th>
+                  <th className="pb-2.5 pr-2 font-semibold">Date</th>
+                  <th className="pb-2.5 pr-2 font-semibold">Amount</th>
+                  <th className="pb-2.5 pr-2 font-semibold">Discount</th>
+                  <th className="pb-2.5 pr-2 font-semibold">QTN By</th>
+                  <th className="pb-2.5 pr-2 font-semibold">BDM</th>
+                  <th className="pb-2.5 pr-2 font-semibold">Status</th>
+                  <th className="pb-2.5 pr-2 font-semibold">Remarks</th>
+                  <th className="pb-2.5 pr-2 font-semibold text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredQuotations.map((item) => (
+                  <tr key={`hist-${item.id}`} className="text-slate-600 hover:bg-slate-50/60 transition-colors">
+                    <td className="py-2.5 pr-3 font-mono font-bold text-slate-900">{item.id}</td>
+                    <td className="py-2.5 pr-3 font-mono text-[11px]">{item.date}</td>
+                    <td className="py-2.5 pr-3 font-mono font-semibold text-slate-900">₹{item.total}</td>
+                    <td className="py-2.5 pr-3 font-mono text-slate-500">₹{item.discount}</td>
+                    <td className="py-2.5 pr-3 font-medium text-slate-800">{item.qtnBy || item.staff}</td>
+                    <td className="py-2.5 pr-3 font-medium text-slate-800">{item.bdm || 'Husna'}</td>
+                    <td className="py-2.5 pr-3">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
+                          item.status === 'Not Sent'
+                            ? 'bg-purple-50 text-purple-700 border-purple-200'
+                            : item.status === 'Pending Approval'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : item.status === 'Approved'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : item.status === 'Rejected'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3 text-slate-500 max-w-xs truncate">{item.remarks || item.notes || '-'}</td>
+                    <td className="py-2.5 pr-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleViewProposal(item)}
+                          className="rounded p-1 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition"
+                          title="View Proposal Form"
+                        >
+                          <EyeIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenNewProposalModal(item)}
+                          className="rounded p-1 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 transition"
+                          title="Edit Proposal"
+                        >
+                          <PencilIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* "New Proposal" Modal (Matching User's Reference Screenshot) */}
+      {proposalModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            {/* Modal Header with Quick Template Selector */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-b border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center gap-3">
+                <h3 className="text-sm font-bold text-slate-900">
+                  {editingProposalId ? 'Edit Proposal' : 'New Proposal'}
+                </h3>
+
+                {/* Quick Template Selector */}
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Template:
+                  </span>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => handleSelectTemplate(e.target.value)}
+                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+                  >
+                    <option value="">Choose Pre-built Template ▾</option>
+                    {PROPOSAL_TEMPLATES.map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setProposalModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSubmitProposal} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+              {/* Row 1: BDM | QTN BY | Client Name in a single row */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    BDM
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="BDM Name"
+                    value={bdm}
+                    onChange={(e) => setBdm(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    QTN BY
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Quotation By"
+                    value={qtnBy}
+                    onChange={(e) => setQtnBy(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Client Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Customer / Contact Person"
+                    value={customerPerson}
+                    onChange={(e) => setCustomerPerson(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              {/* Rich Text Editor 1 - Proposal Scope & Deliverables */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Scope &amp; Deliverables
+                </label>
+                <div className="rounded-lg border border-slate-300 overflow-hidden bg-white shadow-2xs">
+                  <ReactQuill
+                    theme="snow"
+                    className="quill-tall"
+                    value={scopeHtml}
+                    onChange={setScopeHtml}
+                    modules={QUILL_MODULES}
+                    formats={QUILL_FORMATS}
+                    placeholder="Enter detailed deliverables, software features, and module breakdown..."
+                  />
+                </div>
+              </div>
+
+              {/* Rich Text Editor 2 - Proposal in Detail */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Proposal in Detail
+                </label>
+                <div className="rounded-lg border border-slate-300 overflow-hidden bg-white shadow-2xs">
+                  <ReactQuill
+                    theme="snow"
+                    className="quill-tall"
+                    value={termsHtml}
+                    onChange={setTermsHtml}
+                    modules={QUILL_MODULES}
+                    formats={QUILL_FORMATS}
+                    placeholder="Enter detailed technical architecture, module breakdown, milestone roadmap, SLA, warranty, and commercial terms..."
+                  />
+                </div>
+              </div>
+
+              {/* Financial & Source Grid */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Total (₹)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Total Amount"
+                    value={totalVal}
+                    onChange={(e) => setTotalVal(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Discount (₹)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Discount"
+                    value={discountVal}
+                    onChange={(e) => setDiscountVal(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Source
+                  </label>
+                  <select
+                    value={sourceVal}
+                    onChange={(e) => setSourceVal(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                  >
+                    <option value="">Select Source</option>
+                    {SOURCES.map((src) => (
+                      <option key={src} value={src}>
+                        {src}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Currency
+                  </label>
+                  <select
+                    value={currencyVal}
+                    onChange={(e) => setCurrencyVal(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                  >
+                    {CURRENCIES.map((cur) => (
+                      <option key={cur} value={cur}>
+                        {cur}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Remarks &amp; Notes
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter remarks or approval notes..."
+                  value={remarksVal}
+                  onChange={(e) => setRemarksVal(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+
+              {submitMessage && (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
+                  {submitMessage}
+                </div>
+              )}
+
+              {/* Modal Footer Actions (Matching Screenshot: [ Close ] and Red [ Submit ]) */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setProposalModalOpen(false)}
+                  className="rounded-md bg-slate-600 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 transition cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-md bg-rose-600 px-5 py-2 text-xs font-medium text-white hover:bg-rose-700 transition cursor-pointer shadow-xs active:scale-[0.98]"
+                >
+                  Submit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </Layout>
+  )
+}

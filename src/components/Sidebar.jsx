@@ -41,7 +41,7 @@ const MENU_SECTIONS = [
   {
     id: 'dashboard',
     label: 'Dashboard',
-    path: '/',
+    path: '/dashboard',
     isDirect: true,
   },
   {
@@ -68,11 +68,11 @@ const MENU_SECTIONS = [
     id: 'reports',
     label: 'Reports',
     items: [
-      { id: 'lead-register', label: 'Lead Register', path: '/lead-register' },
-      { id: 'calling-register', label: 'Calling Register', path: '/calling-register' },
-      { id: 'quotation-register', label: 'Quotation Register', path: '/quotation-register' },
-      { id: 'order-register', label: 'Order Register', path: '/order-register' },
-      { id: 'performance', label: 'Performance', path: '/performance' },
+      { id: 'raw-data-register', label: 'Raw Data Register', path: '/raw-data-register' },
+      { id: 'telecalling-register', label: 'Telecalling Register', path: '/telecalling-register' },
+      { id: 'quotation-submitted-register', label: 'Quotation Submitted Register', path: '/quotation-submitted-register' },
+      { id: 'order-received-register', label: 'Order Received Register', path: '/order-received-register' },
+      { id: 'order-progress-register', label: 'Order Progress Register', path: '/order-progress-register' },
     ],
   },
   {
