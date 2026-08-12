@@ -1,8 +1,40 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  ResponsiveContainer,
+  FunnelChart,
+  Funnel,
+  LabelList,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Cell,
+} from 'recharts'
 import Layout from '../Layout/Layout'
+
+const CONVERSION_DATA = [
+  { name: 'Total Leads', value: 5736, color: '#3b82f6', rate: '100%' },
+  { name: 'Contacted', value: 3820, color: '#6366f1', rate: '66.5%' },
+  { name: 'Interested', value: 1240, color: '#8b5cf6', rate: '21.6%' },
+  { name: 'Quotations', value: 680, color: '#f59e0b', rate: '11.8%' },
+  { name: 'Approved', value: 245, color: '#f97316', rate: '4.2%' },
+  { name: 'Orders Won', value: 198, color: '#10b981', rate: '3.4%' },
+]
+
+function ActivityIcon() {
+  return (
+    <svg className="w-4 h-4 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  )
+}
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const [chartMode, setChartMode] = useState('funnel') // 'funnel' | 'bar'
 
   const chipTones = {
     blue: 'bg-blue-50 text-blue-600',
@@ -28,16 +60,6 @@ export default function Dashboard() {
     { label: 'Follow-ups Due', value: '24', trend: 'down', change: '8 Overdue', tone: 'amber', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
     { label: 'Open Quotations', value: '680', trend: 'neutral', change: '₹ 1.2Cr', tone: 'orange', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
     { label: 'Orders Won', value: '198', trend: 'up', change: '+15%', tone: 'green', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
-  ]
-
-  // Funnel Data according to BRD specification
-  const funnelSteps = [
-    { label: 'Total Leads', count: 5736, rate: '100%', color: 'from-blue-600 to-indigo-600' },
-    { label: 'Contacted', count: 3820, rate: '66.5%', color: 'from-indigo-600 to-violet-600' },
-    { label: 'Interested', count: 1240, rate: '21.6%', color: 'from-violet-600 to-amber-600' },
-    { label: 'Quotations', count: 680, rate: '11.8%', color: 'from-amber-600 to-orange-600' },
-    { label: 'Approved', count: 245, rate: '4.2%', color: 'from-orange-600 to-brand-600' },
-    { label: 'Orders Won', count: 198, rate: '3.4%', color: 'from-brand-600 to-emerald-600' },
   ]
 
   // Priority hot leads
@@ -148,39 +170,60 @@ export default function Dashboard() {
 
         {/* Main Grid: Funnel & Hot Leads */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Sales Funnel */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-7">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">Lead-to-Order Conversion Funnel</h2>
-                <p className="text-xs text-slate-500">Visual progression across sales lifecycle stages</p>
+          {/* Sales Funnel Card */}
+          <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.01)] lg:col-span-7 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <ActivityIcon />
+                  Lead-to-Order Conversion Funnel
+                </h3>
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                  Live Pipeline
+                </span>
               </div>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                Live Pipeline
-              </span>
+              
+              <div className="h-56 w-full text-[11px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={CONVERSION_DATA} layout="vertical" margin={{ top: 0, right: 15, left: 10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" hide />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="#475569"
+                      width={100}
+                      tick={{ fontSize: 11, fontWeight: 600 }}
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', fontSize: '11px' }}
+                      formatter={(val, name, item) => [`${Number(val).toLocaleString()} leads (${item.payload.rate})`, 'Count']}
+                    />
+                    <Bar dataKey="value" name="Count" radius={[0, 6, 6, 0]} barSize={14}>
+                      {CONVERSION_DATA.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            <div className="space-y-3.5 pt-2">
-              {funnelSteps.map((step, idx) => (
-                <div key={step.label} className="group">
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600">
-                        {idx + 1}
-                      </span>
-                      <span className="font-semibold text-slate-700">{step.label}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-slate-900">{step.count.toLocaleString()}</span>
-                      <span className="w-12 text-right font-medium text-slate-400">({step.rate})</span>
-                    </div>
-                  </div>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className={`h-full rounded-full bg-gradient-to-r ${step.color} transition-all duration-700`}
-                      style={{ width: `${Math.max(8, (step.count / funnelSteps[0].count) * 100)}%` }}
-                    />
-                  </div>
+            {/* Bottom metrics */}
+            <div className="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-2 border-t border-slate-100 pt-3 text-center">
+              {CONVERSION_DATA.map((s) => (
+                <div key={s.name} className="rounded-lg bg-slate-50 p-1.5 border border-slate-100">
+                  <span className="block text-[10px] font-medium text-slate-500 truncate" title={s.name}>
+                    {s.name}
+                  </span>
+                  <span className="block font-mono text-xs font-bold text-slate-900">
+                    {s.value.toLocaleString()}
+                  </span>
+                  <span className="block text-[9.5px] font-bold text-emerald-600">
+                    {s.rate}
+                  </span>
                 </div>
               ))}
             </div>
@@ -195,7 +238,7 @@ export default function Dashboard() {
               </div>
               <button
                 onClick={() => navigate('/tele-calling')}
-                className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+                className="text-xs font-semibold text-brand-600 hover:text-brand-700 cursor-pointer"
               >
                 View all →
               </button>
@@ -232,7 +275,7 @@ export default function Dashboard() {
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => navigate('/tele-calling')}
-                        className="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition"
+                        className="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition cursor-pointer"
                       >
                         Action
                       </button>
