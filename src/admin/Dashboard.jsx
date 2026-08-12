@@ -2,16 +2,18 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer,
-  FunnelChart,
-  Funnel,
-  LabelList,
   Tooltip,
+  Legend,
   BarChart,
   Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Cell,
+  PieChart,
+  Pie,
 } from 'recharts'
 import Layout from '../Layout/Layout'
 
@@ -24,11 +26,89 @@ const CONVERSION_DATA = [
   { name: 'Orders Won', value: 198, color: '#10b981', rate: '3.4%' },
 ]
 
+// Lead acquisition trend over the last 8 months
+const MONTHLY_TREND = [
+  { month: 'Jan', leads: 620, contacted: 402 },
+  { month: 'Feb', leads: 735, contacted: 498 },
+  { month: 'Mar', leads: 684, contacted: 455 },
+  { month: 'Apr', leads: 812, contacted: 560 },
+  { month: 'May', leads: 745, contacted: 510 },
+  { month: 'Jun', leads: 902, contacted: 634 },
+  { month: 'Jul', leads: 738, contacted: 522 },
+  { month: 'Aug', leads: 500, contacted: 239 },
+]
+
+// Lead source distribution
+const SOURCE_DATA = [
+  { name: 'Google Search', value: 1920, color: '#3b82f6' },
+  { name: 'Instagram Campaign', value: 1380, color: '#8b5cf6' },
+  { name: 'Facebook Ads', value: 940, color: '#f59e0b' },
+  { name: 'Customer Referral', value: 760, color: '#10b981' },
+  { name: 'Official Website', value: 522, color: '#f97316' },
+  { name: 'Manual Entry', value: 214, color: '#64748b' },
+]
+
+// Quotation → Order conversion by month (monthly revenue in ₹ Lakh)
+const MONTHLY_QUOTATIONS = [
+  { month: 'Jan', quotations: 42, orders: 12 },
+  { month: 'Feb', quotations: 51, orders: 16 },
+  { month: 'Mar', quotations: 47, orders: 14 },
+  { month: 'Apr', quotations: 60, orders: 19 },
+  { month: 'May', quotations: 55, orders: 17 },
+  { month: 'Jun', quotations: 68, orders: 22 },
+  { month: 'Jul', quotations: 49, orders: 15 },
+]
+
+// Staff sales performance
+const TEAM_PERFORMANCE = [
+  { name: 'Priya Sharma', quotations: 48, orders: 15 },
+  { name: 'Alex Joseph', quotations: 41, orders: 12 },
+  { name: 'NIMISHA DAVIS', quotations: 36, orders: 11 },
+  { name: 'Ananya Nair', quotations: 29, orders: 8 },
+  { name: 'Shanu VR', quotations: 26, orders: 9 },
+]
+
+const TOOLTIP_STYLE = {
+  backgroundColor: '#ffffff',
+  borderRadius: '12px',
+  border: '1px solid #e2e8f0',
+  boxShadow: '0 10px 30px rgba(15,23,42,0.08)',
+  fontSize: '11px',
+  padding: '8px 12px',
+}
+
 function ActivityIcon() {
   return (
-    <svg className="w-4 h-4 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
     </svg>
+  )
+}
+
+function ChartCard({ title, subtitle, badge, headerRight, children, className = '', bodyClass = 'p-5' }) {
+  return (
+    <div className={`flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden ${className}`}>
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+            <ActivityIcon />
+          </span>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+            {subtitle && <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {headerRight}
+          {badge && (
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">
+              {badge}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className={`flex-1 ${bodyClass}`}>{children}</div>
+    </div>
   )
 }
 
@@ -171,19 +251,74 @@ export default function Dashboard() {
         {/* Main Grid: Funnel & Hot Leads */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Sales Funnel Card */}
-          <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.01)] lg:col-span-7 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden lg:col-span-7">
+            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
                   <ActivityIcon />
-                  Lead-to-Order Conversion Funnel
-                </h3>
-                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
-                  Live Pipeline
                 </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Lead-to-Order Conversion Funnel</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-400">5,736 leads → 198 orders won</p>
+                </div>
               </div>
-              
-              <div className="h-56 w-full text-[11px]">
+              <div className="flex items-center gap-1 self-start rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setChartMode('funnel')}
+                  className={`rounded-md px-2.5 py-1 transition cursor-pointer ${
+                    chartMode === 'funnel' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Funnel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode('bar')}
+                  className={`rounded-md px-2.5 py-1 transition cursor-pointer ${
+                    chartMode === 'bar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Bar
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5">
+              {chartMode === 'funnel' ? (
+                <div className="w-full space-y-3 py-1">
+                  {CONVERSION_DATA.map((s) => {
+                    const pct = (s.value / CONVERSION_DATA[0].value) * 100
+                    return (
+                      <div key={s.name} className="grid grid-cols-[92px_1fr_58px] items-center gap-3">
+                        <span
+                          className="truncate text-right text-[11px] font-semibold text-slate-600"
+                          title={s.name}
+                        >
+                          {s.name}
+                        </span>
+                        <div className="flex justify-center">
+                          <div
+                            className="relative flex h-10 items-center justify-center overflow-hidden rounded-lg transition-all duration-300"
+                            style={{
+                              width: `${Math.max(pct, 7)}%`,
+                              background: `linear-gradient(90deg, ${s.color}bb, ${s.color})`,
+                              boxShadow: `0 2px 10px ${s.color}40`,
+                            }}
+                          >
+                            <span className="px-2 font-mono text-[11px] font-black tracking-wide text-white drop-shadow-sm">
+                              {s.value.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="font-mono text-[10.5px] font-bold text-emerald-600">
+                          {s.rate}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={CONVERSION_DATA} layout="vertical" margin={{ top: 0, right: 15, left: 10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
@@ -197,33 +332,29 @@ export default function Dashboard() {
                       width={100}
                       tick={{ fontSize: 11, fontWeight: 600 }}
                     />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', fontSize: '11px' }}
-                      formatter={(val, name, item) => [`${Number(val).toLocaleString()} leads (${item.payload.rate})`, 'Count']}
-                    />
-                    <Bar dataKey="value" name="Count" radius={[0, 6, 6, 0]} barSize={14}>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(val, name, item) => [`${Number(val).toLocaleString()} leads (${item.payload.rate})`, 'Count']} />
+                    <Bar dataKey="value" name="Count" radius={[0, 6, 6, 0]} barSize={20}>
                       {CONVERSION_DATA.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              )}
             </div>
 
             {/* Bottom metrics */}
-            <div className="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-2 border-t border-slate-100 pt-3 text-center">
-              {CONVERSION_DATA.map((s) => (
-                <div key={s.name} className="rounded-lg bg-slate-50 p-1.5 border border-slate-100">
-                  <span className="block text-[10px] font-medium text-slate-500 truncate" title={s.name}>
+            <div className="grid grid-cols-3 gap-2 border-t border-slate-100 px-5 py-4 sm:grid-cols-6">
+              {CONVERSION_DATA.map((s, i) => (
+                <div key={s.name} className={`rounded-lg border bg-slate-50 p-2 text-center ${i === 0 ? 'border-brand-100 bg-brand-50/50' : 'border-slate-100'}`}>
+                  <span className="flex items-center justify-center gap-1.5 text-[10px] font-medium text-slate-500 truncate" title={s.name}>
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                     {s.name}
                   </span>
-                  <span className="block font-mono text-xs font-bold text-slate-900">
+                  <span className="mt-0.5 block font-mono text-sm font-black text-slate-900">
                     {s.value.toLocaleString()}
                   </span>
-                  <span className="block text-[9.5px] font-bold text-emerald-600">
-                    {s.rate}
-                  </span>
+                  <span className="text-[9.5px] font-bold text-emerald-600">{s.rate}</span>
                 </div>
               ))}
             </div>
@@ -285,6 +416,142 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* ============ ANALYTICS CHARTS ROW ============ */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Lead Acquisition Trend */}
+          <ChartCard
+            title="Lead Acquisition Trend"
+            subtitle="Inbound leads vs contacted, last 8 months"
+            badge="Jan – Aug"
+            className="lg:col-span-7"
+          >
+            <div className="h-64 text-[11px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={MONTHLY_TREND} margin={{ top: 10, right: 10, left: -18, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="leadGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="contactGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="leads" name="Leads" stroke="#6366f1" strokeWidth={2.5} fill="url(#leadGrad)" />
+                  <Area type="monotone" dataKey="contacted" name="Contacted" stroke="#10b981" strokeWidth={2.5} fill="url(#contactGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </ChartCard>
+
+          {/* Lead Sources Donut */}
+          <ChartCard
+            title="Lead Sources"
+            subtitle="Acquisition channels breakdown"
+            badge="6 Channels"
+            className="lg:col-span-5"
+          >
+            <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+              <div className="h-52 w-52 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={SOURCE_DATA}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={54}
+                      outerRadius={82}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {SOURCE_DATA.map((s, i) => (
+                        <Cell key={`source-${i}`} fill={s.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(val, name) => [`${Number(val).toLocaleString()} leads`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full space-y-2.5">
+                {SOURCE_DATA.map((s) => (
+                  <div key={s.name} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="flex items-center gap-2 text-slate-600">
+                      <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: s.color }} />
+                      <span className="font-medium">{s.name}</span>
+                    </span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {s.value.toLocaleString()}
+                      <span className="ml-1 text-[10px] font-medium text-slate-400">
+                        {Math.round((s.value / 5736) * 100)}%
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ChartCard>
+
+          {/* Quotation → Order Conversion */}
+          <ChartCard
+            title="Quotation & Order Pipeline"
+            subtitle="Quotations created vs orders won, per month"
+            badge="Monthly"
+            className="lg:col-span-7"
+          >
+            <div className="h-64 text-[11px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={MONTHLY_QUOTATIONS} margin={{ top: 10, right: 10, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="quotations" name="Quotations" fill="#8b5cf6" radius={[5, 5, 0, 0]} barSize={16} />
+                  <Bar dataKey="orders" name="Orders Won" fill="#10b981" radius={[5, 5, 0, 0]} barSize={16} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </ChartCard>
+
+          {/* Staff Sales Performance */}
+          <ChartCard
+            title="Team Sales Performance"
+            subtitle="Quotations & orders generated by staff"
+            badge="Live"
+            className="lg:col-span-5"
+          >
+            <div className="h-64 text-[11px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={TEAM_PERFORMANCE} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    tickLine={false}
+                    axisLine={false}
+                    stroke="#475569"
+                    width={90}
+                    tick={{ fontSize: 10.5, fontWeight: 600 }}
+                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="quotations" name="Quotations" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={8} />
+                  <Bar dataKey="orders" name="Orders" fill="#10b981" radius={[0, 4, 4, 0]} barSize={8} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </ChartCard>
         </div>
       </div>
     </Layout>

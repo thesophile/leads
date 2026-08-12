@@ -190,6 +190,12 @@ const STATUS_LIST = [
   'Sent to Client',
 ]
 
+const ADMIN_LIST = [
+  'Super Admin',
+  'Managing Director',
+  'Operations Admin',
+]
+
 const SOURCES = [
   'Google Search',
   'Official Website',
@@ -317,24 +323,44 @@ export default function Managequotation() {
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState(null)
 
+  // "Send for Approval" Modal State
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false)
+  const [approvalQuoteId, setApprovalQuoteId] = useState(null)
+  const [selectedAdmin, setSelectedAdmin] = useState('')
+  const [approvalSent, setApprovalSent] = useState('')
+
   function handleViewProposal(quote) {
     navigate(`/quotations/preview/${quote.id}`, { state: { proposal: quote } })
   }
 
-  function handleSendForApprovalDirect(quoteId, e) {
+  function handleOpenApprovalModal(quoteId, e) {
     e.stopPropagation()
+    setApprovalQuoteId(quoteId)
+    setSelectedAdmin('')
+    setApprovalSent('')
+    setOpenDropdownId(null)
+    setApprovalModalOpen(true)
+  }
+
+  function handleConfirmSendForApproval() {
+    if (!selectedAdmin) return
     setQuotationsList((prev) =>
       prev.map((item) =>
-        item.id === quoteId
+        item.id === approvalQuoteId
           ? {
               ...item,
               status: 'Pending Approval',
+              approvedBy: selectedAdmin,
+              remarks: `Sent to ${selectedAdmin} for approval`,
             }
           : item
       )
     )
-    setOpenDropdownId(null)
-    alert('Proposal has been submitted for Super Admin Approval!')
+    setApprovalSent(`✓ Proposal sent to ${selectedAdmin} for approval`)
+    setTimeout(() => {
+      setApprovalModalOpen(false)
+      setApprovalSent('')
+    }, 1100)
   }
 
   function handleRowStatusChange(quoteId, newStatus) {
@@ -472,9 +498,11 @@ export default function Managequotation() {
 
     const currentScope = scopeHtml
     const currentTerms = termsHtml
+    let nextApprovalId = null
 
     if (editingProposalId) {
       // Update existing
+      nextApprovalId = editingProposalId
       setQuotationsList((prev) =>
         prev.map((item) =>
           item.id === editingProposalId
@@ -493,16 +521,16 @@ export default function Managequotation() {
                 proposalScope: currentScope,
                 termsConditions: currentTerms,
                 remarks: remarksVal,
-                status: 'Pending Approval', // Transitions to approval state
               }
             : item
         )
       )
-      setSubmitMessage('✓ Custom Proposal submitted for Super Admin Approval!')
+      setSubmitMessage('✓ Proposal details saved. Now choose an admin to send for approval.')
     } else {
       // Create new
+      nextApprovalId = `QT-2026-${String(quotationsList.length + 1).padStart(3, '0')}`
       const newProposal = {
-        id: `QT-2026-${String(quotationsList.length + 1).padStart(3, '0')}`,
+        id: nextApprovalId,
         leadId: `LEAD-${Date.now().toString().slice(-4)}`,
         customer: customerPerson || 'New Contact',
         company: companyName || 'New Client Enterprise',
@@ -514,7 +542,7 @@ export default function Managequotation() {
         qtnBy,
         staff: qtnBy,
         date: 'Today',
-        status: 'Pending Approval',
+        status: 'Not Sent',
         total: totalVal,
         discount: discountVal,
         netAmount: totalVal,
@@ -525,13 +553,17 @@ export default function Managequotation() {
         remarks: remarksVal,
       }
       setQuotationsList([newProposal, ...quotationsList])
-      setSubmitMessage('✓ New Proposal created and sent for Approval!')
+      setSubmitMessage('✓ New Proposal created. Now choose an admin to send for approval.')
     }
 
     setTimeout(() => {
       setSubmitMessage('')
       setProposalModalOpen(false)
-    }, 1200)
+      setApprovalQuoteId(nextApprovalId)
+      setSelectedAdmin('')
+      setApprovalSent('')
+      setApprovalModalOpen(true)
+    }, 900)
   }
 
   // Quick Action: Super Admin Instant Approve
@@ -827,7 +859,7 @@ export default function Managequotation() {
 
                                 <button
                                   type="button"
-                                  onClick={(e) => handleSendForApprovalDirect(quote.id, e)}
+                                  onClick={(e) => handleOpenApprovalModal(quote.id, e)}
                                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
                                 >
                                   <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
@@ -1195,6 +1227,123 @@ export default function Managequotation() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* "Send for Approval" Modal (Select Approving Admin) */}
+      {approvalModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                  <SendIcon className="h-3.5 w-3.5" />
+                </span>
+                <h3 className="text-sm font-bold text-slate-900">Send for Approval</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApprovalModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Selected Proposal Summary */}
+              {(() => {
+                const quote = quotationsList.find((q) => q.id === approvalQuoteId)
+                if (!quote) return null
+                return (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[10px] font-bold text-brand-600 uppercase tracking-wider">
+                          {quote.id}
+                        </p>
+                        <p className="mt-0.5 text-sm font-bold text-slate-900 truncate">
+                          {quote.company}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-600">
+                          {quote.customer} • ₹{quote.netAmount}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${
+                          quote.status === 'Pending Approval'
+                            ? 'border-amber-200 bg-amber-50 text-amber-700'
+                            : 'border-slate-200 bg-white text-slate-600'
+                        }`}
+                      >
+                        {quote.status}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Admin Selection */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  Select Approving Admin <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedAdmin}
+                    onChange={(e) => setSelectedAdmin(e.target.value)}
+                    className={`w-full appearance-none rounded-lg border bg-white px-3 py-2.5 pr-9 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 cursor-pointer ${
+                      selectedAdmin
+                        ? 'border-brand-400 focus:border-brand-500 focus:ring-brand-500/20'
+                        : 'border-slate-300 focus:border-brand-500 focus:ring-brand-500'
+                    }`}
+                  >
+                    <option value="">— Choose an admin —</option>
+                    {ADMIN_LIST.map((admin) => (
+                      <option key={admin} value={admin}>
+                        {admin}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">
+                    ▾
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
+                  The selected admin will review and approve this proposal before it is sent to the
+                  client.
+                </p>
+              </div>
+
+              {/* Success Message */}
+              {approvalSent && (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
+                  {approvalSent}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+              <button
+                type="button"
+                onClick={() => setApprovalModalOpen(false)}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSendForApproval}
+                disabled={!selectedAdmin}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <SendIcon className="h-3.5 w-3.5" />
+                Send for Approval
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -243,7 +243,9 @@ const STATUSES = [
   'Interested',
   'Quotation Requested',
   'Follow Up',
+  'Considering',
   'Not Reachable',
+  'Busy',
   'Not Interested',
 ]
 
@@ -420,6 +422,7 @@ export default function Telecall() {
       formData.callStatus === 'Follow Up' ||
       formData.callStatus === 'Interested' ||
       formData.callStatus === 'Quotation Requested' ||
+      formData.callStatus === 'Considering' ||
       Boolean(formData.nextFollowUpDate)
 
     const isActuallyCalled = formData.callStatus !== 'Pending Call'
@@ -816,12 +819,16 @@ export default function Telecall() {
                                   ? 'bg-emerald-500'
                                   : lead.callStatus === 'Quotation Requested'
                                   ? 'bg-purple-500'
+                                  : lead.callStatus === 'Considering'
+                                  ? 'bg-cyan-500'
                                   : lead.callStatus === 'Follow Up'
                                   ? 'bg-amber-500'
                                   : lead.callStatus === 'Not Reachable'
                                   ? 'bg-slate-400'
                                   : lead.callStatus === 'Pending Call'
                                   ? 'bg-blue-500'
+                                  : lead.callStatus === 'Busy'
+                                  ? 'bg-orange-400'
                                   : 'bg-rose-500'
                               }`}
                             />
@@ -831,12 +838,16 @@ export default function Telecall() {
                                   ? 'text-emerald-700'
                                   : lead.callStatus === 'Quotation Requested'
                                   ? 'text-purple-700'
+                                  : lead.callStatus === 'Considering'
+                                  ? 'text-cyan-700'
                                   : lead.callStatus === 'Follow Up'
                                   ? 'text-amber-700'
                                   : lead.callStatus === 'Not Reachable'
                                   ? 'text-slate-600'
                                   : lead.callStatus === 'Pending Call'
                                   ? 'text-blue-700'
+                                  : lead.callStatus === 'Busy'
+                                  ? 'text-orange-700'
                                   : 'text-rose-700'
                               }`}
                             >
@@ -1302,12 +1313,16 @@ export default function Telecall() {
                                 ? 'bg-emerald-500'
                                 : activeLead.callStatus === 'Quotation Requested'
                                 ? 'bg-purple-500'
+                                : activeLead.callStatus === 'Considering'
+                                ? 'bg-cyan-500'
                                 : activeLead.callStatus === 'Follow Up'
                                 ? 'bg-amber-500'
                                 : activeLead.callStatus === 'Not Reachable'
                                 ? 'bg-slate-400'
                                 : activeLead.callStatus === 'Pending Call'
                                 ? 'bg-blue-500'
+                                : activeLead.callStatus === 'Busy'
+                                ? 'bg-orange-400'
                                 : 'bg-rose-500'
                             }`}
                           />
@@ -1385,6 +1400,7 @@ export default function Telecall() {
                         >
                           <option value="Pending Call">Pending Call (Not Called Yet)</option>
                           <option value="Interested">Interested</option>
+                          <option value="Considering">Considering</option>
                           <option value="Quotation Requested">Quotation Requested</option>
                           <option value="Follow Up">Follow Up / Call Back</option>
                           <option value="Not Reachable">Not Reachable</option>

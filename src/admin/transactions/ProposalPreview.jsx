@@ -121,7 +121,7 @@ function QRCodeVisual({ value = 'https://leads.programersapps.com/quotation/prop
     <div className="flex h-full w-full items-center justify-center bg-white p-0.5">
       <QRCodeSVG
         value={value}
-        size={64}
+        size={84}
         level="H"
         fgColor="#000000"
         bgColor="#ffffff"
@@ -151,7 +151,7 @@ function GeMBadge() {
       <img
         src="/GeM.png"
         alt="GeM - Government e Marketplace"
-        className="h-9 w-auto object-contain"
+        className="h-10 w-auto object-contain"
       />
     </div>
   )
@@ -164,11 +164,11 @@ function BarcodeVisual({ code = '4879297904' }) {
       <Barcode
         value={code.replace(/\s+/g, '')}
         width={1.85}
-        height={28}
+        height={32}
         format="CODE128"
         displayValue={true}
         font="monospace"
-        fontSize={10}
+        fontSize={12}
         textMargin={2}
         margin={0}
         background="transparent"
@@ -181,11 +181,11 @@ function BarcodeVisual({ code = '4879297904' }) {
 // Digital Signature Stamp (Compact Monochrome Seal)
 function SignatureStamp({ bdm = 'Husna M S' }) {
   return (
-    <div className="relative inline-flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-full border border-slate-400 bg-slate-50/80 p-1 text-slate-800">
+    <div className="relative inline-flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border border-slate-400 bg-slate-50/80 p-1 text-slate-800">
       <div className="absolute inset-0.5 rounded-full border border-dashed border-slate-400" />
-      <span className="text-[6.5px] font-extrabold uppercase leading-none text-slate-900">VERIFIED</span>
-      <span className="text-[6px] font-bold leading-none text-black mt-0.5 truncate max-w-[48px]">{bdm}</span>
-      <span className="text-[5.5px] text-slate-500 font-mono leading-none mt-0.5">Thrissur</span>
+      <span className="text-[7px] font-extrabold uppercase leading-none text-slate-900">VERIFIED</span>
+      <span className="text-[6.5px] font-bold leading-none text-black mt-0.5 truncate max-w-[52px]">{bdm}</span>
+      <span className="text-[6px] text-slate-500 font-mono leading-none mt-0.5">Thrissur</span>
     </div>
   )
 }
@@ -194,8 +194,8 @@ function SignatureStamp({ bdm = 'Husna M S' }) {
 function InfoBlock({ label, value }) {
   return (
     <div>
-      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="mt-0.5 font-mono text-[12.5px] font-bold text-slate-900">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-0.5 font-mono text-[13px] font-bold text-slate-900">{value}</p>
     </div>
   )
 }
@@ -203,22 +203,22 @@ function InfoBlock({ label, value }) {
 function SectionBox({ title, children, className = '' }) {
   return (
     <div className={`overflow-hidden rounded-xl border border-slate-300 ${className}`}>
-      <div className="flex items-center justify-between bg-black px-3 py-1.5">
-        <span className="text-[10.5px] font-bold uppercase tracking-wider text-white">{title}</span>
+      <div className="flex items-center justify-between bg-black px-3 py-2">
+        <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
       </div>
-      <div className="p-3 bg-white">{children}</div>
+      <div className="p-3.5 bg-white">{children}</div>
     </div>
   )
 }
 
 function PageHeader({ proposal, annexLabel }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-slate-900 pb-4">
+    <div className="flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-4">
       <div className="flex items-center gap-3">
-        <div className="h-16 w-16 rounded-lg border border-slate-300 bg-white p-1">
+        <div className="h-16 w-16 shrink-0 rounded-lg border border-slate-300 bg-white p-1">
           <QRCodeVisual />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <InfoBlock label="Quotation #" value={proposal.id} />
           <InfoBlock label="Order Date" value={proposal.orderDate} />
           {annexLabel && <InfoBlock label="Annexure" value={annexLabel} />}
@@ -226,10 +226,10 @@ function PageHeader({ proposal, annexLabel }) {
       </div>
 
       <div className="text-center">
-        <h2 className="text-[26px] font-black uppercase tracking-widest text-black">
+        <h2 className="text-[24px] font-black uppercase tracking-[0.1em] text-black">
           Proposal Form
         </h2>
-        <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.25em] text-slate-600">
+        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
           Programers International
         </p>
         <div className="mt-1.5 flex justify-center">
@@ -237,10 +237,10 @@ function PageHeader({ proposal, annexLabel }) {
         </div>
       </div>
 
-      <div className="space-y-2 text-right">
+      <div className="flex flex-col items-end space-y-2 text-right">
         <ProgramersLogo />
         <BarcodeVisual />
-        <p className="font-mono text-[9px] text-slate-600">
+        <p className="font-mono text-[9.5px] text-slate-600">
           {proposal.id} | {proposal.orderDate} | {proposal.quotationBy}
         </p>
       </div>
@@ -250,7 +250,7 @@ function PageHeader({ proposal, annexLabel }) {
 
 function PageFooter() {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-[9.5px] leading-relaxed text-slate-600">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-[11px] leading-relaxed text-slate-600">
       4th Floor, Park House, Round North, Thrissur, Kerala, India - 680 001 | info@programers.in,
       www.programers.in | Ph: 9447151442, 9495951442, 9446451442
     </div>
@@ -260,15 +260,15 @@ function PageFooter() {
 function FinancialBanner({ proposal }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-300">
-      <div className="border-b border-slate-200 bg-slate-100 px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-700">
+      <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-center text-[11.5px] font-bold uppercase tracking-wider text-slate-700">
         All Amt In INR | No Additional Service Or Items | E&amp;O
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-3 text-[13px] font-bold text-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-3 text-[14px] font-bold text-slate-900">
         <span>Total: {proposal.total}</span>
         <span className="text-slate-600">(Discount: {proposal.discount})</span>
-        <span className="text-[15px] font-black text-black">Net: {proposal.net}</span>
+        <span className="text-[16px] font-black text-black">Net: {proposal.net}</span>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-200 bg-slate-100 px-3 py-1.5 text-[10px] font-bold text-slate-700">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-200 bg-slate-100 px-3 py-2 text-[11.5px] font-bold text-slate-700">
         <span>{proposal.amountWords}</span>
         <span>Annexure - A(0)</span>
       </div>
@@ -277,7 +277,7 @@ function FinancialBanner({ proposal }) {
 }
 
 const PAGE_CLASS =
-  'mx-auto max-w-[840px] rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8 print:max-w-none print:border-none print:shadow-none print:p-0 print:break-after-page'
+  'print-page mx-auto flex w-full max-w-[210mm] flex-col min-h-[297mm] bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm'
 
 export default function ProposalPreview() {
   const { id } = useParams()
@@ -396,24 +396,25 @@ export default function ProposalPreview() {
         <div className="space-y-8 print:space-y-0">
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
           <div className={PAGE_CLASS}>
+            <div className="flex flex-1 flex-col">
             <PageHeader proposal={proposalData} />
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <SectionBox title="Customer Details">
                 <div className="space-y-1">
-                  <p className="text-[13px] font-bold uppercase leading-snug text-slate-900">
+                  <p className="text-[15px] font-bold uppercase leading-snug text-slate-900">
                     {proposalData.customerCompany}
                   </p>
-                  <p className="text-[12px] font-medium text-slate-700">
+                  <p className="text-[13.5px] font-medium text-slate-700">
                     {proposalData.customerPerson}
                   </p>
-                  <p className="font-mono text-[12px] text-slate-800">{proposalData.customerPhone}</p>
-                  <p className="text-[11.5px] text-slate-500">{proposalData.customerLocation}</p>
+                  <p className="font-mono text-[13px] text-slate-800">{proposalData.customerPhone}</p>
+                  <p className="text-[12.5px] text-slate-500">{proposalData.customerLocation}</p>
                 </div>
               </SectionBox>
 
               <SectionBox title="Proposal Details">
-                <div className="space-y-1.5 text-[12px] leading-relaxed text-slate-700">
+                <div className="space-y-1.5 text-[13px] leading-relaxed text-slate-700">
                   <p>
                     <span className="font-bold text-slate-900">BDM:</span> {proposalData.bdm}
                   </p>
@@ -429,7 +430,7 @@ export default function ProposalPreview() {
               </SectionBox>
 
               <SectionBox title="Project Details">
-                <div className="space-y-1.5 text-[12px] leading-relaxed text-slate-700">
+                <div className="space-y-1.5 text-[13px] leading-relaxed text-slate-700">
                   <p>
                     <span className="font-bold text-slate-900">Category:</span>{' '}
                     {proposalData.category}
@@ -445,7 +446,7 @@ export default function ProposalPreview() {
               </SectionBox>
             </div>
 
-            <p className="mt-3 text-[11px] italic leading-relaxed text-slate-500">
+            <p className="mt-3 text-[12px] italic leading-relaxed text-slate-500">
               This Proposal form is issued in connection with the proposed project, and confirms our
               intent to proceed with the implementation as per the agreed terms and conditions.
             </p>
@@ -453,7 +454,7 @@ export default function ProposalPreview() {
             <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12">
               <div className="flex flex-col gap-3 lg:col-span-4">
                 <SectionBox title="Terms & Conditions" className="flex-1">
-                  <div className="space-y-2.5 text-[11.5px] leading-relaxed text-slate-700">
+                  <div className="space-y-3 text-[12.5px] leading-relaxed text-slate-700">
                     {proposalData.termsConditions.map((t, idx) => (
                       <div key={idx}>
                         <span className="font-bold text-slate-900">{t.title}</span> {t.content}
@@ -465,16 +466,16 @@ export default function ProposalPreview() {
                 <SectionBox title="Approved By">
                   <div className="flex items-center justify-between gap-2 py-0.5">
                     <div className="space-y-0.5 text-left min-w-0 flex-1">
-                      <p className="text-[11px] font-bold text-slate-900 flex items-center gap-1">
+                      <p className="text-[12px] font-bold text-slate-900 flex items-center gap-1">
                         <span className="text-emerald-700 font-extrabold">✓</span> Signature valid
                       </p>
-                      <p className="text-[10px] text-slate-700 leading-tight">
+                      <p className="text-[11px] text-slate-700 leading-tight">
                         Digitally signed by <span className="font-bold text-black">{proposalData.bdm}</span>
                       </p>
-                      <p className="font-mono text-[9px] text-slate-500 leading-none">
+                      <p className="font-mono text-[10px] text-slate-500 leading-none">
                         Date: 2026.04.17 16:31:09 +00:00
                       </p>
-                      <p className="text-[9px] text-slate-500 leading-none">Location: Thrissur</p>
+                      <p className="text-[10px] text-slate-500 leading-none">Location: Thrissur</p>
                     </div>
                     <SignatureStamp bdm={proposalData.bdm} />
                   </div>
@@ -484,10 +485,10 @@ export default function ProposalPreview() {
               <div className="flex flex-col gap-3 lg:col-span-8">
                 <SectionBox title="Proposal Summary" className="flex-1">
                   <div
-                    className="space-y-1.5 text-[12.5px] leading-relaxed text-slate-800"
+                    className="space-y-1.5 text-[13.5px] leading-relaxed text-slate-800"
                     dangerouslySetInnerHTML={{ __html: proposalData.proposalSummaryHtml }}
                   />
-                  <p className="mt-2 text-right text-[10px] font-bold text-slate-400">
+                  <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
                     Continued…
                   </p>
                 </SectionBox>
@@ -496,75 +497,78 @@ export default function ProposalPreview() {
               </div>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-auto pt-4">
               <PageFooter />
+            </div>
             </div>
           </div>
 
           {/* -------------------- PAGE 2 (ANNEXURE A - 1/1) -------------------- */}
           <div className={PAGE_CLASS}>
+            <div className="flex flex-1 flex-col">
             <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (1/1)" />
 
-            <div className="mt-4">
-              <SectionBox title="Proposal in Details &amp; Specifications" className="min-h-[600px]">
-                <div className="flex h-full min-h-[580px] flex-col justify-between space-y-4">
+            <div className="mt-4 flex flex-1 flex-col">
+              <SectionBox title="Proposal in Details &amp; Specifications" className="flex-1">
+                <div className="flex h-full flex-1 flex-col justify-between space-y-4">
                   <div
-                    className="space-y-3 text-[12px] leading-relaxed text-slate-800"
+                    className="space-y-3 text-[13px] leading-relaxed text-slate-800"
                     dangerouslySetInnerHTML={{
                       __html: `
-                        <h4 style="font-weight:bold; font-size:12.5px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px;">
+                        <h4 style="font-weight:bold; font-size:14px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px;">
                           1. TECHNICAL ARCHITECTURE & MODULE BREAKDOWN
                         </h4>
-                        <div style="line-height:1.5; margin-bottom:8px;">
+                        <div style="line-height:1.6; margin-bottom:10px;">
                           <p><strong>A. Custom Frontend User Experience (UI/UX):</strong> Ultra-fast Single-Page Application (SPA) architecture, mobile-first responsive design, and SEO-optimized workflows.</p>
                           <p style="margin-top:4px;"><strong>B. Operational Command Center & CRM:</strong> Role-based access control, real-time inquiry management, automated notification webhooks, and analytics reporting.</p>
                           <p style="margin-top:4px;"><strong>C. Cloud Infrastructure & Security:</strong> 256-bit SSL encryption, automated daily offsite snapshots, and 99.9% uptime SLA.</p>
                         </div>
 
-                        <h4 style="font-weight:bold; font-size:12.5px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px; margin-top:10px;">
+                        <h4 style="font-weight:bold; font-size:14px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px; margin-top:12px;">
                           2. IMPLEMENTATION PHASES & DELIVERY ROADMAP
                         </h4>
-                        <div style="line-height:1.5; margin-bottom:8px;">
+                        <div style="line-height:1.6; margin-bottom:10px;">
                           <p><strong>• Phase 1 — Discovery & UI Wireframing (Week 1):</strong> Requirement sign-off and prototype approval.<br/>
                              <strong>• Phase 2 — Core Development & Integrations (Weeks 2–3):</strong> Database modeling, API integrations, and billing logic.<br/>
                              <strong>• Phase 3 — QA Testing & Go-Live (Week 4):</strong> End-to-end UAT testing, cloud migration, and staff onboarding.</p>
                         </div>
 
-                        <h4 style="font-weight:bold; font-size:12.5px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px; margin-top:10px;">
+                        <h4 style="font-weight:bold; font-size:14px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px; margin-top:12px;">
                           3. SLA & 12-MONTH TECHNICAL WARRANTY
                         </h4>
-                        <div style="line-height:1.5;">
+                        <div style="line-height:1.6;">
                           <p>Includes complete bug resolution coverage, security patches, multi-channel support desk (Mon–Sat 9:30 AM – 6:00 PM IST), and 100% client data ownership upon project completion.</p>
                         </div>
 
-                        <div style="border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; padding:10px; margin-top:14px;">
-                          <p style="font-weight:bold; font-size:10.5px; color:#0f172a; text-transform:uppercase;">Client Acceptance & Project Commissioning</p>
-                          <p style="font-size:10px; color:#475569; margin-top:2px;">By signing or issuing an official Purchase Order referencing this Proposal, the client confirms acceptance of the scope of work, financial terms, and service conditions outlined herein.</p>
-                          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:20px; padding-top:10px; border-top:1px solid #cbd5e1;">
+                        <div style="border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; padding:12px; margin-top:16px;">
+                          <p style="font-weight:bold; font-size:12px; color:#0f172a; text-transform:uppercase;">Client Acceptance & Project Commissioning</p>
+                          <p style="font-size:11.5px; color:#475569; margin-top:4px;">By signing or issuing an official Purchase Order referencing this Proposal, the client confirms acceptance of the scope of work, financial terms, and service conditions outlined herein.</p>
+                          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:24px; padding-top:12px; border-top:1px solid #cbd5e1;">
                             <div>
-                              <div style="width:140px; border-bottom:1px solid #475569; height:18px;"></div>
-                              <p style="font-size:9.5px; font-weight:bold; color:#0f172a; margin-top:3px;">Authorized Client Signature</p>
-                              <p style="font-size:8.5px; color:#64748b;">(Name, Designation & Seal)</p>
+                              <div style="width:150px; border-bottom:1px solid #475569; height:22px;"></div>
+                              <p style="font-size:11px; font-weight:bold; color:#0f172a; margin-top:4px;">Authorized Client Signature</p>
+                              <p style="font-size:10px; color:#64748b;">(Name, Designation & Seal)</p>
                             </div>
                             <div style="text-align:right;">
-                              <div style="width:140px; border-bottom:1px solid #475569; height:18px; margin-left:auto;"></div>
-                              <p style="font-size:9.5px; font-weight:bold; color:#0f172a; margin-top:3px;">For Programers International</p>
-                              <p style="font-size:8.5px; color:#64748b;">Authorized Signatory</p>
+                              <div style="width:150px; border-bottom:1px solid #475569; height:22px; margin-left:auto;"></div>
+                              <p style="font-size:11px; font-weight:bold; color:#0f172a; margin-top:4px;">For Programers International</p>
+                              <p style="font-size:10px; color:#64748b;">Authorized Signatory</p>
                             </div>
                           </div>
                         </div>
                       `,
                     }}
                   />
-                  <p className="mt-2 text-right text-[10px] font-bold text-slate-400">
+                  <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
                     --- End of proposal ---
                   </p>
                 </div>
               </SectionBox>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-auto pt-4">
               <PageFooter />
+            </div>
             </div>
           </div>
         </div>

@@ -93,7 +93,7 @@ function QRCodeVisual({ value }) {
     <div className="flex h-full w-full items-center justify-center bg-white p-0.5">
       <QRCodeSVG
         value={value || 'https://leads.programersapps.com/orders/verify/P2025-0004'}
-        size={64}
+        size={84}
         level="H"
         fgColor="#000000"
         bgColor="#ffffff"
@@ -125,10 +125,10 @@ function PageHeader({ order, annexLabel }) {
           <Barcode
             value="6780611629"
             format="CODE128"
-            width={1.65}
-            height={22}
+            width={1.8}
+            height={26}
             displayValue={true}
-            fontSize={9}
+            fontSize={11}
             margin={0}
             background="transparent"
           />
@@ -137,42 +137,42 @@ function PageHeader({ order, annexLabel }) {
 
       {/* Center: ORDER FORM & GeM Logo */}
       <div className="flex flex-col items-center justify-center pt-0.5 text-center">
-        <h2 className="text-2xl font-black tracking-widest text-black uppercase font-sans">
+        <h2 className="text-3xl font-black tracking-widest text-black uppercase font-sans">
           ORDER FORM
         </h2>
         {/* Ornamental Ribbon */}
-        <div className="text-slate-600 text-xs tracking-widest leading-none my-0.5 select-none">
+        <div className="text-slate-600 text-sm tracking-widest leading-none my-0.5 select-none">
           ୨୧┈┈┈┈୨୧
         </div>
         <img
           src="/GeM.png"
           alt="GeM - Government e Marketplace"
-          className="h-9 w-auto object-contain mt-0.5"
+          className="h-10 w-auto object-contain mt-0.5"
         />
       </div>
 
       {/* Right: Order #, Date, QR Code & Annexure */}
       <div className="flex items-start gap-2">
         <div className="text-right">
-          <div className="rounded border border-black bg-black px-2 py-0.5 text-center text-[8.5px] font-bold uppercase tracking-wider text-white">
+          <div className="rounded border border-black bg-black px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-white">
             ORDER #
           </div>
-          <div className="mt-0.5 text-[10.5px] font-black tracking-wide text-black font-mono">
+          <div className="mt-1 text-[13px] font-black tracking-wide text-black font-mono">
             {order.id}
           </div>
-          <div className="mt-1 rounded border border-black bg-black px-2 py-0.5 text-center text-[8.5px] font-bold uppercase tracking-wider text-white">
+          <div className="mt-1.5 rounded border border-black bg-black px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-white">
             ORDER DATE
           </div>
-          <div className="mt-0.5 text-[10.5px] font-bold text-black font-mono">
+          <div className="mt-1 text-[13px] font-bold text-black font-mono">
             {order.orderDate}
           </div>
         </div>
 
         <div className="flex flex-col items-center">
-          <div className="h-14 w-14 overflow-hidden rounded border border-black bg-white p-0.5">
+          <div className="h-16 w-16 overflow-hidden rounded border border-black bg-white p-0.5">
             <QRCodeVisual value={`https://leads.programersapps.com/orders/${order.id}`} />
           </div>
-          <span className="mt-0.5 text-[8px] font-black uppercase tracking-wider text-black">
+          <span className="mt-1 text-[10px] font-black uppercase tracking-wider text-black">
             {annexLabel}
           </span>
         </div>
@@ -184,10 +184,10 @@ function PageHeader({ order, annexLabel }) {
 function SectionBox({ title, children, className = '' }) {
   return (
     <div className={`overflow-hidden rounded-md border border-black bg-white flex flex-col ${className}`}>
-      <div className="border-b border-black bg-black px-3 py-1 text-[10.5px] font-bold uppercase tracking-wider text-white text-center shrink-0">
+      <div className="border-b border-black bg-black px-3 py-1.5 text-[13px] font-bold uppercase tracking-wider text-white text-center shrink-0">
         {title}
       </div>
-      <div className="p-2.5 text-[11px] leading-relaxed text-black flex-1 flex flex-col justify-start">
+      <div className="p-3.5 text-[13px] leading-relaxed text-black flex-1 flex flex-col justify-start">
         {children}
       </div>
     </div>
@@ -197,21 +197,21 @@ function SectionBox({ title, children, className = '' }) {
 function FinancialBanner({ order }) {
   return (
     <div className="rounded-md border border-black bg-white p-2 text-black mt-1.5 shrink-0">
-      <div className="border-b border-slate-300 pb-1 text-center text-[9px] font-bold uppercase tracking-wider text-black">
+      <div className="border-b border-slate-300 pb-1 text-center text-[10.5px] font-bold uppercase tracking-wider text-black">
         All Amt In | No Additional Service Or Items | E&amp;O
       </div>
-      <div className="mt-1.5 flex items-center justify-between gap-1 px-1 text-[11px]">
+      <div className="mt-1.5 flex items-center justify-between gap-1 px-1 text-[13px]">
         <div className="font-bold">
           Total: <span className="font-mono text-black">{order.total}</span>
         </div>
-        <div className="font-bold text-slate-700 text-[10px]">
+        <div className="font-bold text-slate-700 text-[12px]">
           (Discount: <span className="font-mono text-black">{order.discount}</span>)
         </div>
-        <div className="rounded bg-black px-2.5 py-0.5 text-[11px] font-black text-white">
+        <div className="rounded bg-black px-3 py-0.5 text-[13px] font-black text-white">
           Net: <span className="font-mono">{order.net}</span>
         </div>
       </div>
-      <div className="mt-1.5 border-t border-slate-300 pt-1 text-center text-[10px] font-black uppercase tracking-widest text-black">
+      <div className="mt-1.5 border-t border-slate-300 pt-1 text-center text-[12px] font-black uppercase tracking-widest text-black">
         {order.amountWords}
       </div>
     </div>
@@ -220,11 +220,11 @@ function FinancialBanner({ order }) {
 
 function PageFooter() {
   return (
-    <div className="border-t border-black pt-1.5 text-center text-[9px] leading-tight text-slate-800 shrink-0">
+    <div className="border-t border-black pt-1.5 text-center text-[10.5px] leading-tight text-slate-800 shrink-0">
       <p className="font-medium">
         4th Floor, Park House ,Round North, Thrissur, Kerala, India - 680 001 | info@programers.in, www.programers.in | Ph: 9447151442, 9495951442, 9446451442
       </p>
-      <p className="text-[8px] text-slate-500 mt-0.5">
+      <p className="text-[9.5px] text-slate-500 mt-0.5">
         Purchase authorization request
       </p>
     </div>
@@ -316,38 +316,38 @@ export default function OrderPreview() {
               {/* 3-Column Metadata Grid */}
               <div className="mt-2.5 grid grid-cols-3 gap-2">
                 <SectionBox title="CUSTOMER DETAILS">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-black text-[12px]">{orderData.customerPerson}</p>
-                    <p className="text-slate-700 font-mono text-[10.5px]">{orderData.customerPhone}</p>
-                    <p className="text-slate-600 text-[10px]">{orderData.customerLocation}</p>
+                  <div className="space-y-1">
+                    <p className="font-bold text-black text-[14px]">{orderData.customerPerson}</p>
+                    <p className="text-slate-700 font-mono text-[12px]">{orderData.customerPhone}</p>
+                    <p className="text-slate-600 text-[11.5px]">{orderData.customerLocation}</p>
                   </div>
                 </SectionBox>
 
                 <SectionBox title="ORDER DETAILS">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-black text-[12px]">{orderData.customerCompany}</p>
-                    <p className="text-slate-700 text-[10.5px]">
+                  <div className="space-y-1">
+                    <p className="font-bold text-black text-[14px]">{orderData.customerCompany}</p>
+                    <p className="text-slate-700 text-[12px]">
                       Proposal Date: <span className="font-mono font-bold text-black">{orderData.proposalDate}</span>
                     </p>
                   </div>
                 </SectionBox>
 
                 <SectionBox title="PROJECT DETAILS">
-                  <div className="space-y-0.5">
-                    <p className="text-[10.5px]">
+                  <div className="space-y-1">
+                    <p className="text-[12px]">
                       BDO /BDM: <span className="font-bold text-black">{orderData.bdm}</span>
                     </p>
-                    <p className="text-[10.5px]">
+                    <p className="text-[12px]">
                       Proposal #: <span className="font-mono font-bold text-black">{orderData.proposalNo}</span>
                     </p>
-                    <p className="text-[10.5px]">
+                    <p className="text-[12px]">
                       Proposal By: <span className="font-medium text-slate-700">{orderData.proposalBy}</span>
                     </p>
                   </div>
                 </SectionBox>
               </div>
 
-              <p className="mt-1.5 text-[9px] italic leading-tight text-slate-600 text-center">
+              <p className="mt-2 text-[10.5px] italic leading-tight text-slate-600 text-center">
                 This Proposal form is issued in connection with the proposed project, and confirms our intent to proceed with the implementation as per the agreed terms and conditions.
               </p>
 
@@ -357,10 +357,10 @@ export default function OrderPreview() {
                 <div className="col-span-7 flex flex-col justify-between">
                   <SectionBox title="ORDER SUMMARY" className="flex-1">
                     <div
-                      className="space-y-1 text-[10.5px] leading-relaxed text-black"
+                      className="space-y-1.5 text-[13px] leading-relaxed text-black"
                       dangerouslySetInnerHTML={{ __html: orderData.orderSummaryHtml }}
                     />
-                    <p className="mt-auto pt-2 text-center text-[9px] font-bold text-slate-500">
+                    <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
                       --- Continued ---
                     </p>
                   </SectionBox>
@@ -372,10 +372,10 @@ export default function OrderPreview() {
                 <div className="col-span-5 flex flex-col">
                   <SectionBox title="TERMS &amp; CONDITIONS" className="h-full">
                     <div
-                      className="space-y-1.5 text-[10px] leading-relaxed text-black"
+                      className="space-y-2 text-[12.5px] leading-relaxed text-black"
                       dangerouslySetInnerHTML={{ __html: orderData.termsSummaryHtml }}
                     />
-                    <p className="mt-auto pt-2 text-center text-[9px] font-bold text-slate-500">
+                    <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
                       --- Detailed continued in Page 2 ---
                     </p>
                   </SectionBox>
@@ -383,47 +383,47 @@ export default function OrderPreview() {
               </div>
 
               {/* Bottom 3-Box Row: Approved By | Accepted By | Bank Details */}
-              <div className="mt-2 grid grid-cols-3 gap-2 text-[9px]">
+              <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
                 {/* Box 1: Approved By */}
                 <div className="rounded-md border border-black bg-white p-2 text-black flex flex-col justify-between">
-                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-0.5 text-center text-[9.5px] font-bold uppercase text-white mb-1.5">
+                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11.5px] font-bold uppercase text-white mb-1.5">
                     Approved By
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     <p className="font-bold text-emerald-700 flex items-center gap-1">
                       <span>Signature valid</span>
-                      <span className="text-xs">✔</span>
+                      <span className="text-sm">✔</span>
                     </p>
-                    <p className="text-[9px] text-slate-800">Digitally signed by <strong>Programers International</strong></p>
-                    <p className="font-mono text-[8px] text-slate-500">Date: 2026.04.18 08:22:30 +00:00</p>
-                    <p className="text-slate-500 text-[8px]">Location: Thrissur</p>
+                    <p className="text-[10.5px] text-slate-800">Digitally signed by <strong>Programers International</strong></p>
+                    <p className="font-mono text-[9.5px] text-slate-500">Date: 2026.04.18 08:22:30 +00:00</p>
+                    <p className="text-slate-500 text-[9.5px]">Location: Thrissur</p>
                   </div>
                 </div>
 
                 {/* Box 2: Accepted By */}
                 <div className="rounded-md border border-black bg-white p-2 text-black flex flex-col justify-between">
-                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-0.5 text-center text-[9.5px] font-bold uppercase text-white mb-1.5">
+                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11.5px] font-bold uppercase text-white mb-1.5">
                     Accepted By
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     <p className="font-bold text-emerald-700 flex items-center gap-1">
                       <span>Signature valid</span>
-                      <span className="text-xs">✔</span>
+                      <span className="text-sm">✔</span>
                     </p>
-                    <p className="text-[9px] text-slate-800">Digitally signed by <strong>{orderData.customerCompany}</strong></p>
-                    <p className="font-mono text-[8px] text-slate-500">Date: 2026.04.18 08:22:30 +00:00</p>
-                    <p className="text-slate-500 text-[8px]">Location: KOCHI</p>
+                    <p className="text-[10.5px] text-slate-800">Digitally signed by <strong>{orderData.customerCompany}</strong></p>
+                    <p className="font-mono text-[9.5px] text-slate-500">Date: 2026.04.18 08:22:30 +00:00</p>
+                    <p className="text-slate-500 text-[9.5px]">Location: KOCHI</p>
                   </div>
                 </div>
 
                 {/* Box 3: Bank Details */}
                 <div className="rounded-md border border-black bg-white p-2 text-black flex flex-col justify-between">
-                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-0.5 text-center text-[9.5px] font-bold uppercase text-white mb-1.5">
+                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11.5px] font-bold uppercase text-white mb-1.5">
                     Bank Details
                   </div>
                   <div>
-                    <p className="font-bold text-black text-[9.5px]">{orderData.bankName}</p>
-                    <p className="text-[8.5px] text-slate-700 mt-0.5 leading-snug">{orderData.bankBranch}</p>
+                    <p className="font-bold text-black text-[11.5px]">{orderData.bankName}</p>
+                    <p className="text-[10px] text-slate-700 mt-0.5 leading-snug">{orderData.bankBranch}</p>
                   </div>
                 </div>
               </div>
@@ -447,10 +447,10 @@ export default function OrderPreview() {
               <div className="mt-3 flex-1 flex flex-col">
                 <SectionBox title="ORDER IN DETAILS" className="flex-1 flex flex-col justify-between min-h-[580px]">
                   <div
-                    className="space-y-2 text-[11px] leading-relaxed text-black"
+                    className="space-y-2 text-[13px] leading-relaxed text-black"
                     dangerouslySetInnerHTML={{ __html: orderData.orderInDetailsHtml }}
                   />
-                  <p className="mt-3 text-right text-[9.5px] font-bold text-slate-400">--- End of page ---</p>
+                  <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- End of page ---</p>
                 </SectionBox>
               </div>
             </div>
@@ -473,7 +473,7 @@ export default function OrderPreview() {
               <div className="mt-3 flex-1 flex flex-col justify-between">
                 <SectionBox title="TERMS &amp; CONDITIONS" className="flex-1">
                   <div
-                    className="space-y-1.5 text-[9.5px] leading-snug text-black text-justify"
+                    className="space-y-3 text-[12.5px] leading-relaxed text-black text-justify"
                     dangerouslySetInnerHTML={{ __html: orderData.legalTermsHtml }}
                   />
                 </SectionBox>
@@ -481,37 +481,37 @@ export default function OrderPreview() {
                 {/* Final Signatures & QR Block */}
                 <div className="mt-2.5 grid grid-cols-12 gap-2">
                   <div className="col-span-5 rounded-md border border-black bg-white p-2">
-                    <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-0.5 text-center text-[9px] font-bold uppercase text-white mb-1">
+                    <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
                       Approved By
                     </div>
-                    <div className="mt-1 text-[9px]">
+                    <div className="mt-1 text-[11px]">
                       <p className="font-bold text-emerald-700 flex items-center gap-1">
                         <span>Signature valid</span>
-                        <span className="text-xs">✔</span>
+                        <span className="text-sm">✔</span>
                       </p>
                       <p className="text-slate-800 font-semibold mt-0.5">Programers International</p>
-                      <p className="text-slate-500 text-[8px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
-                      <p className="text-slate-500 text-[8px]">Location: Thrissur</p>
+                      <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
+                      <p className="text-slate-500 text-[9.5px]">Location: Thrissur</p>
                     </div>
                   </div>
 
                   <div className="col-span-5 rounded-md border border-black bg-white p-2">
-                    <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-0.5 text-center text-[9px] font-bold uppercase text-white mb-1">
+                    <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
                       Accepted By
                     </div>
-                    <div className="mt-1 text-[9px]">
+                    <div className="mt-1 text-[11px]">
                       <p className="font-bold text-emerald-700 flex items-center gap-1">
                         <span>Signature valid</span>
-                        <span className="text-xs">✔</span>
+                        <span className="text-sm">✔</span>
                       </p>
                       <p className="text-slate-800 font-semibold mt-0.5">{orderData.customerCompany}</p>
-                      <p className="text-slate-500 text-[8px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
-                      <p className="text-slate-500 text-[8px]">Location: KOCHI</p>
+                      <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
+                      <p className="text-slate-500 text-[9.5px]">Location: KOCHI</p>
                     </div>
                   </div>
 
                   <div className="col-span-2 flex items-center justify-center rounded-md border border-black bg-white p-1">
-                    <div className="h-14 w-14">
+                    <div className="h-[72px] w-[72px]">
                       <QRCodeVisual value={`https://leads.programersapps.com/orders/${orderData.id}`} />
                     </div>
                   </div>
