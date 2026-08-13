@@ -14,6 +14,9 @@ import OrderPreview from './admin/transactions/OrderPreview'
 import RawDataRegister from './admin/reports/RawDataRegister'
 import TelecalligRegister from './admin/reports/TelecalligRegister'
 import QuotationRegister from './admin/reports/QuotationRegister'
+import OrderReceived from './admin/reports/OrderReceived'
+import OrderProgress from './admin/reports/OrderProgress'
+import Settings from './admin/utilities/Settings'
 
 function App() {
   return (
@@ -43,6 +46,12 @@ function App() {
       <Route path="/raw-data-register" element={<RawDataRegister />} />
       <Route path="/telecalling-register" element={<TelecalligRegister />} />
       <Route path="/quotation-submitted-register" element={<QuotationRegister />} />
+      <Route path="/order-received-register" element={<OrderReceived />} />
+      <Route path="/order-received" element={<OrderReceived />} />
+      <Route path="/order-progress-register" element={<OrderProgress />} />
+
+      {/* Utilities Routes */}
+      <Route path="/settings" element={<Settings />} />
 
       {/* Fallback Route */}
       <Route path="*" element={<Navigate to="/" replace />} />

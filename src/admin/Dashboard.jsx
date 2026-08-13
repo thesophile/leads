@@ -248,7 +248,91 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Main Grid: Funnel & Hot Leads */}
+        {/* ============ LEAD ACQUISITION & SOURCES ROW ============ */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Lead Acquisition Trend */}
+          <ChartCard
+            title="Lead Acquisition Trend"
+            subtitle="Inbound leads vs contacted, last 8 months"
+            badge="Jan – Aug"
+            className="lg:col-span-7"
+          >
+            <div className="h-64 text-[11px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={MONTHLY_TREND} margin={{ top: 10, right: 10, left: -18, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="leadGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="contactGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="leads" name="Leads" stroke="#6366f1" strokeWidth={2.5} fill="url(#leadGrad)" />
+                  <Area type="monotone" dataKey="contacted" name="Contacted" stroke="#10b981" strokeWidth={2.5} fill="url(#contactGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </ChartCard>
+
+          {/* Lead Sources Donut */}
+          <ChartCard
+            title="Lead Sources"
+            subtitle="Acquisition channels breakdown"
+            badge="6 Channels"
+            className="lg:col-span-5"
+          >
+            <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+              <div className="h-52 w-52 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={SOURCE_DATA}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={54}
+                      outerRadius={82}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {SOURCE_DATA.map((s, i) => (
+                        <Cell key={`source-${i}`} fill={s.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(val, name) => [`${Number(val).toLocaleString()} leads`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full space-y-2.5">
+                {SOURCE_DATA.map((s) => (
+                  <div key={s.name} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="flex items-center gap-2 text-slate-600">
+                      <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: s.color }} />
+                      <span className="font-medium">{s.name}</span>
+                    </span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {s.value.toLocaleString()}
+                      <span className="ml-1 text-[10px] font-medium text-slate-400">
+                        {Math.round((s.value / 5736) * 100)}%
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ChartCard>
+        </div>
+
+        {/* ============ CONVERSION FUNNEL & HOT LEADS ROW ============ */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Sales Funnel Card */}
           <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden lg:col-span-7">
@@ -418,89 +502,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ============ ANALYTICS CHARTS ROW ============ */}
+        {/* ============ PIPELINE & PERFORMANCE ROW ============ */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Lead Acquisition Trend */}
-          <ChartCard
-            title="Lead Acquisition Trend"
-            subtitle="Inbound leads vs contacted, last 8 months"
-            badge="Jan – Aug"
-            className="lg:col-span-7"
-          >
-            <div className="h-64 text-[11px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={MONTHLY_TREND} margin={{ top: 10, right: 10, left: -18, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="leadGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="contactGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
-                  <Area type="monotone" dataKey="leads" name="Leads" stroke="#6366f1" strokeWidth={2.5} fill="url(#leadGrad)" />
-                  <Area type="monotone" dataKey="contacted" name="Contacted" stroke="#10b981" strokeWidth={2.5} fill="url(#contactGrad)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </ChartCard>
-
-          {/* Lead Sources Donut */}
-          <ChartCard
-            title="Lead Sources"
-            subtitle="Acquisition channels breakdown"
-            badge="6 Channels"
-            className="lg:col-span-5"
-          >
-            <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
-              <div className="h-52 w-52 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={SOURCE_DATA}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={54}
-                      outerRadius={82}
-                      paddingAngle={2}
-                      stroke="none"
-                    >
-                      {SOURCE_DATA.map((s, i) => (
-                        <Cell key={`source-${i}`} fill={s.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(val, name) => [`${Number(val).toLocaleString()} leads`, name]} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="w-full space-y-2.5">
-                {SOURCE_DATA.map((s) => (
-                  <div key={s.name} className="flex items-center justify-between gap-2 text-xs">
-                    <span className="flex items-center gap-2 text-slate-600">
-                      <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: s.color }} />
-                      <span className="font-medium">{s.name}</span>
-                    </span>
-                    <span className="font-mono font-bold text-slate-800">
-                      {s.value.toLocaleString()}
-                      <span className="ml-1 text-[10px] font-medium text-slate-400">
-                        {Math.round((s.value / 5736) * 100)}%
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </ChartCard>
-
           {/* Quotation → Order Conversion */}
           <ChartCard
             title="Quotation & Order Pipeline"

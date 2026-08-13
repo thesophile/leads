@@ -264,6 +264,22 @@ export default function ManageOrder() {
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState(null)
 
+  // Payment Modal State
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [paymentOrder, setPaymentOrder] = useState(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMode, setPaymentMode] = useState('UPI')
+  const [paymentDate, setPaymentDate] = useState('')
+  const [paymentRef, setPaymentRef] = useState('')
+
+  // Project Progress Fields
+  const [deliveryDate, setDeliveryDate] = useState('2026-08-25')
+  const [assignedDeveloper, setAssignedDeveloper] = useState('Sujith Kumar')
+  const [developmentStage, setDevelopmentStage] = useState('UI/UX Design')
+  const [timelineHealth, setTimelineHealth] = useState('On Time')
+
+
+
   // Modal State for Order Form Editor
   const [orderModalOpen, setOrderModalOpen] = useState(false)
   const [editingOrderId, setEditingOrderId] = useState(null)
@@ -326,6 +342,10 @@ export default function ManageOrder() {
       setBankName(order.bankName || 'ICICI BANK')
       setBankBranch(order.bankBranch || 'OPP BISHOP PALACE, EAST FORT, TRICHUR. Pin : 680005')
       setRemarksVal(order.remarks || '')
+      setDeliveryDate(order.deliveryDate || '2026-08-25')
+      setAssignedDeveloper(order.developer || 'Sujith Kumar')
+      setDevelopmentStage(order.stage || 'UI/UX Design')
+      setTimelineHealth(order.health || 'On Time')
     } else {
       // New order
       setEditingOrderId(null)
@@ -347,6 +367,10 @@ export default function ManageOrder() {
       setBankName('ICICI BANK')
       setBankBranch('OPP BISHOP PALACE, EAST FORT, TRICHUR. Pin : 680005')
       setRemarksVal('')
+      setDeliveryDate('2026-08-25')
+      setAssignedDeveloper('Sujith Kumar')
+      setDevelopmentStage('UI/UX Design')
+      setTimelineHealth('On Time')
     }
     setOrderModalOpen(true)
   }
@@ -375,6 +399,10 @@ export default function ManageOrder() {
                 remarks: remarksVal,
                 scope: orderSummaryHtml,
                 details: orderInDetailsHtml,
+                deliveryDate: deliveryDate,
+                developer: assignedDeveloper,
+                stage: developmentStage,
+                health: timelineHealth,
               }
             : item
         )
@@ -407,6 +435,10 @@ export default function ManageOrder() {
         remarks: remarksVal,
         scope: orderSummaryHtml,
         details: orderInDetailsHtml,
+        deliveryDate: deliveryDate,
+        developer: assignedDeveloper,
+        stage: developmentStage,
+        health: timelineHealth,
       }
       setOrdersList([newOrder, ...ordersList])
       setSubmitMessage('✓ New Order Form generated!')
@@ -431,6 +463,39 @@ export default function ManageOrder() {
       )
     )
     setOpenDropdownId(null)
+  }
+
+  function handleOpenPaymentModal(order) {
+    setPaymentOrder(order)
+    setPaymentAmount('')
+    setPaymentMode('UPI')
+    setPaymentDate(new Date().toISOString().slice(0, 10))
+    setPaymentRef('')
+    setPaymentModalOpen(true)
+  }
+
+  function handleRecordPayment(e) {
+    e.preventDefault()
+    
+    // In a real app, this would send data to the backend.
+    // For now, we update the order's remarks or status and close the modal.
+    setOrdersList((prev) =>
+      prev.map((item) =>
+        item.id === paymentOrder?.id
+          ? {
+              ...item,
+              remarks: `Received payment of ₹${paymentAmount} via ${paymentMode} on ${paymentDate}. Ref: ${paymentRef}. ` + (item.remarks || ''),
+            }
+          : item
+      )
+    )
+    
+    setSubmitMessage('✓ Payment recorded successfully!')
+    setTimeout(() => {
+      setSubmitMessage('')
+      setPaymentModalOpen(false)
+      setPaymentOrder(null)
+    }, 1500)
   }
 
   // Filtered dataset
@@ -585,162 +650,188 @@ export default function ManageOrder() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order) => (
-                    <tr key={order.id} className="text-slate-600 hover:bg-slate-50/60 transition-colors">
-                      {/* Order ID */}
-                      <td className="py-2.5 pr-3 font-mono font-bold text-slate-950">
-                        {order.id}
-                      </td>
+                  filteredOrders.map((order, idx) => {
+                    const isNearBottom = idx >= Math.max(1, filteredOrders.length - 2)
 
-                      {/* Customer */}
-                      <td className="py-2.5 pr-3 font-semibold text-slate-900">
-                        {order.customer}
-                      </td>
+                    return (
+                      <tr key={order.id} className="text-slate-600 hover:bg-slate-50/60 transition-colors">
+                        {/* Order ID */}
+                        <td className="py-2.5 pr-3 font-mono font-bold text-slate-950">
+                          {order.id}
+                        </td>
 
-                      {/* Company */}
-                      <td className="py-2.5 pr-3 text-slate-700">
-                        {order.company}
-                      </td>
+                        {/* Customer */}
+                        <td className="py-2.5 pr-3 font-semibold text-slate-900">
+                          {order.customer}
+                        </td>
 
-                      {/* Mobile */}
-                      <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
-                        {order.mobile}
-                      </td>
+                        {/* Company */}
+                        <td className="py-2.5 pr-3 text-slate-700">
+                          {order.company}
+                        </td>
 
-                      {/* Staff */}
-                      <td className="py-2.5 pr-3">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800">
-                          <span>{order.proposalBy || order.bdm}</span>
-                        </span>
-                      </td>
+                        {/* Mobile */}
+                        <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
+                          {order.mobile}
+                        </td>
 
-                      {/* Order Date */}
-                      <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
-                        {order.date}
-                      </td>
+                        {/* Staff */}
+                        <td className="py-2.5 pr-3">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800">
+                            <span>{order.proposalBy || order.bdm}</span>
+                          </span>
+                        </td>
 
-                      {/* Net Amount */}
-                      <td className="py-2.5 pr-3 font-mono font-bold text-slate-900">
-                        ₹{order.netAmount}
-                      </td>
+                        {/* Order Date */}
+                        <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
+                          {order.date}
+                        </td>
 
-                      {/* Status */}
-                      <td className="py-2.5 pr-3">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
-                            order.status === 'Order Created'
-                              ? 'border-blue-200 bg-blue-50 text-blue-700'
-                              : order.status === 'In Progress'
-                              ? 'border-amber-200 bg-amber-50 text-amber-700'
-                              : order.status === 'Completed'
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : 'border-slate-200 bg-slate-50 text-slate-700'
-                          }`}
-                        >
+                        {/* Net Amount */}
+                        <td className="py-2.5 pr-3 font-mono font-bold text-slate-900">
+                          ₹{order.netAmount}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-2.5 pr-3">
                           <span
-                            className={`h-1.5 w-1.5 rounded-full ${
+                            className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
                               order.status === 'Order Created'
-                                ? 'bg-blue-500'
+                                ? 'border-blue-200 bg-blue-50 text-blue-700'
                                 : order.status === 'In Progress'
-                                ? 'bg-amber-500 animate-pulse'
+                                ? 'border-amber-200 bg-amber-50 text-amber-700'
                                 : order.status === 'Completed'
-                                ? 'bg-emerald-500'
-                                : 'bg-slate-500'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-slate-200 bg-slate-50 text-slate-700'
                             }`}
-                          />
-                          <span>{order.status}</span>
-                        </span>
-                      </td>
-
-                      {/* Action: 3-Dot Action Menu */}
-                      <td className="py-2.5 pr-3 text-center">
-                        <div className="relative inline-block text-left">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setOpenDropdownId(openDropdownId === order.id ? null : order.id)
-                            }}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer mx-auto"
-                            title="Order Actions"
                           >
-                            <MoreVerticalIcon className="h-4 w-4" />
-                          </button>
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                order.status === 'Order Created'
+                                  ? 'bg-blue-500'
+                                  : order.status === 'In Progress'
+                                  ? 'bg-amber-500 animate-pulse'
+                                  : order.status === 'Completed'
+                                  ? 'bg-emerald-500'
+                                  : 'bg-slate-500'
+                              }`}
+                            />
+                            <span>{order.status}</span>
+                          </span>
+                        </td>
 
-                          {/* Floating Action Dropdown Menu */}
-                          {openDropdownId === order.id && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-30"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setOpenDropdownId(null)
-                                }}
-                              />
-                              <div className="absolute right-0 z-40 mt-1.5 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100 text-left">
-                                <button
-                                  type="button"
+                        {/* Action: 3-Dot Action Menu */}
+                        <td className="py-2.5 pr-3 text-center">
+                          <div className="relative inline-block text-left">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setOpenDropdownId(openDropdownId === order.id ? null : order.id)
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer mx-auto"
+                              title="Order Actions"
+                            >
+                              <MoreVerticalIcon className="h-4 w-4" />
+                            </button>
+
+                            {/* Floating Action Dropdown Menu */}
+                            {openDropdownId === order.id && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-30"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     setOpenDropdownId(null)
-                                    handleViewOrder(order)
                                   }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                                />
+                                <div
+                                  className={`absolute right-0 z-40 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100 text-left ${
+                                    isNearBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                                  }`}
                                 >
-                                  <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
-                                  <span>View Order Form</span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setOpenDropdownId(null)
+                                      handleViewOrder(order)
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                                  >
+                                    <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
+                                    <span>View Order Form</span>
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenDropdownId(null)
-                                    handleOpenOrderModal(order)
-                                  }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
-                                >
-                                  <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
-                                  <span>Edit Order Details</span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setOpenDropdownId(null)
+                                      handleOpenOrderModal(order)
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
+                                  >
+                                    <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
+                                    <span>Edit Order Details</span>
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenDropdownId(null)
-                                    alert(`Order Form ${order.id} dispatched to ${order.customer} via WhatsApp/Email!`)
-                                  }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
-                                >
-                                  <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
-                                  <span>Send to Client</span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setOpenDropdownId(null)
+                                      alert(`Order Form ${order.id} dispatched to ${order.customer} via WhatsApp/Email!`)
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                                  >
+                                    <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
+                                    <span>Send to Client</span>
+                                  </button>
 
-                                <div className="my-1 border-t border-slate-100" />
+                                  <div className="my-1 border-t border-slate-100" />
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleUpdateOrderStatus(order.id, 'In Progress', e)}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition cursor-pointer"
-                                >
-                                  <span>Mark In Progress</span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'In Progress', e)}
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition cursor-pointer"
+                                  >
+                                    <span>Mark In Progress</span>
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleUpdateOrderStatus(order.id, 'Completed', e)}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
-                                >
-                                  <span>Mark Completed</span>
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'Completed', e)}
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
+                                  >
+                                    <span>Mark Completed</span>
+                                  </button>
+
+                                  <div className="my-1 border-t border-slate-100" />
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setOpenDropdownId(null)
+                                      handleOpenPaymentModal(order)
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                                  >
+                                    <svg className="h-3.5 w-3.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="2" y="5" width="20" height="14" rx="2" />
+                                      <line x1="2" y1="10" x2="22" y2="10" />
+                                    </svg>
+                                    <span>Record Payment</span>
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
                 ) : (
                   <tr>
                     <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
@@ -993,6 +1084,75 @@ export default function ManageOrder() {
                 />
               </div>
 
+              {/* Project Progress Fields Section */}
+              <div className="border-t border-slate-100 pt-4 space-y-3.5">
+                <h4 className="font-bold text-slate-800 text-xs">Fulfillment &amp; Delivery Tracking</h4>
+                
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Target Delivery Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={deliveryDate}
+                      onChange={(e) => setDeliveryDate(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Assigned Developer
+                    </label>
+                    <select
+                      value={assignedDeveloper}
+                      onChange={(e) => setAssignedDeveloper(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+                    >
+                      <option value="Sujith Kumar">Sujith Kumar</option>
+                      <option value="Rahul Varma">Rahul Varma</option>
+                      <option value="Arya Sree">Arya Sree</option>
+                      <option value="Sandeep MD">Sandeep MD</option>
+                      <option value="Deepak Raj">Deepak Raj</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Development Stage
+                    </label>
+                    <select
+                      value={developmentStage}
+                      onChange={(e) => setDevelopmentStage(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+                    >
+                      <option value="UI/UX Design">UI/UX Design</option>
+                      <option value="Coding & Development">Coding &amp; Development</option>
+                      <option value="Testing & QA">Testing &amp; QA</option>
+                      <option value="Client Review">Client Review</option>
+                      <option value="Live & Deployed">Live &amp; Deployed</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Timeline Health
+                    </label>
+                    <select
+                      value={timelineHealth}
+                      onChange={(e) => setTimelineHealth(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+                    >
+                      <option value="On Time">On Time</option>
+                      <option value="Delayed">Delayed</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               {submitMessage && (
                 <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
                   {submitMessage}
@@ -1013,6 +1173,103 @@ export default function ManageOrder() {
                   className="rounded-lg bg-slate-950 px-5 py-2 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer shadow-xs active:scale-98"
                 >
                   Save &amp; Generate Order Form
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Record Payment Modal */}
+      {paymentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={() => setPaymentModalOpen(false)} />
+          <div className="relative w-full max-w-md transform rounded-2xl bg-white text-left shadow-2xl transition-all animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Record Advance / Payment</h3>
+                <p className="text-xs text-slate-500">Order: {paymentOrder?.id} - {paymentOrder?.company}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            
+            <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Amount Received (₹)</label>
+                <input
+                  type="number"
+                  required
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  placeholder="e.g. 25000"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Mode</label>
+                <select
+                  required
+                  value={paymentMode}
+                  onChange={(e) => setPaymentMode(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
+                >
+                  <option value="UPI">UPI (GPay / PhonePe)</option>
+                  <option value="NEFT / RTGS">Bank Transfer (NEFT / RTGS)</option>
+                  <option value="Cheque">Cheque Deposit</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Card">Card Payment</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Reference No.</label>
+                  <input
+                    type="text"
+                    value={paymentRef}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    placeholder="UTR / Cheque No"
+                  />
+                </div>
+              </div>
+
+              {submitMessage && (
+                <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-600 border border-emerald-200 text-center">
+                  {submitMessage}
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalOpen(false)}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
+                >
+                  Save Payment
                 </button>
               </div>
             </form>
