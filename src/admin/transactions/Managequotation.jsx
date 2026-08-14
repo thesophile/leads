@@ -593,12 +593,12 @@ export default function Managequotation() {
     <Layout>
       <div className="space-y-5">
         {/* Top Header Card */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
               Manage Quotation & Proposals
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 leading-relaxed">
               Prepare custom commercial proposals, submit for approval, and track client quotations.
             </p>
           </div>
@@ -607,7 +607,7 @@ export default function Managequotation() {
           <div className="flex flex-wrap items-center gap-2.5">
 
             {/* Quick Metrics */}
-            <div className="flex items-center gap-1.5">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
               <div className="rounded-xl border border-purple-200/80 bg-purple-50/60 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Not Sent</span>
                 <span className="text-xs font-bold text-purple-700 ml-1">
@@ -637,7 +637,7 @@ export default function Managequotation() {
         </div>
 
         {/* Main Table Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
           {/* Table Toolbar (Staff Filter + Status Filter + Search) */}
           <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -682,7 +682,7 @@ export default function Managequotation() {
 
               {/* Right Search Box */}
               <div className="flex items-center">
-                <div className="relative flex-1 sm:w-60">
+                <div className="relative w-full sm:w-60">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
                     <SearchIcon />
                   </span>
@@ -710,13 +710,13 @@ export default function Managequotation() {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
-                  <th className="pb-2.5 pr-2 font-semibold w-40">Customer</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-60">Company</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-28">Mobile</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-32">Staff</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-24">Date</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-36">Status</th>
-                  <th className="pb-2.5 pr-2 font-semibold text-left w-36">Action</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-32">Customer</th>
+                  <th className="hidden sm:table-cell pb-2.5 pr-2 font-semibold min-w-40">Company</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-24">Mobile</th>
+                  <th className="hidden md:table-cell pb-2.5 pr-2 font-semibold min-w-28">Staff</th>
+                  <th className="hidden md:table-cell pb-2.5 pr-2 font-semibold min-w-20">Date</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-32">Status</th>
+                  <th className="pb-2.5 pr-2 font-semibold text-left min-w-20">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -737,7 +737,7 @@ export default function Managequotation() {
                       </td>
 
                       {/* Company */}
-                      <td className="py-2.5 pr-3">
+                      <td className="hidden sm:table-cell py-2.5 pr-3">
                         <p className="font-semibold text-slate-900 text-xs">
                           {quote.company}
                         </p>
@@ -761,7 +761,7 @@ export default function Managequotation() {
                       </td>
 
                       {/* Staff */}
-                      <td className="py-2.5 pr-3">
+                      <td className="hidden md:table-cell py-2.5 pr-3">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           <span>{quote.staff || quote.qtnBy}</span>
@@ -769,7 +769,7 @@ export default function Managequotation() {
                       </td>
 
                       {/* Date */}
-                      <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
+                      <td className="hidden md:table-cell py-2.5 pr-3 font-mono text-[11px] text-slate-600">
                         {quote.date}
                       </td>
 
@@ -899,7 +899,7 @@ export default function Managequotation() {
           </div>
 
           {/* Static Pagination Footer */}
-          <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-[11px]">
+          <div className="flex flex-col gap-2 items-start sm:flex-row sm:items-center sm:justify-between pt-3 mt-3 border-t border-slate-100 text-[11px]">
             <span className="text-slate-400 font-medium">
               Showing 1 to {filteredQuotations.length} of {filteredQuotations.length} entries
             </span>
@@ -928,7 +928,7 @@ export default function Managequotation() {
         </div>
 
         {/* Quotation History Card (Matching Old Software Screenshot) */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-3">
             <FileTextIcon className="h-4 w-4 text-slate-500" />
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
@@ -936,33 +936,34 @@ export default function Managequotation() {
             </h3>
           </div>
 
+          {/* Quotation History Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
-                  <th className="pb-2.5 pr-2 font-semibold">QTN ID</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Date</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Amount</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Discount</th>
-                  <th className="pb-2.5 pr-2 font-semibold">QTN By</th>
-                  <th className="pb-2.5 pr-2 font-semibold">BDM</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Status</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Remarks</th>
-                  <th className="pb-2.5 pr-2 font-semibold text-center">Action</th>
+                  <th className="pb-2.5 pr-2 font-semibold whitespace-nowrap">QTN ID</th>
+                  <th className="hidden md:table-cell pb-2.5 pr-2 font-semibold whitespace-nowrap">Date</th>
+                  <th className="pb-2.5 pr-2 font-semibold whitespace-nowrap">Amount</th>
+                  <th className="hidden sm:table-cell pb-2.5 pr-2 font-semibold whitespace-nowrap">Discount</th>
+                  <th className="hidden md:table-cell pb-2.5 pr-2 font-semibold whitespace-nowrap">QTN By</th>
+                  <th className="hidden lg:table-cell pb-2.5 pr-2 font-semibold whitespace-nowrap">BDM</th>
+                  <th className="pb-2.5 pr-2 font-semibold whitespace-nowrap">Status</th>
+                  <th className="hidden md:table-cell pb-2.5 pr-2 font-semibold whitespace-nowrap">Remarks</th>
+                  <th className="pb-2.5 pr-2 font-semibold text-center whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredQuotations.map((item) => (
                   <tr key={`hist-${item.id}`} className="text-slate-600 hover:bg-slate-50/60 transition-colors">
-                    <td className="py-2.5 pr-3 font-mono font-bold text-slate-900">{item.id}</td>
-                    <td className="py-2.5 pr-3 font-mono text-[11px]">{item.date}</td>
-                    <td className="py-2.5 pr-3 font-mono font-semibold text-slate-900">₹{item.total}</td>
-                    <td className="py-2.5 pr-3 font-mono text-slate-500">₹{item.discount}</td>
-                    <td className="py-2.5 pr-3 font-medium text-slate-800">{item.qtnBy || item.staff}</td>
-                    <td className="py-2.5 pr-3 font-medium text-slate-800">{item.bdm || 'Husna'}</td>
-                    <td className="py-2.5 pr-3">
+                    <td className="py-2.5 pr-3 font-mono font-bold text-slate-900 whitespace-nowrap">{item.id}</td>
+                    <td className="hidden md:table-cell py-2.5 pr-3 font-mono text-[11px] whitespace-nowrap">{item.date}</td>
+                    <td className="py-2.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">₹{item.total}</td>
+                    <td className="hidden sm:table-cell py-2.5 pr-3 font-mono text-slate-500 whitespace-nowrap">₹{item.discount}</td>
+                    <td className="hidden md:table-cell py-2.5 pr-3 font-medium text-slate-800">{item.qtnBy || item.staff}</td>
+                    <td className="hidden lg:table-cell py-2.5 pr-3 font-medium text-slate-800">{item.bdm || 'Husna'}</td>
+                    <td className="py-2.5 pr-3 whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
+                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${
                           item.status === 'Not Sent'
                             ? 'bg-purple-50 text-purple-700 border-purple-200'
                             : item.status === 'Pending Approval'
@@ -977,7 +978,7 @@ export default function Managequotation() {
                         {item.status}
                       </span>
                     </td>
-                    <td className="py-2.5 pr-3 text-slate-500 max-w-xs truncate">{item.remarks || item.notes || '-'}</td>
+                    <td className="hidden md:table-cell py-2.5 pr-3 text-slate-500 max-w-xs truncate">{item.remarks || item.notes || '-'}</td>
                     <td className="py-2.5 pr-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
@@ -1003,6 +1004,7 @@ export default function Managequotation() {
               </tbody>
             </table>
           </div>
+
         </div>
       </div>
 
@@ -1011,7 +1013,7 @@ export default function Managequotation() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="w-full max-w-3xl my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
             {/* Modal Header with Quick Template Selector */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-b border-slate-200 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-slate-200 bg-white">
               <div className="flex flex-wrap items-center gap-3">
                 <h3 className="text-sm font-bold text-slate-900">
                   {editingProposalId ? 'Edit Proposal' : 'New Proposal'}
@@ -1047,7 +1049,7 @@ export default function Managequotation() {
             </div>
 
             {/* Scrollable Form Body */}
-            <form onSubmit={handleSubmitProposal} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+            <form onSubmit={handleSubmitProposal} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
               {/* Row 1: BDM | QTN BY | Client Name in a single row */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>

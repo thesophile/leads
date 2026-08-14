@@ -62,6 +62,7 @@ const MENU_SECTIONS = [
       { id: 'tele-call', label: 'Tele Call', path: '/tele-calling' },
       { id: 'quotations', label: 'Manage Quotation', path: '/quotations' },
       { id: 'orders', label: 'Manage Order', path: '/orders' },
+      { id: 'client-details', label: 'Client Details', path: '/client-details' },
     ],
   },
   {
@@ -71,8 +72,7 @@ const MENU_SECTIONS = [
       { id: 'raw-data-register', label: 'Raw Data Register', path: '/raw-data-register' },
       { id: 'telecalling-register', label: 'Telecalling Register', path: '/telecalling-register' },
       { id: 'quotation-submitted-register', label: 'Quotation Submitted Register', path: '/quotation-submitted-register' },
-      { id: 'order-received-register', label: 'Order Received Register', path: '/order-received-register' },
-      { id: 'order-progress-register', label: 'Order Progress Register', path: '/order-progress-register' },
+      { id: 'order-received-register', label: 'Converted Clients Register', path: '/order-received-register' },
     ],
   },
   {

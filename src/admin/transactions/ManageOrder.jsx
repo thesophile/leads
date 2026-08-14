@@ -21,15 +21,13 @@ const INITIAL_ORDERS_DATA = [
     proposalBy: 'Bincy',
     staff: 'Bincy',
     date: '12-12-2024',
-    status: 'In Progress',
+    status: 'Accepted',
     total: '50000/-',
     discount: '5000/-',
     netAmount: '45,000.00/-',
     currency: 'INR (₹)',
     category: 'Static & Dynamic Web',
-    bankName: 'ICICI BANK',
-    bankBranch: 'OPP BISHOP PALACE , EAST FORT TRICHUR. Pin : 680005',
-    remarks: '50% advance received via UPI. Frontend UI design and photo gallery under development.',
+    remarks: 'Order accepted by client. Client details collected for handover.',
     scope: `<p>To,</p>
 <p><strong>The Managing Director</strong><br/>
 Nambeesans Lakshmi Lodge, Thriprayar, Thrissur</p>
@@ -85,8 +83,6 @@ Final Amount: <strong>₹18,000</strong></p>
     netAmount: '1,35,000.00/-',
     currency: 'INR (₹)',
     category: 'Dynamic Web & OPD Suite',
-    bankName: 'ICICI BANK',
-    bankBranch: 'OPP BISHOP PALACE , EAST FORT TRICHUR. Pin : 680005',
     remarks: 'Approved by Super Admin. Order Form generated and ready to dispatch to hospital director.',
     scope: `<h3>Hospital Clinical Management & Web Portal</h3>
 <p>End-to-end OPD patient registration, doctor desk EHR, and cloud hosting.</p>`,
@@ -107,15 +103,13 @@ Final Amount: <strong>₹18,000</strong></p>
     proposalBy: 'Ananya Nair',
     staff: 'Ananya Nair',
     date: '11-08-2026',
-    status: 'In Progress',
+    status: 'Sent to Client',
     total: '95,000/-',
     discount: '5,000/-',
     netAmount: '90,000.00/-',
     currency: 'INR (₹)',
     category: 'Dynamic Web Portal',
-    bankName: 'ICICI BANK',
-    bankBranch: 'EAST FORT TRICHUR',
-    remarks: '50% token advance received via RTGS. Banquet hall calendar engine underway.',
+    remarks: 'Order Form sent to client. Awaiting acceptance.',
     scope: `<h3>Smart Venue Booking & Catering Reservation Portal</h3>
 <p>Banquet hall scheduling and catering management system.</p>`,
     details: `<h4>1. Deliverables</h4>
@@ -135,15 +129,13 @@ Final Amount: <strong>₹18,000</strong></p>
     proposalBy: 'Alex Joseph',
     staff: 'Alex Joseph',
     date: '10-08-2026',
-    status: 'Completed',
+    status: 'Accepted',
     total: '55,000/-',
     discount: '8,000/-',
     netAmount: '47,000.00/-',
     currency: 'INR (₹)',
     category: 'Social Media Ads & Meta',
-    bankName: 'ICICI BANK',
-    bankBranch: 'MG ROAD KOCHI',
-    remarks: 'Campaign setup complete. 100% realized settlement verified.',
+    remarks: 'Order accepted by client. Client details collected for handover.',
     scope: `<h3>Omnichannel Meta Ads & Brand Awareness</h3>
 <p>Full-funnel direct-response Instagram & Facebook marketing campaign.</p>`,
     details: `<h4>1. Deliverables</h4>
@@ -165,10 +157,9 @@ const STAFF_LIST = [
 const STATUS_LIST = [
   'All Status',
   'Order Created',
-  'In Progress',
-  'Pending Sign-off',
-  'Completed',
-  'Cancelled',
+  'Sent to Client',
+  'Accepted',
+  'Rejected',
 ]
 
 const QUILL_MODULES = {
@@ -247,15 +238,6 @@ function CloseIcon() {
   )
 }
 
-function PlusIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  )
-}
-
 export default function ManageOrder() {
   const navigate = useNavigate()
   const [ordersList, setOrdersList] = useState(INITIAL_ORDERS_DATA)
@@ -263,22 +245,6 @@ export default function ManageOrder() {
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState(null)
-
-  // Payment Modal State
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
-  const [paymentOrder, setPaymentOrder] = useState(null)
-  const [paymentAmount, setPaymentAmount] = useState('')
-  const [paymentMode, setPaymentMode] = useState('UPI')
-  const [paymentDate, setPaymentDate] = useState('')
-  const [paymentRef, setPaymentRef] = useState('')
-
-  // Project Progress Fields
-  const [deliveryDate, setDeliveryDate] = useState('2026-08-25')
-  const [assignedDeveloper, setAssignedDeveloper] = useState('Sujith Kumar')
-  const [developmentStage, setDevelopmentStage] = useState('UI/UX Design')
-  const [timelineHealth, setTimelineHealth] = useState('On Time')
-
-
 
   // Modal State for Order Form Editor
   const [orderModalOpen, setOrderModalOpen] = useState(false)
@@ -301,8 +267,6 @@ export default function ManageOrder() {
   const [totalVal, setTotalVal] = useState('50,000')
   const [discountVal, setDiscountVal] = useState('5,000')
   const [netVal, setNetVal] = useState('45,000.00')
-  const [bankName, setBankName] = useState('ICICI BANK')
-  const [bankBranch, setBankBranch] = useState('OPP BISHOP PALACE, EAST FORT, TRICHUR. Pin : 680005')
   const [remarksVal, setRemarksVal] = useState('')
   const [submitMessage, setSubmitMessage] = useState('')
 
@@ -339,13 +303,7 @@ export default function ManageOrder() {
       setTotalVal(order.total || '50,000')
       setDiscountVal(order.discount || '5,000')
       setNetVal(order.netAmount || '45,000.00')
-      setBankName(order.bankName || 'ICICI BANK')
-      setBankBranch(order.bankBranch || 'OPP BISHOP PALACE, EAST FORT, TRICHUR. Pin : 680005')
       setRemarksVal(order.remarks || '')
-      setDeliveryDate(order.deliveryDate || '2026-08-25')
-      setAssignedDeveloper(order.developer || 'Sujith Kumar')
-      setDevelopmentStage(order.stage || 'UI/UX Design')
-      setTimelineHealth(order.health || 'On Time')
     } else {
       // New order
       setEditingOrderId(null)
@@ -364,13 +322,7 @@ export default function ManageOrder() {
       setTotalVal(defaultTpl?.defaultTotal || '50,000')
       setDiscountVal(defaultTpl?.defaultDiscount || '5,000')
       setNetVal('45,000.00')
-      setBankName('ICICI BANK')
-      setBankBranch('OPP BISHOP PALACE, EAST FORT, TRICHUR. Pin : 680005')
       setRemarksVal('')
-      setDeliveryDate('2026-08-25')
-      setAssignedDeveloper('Sujith Kumar')
-      setDevelopmentStage('UI/UX Design')
-      setTimelineHealth('On Time')
     }
     setOrderModalOpen(true)
   }
@@ -394,15 +346,9 @@ export default function ManageOrder() {
                 total: totalVal,
                 discount: discountVal,
                 netAmount: netVal,
-                bankName,
-                bankBranch,
                 remarks: remarksVal,
                 scope: orderSummaryHtml,
                 details: orderInDetailsHtml,
-                deliveryDate: deliveryDate,
-                developer: assignedDeveloper,
-                stage: developmentStage,
-                health: timelineHealth,
               }
             : item
         )
@@ -430,15 +376,9 @@ export default function ManageOrder() {
         netAmount: netVal,
         currency: 'INR (₹)',
         category: categoryName,
-        bankName,
-        bankBranch,
         remarks: remarksVal,
         scope: orderSummaryHtml,
         details: orderInDetailsHtml,
-        deliveryDate: deliveryDate,
-        developer: assignedDeveloper,
-        stage: developmentStage,
-        health: timelineHealth,
       }
       setOrdersList([newOrder, ...ordersList])
       setSubmitMessage('✓ New Order Form generated!')
@@ -465,37 +405,13 @@ export default function ManageOrder() {
     setOpenDropdownId(null)
   }
 
-  function handleOpenPaymentModal(order) {
-    setPaymentOrder(order)
-    setPaymentAmount('')
-    setPaymentMode('UPI')
-    setPaymentDate(new Date().toISOString().slice(0, 10))
-    setPaymentRef('')
-    setPaymentModalOpen(true)
-  }
-
-  function handleRecordPayment(e) {
-    e.preventDefault()
-    
-    // In a real app, this would send data to the backend.
-    // For now, we update the order's remarks or status and close the modal.
+  function handleMarkAccepted(order) {
     setOrdersList((prev) =>
       prev.map((item) =>
-        item.id === paymentOrder?.id
-          ? {
-              ...item,
-              remarks: `Received payment of ₹${paymentAmount} via ${paymentMode} on ${paymentDate}. Ref: ${paymentRef}. ` + (item.remarks || ''),
-            }
-          : item
+        item.id === order.id ? { ...item, status: 'Accepted' } : item
       )
     )
-    
-    setSubmitMessage('✓ Payment recorded successfully!')
-    setTimeout(() => {
-      setSubmitMessage('')
-      setPaymentModalOpen(false)
-      setPaymentOrder(null)
-    }, 1500)
+    navigate('/client-details', { state: { order } })
   }
 
   // Filtered dataset
@@ -520,16 +436,16 @@ export default function ManageOrder() {
 
   // Metric counts
   const totalOrdersCount = ordersList.length
-  const inProgressCount = useMemo(
-    () => ordersList.filter((o) => o.status === 'In Progress').length,
+  const sentCount = useMemo(
+    () => ordersList.filter((o) => o.status === 'Sent to Client').length,
     [ordersList]
   )
   const createdCount = useMemo(
     () => ordersList.filter((o) => o.status === 'Order Created').length,
     [ordersList]
   )
-  const completedCount = useMemo(
-    () => ordersList.filter((o) => o.status === 'Completed').length,
+  const acceptedCount = useMemo(
+    () => ordersList.filter((o) => o.status === 'Accepted').length,
     [ordersList]
   )
 
@@ -540,10 +456,10 @@ export default function ManageOrder() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              Manage Orders &amp; Executions
+              Manage Orders
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Generate official Order Forms, track client sign-offs, and monitor project execution.
+              Generate official Order Forms, send to client and track acceptance.
             </p>
           </div>
 
@@ -558,13 +474,13 @@ export default function ManageOrder() {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Created</span>
                 <span className="text-xs font-bold text-blue-700 ml-1">{createdCount}</span>
               </div>
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">In Progress</span>
-                <span className="text-xs font-bold text-amber-700 ml-1">{inProgressCount}</span>
+              <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 px-2.5 py-1.5 text-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Sent</span>
+                <span className="text-xs font-bold text-indigo-700 ml-1">{sentCount}</span>
               </div>
               <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Completed</span>
-                <span className="text-xs font-bold text-emerald-700 ml-1">{completedCount}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Accepted</span>
+                <span className="text-xs font-bold text-emerald-700 ml-1">{acceptedCount}</span>
               </div>
             </div>
           </div>
@@ -698,20 +614,20 @@ export default function ManageOrder() {
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
                               order.status === 'Order Created'
                                 ? 'border-blue-200 bg-blue-50 text-blue-700'
-                                : order.status === 'In Progress'
-                                ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                : order.status === 'Completed'
+                                : order.status === 'Sent to Client'
+                                ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                : order.status === 'Accepted'
                                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : 'border-slate-200 bg-slate-50 text-slate-700'
+                                : 'border-red-200 bg-red-50 text-red-700'
                             }`}
                           >
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${
                                 order.status === 'Order Created'
                                   ? 'bg-blue-500'
-                                  : order.status === 'In Progress'
-                                  ? 'bg-amber-500 animate-pulse'
-                                  : order.status === 'Completed'
+                                  : order.status === 'Sent to Client'
+                                  ? 'bg-indigo-500'
+                                  : order.status === 'Accepted'
                                   ? 'bg-emerald-500'
                                   : 'bg-slate-500'
                               }`}
@@ -793,36 +709,22 @@ export default function ManageOrder() {
 
                                   <button
                                     type="button"
-                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'In Progress', e)}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition cursor-pointer"
-                                  >
-                                    <span>Mark In Progress</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'Completed', e)}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
-                                  >
-                                    <span>Mark Completed</span>
-                                  </button>
-
-                                  <div className="my-1 border-t border-slate-100" />
-
-                                  <button
-                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       setOpenDropdownId(null)
-                                      handleOpenPaymentModal(order)
+                                      handleMarkAccepted(order)
                                     }}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
                                   >
-                                    <svg className="h-3.5 w-3.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <rect x="2" y="5" width="20" height="14" rx="2" />
-                                      <line x1="2" y1="10" x2="22" y2="10" />
-                                    </svg>
-                                    <span>Record Payment</span>
+                                    <span>Mark Accepted</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'Rejected', e)}
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 transition cursor-pointer"
+                                  >
+                                    <span>Mark Rejected</span>
                                   </button>
                                 </div>
                               </>
@@ -1043,114 +945,18 @@ export default function ManageOrder() {
                 </div>
               </div>
 
-              {/* Bank Details Grid */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-1">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Bank Name
-                  </label>
-                  <input
-                    type="text"
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Bank Branch &amp; Address
-                  </label>
-                  <input
-                    type="text"
-                    value={bankBranch}
-                    onChange={(e) => setBankBranch(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-
               {/* Remarks */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Internal Remarks &amp; Token Advance Notes
+                  Internal Remarks
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 50% advance token received via UPI / Cheque..."
+                  placeholder="e.g. Client asked for a follow-up call before acceptance..."
                   value={remarksVal}
                   onChange={(e) => setRemarksVal(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
-              </div>
-
-              {/* Project Progress Fields Section */}
-              <div className="border-t border-slate-100 pt-4 space-y-3.5">
-                <h4 className="font-bold text-slate-800 text-xs">Fulfillment &amp; Delivery Tracking</h4>
-                
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Target Delivery Date
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={deliveryDate}
-                      onChange={(e) => setDeliveryDate(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Assigned Developer
-                    </label>
-                    <select
-                      value={assignedDeveloper}
-                      onChange={(e) => setAssignedDeveloper(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
-                    >
-                      <option value="Sujith Kumar">Sujith Kumar</option>
-                      <option value="Rahul Varma">Rahul Varma</option>
-                      <option value="Arya Sree">Arya Sree</option>
-                      <option value="Sandeep MD">Sandeep MD</option>
-                      <option value="Deepak Raj">Deepak Raj</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Development Stage
-                    </label>
-                    <select
-                      value={developmentStage}
-                      onChange={(e) => setDevelopmentStage(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
-                    >
-                      <option value="UI/UX Design">UI/UX Design</option>
-                      <option value="Coding & Development">Coding &amp; Development</option>
-                      <option value="Testing & QA">Testing &amp; QA</option>
-                      <option value="Client Review">Client Review</option>
-                      <option value="Live & Deployed">Live &amp; Deployed</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Timeline Health
-                    </label>
-                    <select
-                      value={timelineHealth}
-                      onChange={(e) => setTimelineHealth(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
-                    >
-                      <option value="On Time">On Time</option>
-                      <option value="Delayed">Delayed</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </div>
-                </div>
               </div>
 
               {submitMessage && (
@@ -1173,103 +979,6 @@ export default function ManageOrder() {
                   className="rounded-lg bg-slate-950 px-5 py-2 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer shadow-xs active:scale-98"
                 >
                   Save &amp; Generate Order Form
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Record Payment Modal */}
-      {paymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={() => setPaymentModalOpen(false)} />
-          <div className="relative w-full max-w-md transform rounded-2xl bg-white text-left shadow-2xl transition-all animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Record Advance / Payment</h3>
-                <p className="text-xs text-slate-500">Order: {paymentOrder?.id} - {paymentOrder?.company}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPaymentModalOpen(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
-              >
-                <CloseIcon />
-              </button>
-            </div>
-            
-            <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Amount Received (₹)</label>
-                <input
-                  type="number"
-                  required
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  placeholder="e.g. 25000"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Mode</label>
-                <select
-                  required
-                  value={paymentMode}
-                  onChange={(e) => setPaymentMode(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
-                >
-                  <option value="UPI">UPI (GPay / PhonePe)</option>
-                  <option value="NEFT / RTGS">Bank Transfer (NEFT / RTGS)</option>
-                  <option value="Cheque">Cheque Deposit</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Card">Card Payment</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Reference No.</label>
-                  <input
-                    type="text"
-                    value={paymentRef}
-                    onChange={(e) => setPaymentRef(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                    placeholder="UTR / Cheque No"
-                  />
-                </div>
-              </div>
-
-              {submitMessage && (
-                <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-600 border border-emerald-200 text-center">
-                  {submitMessage}
-                </div>
-              )}
-
-              <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setPaymentModalOpen(false)}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
-                >
-                  Save Payment
                 </button>
               </div>
             </form>

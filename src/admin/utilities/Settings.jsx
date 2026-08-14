@@ -113,8 +113,19 @@ export default function Settings() {
   const [callsTarget, setCallsTarget] = useState(800)
 
   const [targetDrawerOpen, setTargetDrawerOpen] = useState(false)
+  const [targetDrawerVisible, setTargetDrawerVisible] = useState(false)
 
   const [toastMessage, setToastMessage] = useState('')
+
+  function openTargetDrawer() {
+    setTargetDrawerVisible(true)
+    requestAnimationFrame(() => setTargetDrawerOpen(true))
+  }
+
+  function closeTargetDrawer() {
+    setTargetDrawerOpen(false)
+    setTimeout(() => setTargetDrawerVisible(false), 300)
+  }
 
   function handleSaveGeneral(e) {
     e.preventDefault()
@@ -134,7 +145,7 @@ export default function Settings() {
           : staff
       )
     )
-    setTargetDrawerOpen(false)
+    closeTargetDrawer()
     showToast(`Target updated for ${selectedStaffName}.`)
   }
 
@@ -223,7 +234,7 @@ export default function Settings() {
 
                 <button
                   type="button"
-                  onClick={() => setTargetDrawerOpen(true)}
+                  onClick={openTargetDrawer}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
                 >
                   <PlusIcon className="h-3.5 w-3.5" />
@@ -474,15 +485,21 @@ export default function Settings() {
         )}
       </div>
 
-      {targetDrawerOpen && (
+      {targetDrawerVisible && (
         <div className="fixed inset-0 z-50">
           <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-            onClick={() => setTargetDrawerOpen(false)}
+            className={`absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300 ${
+              targetDrawerOpen ? 'opacity-100' : 'opacity-0'
+            }`}
+            onClick={closeTargetDrawer}
           />
 
           <div className="absolute inset-y-0 right-0 flex w-full max-w-md">
-            <div className="flex h-full w-full flex-col bg-white shadow-2xl">
+            <div
+              className={`flex h-full w-full flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${
+                targetDrawerOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}
+            >
               <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-5 py-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-md shadow-brand-600/20">
                   <SlidersIcon className="h-5 w-5" />
@@ -493,7 +510,7 @@ export default function Settings() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setTargetDrawerOpen(false)}
+                  onClick={closeTargetDrawer}
                   aria-label="Close drawer"
                   className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                 >

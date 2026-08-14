@@ -361,6 +361,7 @@ export default function Telecall() {
   
   // Drawer State for Call Logging & Assessment
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerVisible, setDrawerVisible] = useState(false)
   const [activeLead, setActiveLead] = useState(null)
   const [formData, setFormData] = useState({
     assignedTo: '',
@@ -399,6 +400,16 @@ export default function Telecall() {
     [telecallList]
   )
 
+  function openDrawer() {
+    setDrawerVisible(true)
+    requestAnimationFrame(() => setDrawerOpen(true))
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false)
+    setTimeout(() => setDrawerVisible(false), 300)
+  }
+
   function handleOpenCallModal(lead, e) {
     if (e) e.stopPropagation()
     setActiveLead(lead)
@@ -411,7 +422,7 @@ export default function Telecall() {
       nextFollowUpDate: lead.nextFollowUpDate || '',
       nextFollowUpTime: lead.nextFollowUpTime || '10:00 AM',
     })
-    setDrawerOpen(true)
+    openDrawer()
   }
 
   function handleSaveCall(e) {
@@ -460,7 +471,7 @@ export default function Telecall() {
           : item
       )
     )
-    setDrawerOpen(false)
+    closeDrawer()
   }
 
   function handleExecuteAssign(e) {
@@ -529,9 +540,9 @@ export default function Telecall() {
     <Layout>
       <div className="space-y-5">
         {/* Top Header Card */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs sm:p-5">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
               Tele Call
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -553,19 +564,19 @@ export default function Telecall() {
 
             {/* Quick Metrics (Only for Qualified / Assessed Leads) */}
             <div className="flex items-center gap-1.5">
-              <div className="rounded-xl border border-red-200/80 bg-red-50/60 px-2.5 py-1.5 text-center" title="Qualified Hot Leads">
+              <div className="rounded-lg border border-red-200/80 bg-red-50/60 px-2.5 py-1.5" title="Qualified Hot Leads">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">Hot</span>
                 <span className="text-xs font-bold text-red-700 ml-1">
                   {hotLeadsCount}
                 </span>
               </div>
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-2.5 py-1.5 text-center" title="Qualified Warm Leads">
+              <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 px-2.5 py-1.5" title="Qualified Warm Leads">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Warm</span>
                 <span className="text-xs font-bold text-amber-700 ml-1">
                   {warmLeadsCount}
                 </span>
               </div>
-              <div className="rounded-xl border border-blue-200/80 bg-blue-50/60 px-2.5 py-1.5 text-center" title="Qualified Cold Leads">
+              <div className="rounded-lg border border-blue-200/80 bg-blue-50/60 px-2.5 py-1.5" title="Qualified Cold Leads">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Cold</span>
                 <span className="text-xs font-bold text-blue-700 ml-1">
                   {coldLeadsCount}
@@ -576,10 +587,10 @@ export default function Telecall() {
         </div>
 
         {/* Main Table Container */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs sm:p-5">
           {/* Top Segmented Tabs: [ All Leads | Assigned Leads | Not Assigned | Follow Up Scheduled ] */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3.5 mb-3.5">
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200/60">
+          <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-100 pb-3.5 mb-3.5 lg:flex-row lg:items-center">
+            <div className="inline-flex w-full max-w-full overflow-x-auto rounded-xl bg-slate-100 p-1 border border-slate-200/60 whitespace-nowrap lg:w-auto">
               {/* All Leads Tab */}
               <button
                 type="button"
@@ -713,7 +724,7 @@ export default function Telecall() {
               </div>
 
               {/* Right Search Box */}
-              <div className="flex items-center">
+              <div className="flex items-center w-full sm:w-auto">
                 <div className="relative flex-1 sm:w-60">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
                     <SearchIcon />
@@ -738,17 +749,17 @@ export default function Telecall() {
           </div>
 
           {/* Telecall Table */}
-          <div className="overflow-x-auto mt-3">
+          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 mt-3">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
-                  <th className="pb-2.5 pr-2 font-semibold w-60">Company</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-32">Mobile</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-28">Category</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-32">Assigned To</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-36">Call Status</th>
-                  <th className="pb-2.5 pr-2 font-semibold w-20">Priority</th>
-                  <th className="pb-2.5 pr-2 font-semibold text-left w-32">Action</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-[180px]">Company</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-[110px]">Mobile</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-[100px]">Category</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-[120px]">Assigned To</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-[120px]">Call Status</th>
+                  <th className="pb-2.5 pr-2 font-semibold min-w-[80px]">Priority</th>
+                  <th className="pb-2.5 pr-2 font-semibold text-left min-w-[110px]">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -947,13 +958,13 @@ export default function Telecall() {
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
             {/* History Card Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <HistoryIcon className="h-4 w-4 text-brand-600" />
                 <h3 className="text-sm font-bold text-slate-900">
                   Follow Up History & Call Log
                 </h3>
                 <span className="text-xs text-slate-400">•</span>
-                <span className="text-xs font-semibold text-brand-700">
+                <span className="text-xs font-semibold text-brand-700 break-all">
                   {selectedLeadForHistory.company}
                 </span>
                 <span className="text-[11px] text-slate-500">
@@ -1059,15 +1070,15 @@ export default function Telecall() {
 
       {/* Modern, Highly Refined "Assign Leads to Staff" Modal */}
       {assignModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
+          <div className="flex max-h-full w-full flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150 sm:max-w-xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600 border border-brand-100">
+            <div className="flex shrink-0 items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 border border-brand-100">
                   <UsersIcon className="h-5 w-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-base font-bold text-slate-900">
                     Assign Leads to Staff
                   </h3>
@@ -1079,13 +1090,14 @@ export default function Telecall() {
               <button
                 type="button"
                 onClick={() => setAssignModalOpen(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+                aria-label="Close"
+                className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
               >
                 <CloseIcon />
               </button>
             </div>
 
-            <form onSubmit={handleExecuteAssign} className="p-6 space-y-4">
+            <form onSubmit={handleExecuteAssign} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
               {/* Step 1: Select Staff Member */}
               <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5 shadow-2xs">
                 <div className="flex items-center justify-between">
@@ -1232,7 +1244,7 @@ export default function Telecall() {
               )}
 
               {/* Modal Footer Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setAssignModalOpen(false)}
@@ -1242,7 +1254,7 @@ export default function Telecall() {
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition active:scale-[0.98] cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition active:scale-[0.98] cursor-pointer"
                 >
                   <span>✓ Assign {assignCount} Lead(s) to {assignStaff}</span>
                 </button>
@@ -1253,22 +1265,25 @@ export default function Telecall() {
       )}
 
       {/* Slide-Over Drawer: Update Call Outcome, Remarks & Priority */}
-      {drawerOpen && activeLead && (
+      {drawerVisible && activeLead && (
         <div className="fixed inset-0 z-50">
           <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-            onClick={() => setDrawerOpen(false)}
+            className={`absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300 ${
+              drawerOpen ? 'opacity-100' : 'opacity-0'
+            }`}
+            onClick={closeDrawer}
           />
 
           <div className="absolute inset-y-0 right-0 flex w-full max-w-md sm:max-w-lg">
-            <div className="flex h-full w-full flex-col bg-white shadow-2xl">
-              {/* top accent */}
-              <div className="h-1 shrink-0 bg-gradient-to-r from-brand-700 via-brand-500 to-brand-400" />
-
+            <div
+              className={`flex h-full w-full flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${
+                drawerOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}
+            >
               {/* Drawer Header */}
-              <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-5 py-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-md shadow-brand-600/20">
-                  <PhoneCallIcon className="h-5 w-5" />
+              <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3.5 sm:px-5 sm:py-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                  <PhoneCallIcon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h2 className="text-sm font-bold text-slate-900">Log Tele Call</h2>
@@ -1278,20 +1293,21 @@ export default function Telecall() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDrawerOpen(false)}
+                  onClick={closeDrawer}
                   aria-label="Close drawer"
-                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
                 >
-                  <CloseIcon />
+                  <CloseIcon className="h-3.5 w-3.5" />
+                  <span className="sm:hidden">Close</span>
                 </button>
               </div>
 
               {/* Scrollable Body */}
-              <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
                 {/* Customer Summary */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3.5">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-700">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-700 ring-1 ring-slate-200">
                       {activeLead.company.charAt(0)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1305,51 +1321,14 @@ export default function Telecall() {
                       <p className="mt-1 font-mono text-xs font-semibold text-slate-800">
                         {activeLead.phone}
                       </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold">
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              activeLead.callStatus === 'Interested'
-                                ? 'bg-emerald-500'
-                                : activeLead.callStatus === 'Quotation Requested'
-                                ? 'bg-purple-500'
-                                : activeLead.callStatus === 'Considering'
-                                ? 'bg-cyan-500'
-                                : activeLead.callStatus === 'Follow Up'
-                                ? 'bg-amber-500'
-                                : activeLead.callStatus === 'Not Reachable'
-                                ? 'bg-slate-400'
-                                : activeLead.callStatus === 'Pending Call'
-                                ? 'bg-blue-500'
-                                : activeLead.callStatus === 'Busy'
-                                ? 'bg-orange-400'
-                                : 'bg-rose-500'
-                            }`}
-                          />
-                          <span className="text-slate-600">{activeLead.callStatus}</span>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                          {activeLead.callStatus}
                         </span>
                         {activeLead.priority && (
-                          <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                activeLead.priority === 'Hot'
-                                  ? 'bg-red-500'
-                                  : activeLead.priority === 'Warm'
-                                  ? 'bg-amber-500'
-                                  : 'bg-blue-500'
-                              }`}
-                            />
-                            <span
-                              className={
-                                activeLead.priority === 'Hot'
-                                  ? 'text-red-600'
-                                  : activeLead.priority === 'Warm'
-                                  ? 'text-amber-600'
-                                  : 'text-blue-600'
-                              }
-                            >
-                              {activeLead.priority}
-                            </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                            {activeLead.priority}
                           </span>
                         )}
                       </div>
@@ -1357,7 +1336,7 @@ export default function Telecall() {
                   </div>
                   <a
                     href={`tel:${activeLead.phone}`}
-                    className="mt-3 flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2 text-xs font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700"
+                    className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                   >
                     <PhoneCallIcon className="h-3.5 w-3.5" />
                     Call Now
@@ -1365,21 +1344,21 @@ export default function Telecall() {
                 </div>
 
                 {/* Drawer Form */}
-                <form id="telecall-form" onSubmit={handleSaveCall} className="mt-5 space-y-5 text-xs">
+                <form id="telecall-form" onSubmit={handleSaveCall} className="mt-5 space-y-4 text-xs">
                   {/* Call Details */}
                   <div className="space-y-3">
-                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                       Call Details
                     </h4>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-xs font-semibold text-slate-700">
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
                           Assigned Caller
                         </label>
                         <select
                           value={formData.assignedTo}
                           onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         >
                           {ASSIGNABLE_STAFF.map((staff) => (
                             <option key={staff.name} value={staff.name}>
@@ -1390,13 +1369,13 @@ export default function Telecall() {
                       </div>
 
                       <div>
-                        <label className="mb-1 block text-xs font-semibold text-slate-700">
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
                           Call Outcome
                         </label>
                         <select
                           value={formData.callStatus}
                           onChange={(e) => setFormData({ ...formData, callStatus: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         >
                           <option value="Pending Call">Pending Call (Not Called Yet)</option>
                           <option value="Interested">Interested</option>
@@ -1414,14 +1393,14 @@ export default function Telecall() {
                   {/* Priority Rating */}
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                         Lead Priority
                       </h4>
                       {formData.priority && (
                         <button
                           type="button"
                           onClick={() => setFormData({ ...formData, priority: null })}
-                          className="text-[11px] font-semibold text-slate-400 transition hover:text-slate-600"
+                          className="text-[11px] font-medium text-slate-400 transition hover:text-slate-600"
                         >
                           Clear rating
                         </button>
@@ -1429,9 +1408,9 @@ export default function Telecall() {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { label: 'Hot', dot: 'bg-red-500', active: 'border-red-500 bg-red-500 text-white shadow-sm shadow-red-500/20' },
-                        { label: 'Warm', dot: 'bg-amber-500', active: 'border-amber-500 bg-amber-500 text-white shadow-sm shadow-amber-500/20' },
-                        { label: 'Cold', dot: 'bg-blue-500', active: 'border-blue-500 bg-blue-500 text-white shadow-sm shadow-blue-500/20' },
+                        { label: 'Hot', dot: 'bg-red-500' },
+                        { label: 'Warm', dot: 'bg-amber-500' },
+                        { label: 'Cold', dot: 'bg-blue-500' },
                       ].map((p) => {
                         const isActive = formData.priority === p.label
                         return (
@@ -1441,13 +1420,13 @@ export default function Telecall() {
                             onClick={() =>
                               setFormData({ ...formData, priority: isActive ? null : p.label })
                             }
-                            className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs font-bold transition cursor-pointer ${
+                            className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition cursor-pointer ${
                               isActive
-                                ? p.active
+                                ? 'border-brand-500 bg-brand-50 text-brand-700'
                                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                             }`}
                           >
-                            <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-white' : p.dot}`} />
+                            <span className={`h-2 w-2 rounded-full ${p.dot}`} />
                             {p.label}
                           </button>
                         )
@@ -1458,8 +1437,7 @@ export default function Telecall() {
                   {/* Follow-Up */}
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        <CalendarDaysIcon className="h-3.5 w-3.5" />
+                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                         Next Follow-Up
                       </h4>
                       <button
@@ -1472,7 +1450,7 @@ export default function Telecall() {
                             nextFollowUpDate: d.toISOString().split('T')[0],
                           }))
                         }}
-                        className="text-[11px] font-semibold text-brand-600 hover:underline"
+                        className="text-[11px] font-medium text-brand-600 hover:underline"
                       >
                         + Tomorrow
                       </button>
@@ -1482,12 +1460,12 @@ export default function Telecall() {
                         type="date"
                         value={formData.nextFollowUpDate}
                         onChange={(e) => setFormData({ ...formData, nextFollowUpDate: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+                        className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                       />
                       <select
                         value={formData.nextFollowUpTime}
                         onChange={(e) => setFormData({ ...formData, nextFollowUpTime: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+                        className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                       >
                         <option value="09:30 AM">09:30 AM (Morning)</option>
                         <option value="10:30 AM">10:30 AM (Morning)</option>
@@ -1501,7 +1479,7 @@ export default function Telecall() {
 
                   {/* Notes */}
                   <div className="space-y-2">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                       Call Remarks / Notes
                     </label>
                     <textarea
@@ -1509,7 +1487,7 @@ export default function Telecall() {
                       placeholder="Enter customer requirements, budget, discussion summary..."
                       value={formData.remarks}
                       onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                      className="w-full resize-none rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-800 placeholder:text-slate-400 transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+                      className="w-full resize-none rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-800 placeholder:text-slate-400 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                   </div>
                 </form>
@@ -1519,15 +1497,15 @@ export default function Telecall() {
               <div className="flex shrink-0 items-center gap-2.5 border-t border-slate-200 bg-white p-4">
                 <button
                   type="button"
-                  onClick={() => setDrawerOpen(false)}
-                  className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  onClick={closeDrawer}
+                  className="flex-1 rounded-lg border border-slate-300 bg-white py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   form="telecall-form"
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-700 py-2.5 text-xs font-bold text-white shadow-md shadow-brand-600/20 transition hover:from-brand-700 hover:to-brand-800 active:scale-[0.99]"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-brand-700"
                 >
                   <CheckCircleIcon className="h-4 w-4" />
                   Save Feedback

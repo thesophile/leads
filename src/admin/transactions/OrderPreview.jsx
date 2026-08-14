@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import Layout from '../../Layout/Layout'
@@ -83,8 +83,6 @@ const DEFAULT_ORDER = {
   discount: '5000/-',
   net: '45,000.00/-',
   amountWords: 'FORTY-FIVE THOUSAND ONLY',
-  bankName: 'ICICI BANK',
-  bankBranch: 'OPP BISHOP PALACE , EAST FORT TRICHUR. Pin : 680005',
   status: 'Order Created',
 }
 
@@ -232,11 +230,10 @@ function PageFooter() {
 }
 
 export default function OrderPreview() {
-  const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [orderData, setOrderData] = useState(() => {
+  const [orderData] = useState(() => {
     if (location.state?.order) {
       const o = location.state.order
       return {
@@ -292,7 +289,7 @@ export default function OrderPreview() {
 
             <button
               type="button"
-              onClick={() => alert(`Order Form ${orderData.id} dispatched to client via WhatsApp!`)}
+              onClick={() => alert(`Order Form ${orderData.id} sent to ${orderData.customerCompany}. Track acceptance in Manage Orders.`)}
               className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-95"
             >
               <span>📱</span>
@@ -382,8 +379,8 @@ export default function OrderPreview() {
                 </div>
               </div>
 
-              {/* Bottom 3-Box Row: Approved By | Accepted By | Bank Details */}
-              <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+              {/* Bottom 2-Box Row: Approved By | Accepted By */}
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
                 {/* Box 1: Approved By */}
                 <div className="rounded-md border border-black bg-white p-2 text-black flex flex-col justify-between">
                   <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11.5px] font-bold uppercase text-white mb-1.5">
@@ -413,17 +410,6 @@ export default function OrderPreview() {
                     <p className="text-[10.5px] text-slate-800">Digitally signed by <strong>{orderData.customerCompany}</strong></p>
                     <p className="font-mono text-[9.5px] text-slate-500">Date: 2026.04.18 08:22:30 +00:00</p>
                     <p className="text-slate-500 text-[9.5px]">Location: KOCHI</p>
-                  </div>
-                </div>
-
-                {/* Box 3: Bank Details */}
-                <div className="rounded-md border border-black bg-white p-2 text-black flex flex-col justify-between">
-                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11.5px] font-bold uppercase text-white mb-1.5">
-                    Bank Details
-                  </div>
-                  <div>
-                    <p className="font-bold text-black text-[11.5px]">{orderData.bankName}</p>
-                    <p className="text-[10px] text-slate-700 mt-0.5 leading-snug">{orderData.bankBranch}</p>
                   </div>
                 </div>
               </div>

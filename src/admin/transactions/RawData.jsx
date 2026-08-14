@@ -271,6 +271,7 @@ export default function RawData() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerVisible, setDrawerVisible] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importedFileName, setImportedFileName] = useState('')
   const [importSuccessMessage, setImportSuccessMessage] = useState('')
@@ -289,6 +290,16 @@ export default function RawData() {
     city: '',
   })
 
+  function openDrawer() {
+    setDrawerVisible(true)
+    requestAnimationFrame(() => setDrawerOpen(true))
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false)
+    setTimeout(() => setDrawerVisible(false), 300)
+  }
+
   function handleOpenAdd() {
     setEditingId(null)
     setFormData({
@@ -300,7 +311,7 @@ export default function RawData() {
       source: '',
       city: '',
     })
-    setDrawerOpen(true)
+    openDrawer()
   }
 
   function handleEditClick(item) {
@@ -314,7 +325,7 @@ export default function RawData() {
       source: item.source || '',
       city: item.city || '',
     })
-    setDrawerOpen(true)
+    openDrawer()
   }
 
   function handleSave(e) {
@@ -336,7 +347,7 @@ export default function RawData() {
       }
       setRawDataList((prev) => [newRawRecord, ...prev])
     }
-    setDrawerOpen(false)
+    closeDrawer()
   }
 
   function handleBulkImport(e) {
@@ -806,16 +817,22 @@ export default function RawData() {
       )}
 
       {/* Right Slide-Over Drawer Form for Add / Edit Raw Data */}
-      {drawerOpen && (
+      {drawerVisible && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setDrawerOpen(false)}
+            className={`absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-300 ${
+              drawerOpen ? 'opacity-100' : 'opacity-0'
+            }`}
+            onClick={closeDrawer}
           />
 
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
+            <div
+              className={`w-screen max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+                drawerOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}
+            >
               {/* Drawer Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                 <div>
@@ -830,7 +847,7 @@ export default function RawData() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDrawerOpen(false)}
+                  onClick={closeDrawer}
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
                 >
                   <CloseIcon />
@@ -1031,7 +1048,7 @@ export default function RawData() {
               <div className="p-4 border-t border-slate-100 flex items-center gap-2.5 bg-slate-50/50">
                 <button
                   type="button"
-                  onClick={() => setDrawerOpen(false)}
+                  onClick={closeDrawer}
                   className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel

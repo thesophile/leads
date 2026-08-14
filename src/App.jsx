@@ -11,12 +11,13 @@ import Managequotation from './admin/transactions/Managequotation'
 import ProposalPreview from './admin/transactions/ProposalPreview'
 import ManageOrder from './admin/transactions/ManageOrder'
 import OrderPreview from './admin/transactions/OrderPreview'
+import ClientDetails from './admin/transactions/ClientDetails'
 import RawDataRegister from './admin/reports/RawDataRegister'
 import TelecalligRegister from './admin/reports/TelecalligRegister'
 import QuotationRegister from './admin/reports/QuotationRegister'
 import OrderReceived from './admin/reports/OrderReceived'
-import OrderProgress from './admin/reports/OrderProgress'
 import Settings from './admin/utilities/Settings'
+import Notifications from './admin/utilities/Notifications'
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
       <Route path="/quotations/preview/:id" element={<ProposalPreview />} />
       <Route path="/orders" element={<ManageOrder />} />
       <Route path="/orders/preview/:id" element={<OrderPreview />} />
+      <Route path="/client-details" element={<ClientDetails />} />
 
       {/* Reports Routes */}
       <Route path="/raw-data-register" element={<RawDataRegister />} />
@@ -48,10 +50,10 @@ function App() {
       <Route path="/quotation-submitted-register" element={<QuotationRegister />} />
       <Route path="/order-received-register" element={<OrderReceived />} />
       <Route path="/order-received" element={<OrderReceived />} />
-      <Route path="/order-progress-register" element={<OrderProgress />} />
 
       {/* Utilities Routes */}
       <Route path="/settings" element={<Settings />} />
+      <Route path="/notifications" element={<Notifications />} />
 
       {/* Fallback Route */}
       <Route path="*" element={<Navigate to="/" replace />} />

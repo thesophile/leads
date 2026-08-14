@@ -23,7 +23,7 @@ const CONVERSION_DATA = [
   { name: 'Interested', value: 1240, color: '#8b5cf6', rate: '21.6%' },
   { name: 'Quotations', value: 680, color: '#f59e0b', rate: '11.8%' },
   { name: 'Approved', value: 245, color: '#f97316', rate: '4.2%' },
-  { name: 'Orders Won', value: 198, color: '#10b981', rate: '3.4%' },
+  { name: 'Orders Accepted', value: 198, color: '#10b981', rate: '3.4%' },
 ]
 
 // Lead acquisition trend over the last 8 months
@@ -48,7 +48,7 @@ const SOURCE_DATA = [
   { name: 'Manual Entry', value: 214, color: '#64748b' },
 ]
 
-// Quotation → Order conversion by month (monthly revenue in ₹ Lakh)
+// Quotation → Order conversion by month
 const MONTHLY_QUOTATIONS = [
   { month: 'Jan', quotations: 42, orders: 12 },
   { month: 'Feb', quotations: 51, orders: 16 },
@@ -138,8 +138,8 @@ export default function Dashboard() {
     { label: 'Calls Today', value: '42', trend: 'up', change: '+8%', tone: 'violet', icon: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z' },
     { label: 'Hot Leads', value: '18', trend: 'urgent', change: 'Urgent', tone: 'red', isHighlight: true, icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' },
     { label: 'Follow-ups Due', value: '24', trend: 'down', change: '8 Overdue', tone: 'amber', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { label: 'Open Quotations', value: '680', trend: 'neutral', change: '₹ 1.2Cr', tone: 'orange', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-    { label: 'Orders Won', value: '198', trend: 'up', change: '+15%', tone: 'green', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
+    { label: 'Open Quotations', value: '680', trend: 'neutral', change: '84 open', tone: 'orange', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    { label: 'Orders Accepted', value: '198', trend: 'up', change: '+15%', tone: 'green', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
   ]
 
   // Priority hot leads
@@ -189,17 +189,6 @@ export default function Dashboard() {
             <p className="text-sm text-slate-500">
               Unified Lead-to-Order sales pipeline and operational overview
             </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/raw-leads')}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-brand-600/20 hover:from-brand-700 hover:to-brand-800 transition"
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              + Add New Lead
-            </button>
           </div>
         </div>
 
@@ -343,7 +332,7 @@ export default function Dashboard() {
                 </span>
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">Lead-to-Order Conversion Funnel</h3>
-                  <p className="mt-0.5 text-[11px] text-slate-400">5,736 leads → 198 orders won</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">5,736 leads → 198 orders accepted</p>
                 </div>
               </div>
               <div className="flex items-center gap-1 self-start rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold sm:self-auto">
@@ -507,7 +496,7 @@ export default function Dashboard() {
           {/* Quotation → Order Conversion */}
           <ChartCard
             title="Quotation & Order Pipeline"
-            subtitle="Quotations created vs orders won, per month"
+            subtitle="Quotations created vs orders accepted, per month"
             badge="Monthly"
             className="lg:col-span-7"
           >
@@ -520,7 +509,7 @@ export default function Dashboard() {
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
                   <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="quotations" name="Quotations" fill="#8b5cf6" radius={[5, 5, 0, 0]} barSize={16} />
-                  <Bar dataKey="orders" name="Orders Won" fill="#10b981" radius={[5, 5, 0, 0]} barSize={16} />
+                  <Bar dataKey="orders" name="Orders Accepted" fill="#10b981" radius={[5, 5, 0, 0]} barSize={16} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
