@@ -77,7 +77,7 @@ Final Amount: <strong>₹18,000</strong></p>
     proposalBy: 'Priya Sharma',
     staff: 'Priya Sharma',
     date: '12-08-2026',
-    status: 'Order Created',
+    status: 'Pending',
     total: '1,45,000/-',
     discount: '10,000/-',
     netAmount: '1,35,000.00/-',
@@ -156,7 +156,7 @@ const STAFF_LIST = [
 
 const STATUS_LIST = [
   'All Status',
-  'Order Created',
+  'Pending',
   'Sent to Client',
   'Accepted',
   'Rejected',
@@ -245,6 +245,7 @@ export default function ManageOrder() {
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState(null)
+  const [toastMessage, setToastMessage] = useState('')
 
   // Modal State for Order Form Editor
   const [orderModalOpen, setOrderModalOpen] = useState(false)
@@ -370,7 +371,7 @@ export default function ManageOrder() {
         proposalBy,
         staff: proposalBy,
         date: orderDate,
-        status: 'Order Created',
+        status: 'Pending',
         total: totalVal,
         discount: discountVal,
         netAmount: netVal,
@@ -403,6 +404,8 @@ export default function ManageOrder() {
       )
     )
     setOpenDropdownId(null)
+    const label = nextStatus === 'Pending' ? 'Pending (Not Sent)' : nextStatus
+    showToast(`Order ${orderId} marked as ${label}.`)
   }
 
   function handleMarkAccepted(order) {
@@ -412,6 +415,13 @@ export default function ManageOrder() {
       )
     )
     navigate('/client-details', { state: { order } })
+  }
+
+  function showToast(msg) {
+    setToastMessage(msg)
+    setTimeout(() => {
+      setToastMessage('')
+    }, 2500)
   }
 
   // Filtered dataset
@@ -436,22 +446,37 @@ export default function ManageOrder() {
 
   // Metric counts
   const totalOrdersCount = ordersList.length
-  const sentCount = useMemo(
-    () => ordersList.filter((o) => o.status === 'Sent to Client').length,
+  const pendingCount = useMemo(
+    () => ordersList.filter((o) => o.status === 'Pending').length,
     [ordersList]
   )
-  const createdCount = useMemo(
-    () => ordersList.filter((o) => o.status === 'Order Created').length,
+  const sentCount = useMemo(
+    () => ordersList.filter((o) => o.status === 'Sent to Client').length,
     [ordersList]
   )
   const acceptedCount = useMemo(
     () => ordersList.filter((o) => o.status === 'Accepted').length,
     [ordersList]
   )
+  const rejectedCount = useMemo(
+    () => ordersList.filter((o) => o.status === 'Rejected').length,
+    [ordersList]
+  )
 
   return (
     <Layout>
       <div className="space-y-5">
+        {toastMessage && (
+          <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+            <span className="text-xs font-semibold text-slate-800">{toastMessage}</span>
+          </div>
+        )}
+
         {/* Top Header Card */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div>
@@ -470,9 +495,9 @@ export default function ManageOrder() {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Total</span>
                 <span className="text-xs font-bold text-slate-900 ml-1">{totalOrdersCount}</span>
               </div>
-              <div className="rounded-xl border border-blue-200/80 bg-blue-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Created</span>
-                <span className="text-xs font-bold text-blue-700 ml-1">{createdCount}</span>
+              <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-2.5 py-1.5 text-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Pending</span>
+                <span className="text-xs font-bold text-amber-700 ml-1">{pendingCount}</span>
               </div>
               <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Sent</span>
@@ -481,6 +506,10 @@ export default function ManageOrder() {
               <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Accepted</span>
                 <span className="text-xs font-bold text-emerald-700 ml-1">{acceptedCount}</span>
+              </div>
+              <div className="rounded-xl border border-red-200/80 bg-red-50/60 px-2.5 py-1.5 text-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">Rejected</span>
+                <span className="text-xs font-bold text-red-700 ml-1">{rejectedCount}</span>
               </div>
             </div>
           </div>
@@ -612,8 +641,8 @@ export default function ManageOrder() {
                         <td className="py-2.5 pr-3">
                           <span
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
-                              order.status === 'Order Created'
-                                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                              order.status === 'Pending'
+                                ? 'border-amber-200 bg-amber-50 text-amber-700'
                                 : order.status === 'Sent to Client'
                                 ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                                 : order.status === 'Accepted'
@@ -623,16 +652,16 @@ export default function ManageOrder() {
                           >
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${
-                                order.status === 'Order Created'
-                                  ? 'bg-blue-500'
+                                order.status === 'Pending'
+                                  ? 'bg-amber-500'
                                   : order.status === 'Sent to Client'
                                   ? 'bg-indigo-500'
                                   : order.status === 'Accepted'
                                   ? 'bg-emerald-500'
-                                  : 'bg-slate-500'
+                                  : 'bg-red-500'
                               }`}
                             />
-                            <span>{order.status}</span>
+                            <span>{order.status === 'Pending' ? 'Pending (Not Sent)' : order.status}</span>
                           </span>
                         </td>
 
@@ -694,18 +723,22 @@ export default function ManageOrder() {
 
                                   <button
                                     type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setOpenDropdownId(null)
-                                      alert(`Order Form ${order.id} dispatched to ${order.customer} via WhatsApp/Email!`)
-                                    }}
+                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'Sent to Client', e)}
                                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
                                   >
                                     <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
-                                    <span>Send to Client</span>
+                                    <span>Mark as Sent to Client</span>
                                   </button>
 
                                   <div className="my-1 border-t border-slate-100" />
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'Pending', e)}
+                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition cursor-pointer"
+                                  >
+                                    <span>Mark as Pending (Not Sent)</span>
+                                  </button>
 
                                   <button
                                     type="button"

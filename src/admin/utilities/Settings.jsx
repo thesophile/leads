@@ -91,11 +91,128 @@ function ScaleIcon({ className = 'h-4 w-4' }) {
   )
 }
 
+function UsersIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+
+function TargetIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  )
+}
+
+function PhoneIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  )
+}
+
+function TrendIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
+    </svg>
+  )
+}
+
+function CalendarIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  )
+}
+
 const TABS = [
   { id: 'targets', label: 'Targets & KPIs', icon: SlidersIcon },
   { id: 'general', label: 'General & Finance', icon: BuildingIcon },
   { id: 'backup', label: 'Backup & Logs', icon: DatabaseIcon },
 ]
+
+const inputClass =
+  'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-xs transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/15'
+
+const formatINR = (n) => '₹' + Number(n).toLocaleString('en-IN')
+
+const pctOf = (done, target) => (target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0)
+
+function ProgressCell({ done, target, barClass, format }) {
+  const pct = pctOf(done, target)
+  const display = (v) => (format ? format(v) : String(v).toLocaleString('en-IN'))
+  return (
+    <div className="min-w-[150px]">
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <span className="font-mono text-slate-500">
+          {display(done)}
+          <span className="mx-1 text-slate-300">/</span>
+          {display(target)}
+        </span>
+        <span className={`font-semibold ${pct >= 100 ? 'text-emerald-600' : 'text-slate-700'}`}>{pct}%</span>
+      </div>
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full rounded-full ${barClass}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function StatCard({ label, value, detail, progress, barClass, icon }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs sm:p-5">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+          {icon}
+        </span>
+      </div>
+      <p className="mt-2 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{value}</p>
+      {progress !== undefined ? (
+        <div className="mt-2.5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className={`h-full rounded-full ${barClass}`} style={{ width: `${progress}%` }} />
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-400">{detail}</p>
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
+      )}
+    </div>
+  )
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="h-4 w-1 rounded-full bg-brand-500" />
+      <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{children}</h3>
+    </div>
+  )
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-600">{label}</label>
+      <div className="mt-1.5">{children}</div>
+    </div>
+  )
+}
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('targets')
@@ -167,26 +284,19 @@ export default function Settings() {
     }, 2500)
   }
 
-  const formatINR = (n) => '₹' + Number(n).toLocaleString('en-IN')
-
-  function ProgressCell({ done, target, barClass }) {
-    const pct = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0
-    return (
-      <div className="min-w-[140px]">
-        <div className="flex items-center justify-between text-[11px] text-slate-500">
-          <span className="font-mono">{done}/{target}</span>
-          <span className="font-semibold text-slate-700">{pct}%</span>
-        </div>
-        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div className={`h-full rounded-full ${barClass}`} style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-    )
+  const totals = {
+    members: staffTargets.length,
+    rawTarget: staffTargets.reduce((s, st) => s + st.rawLeadsTarget, 0),
+    rawDone: staffTargets.reduce((s, st) => s + st.rawLeadsDone, 0),
+    callsTarget: staffTargets.reduce((s, st) => s + st.callsTarget, 0),
+    callsDone: staffTargets.reduce((s, st) => s + st.callsDone, 0),
+    salesTarget: staffTargets.reduce((s, st) => s + st.salesTarget, 0),
+    salesDone: staffTargets.reduce((s, st) => s + st.salesDone, 0),
   }
 
   return (
     <Layout>
-      <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl space-y-6">
         {toastMessage && (
           <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
@@ -196,13 +306,21 @@ export default function Settings() {
           </div>
         )}
 
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Settings</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            System defaults, tax and bank configuration, employee targets, and maintenance tools
-          </p>
+        {/* Page header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Settings</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Manage system defaults, tax and bank configuration, employee targets, and maintenance tools
+            </p>
+          </div>
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-500 shadow-xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            System Configuration
+          </span>
         </div>
 
+        {/* Tabs */}
         <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200/60">
           {TABS.map((tab) => {
             const Icon = tab.icon
@@ -225,21 +343,67 @@ export default function Settings() {
 
         {activeTab === 'targets' && (
           <div className="space-y-6">
+            {/* Summary stats */}
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
+              <StatCard
+                label="Team Members"
+                value={totals.members}
+                detail="Active members with targets"
+                icon={<UsersIcon className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Raw Leads"
+                value={`${totals.rawDone.toLocaleString('en-IN')}`}
+                detail={`${pctOf(totals.rawDone, totals.rawTarget)}% of ${totals.rawTarget.toLocaleString('en-IN')} target`}
+                progress={pctOf(totals.rawDone, totals.rawTarget)}
+                barClass="bg-brand-500"
+                icon={<TargetIcon className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Calls Made"
+                value={`${totals.callsDone.toLocaleString('en-IN')}`}
+                detail={`${pctOf(totals.callsDone, totals.callsTarget)}% of ${totals.callsTarget.toLocaleString('en-IN')} target`}
+                progress={pctOf(totals.callsDone, totals.callsTarget)}
+                barClass="bg-indigo-500"
+                icon={<PhoneIcon className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Sales Achieved"
+                value={formatINR(totals.salesDone)}
+                detail={`${pctOf(totals.salesDone, totals.salesTarget)}% of ${formatINR(totals.salesTarget)} target`}
+                progress={pctOf(totals.salesDone, totals.salesTarget)}
+                barClass="bg-emerald-500"
+                icon={<TrendIcon className="h-4 w-4" />}
+              />
+            </div>
+
+            {/* Team Target Progress */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
               <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-800">Team Target Progress</h2>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Monthly targets vs actual achievement</p>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                    <SlidersIcon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-800">Team Target Progress</h2>
+                    <p className="mt-0.5 text-[11px] text-slate-400">Monthly targets vs actual achievement</p>
+                  </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={openTargetDrawer}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
-                >
-                  <PlusIcon className="h-3.5 w-3.5" />
-                  Set Target
-                </button>
+                <div className="flex items-center gap-2.5">
+                  <span className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-500 sm:inline-flex">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    August 2026
+                  </span>
+                  <button
+                    type="button"
+                    onClick={openTargetDrawer}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
+                  >
+                    <PlusIcon className="h-3.5 w-3.5" />
+                    Set Target
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -270,20 +434,7 @@ export default function Settings() {
                           <ProgressCell done={staff.quotationDone} target={staff.quotationTarget} barClass="bg-amber-500" />
                         </td>
                         <td className="px-3 py-3.5">
-                          <div className="min-w-[140px]">
-                            <div className="flex items-center justify-between text-[11px] text-slate-500">
-                              <span className="font-mono">{formatINR(staff.salesDone)}</span>
-                              <span className="font-semibold text-slate-700">
-                                {staff.salesTarget > 0 ? Math.min(100, Math.round((staff.salesDone / staff.salesTarget) * 100)) : 0}%
-                              </span>
-                            </div>
-                            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                              <div
-                                className="h-full rounded-full bg-emerald-500"
-                                style={{ width: `${staff.salesTarget > 0 ? Math.min(100, Math.round((staff.salesDone / staff.salesTarget) * 100)) : 0}%` }}
-                              />
-                            </div>
-                          </div>
+                          <ProgressCell done={staff.salesDone} target={staff.salesTarget} barClass="bg-emerald-500" format={formatINR} />
                         </td>
                       </tr>
                     ))}
@@ -292,47 +443,41 @@ export default function Settings() {
               </div>
             </div>
 
+            {/* Bulk Adjust Targets */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-xs">
-              <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="border-b border-slate-100 px-5 py-4">
                 <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
                     <ScaleIcon className="h-4 w-4" />
                   </span>
                   <div>
                     <h2 className="text-sm font-bold text-slate-800">Bulk Adjust Targets</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Scale raw lead and call targets for the entire team</p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">Scale raw lead and call targets for the entire team at once</p>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickSetAll('raw', 1.1)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                  >
-                    +10% Raw Leads
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickSetAll('calls', 1.1)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                  >
-                    +10% Calls
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickSetAll('raw', 0.9)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                  >
-                    -10% Raw Leads
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickSetAll('calls', 0.9)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                  >
-                    -10% Calls
-                  </button>
+              </div>
+              <div className="px-5 py-4">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {[
+                    { label: 'Raw Leads', type: 'raw', factor: 1.1, sign: '+', badge: 'bg-brand-50 text-brand-600 border-brand-100' },
+                    { label: 'Calls', type: 'calls', factor: 1.1, sign: '+', badge: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
+                    { label: 'Raw Leads', type: 'raw', factor: 0.9, sign: '−', badge: 'bg-slate-50 text-slate-500 border-slate-200' },
+                    { label: 'Calls', type: 'calls', factor: 0.9, sign: '−', badge: 'bg-slate-50 text-slate-500 border-slate-200' },
+                  ].map((b) => (
+                    <button
+                      key={`${b.type}-${b.factor}`}
+                      type="button"
+                      onClick={() => handleQuickSetAll(b.type, b.factor)}
+                      className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-3.5 transition-colors hover:border-brand-200 hover:bg-brand-50/50 cursor-pointer"
+                    >
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${b.badge}`}>
+                        {b.sign}{Math.abs(Math.round((b.factor - 1) * 100))}%
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-600 group-hover:text-slate-800">
+                        {b.label} Target
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -340,92 +485,91 @@ export default function Settings() {
         )}
 
         {activeTab === 'general' && (
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-xs max-w-4xl">
-            <div className="border-b border-slate-100 px-6 py-4">
-              <h2 className="text-sm font-bold text-slate-800">Company & Financial Defaults</h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">Used across quotations, orders, and invoices</p>
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden max-w-5xl">
+            <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                <BuildingIcon className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Company & Financial Defaults</h2>
+                <p className="mt-0.5 text-[11px] text-slate-400">Used across quotations, orders, and invoices</p>
+              </div>
             </div>
 
-            <form onSubmit={handleSaveGeneral} className="space-y-8 p-6 text-xs">
-              <div>
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Company Identity</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Company Name</label>
+            <form onSubmit={handleSaveGeneral}>
+              <div className="grid grid-cols-1 gap-x-12 gap-y-8 px-6 py-6 md:grid-cols-2 md:px-8 md:py-7">
+                <div className="space-y-6">
+                  <SectionTitle>Company Identity</SectionTitle>
+                  <Field label="Company Name">
                     <input
                       type="text"
                       required
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 focus:border-brand-500 focus:outline-none"
+                      className={inputClass}
                     />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Primary Email</label>
+                  </Field>
+                  <Field label="Primary Email">
                     <input
                       type="email"
                       required
                       value={companyEmail}
                       onChange={(e) => setCompanyEmail(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 focus:border-brand-500 focus:outline-none"
+                      className={inputClass}
                     />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">GSTIN</label>
+                  </Field>
+                  <Field label="GSTIN">
                     <input
                       type="text"
                       required
                       value={gstNo}
                       onChange={(e) => setGstNo(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-slate-800 focus:border-brand-500 focus:outline-none"
+                      className={`${inputClass} font-mono`}
                     />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Base Currency</label>
+                  </Field>
+                </div>
+
+                <div className="space-y-6">
+                  <SectionTitle>Finance & Bank</SectionTitle>
+                  <Field label="Base Currency">
                     <select
                       value={currency}
                       onChange={(e) => setCurrency(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-brand-500 focus:outline-none cursor-pointer"
+                      className={`${inputClass} cursor-pointer`}
                     >
                       <option value="INR (₹)">INR (₹)</option>
                       <option value="USD ($)">USD ($)</option>
                       <option value="AED (Dh)">AED (Dh)</option>
                     </select>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Default Bank Account</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Bank Name</label>
+                  </Field>
+                  <Field label="Default Bank">
                     <input
                       type="text"
                       required
                       value={defaultBank}
                       onChange={(e) => setDefaultBank(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 focus:border-brand-500 focus:outline-none"
+                      className={inputClass}
                     />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Branch & Address</label>
+                  </Field>
+                  <Field label="Branch & Address">
                     <input
                       type="text"
                       required
                       value={bankBranch}
                       onChange={(e) => setBankBranch(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 focus:border-brand-500 focus:outline-none"
+                      className={inputClass}
                     />
-                  </div>
+                  </Field>
                 </div>
               </div>
 
-              <div className="flex justify-end border-t border-slate-100 pt-4">
+              <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
+                <p className="text-[11px] text-slate-400">Changes apply immediately to new documents.</p>
                 <button
                   type="submit"
-                  className="rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
                 >
+                  <CheckIcon className="h-3.5 w-3.5" />
                   Save Changes
                 </button>
               </div>
@@ -435,21 +579,25 @@ export default function Settings() {
 
         {activeTab === 'backup' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs">
-              <div className="border-b border-slate-100 px-5 py-4">
-                <h2 className="text-sm font-bold text-slate-800">Data Backup</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">Export a complete snapshot of the system</p>
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                  <DatabaseIcon className="h-4 w-4" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-800">Data Backup</h2>
+                  <p className="mt-0.5 text-[11px] text-slate-400">Export a complete snapshot of the system</p>
+                </div>
               </div>
               <div className="space-y-4 p-5 text-xs">
-                <p className="text-slate-500 leading-relaxed">
-                  The backup includes master registers, telecalling details, quotations, order forms,
-                  and activity logs.
+                <p className="leading-relaxed text-slate-500">
+                  The backup includes master registers, telecalling details, quotations, order forms, and activity logs.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => showToast('Database backup downloaded.')}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-slate-900 py-2 font-semibold text-white hover:bg-slate-800 transition cursor-pointer"
+                    className="flex items-center justify-center gap-2 rounded-lg bg-slate-900 py-2.5 font-semibold text-white hover:bg-slate-800 transition cursor-pointer"
                   >
                     <DownloadIcon className="h-3.5 w-3.5" />
                     Download SQL Backup
@@ -457,22 +605,31 @@ export default function Settings() {
                   <button
                     type="button"
                     onClick={() => showToast('Configuration exported.')}
-                    className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 py-2 font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                    className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 py-2.5 font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                   >
                     <DownloadIcon className="h-3.5 w-3.5" />
                     Export JSON Config
                   </button>
                 </div>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-[11px] text-slate-500">
+                  <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />
+                  Last automatic backup: Today, 06:00 AM
+                </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs">
-              <div className="border-b border-slate-100 px-5 py-4">
-                <h2 className="text-sm font-bold text-slate-800">System Activity Log</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">Recent system events and user actions</p>
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                  <TargetIcon className="h-4 w-4" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-800">System Activity Log</h2>
+                  <p className="mt-0.5 text-[11px] text-slate-400">Recent system events and user actions</p>
+                </div>
               </div>
               <div className="p-5">
-                <div className="font-mono text-[10px] text-slate-500 bg-slate-50 p-4 rounded-lg border border-slate-200 max-h-52 overflow-y-auto space-y-2">
+                <div className="font-mono text-[10px] text-slate-500 bg-slate-50 p-4 rounded-lg border border-slate-200 max-h-52 overflow-y-auto space-y-2.5">
                   <div>[10:14:02] Shanu VR recorded payment ₹25,000 for ORD-2026-001.</div>
                   <div>[09:55:12] Priya Sharma updated Quotation status to Approved.</div>
                   <div>[09:20:45] System automatic cron task resolved 2 follow-ups.</div>
@@ -520,8 +677,7 @@ export default function Settings() {
 
               <div className="flex-1 overflow-y-auto px-5 py-4">
                 <form onSubmit={handleUpdateTarget} className="space-y-4 text-xs">
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Employee</label>
+                  <Field label="Employee">
                     <select
                       value={selectedStaffName}
                       onChange={(e) => {
@@ -532,7 +688,7 @@ export default function Settings() {
                           setCallsTarget(found.callsTarget)
                         }
                       }}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
+                      className={`${inputClass} cursor-pointer`}
                     >
                       {staffTargets.map((s) => (
                         <option key={s.name} value={s.name}>
@@ -540,29 +696,27 @@ export default function Settings() {
                         </option>
                       ))}
                     </select>
-                  </div>
+                  </Field>
 
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Raw Leads Target</label>
+                  <Field label="Raw Leads Target">
                     <input
                       type="number"
                       required
                       value={rawLeadsTarget}
                       onChange={(e) => setRawLeadsTarget(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-slate-800 focus:border-brand-500 focus:outline-none"
+                      className={`${inputClass} font-mono`}
                     />
-                  </div>
+                  </Field>
 
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Calls Target</label>
+                  <Field label="Calls Target">
                     <input
                       type="number"
                       required
                       value={callsTarget}
                       onChange={(e) => setCallsTarget(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-slate-800 focus:border-brand-500 focus:outline-none"
+                      className={`${inputClass} font-mono`}
                     />
-                  </div>
+                  </Field>
 
                   <button
                     type="submit"

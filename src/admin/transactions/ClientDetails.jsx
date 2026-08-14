@@ -166,14 +166,6 @@ function CloseIcon() {
   )
 }
 
-function CheckIcon({ className = 'h-3.5 w-3.5' }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
-
 function UploadIcon({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -381,14 +373,8 @@ export default function ClientDetails() {
     setTimeout(() => setToastMessage(''), 2500)
   }
 
-  function toggleComplete(rec) {
-    setRecords((prev) =>
-      prev.map((r) =>
-        r.id === rec.id
-          ? { ...r, status: r.status === 'Details Complete' ? 'Details Pending' : 'Details Complete' }
-          : r
-      )
-    )
+  function handleStatusChange(id, newStatus) {
+    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r)))
   }
 
   function confirmDelete() {
@@ -560,20 +546,20 @@ export default function ClientDetails() {
                         )}
                       </td>
                       <td className="py-2.5 pr-3">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
+                        <select
+                          value={rec.status}
+                          onChange={(e) => handleStatusChange(rec.id, e.target.value)}
+                          title="Change status"
+                          aria-label={`Status for ${rec.clientName}`}
+                          className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 ${
                             rec.status === 'Details Complete'
                               ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                               : 'border-amber-200 bg-amber-50 text-amber-700'
                           }`}
                         >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              rec.status === 'Details Complete' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                            }`}
-                          />
-                          {rec.status}
-                        </span>
+                          <option value="Details Complete">Details Complete</option>
+                          <option value="Details Pending">Details Pending</option>
+                        </select>
                       </td>
                       <td className="py-2.5 pr-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
@@ -584,19 +570,6 @@ export default function ClientDetails() {
                             title="Edit"
                           >
                             <PencilIcon className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => toggleComplete(rec)}
-                            className={`flex h-7 items-center gap-1 rounded-lg border px-2 text-[10.5px] font-bold transition cursor-pointer ${
-                              rec.status === 'Details Complete'
-                                ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                            }`}
-                            title={rec.status === 'Details Complete' ? 'Mark Pending' : 'Mark Complete'}
-                          >
-                            <CheckIcon className="h-3 w-3" />
-                            {rec.status === 'Details Complete' ? 'Pending' : 'Complete'}
                           </button>
                           <button
                             type="button"

@@ -67,7 +67,6 @@ const INITIAL_CONVERTED_REGISTER = [
     staff: 'Bincy',
     bdm: 'Husna',
     category: 'Dynamic Website',
-    status: 'Accepted',
     detailsStatus: 'Collected',
     remarks: 'Order accepted by client. SRS and business card collected.',
   },
@@ -85,7 +84,6 @@ const INITIAL_CONVERTED_REGISTER = [
     staff: 'Priya Sharma',
     bdm: 'Alex Joseph',
     category: 'Dynamic Web & OPD Suite',
-    status: 'Accepted',
     detailsStatus: 'Pending',
     remarks: 'Order form sent and accepted. Awaiting SRS and business card.',
   },
@@ -103,7 +101,6 @@ const INITIAL_CONVERTED_REGISTER = [
     staff: 'Ananya Nair',
     bdm: 'Shanu VR',
     category: 'Dynamic Website',
-    status: 'Accepted',
     detailsStatus: 'Collected',
     remarks: 'Accepted via WhatsApp. Requirements call recorded as voice clip.',
   },
@@ -121,7 +118,6 @@ const INITIAL_CONVERTED_REGISTER = [
     staff: 'Alex Joseph',
     bdm: 'Alex Joseph',
     category: 'Meta Ads',
-    status: 'Accepted',
     detailsStatus: 'Collected',
     remarks: 'Campaign brief approved. Business card and ad copy shared.',
   },
@@ -139,7 +135,6 @@ const INITIAL_CONVERTED_REGISTER = [
     staff: 'Shanu VR',
     bdm: 'Shanu VR',
     category: 'Mobile App',
-    status: 'Accepted',
     detailsStatus: 'Pending',
     remarks: 'Accepted in principle. SRS document expected from IT team.',
   },
@@ -157,7 +152,6 @@ const INITIAL_CONVERTED_REGISTER = [
     staff: 'Priya Sharma',
     bdm: 'Priya Sharma',
     category: 'SEO & Digital Marketing',
-    status: 'Accepted',
     detailsStatus: 'Collected',
     remarks: 'Order accepted. Keywords list and business card received.',
   },
@@ -175,7 +169,6 @@ const INITIAL_CONVERTED_REGISTER = [
     staff: 'NIMISHA DAVIS',
     bdm: 'NIMISHA DAVIS',
     category: 'Static Website',
-    status: 'Accepted',
     detailsStatus: 'Collected',
     remarks: 'Client accepted. Content and images handed over.',
   },
@@ -193,7 +186,6 @@ const INITIAL_CONVERTED_REGISTER = [
     staff: 'Husna',
     bdm: 'Husna',
     category: 'Google Ads',
-    status: 'Accepted',
     detailsStatus: 'Pending',
     remarks: 'Accepted over call. Waiting for signed order form and brief.',
   },
@@ -223,12 +215,6 @@ const STAFF_LIST = [
   'Karthika',
 ]
 
-const STATUS_LIST = [
-  'All Status',
-  'Accepted',
-  'Rejected',
-]
-
 const DETAILS_STATUS_LIST = [
   'All Details',
   'Collected',
@@ -242,7 +228,6 @@ export default function OrderReceived() {
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
   const [staff, setStaff] = useState('All Staff')
-  const [status, setStatus] = useState('All Status')
   const [detailsStatus, setDetailsStatus] = useState('All Details')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -256,7 +241,6 @@ export default function OrderReceived() {
     toDate: '',
     category: 'All Category',
     staff: 'All Staff',
-    status: 'All Status',
     detailsStatus: 'All Details',
   })
 
@@ -267,7 +251,6 @@ export default function OrderReceived() {
       toDate,
       category,
       staff,
-      status,
       detailsStatus,
     })
     setCurrentPage(1)
@@ -278,7 +261,6 @@ export default function OrderReceived() {
     setToDate('')
     setCategory('All Category')
     setStaff('All Staff')
-    setStatus('All Status')
     setDetailsStatus('All Details')
     setSearchQuery('')
     setAppliedFilters({
@@ -286,7 +268,6 @@ export default function OrderReceived() {
       toDate: '',
       category: 'All Category',
       staff: 'All Staff',
-      status: 'All Status',
       detailsStatus: 'All Details',
     })
     setCurrentPage(1)
@@ -298,7 +279,6 @@ export default function OrderReceived() {
       if (appliedFilters.toDate && item.rawDate > appliedFilters.toDate) return false
       if (appliedFilters.category !== 'All Category' && item.category !== appliedFilters.category) return false
       if (appliedFilters.staff !== 'All Staff' && item.staff !== appliedFilters.staff) return false
-      if (appliedFilters.status !== 'All Status' && item.status !== appliedFilters.status) return false
       if (appliedFilters.detailsStatus !== 'All Details' && item.detailsStatus !== appliedFilters.detailsStatus) return false
 
       if (searchQuery.trim()) {
@@ -310,8 +290,7 @@ export default function OrderReceived() {
           item.mobile.includes(q) ||
           item.location.toLowerCase().includes(q) ||
           item.staff.toLowerCase().includes(q) ||
-          item.category.toLowerCase().includes(q) ||
-          item.status.toLowerCase().includes(q)
+          item.category.toLowerCase().includes(q)
         )
       }
 
@@ -340,7 +319,6 @@ export default function OrderReceived() {
       'Location',
       'Staff',
       'Category',
-      'Status',
       'Client Details',
     ]
 
@@ -354,7 +332,6 @@ export default function OrderReceived() {
       `"${o.location}"`,
       `"${o.staff}"`,
       `"${o.category}"`,
-      `"${o.status}"`,
       `"${o.detailsStatus}"`,
     ])
 
@@ -366,17 +343,6 @@ export default function OrderReceived() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }
-
-  function getStatusBadge(st) {
-    switch (st) {
-      case 'Accepted':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-      case 'Rejected':
-        return 'bg-red-50 text-red-700 border-red-200'
-      default:
-        return 'bg-slate-50 text-slate-700 border-slate-200'
-    }
   }
 
   function getDetailsBadge(st) {
@@ -455,7 +421,7 @@ export default function OrderReceived() {
           </div>
 
           {/* Filter Form */}
-          <form onSubmit={handleApplyFilter} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-7 items-end">
+          <form onSubmit={handleApplyFilter} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-6 items-end">
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">From Date</label>
               <input
@@ -501,21 +467,6 @@ export default function OrderReceived() {
                 {STAFF_LIST.map((s) => (
                   <option key={s} value={s}>
                     {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none"
-              >
-                {STATUS_LIST.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
                   </option>
                 ))}
               </select>
@@ -606,7 +557,6 @@ export default function OrderReceived() {
                   <th className="py-3 px-3">Location</th>
                   <th className="py-3 px-3">Staff / BDM</th>
                   <th className="py-3 px-3">Category</th>
-                  <th className="py-3 px-3 text-center">Status</th>
                   <th className="py-3 px-3 text-center">Client Details</th>
                   <th className="py-3 px-3 text-center print:hidden">Action</th>
                 </tr>
@@ -614,7 +564,7 @@ export default function OrderReceived() {
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-slate-400">
+                    <td colSpan={8} className="py-8 text-center text-slate-400">
                       No converted client records match the selected filter criteria.
                     </td>
                   </tr>
@@ -652,16 +602,6 @@ export default function OrderReceived() {
                       <td className="py-3 px-3 whitespace-nowrap">
                         <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                           {order.category}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold ${getStatusBadge(
-                            order.status
-                          )}`}
-                        >
-                          {order.status}
                         </span>
                       </td>
 
@@ -799,9 +739,6 @@ export default function OrderReceived() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold ${getStatusBadge(selectedOrder.status)}`}>
-                    {selectedOrder.status}
-                  </span>
                   <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold ${getDetailsBadge(selectedOrder.detailsStatus)}`}>
                     Client Details: {selectedOrder.detailsStatus}
                   </span>

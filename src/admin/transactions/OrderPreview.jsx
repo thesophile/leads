@@ -83,7 +83,7 @@ const DEFAULT_ORDER = {
   discount: '5000/-',
   net: '45,000.00/-',
   amountWords: 'FORTY-FIVE THOUSAND ONLY',
-  status: 'Order Created',
+  status: 'Pending',
 }
 
 function QRCodeVisual({ value }) {
