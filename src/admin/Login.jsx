@@ -3,17 +3,17 @@ import { useNavigate } from 'react-router-dom'
 
 function BrandMark({ size = 40 }) {
   return (
-    <div
-      className="flex items-center justify-center rounded-xl shadow-lg shadow-brand-600/30"
-      style={{ width: size, height: size }}
-    >
-      <svg viewBox="0 0 24 24" width={size * 0.6} height={size * 0.6} fill="none" aria-hidden="true">
-        <path
-          d="M13 2 4.5 13.5H11L9.5 22 18.5 10H12L13 2Z"
-          fill="currentColor"
-        />
-      </svg>
-    </div>
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
+      <rect x="3" y="3" width="4.5" height="4.5" rx="1" />
+      <rect x="9.75" y="3" width="4.5" height="4.5" rx="1" />
+      <rect x="16.5" y="3" width="4.5" height="4.5" rx="1" />
+      <rect x="3" y="9.75" width="4.5" height="4.5" rx="1" />
+      <rect x="9.75" y="9.75" width="4.5" height="4.5" rx="1" />
+      <rect x="16.5" y="9.75" width="4.5" height="4.5" rx="1" />
+      <rect x="3" y="16.5" width="4.5" height="4.5" rx="1" />
+      <rect x="9.75" y="16.5" width="4.5" height="4.5" rx="1" />
+      <rect x="16.5" y="16.5" width="4.5" height="4.5" rx="1" />
+    </svg>
   )
 }
 
@@ -60,7 +60,7 @@ function Spinner() {
   )
 }
 
-const TYPE_WORDS = ['Lead.', 'Identity.', 'Order.']
+const TYPE_WORDS = ['Client.', 'Prospect.', 'Deal.']
 
 function useTypewriter(words, typeSpeed = 90, deleteSpeed = 50, holdTime = 1700) {
   const [text, setText] = useState('')
@@ -186,20 +186,18 @@ export default function Login() {
         <div className="pointer-events-none absolute right-16 top-1/3 h-40 w-40 rounded-full bg-brand-300/20 blur-2xl" />
 
         {/* logo */}
-        <div className="relative flex items-center gap-3 text-white">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 shadow-lg backdrop-blur">
-            <BrandMark size={22} />
-          </div>
-          <div className="text-lg font-bold tracking-wide">LEADS</div>
+        <div className="relative flex items-center gap-2.5 text-white">
+          <BrandMark size={32} />
+          <div className="text-xl font-bold tracking-wide">LEADS</div>
         </div>
 
         {/* headline + copy */}
         <div className="relative max-w-md">
           <h1 className="text-4xl font-bold leading-tight text-white">
-            One{' '}
-            <span className="text-brand-200">
+            Every{' '}
+            <span className="text-white drop-shadow-sm">
               {typed}
-              <span className="ml-0.5 inline-block h-[0.9em] w-[3px] translate-y-[0.12em] animate-pulse rounded-full bg-brand-200" />
+              <span className="ml-0.5 inline-block h-[0.9em] w-[3px] translate-y-[0.12em] animate-pulse rounded-full bg-white shadow-sm" />
             </span>
           </h1>
           <p className="mt-4 text-sm leading-relaxed text-white/75">
@@ -233,11 +231,11 @@ export default function Login() {
 
         <div className="relative w-full max-w-md">
           {/* mobile-only brand */}
-          <div className="mb-4 flex items-center justify-center gap-3 lg:hidden">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/30">
-              <BrandMark size={20} />
+          <div className="mb-6 flex items-center justify-center gap-2 lg:hidden">
+            <div className="text-brand-600">
+              <BrandMark size={28} />
             </div>
-            <span className="text-base font-bold text-slate-900">LEADS</span>
+            <span className="text-lg font-bold text-slate-900">LEADS</span>
           </div>
 
           <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-200/60 sm:p-8">
