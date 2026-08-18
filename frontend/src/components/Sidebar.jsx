@@ -84,17 +84,27 @@ const MENU_BASE = [
       { id: 'notifications', label: 'Notifications', path: '/notifications' },
     ],
   },
+  {
+    id: 'super-admin',
+    label: 'Super Admin',
+    items: [
+      { id: 'admins', label: 'Admins', path: '/admins', superAdminOnly: true },
+    ],
+  },
 ]
 
 function filterMenu(user) {
   const isAdmin = user && (user.role === 'admin' || user.is_superuser)
-  return [
-    ...MENU_BASE.map((section) => {
-      if (section.isDirect || !section.items) return section
-      const items = section.items.filter((item) => !item.adminOnly || isAdmin)
-      return { ...section, items }
-    }),
-  ]
+  const isSuperAdmin = user && user.is_superuser
+  return MENU_BASE.map((section) => {
+    if (section.isDirect || !section.items) return section
+    const items = section.items.filter((item) => {
+      if (item.superAdminOnly) return isSuperAdmin
+      if (item.adminOnly) return isAdmin
+      return true
+    })
+    return items.length > 0 ? { ...section, items } : null
+  }).filter(Boolean)
 }
 
 export default function Sidebar({

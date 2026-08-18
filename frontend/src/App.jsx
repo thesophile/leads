@@ -23,6 +23,7 @@ import QuotationRegister from './admin/reports/QuotationRegister'
 import OrderReceived from './admin/reports/OrderReceived'
 import Settings from './admin/utilities/Settings'
 import Notifications from './admin/utilities/Notifications'
+import Admins from './admin/superadmin/Admins'
 
 const guard = (el, opts) => <ProtectedRoute {...opts}>{el}</ProtectedRoute>
 
@@ -57,6 +58,7 @@ function App() {
         <Route path="/order-received" element={guard(<OrderReceived />)} />
         <Route path="/settings" element={guard(<Settings />)} />
         <Route path="/notifications" element={guard(<Notifications />)} />
+        <Route path="/admins" element={guard(<Admins />, { superAdminOnly: true })} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

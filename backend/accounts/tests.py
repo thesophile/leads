@@ -100,3 +100,83 @@ class AdminQuerysetScopingTests(TestCase):
         RawLead.objects.create(id='RL-2', company='Hospital Two')
         qs = RawLeadAdmin(RawLead, admin.site).get_queryset(self._request_for(self.admin_a))
         self.assertEqual(set(qs.values_list('id', flat=True)), {'RL-1'})
+
+
+class SuperuserAdminManagementTests(APITestCase):
+    def setUp(self):
+        acme, globex = make_company('Acme'), make_company('Globex')
+        self.superuser = User.objects.create_superuser(
+            email='root@platform.com', password='x', name='Root',
+        )
+        self.admin_a = User.objects.create_user(
+            email='admin_a@acme.com', password='x', name='Admin A',
+            role=User.Role.ADMIN, company=acme,
+        )
+        self.admin_b = User.objects.create_user(
+            email='admin_b@globex.com', password='x', name='Admin B',
+            role=User.Role.ADMIN, company=globex,
+        )
+        User.objects.create_user(email='staff_a@acme.com', password='x', name='Staff A', company=acme)
+
+    def test_superuser_lists_all_admins_across_companies(self):
+        self.client.force_authenticate(self.superuser)
+        resp = self.client.get('/api/auth/admins/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            {u['email'] for u in resp.data},
+            {'admin_a@acme.com', 'admin_b@globex.com', 'root@platform.com'},
+        )
+
+    def test_plain_admin_is_forbidden(self):
+        self.client.force_authenticate(self.admin_a)
+        resp = self.client.get('/api/auth/admins/')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_create_admin_reuses_existing_company(self):
+        self.client.force_authenticate(self.superuser)
+        resp = self.client.post('/api/auth/admins/', {
+            'company': 'Globex',
+            'name': 'New Admin',
+            'email': 'new_admin@globex.com',
+            'phone': '999',
+            'password': 'Str0ngPass!',
+            'password2': 'Str0ngPass!',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(Company.objects.filter(name='Globex').count(), 1)
+        user = User.objects.get(email='new_admin@globex.com')
+        self.assertEqual(user.role, User.Role.ADMIN)
+        self.assertTrue(user.is_staff)
+        self.assertFalse(user.is_superuser)
+
+    def test_delete_admin_removes_login(self):
+        self.client.force_authenticate(self.superuser)
+        resp = self.client.delete(f'/api/auth/admins/{self.admin_a.pk}/')
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(User.objects.filter(pk=self.admin_a.pk).exists())
+
+    def test_delete_self_is_blocked(self):
+        self.client.force_authenticate(self.superuser)
+        resp = self.client.delete(f'/api/auth/admins/{self.superuser.pk}/')
+        self.assertEqual(resp.status_code, 400)
+        self.assertTrue(User.objects.filter(pk=self.superuser.pk).exists())
+
+    def test_delete_other_superuser_is_blocked(self):
+        other = User.objects.create_superuser(
+            email='root2@platform.com', password='x', name='Root Two',
+        )
+        self.client.force_authenticate(self.superuser)
+        resp = self.client.delete(f'/api/auth/admins/{other.pk}/')
+        self.assertEqual(resp.status_code, 400)
+        self.assertTrue(User.objects.filter(pk=other.pk).exists())
+
+    def test_reset_password_works_cross_company(self):
+        self.client.force_authenticate(self.superuser)
+        resp = self.client.post(
+            f'/api/auth/admins/{self.admin_b.pk}/reset-password/',
+            {'new_password': 'NewPass123!'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.admin_b.refresh_from_db()
+        self.assertTrue(self.admin_b.check_password('NewPass123!'))

@@ -9,9 +9,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .permissions import IsAdmin
+from .permissions import IsAdmin, IsSuperuser
 from .serializers import (
+    AdminManageSerializer,
     AdminRegisterSerializer,
+    AdminUpdateSerializer,
     ChangePasswordSerializer,
     LoginSerializer,
     PasswordResetByAdminSerializer,
@@ -96,6 +98,82 @@ class StaffResetPasswordView(APIView):
     def post(self, request, pk):
         try:
             user = User.objects.get(pk=pk, company=request.user.company)
+        except User.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = PasswordResetByAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
+        return Response({'detail': 'Password updated successfully.'})
+
+
+class SuperuserAdminListView(APIView):
+    """Superuser-only: list and create admin accounts across all companies."""
+
+    permission_classes = [IsSuperuser]
+
+    def get(self, request):
+        admins = User.objects.filter(role=User.Role.ADMIN).order_by('name')
+        return Response(UserSerializer(admins, many=True).data)
+
+    def post(self, request):
+        serializer = AdminManageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+class SuperuserAdminDetailView(APIView):
+    """Superuser-only: edit, reset password for, or delete an admin account."""
+
+    permission_classes = [IsSuperuser]
+
+    def get_object(self, pk):
+        try:
+            return User.objects.get(pk=pk, role=User.Role.ADMIN)
+        except User.DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        user = self.get_object(pk)
+        if user is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if user.is_superuser:
+            return Response(
+                {'detail': 'Platform superadmin accounts cannot be edited here.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = AdminUpdateSerializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(user).data)
+
+    def delete(self, request, pk):
+        user = self.get_object(pk)
+        if user is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if user.pk == request.user.pk:
+            return Response(
+                {'detail': 'You cannot delete your own account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if user.is_superuser:
+            return Response(
+                {'detail': 'Platform superadmin accounts cannot be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SuperuserAdminResetPasswordView(APIView):
+    """Superuser-only: set a new password for an admin in any company."""
+
+    permission_classes = [IsSuperuser]
+
+    def post(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk, role=User.Role.ADMIN)
         except User.DoesNotExist:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = PasswordResetByAdminSerializer(data=request.data)

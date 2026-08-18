@@ -14,8 +14,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'phone', 'company', 'role', 'initials', 'staff_code', 'branch_name', 'is_active', 'date_joined']
-        read_only_fields = ['id', 'is_active', 'date_joined']
+        fields = ['id', 'email', 'name', 'phone', 'company', 'role', 'initials', 'staff_code', 'branch_name', 'is_active', 'is_superuser', 'date_joined']
+        read_only_fields = ['id', 'is_active', 'is_superuser', 'date_joined']
 
     def get_company(self, obj):
         return obj.company.name if obj.company else ''
@@ -60,6 +60,49 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
         # Intentionally NOT a superuser: this endpoint is publicly reachable,
         # so the registering company admin must not get cross-tenant access.
         return User.objects.create_user(company=company, **validated_data)
+
+
+class AdminManageSerializer(serializers.ModelSerializer):
+    """Superuser-only: create an admin for an existing or new company."""
+
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password2 = serializers.CharField(write_only=True)
+    company = serializers.CharField(max_length=200)
+
+    class Meta:
+        model = User
+        fields = ['company', 'name', 'email', 'phone', 'password', 'password2']
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError({'password2': 'Passwords do not match.'})
+        return attrs
+
+    def validate_company(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Company name is required.')
+        return value
+
+    def create(self, validated_data):
+        from .models import Company
+
+        company_name = validated_data.pop('company').strip()
+        company, _ = Company.objects.get_or_create(name=company_name)
+        validated_data.pop('password2')
+        validated_data['role'] = User.Role.ADMIN
+        validated_data['is_staff'] = True
+        # Still never a superuser: platform-level access stays with the
+        # superadmin who is creating this account.
+        return User.objects.create_user(company=company, **validated_data)
+
+
+class AdminUpdateSerializer(serializers.ModelSerializer):
+    """Superuser-only: edit basic details of an admin account."""
+
+    class Meta:
+        model = User
+        fields = ['name', 'phone', 'email', 'is_active']
 
 
 class StaffCreateSerializer(serializers.ModelSerializer):

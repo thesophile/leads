@@ -73,7 +73,12 @@ export class ApiError extends Error {
 function extractMessage(data) {
   if (!data) return ''
   if (typeof data === 'string') return data
-  if (data.detail) return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)
+  if (data.detail) {
+    if (typeof data.detail === 'string') return data.detail
+    if (Array.isArray(data.detail)) return data.detail[0]
+    return JSON.stringify(data.detail)
+  }
+  if (data.non_field_errors && Array.isArray(data.non_field_errors)) return data.non_field_errors[0]
   const firstKey = Object.keys(data)[0]
   if (!firstKey) return ''
   const val = data[firstKey]
