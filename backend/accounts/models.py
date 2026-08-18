@@ -28,7 +28,12 @@ class UserManager(BaseUserManager):
 
 class Company(models.Model):
     name = models.CharField(max_length=200, unique=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
+    website = models.URLField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['name']

@@ -49,9 +49,10 @@ const MENU_BASE = [
     id: 'master-data',
     label: 'Master Data',
     items: [
+      { id: 'company', label: 'Company', path: '/company' },
+      { id: 'branches', label: 'Branches', path: '/branches' },
       { id: 'categories', label: 'Categories', path: '/categories' },
       { id: 'sources', label: 'Sources', path: '/sources' },
-      { id: 'branches', label: 'Branches', path: '/branches' },
       { id: 'staff', label: 'Staff', path: '/staff', adminOnly: true },
     ],
   },

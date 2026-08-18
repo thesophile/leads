@@ -15,6 +15,7 @@ from .serializers import (
     AdminRegisterSerializer,
     AdminUpdateSerializer,
     ChangePasswordSerializer,
+    CompanySerializer,
     LoginSerializer,
     PasswordResetByAdminSerializer,
     PasswordResetConfirmSerializer,
@@ -214,6 +215,32 @@ class MeView(APIView):
 
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+
+class CompanyDetailView(APIView):
+    """Authenticated user: view and edit the details of their own company."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request):
+        if not getattr(request.user, 'company', None):
+            return None
+        return request.user.company
+
+    def get(self, request):
+        company = self.get_object(request)
+        if company is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(CompanySerializer(company).data)
+
+    def patch(self, request):
+        company = self.get_object(request)
+        if company is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = CompanySerializer(company, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 class ChangePasswordView(APIView):

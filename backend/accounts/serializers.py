@@ -3,7 +3,15 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework import serializers
 
+from .models import Company
+
 User = get_user_model()
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = ['id', 'name', 'email', 'phone', 'address', 'website']
 
 
 class UserSerializer(serializers.ModelSerializer):

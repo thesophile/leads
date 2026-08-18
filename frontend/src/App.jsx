@@ -8,6 +8,7 @@ import ChangePassword from './admin/ChangePassword'
 import Dashboard from './admin/Dashboard'
 import Categories from './admin/master/Categories'
 import Sources from './admin/master/Sources'
+import Company from './admin/master/Company'
 import Branch from './admin/master/Branch'
 import Staff from './admin/master/Staff'
 import RawData from './admin/transactions/RawData'
@@ -42,6 +43,7 @@ function App() {
         <Route path="/dashboard" element={guard(<Dashboard />)} />
         <Route path="/categories" element={guard(<Categories />)} />
         <Route path="/sources" element={guard(<Sources />)} />
+        <Route path="/company" element={guard(<Company />)} />
         <Route path="/branches" element={guard(<Branch />)} />
         <Route path="/staff" element={guard(<Staff />, { adminOnly: true })} />
         <Route path="/raw-leads" element={guard(<RawData />)} />
