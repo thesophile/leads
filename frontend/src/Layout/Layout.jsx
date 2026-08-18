@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import { useAuth } from '../context/auth-context'
 
 export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { user } = useAuth()
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -35,7 +37,7 @@ export default function Layout({ children }) {
 
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
-              S
+              {user?.initials || 'U'}
             </div>
           </div>
         </header>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/auth-context'
 
 function BrandMark({ size = 40 }) {
   return (
@@ -148,6 +149,7 @@ function StatCard({ value, label, live = false }) {
 
 export default function Login() {
   const navigate = useNavigate()
+  const { login, isAuthenticated } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -156,12 +158,12 @@ export default function Login() {
   const [error, setError] = useState('')
   const { text: typed } = useTypewriter(TYPE_WORDS)
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
 
     if (!email.trim()) {
-      setError('Please enter your email or username.')
+      setError('Please enter your email.')
       return
     }
     if (!password) {
@@ -170,11 +172,16 @@ export default function Login() {
     }
 
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
+    try {
+      await login({ email, password, remember })
       navigate('/dashboard')
-    }, 600)
+    } catch (err) {
+      setError(err.message || 'Unable to sign in. Please try again.')
+      setLoading(false)
+    }
   }
+
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white lg:grid lg:grid-cols-[1.05fr_1fr]">
@@ -279,13 +286,12 @@ export default function Login() {
                   <label htmlFor="password" className="block text-sm font-semibold text-slate-700">
                     Password
                   </label>
-                  <a
-                    href="#"
-                    onClick={(e) => e.preventDefault()}
+                  <Link
+                    to="/forgot-password"
                     className="text-xs font-semibold text-brand-600 hover:text-brand-700"
                   >
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
@@ -353,13 +359,13 @@ export default function Login() {
               </button>
             </form>
 
-            {/* demo hint */}
+            {/* admin register prompt */}
             <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-center">
               <p className="text-xs text-slate-500">
-                <span className="font-semibold text-slate-700">Demo access:</span>
-                <span className="ml-1 font-mono text-slate-600">admin@leads.com</span>
-                <span className="mx-1 text-slate-400">/</span>
-                <span className="font-mono text-slate-600">admin123</span>
+                <span className="font-semibold text-slate-700">Register your company?</span>{' '}
+                <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700">
+                  Create admin account
+                </Link>
               </p>
             </div>
           </div>

@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from common.admin import CompanyScopedAdminMixin
+
 from .models import (
     Attachment,
     CallHistory,
@@ -23,14 +25,16 @@ class ProposalTemplateAdmin(admin.ModelAdmin):
 
 
 @admin.register(RawLead)
-class RawLeadAdmin(admin.ModelAdmin):
+class RawLeadAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+    company_field = 'tenant'
     list_display = ('id', 'company', 'phone', 'category', 'source', 'date')
     list_filter = ('category', 'source', 'added_by')
     search_fields = ('company', 'contact', 'phone', 'id')
 
 
 @admin.register(TelecallLead)
-class TelecallLeadAdmin(admin.ModelAdmin):
+class TelecallLeadAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+    company_field = 'tenant'
     list_display = ('id', 'company', 'phone', 'assigned_to', 'call_status', 'priority')
     list_filter = ('call_status', 'priority', 'assigned_to')
     search_fields = ('company', 'contact', 'phone', 'id')
@@ -38,14 +42,16 @@ class TelecallLeadAdmin(admin.ModelAdmin):
 
 
 @admin.register(Quotation)
-class QuotationAdmin(admin.ModelAdmin):
+class QuotationAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+    company_field = 'tenant'
     list_display = ('id', 'company', 'customer', 'status', 'net_amount', 'date')
     list_filter = ('status', 'source', 'category')
     search_fields = ('id', 'company', 'customer', 'mobile')
 
 
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
+class OrderAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+    company_field = 'tenant'
     list_display = ('id', 'company', 'customer', 'status', 'net_amount', 'date')
     list_filter = ('status', 'category')
     search_fields = ('id', 'company', 'customer', 'mobile')
@@ -53,7 +59,8 @@ class OrderAdmin(admin.ModelAdmin):
 
 
 @admin.register(ClientDetail)
-class ClientDetailAdmin(admin.ModelAdmin):
+class ClientDetailAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+    company_field = 'tenant'
     list_display = ('id', 'order_no', 'company', 'client_name', 'status', 'accepted_date')
     list_filter = ('status', 'category', 'collected_by')
     search_fields = ('id', 'order_no', 'company', 'client_name')

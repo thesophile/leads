@@ -1,5 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
 import Login from './admin/Login'
+import Register from './admin/Register'
+import ForgotPassword from './admin/ForgotPassword'
+import ChangePassword from './admin/ChangePassword'
 import Dashboard from './admin/Dashboard'
 import Categories from './admin/master/Categories'
 import Sources from './admin/master/Sources'
@@ -19,45 +24,43 @@ import OrderReceived from './admin/reports/OrderReceived'
 import Settings from './admin/utilities/Settings'
 import Notifications from './admin/utilities/Notifications'
 
+const guard = (el, opts) => <ProtectedRoute {...opts}>{el}</ProtectedRoute>
+
 function App() {
   return (
-    <Routes>
-      {/* Public Login Route as Root */}
-      <Route path="/" element={<Login />} />
-      <Route path="/login" element={<Login />} />
+    <AuthProvider>
+      <Routes>
+        {/* Public auth pages */}
+        <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
 
-      {/* Main Dashboard Route */}
-      <Route path="/dashboard" element={<Dashboard />} />
+        {/* Protected app routes */}
+        <Route path="/change-password" element={guard(<ChangePassword />)} />
+        <Route path="/dashboard" element={guard(<Dashboard />)} />
+        <Route path="/categories" element={guard(<Categories />)} />
+        <Route path="/sources" element={guard(<Sources />)} />
+        <Route path="/branches" element={guard(<Branch />)} />
+        <Route path="/staff" element={guard(<Staff />, { adminOnly: true })} />
+        <Route path="/raw-leads" element={guard(<RawData />)} />
+        <Route path="/tele-calling" element={guard(<Telecall />)} />
+        <Route path="/quotations" element={guard(<Managequotation />)} />
+        <Route path="/quotations/preview/:id" element={guard(<ProposalPreview />)} />
+        <Route path="/orders" element={guard(<ManageOrder />)} />
+        <Route path="/orders/preview/:id" element={guard(<OrderPreview />)} />
+        <Route path="/client-details" element={guard(<ClientDetails />)} />
+        <Route path="/raw-data-register" element={guard(<RawDataRegister />)} />
+        <Route path="/telecalling-register" element={guard(<TelecalligRegister />)} />
+        <Route path="/quotation-submitted-register" element={guard(<QuotationRegister />)} />
+        <Route path="/order-received-register" element={guard(<OrderReceived />)} />
+        <Route path="/order-received" element={guard(<OrderReceived />)} />
+        <Route path="/settings" element={guard(<Settings />)} />
+        <Route path="/notifications" element={guard(<Notifications />)} />
 
-      {/* Master Data Routes */}
-      <Route path="/categories" element={<Categories />} />
-      <Route path="/sources" element={<Sources />} />
-      <Route path="/branches" element={<Branch />} />
-      <Route path="/staff" element={<Staff />} />
-
-      {/* Sales / Transactions Routes */}
-      <Route path="/raw-leads" element={<RawData />} />
-      <Route path="/tele-calling" element={<Telecall />} />
-      <Route path="/quotations" element={<Managequotation />} />
-      <Route path="/quotations/preview/:id" element={<ProposalPreview />} />
-      <Route path="/orders" element={<ManageOrder />} />
-      <Route path="/orders/preview/:id" element={<OrderPreview />} />
-      <Route path="/client-details" element={<ClientDetails />} />
-
-      {/* Reports Routes */}
-      <Route path="/raw-data-register" element={<RawDataRegister />} />
-      <Route path="/telecalling-register" element={<TelecalligRegister />} />
-      <Route path="/quotation-submitted-register" element={<QuotationRegister />} />
-      <Route path="/order-received-register" element={<OrderReceived />} />
-      <Route path="/order-received" element={<OrderReceived />} />
-
-      {/* Utilities Routes */}
-      <Route path="/settings" element={<Settings />} />
-      <Route path="/notifications" element={<Notifications />} />
-
-      {/* Fallback Route */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
   )
 }
 

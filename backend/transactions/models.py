@@ -22,6 +22,13 @@ class ProposalTemplate(models.Model):
 class RawLead(models.Model):
     id = models.CharField(max_length=20, primary_key=True)
     company = models.CharField(max_length=200)
+    tenant = models.ForeignKey(
+        'accounts.Company',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
     contact = models.CharField(max_length=120, blank=True)
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
@@ -44,6 +51,13 @@ class RawLead(models.Model):
 class TelecallLead(models.Model):
     id = models.CharField(max_length=20, primary_key=True)
     company = models.CharField(max_length=200)
+    tenant = models.ForeignKey(
+        'accounts.Company',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
     contact = models.CharField(max_length=120, blank=True)
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
@@ -89,6 +103,13 @@ class Quotation(models.Model):
     lead_id = models.CharField(max_length=30, blank=True)
     customer = models.CharField(max_length=120, blank=True)
     company = models.CharField(max_length=200)
+    tenant = models.ForeignKey(
+        'accounts.Company',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
     mobile = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     category = models.CharField(max_length=100, blank=True)
@@ -123,6 +144,13 @@ class Order(models.Model):
     proposal_date = models.CharField(max_length=30, blank=True)
     customer = models.CharField(max_length=120, blank=True)
     company = models.CharField(max_length=200)
+    tenant = models.ForeignKey(
+        'accounts.Company',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
     mobile = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     city = models.CharField(max_length=150, blank=True)
@@ -155,6 +183,13 @@ class ClientDetail(models.Model):
     lead_id = models.CharField(max_length=30, blank=True)
     client_name = models.CharField(max_length=120, blank=True)
     company = models.CharField(max_length=200)
+    tenant = models.ForeignKey(
+        'accounts.Company',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
     mobile = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     category = models.CharField(max_length=100, blank=True)

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/auth-context'
 
 // Grid icon matching the screenshot (3x3 rounded squares)
 function LeadsGridIcon() {
@@ -37,7 +38,7 @@ function LogoutIcon() {
 }
 
 // Navigation structure matching the workflow & screenshot
-const MENU_SECTIONS = [
+const MENU_BASE = [
   {
     id: 'dashboard',
     label: 'Dashboard',
@@ -51,7 +52,7 @@ const MENU_SECTIONS = [
       { id: 'categories', label: 'Categories', path: '/categories' },
       { id: 'sources', label: 'Sources', path: '/sources' },
       { id: 'branches', label: 'Branches', path: '/branches' },
-      { id: 'staff', label: 'Staff', path: '/staff' },
+      { id: 'staff', label: 'Staff', path: '/staff', adminOnly: true },
     ],
   },
   {
@@ -85,12 +86,25 @@ const MENU_SECTIONS = [
   },
 ]
 
+function filterMenu(user) {
+  const isAdmin = user && (user.role === 'admin' || user.is_superuser)
+  return [
+    ...MENU_BASE.map((section) => {
+      if (section.isDirect || !section.items) return section
+      const items = section.items.filter((item) => !item.adminOnly || isAdmin)
+      return { ...section, items }
+    }),
+  ]
+}
+
 export default function Sidebar({
   mobileOpen = false,
   onCloseMobile,
 }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user, logout } = useAuth()
+  const menuSections = useMemo(() => filterMenu(user), [user])
 
   // Track hovered section
   const [hoveredSection, setHoveredSection] = useState(null)
@@ -100,7 +114,7 @@ export default function Sidebar({
   
   // Track permanently pinned/clicked sections
   const [openSections, setOpenSections] = useState(() => {
-    const activeSection = MENU_SECTIONS.find((sec) =>
+    const activeSection = MENU_BASE.find((sec) =>
       sec.items?.some((item) => item.path === window.location.pathname)
     )
     return activeSection ? [activeSection.id] : ['transaction']
@@ -127,7 +141,8 @@ export default function Sidebar({
     onCloseMobile?.()
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    await logout()
     navigate('/login')
     onCloseMobile?.()
   }
@@ -159,7 +174,7 @@ export default function Sidebar({
         {/* Navigation List */}
         <nav className="flex-1 overflow-y-auto px-2 py-3.5">
           <ul className="space-y-1.5 font-medium">
-            {MENU_SECTIONS.map((section) => {
+            {menuSections.map((section) => {
               if (section.isDirect) {
                 const isActive =
                   location.pathname === section.path ||
@@ -264,8 +279,19 @@ export default function Sidebar({
           </ul>
         </nav>
 
-        {/* Footer with Logout Button */}
+        {/* Footer with User + Logout */}
         <div className="shrink-0 border-t border-slate-200 p-3">
+          {user && (
+            <div className="mb-2.5 flex items-center gap-2.5 rounded-xl bg-slate-50 px-2.5 py-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[11px] font-bold text-white">
+                {user.initials || 'U'}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-bold text-slate-800">{user.name}</p>
+                <p className="truncate text-[10px] capitalize text-slate-400">{user.role}</p>
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleLogout}

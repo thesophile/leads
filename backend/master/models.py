@@ -24,7 +24,13 @@ class Source(CommonMaster):
 
 
 class Branch(CommonMaster):
-    pass
+    company = models.ForeignKey(
+        'accounts.Company',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='branches',
+    )
 
 
 class Staff(models.Model):
@@ -34,6 +40,13 @@ class Staff(models.Model):
     mobile = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_members')
+    user = models.OneToOneField(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='staff_profile',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
