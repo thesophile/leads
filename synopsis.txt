@@ -1,0 +1,145 @@
+
+Lead Management System for Software Company
+1. Introduction
+The Lead Management System is a software solution developed to manage and track potential clients for a software company specializing in website development. The system helps in organizing leads, tracking communication, managing follow-ups, and converting leads into successful business orders. It also ensures smooth coordination between different departments such as marketing and accounts.
+________________________________________
+2. Objectives
+The main objectives of the system are:
+•	To efficiently manage and store lead information 
+•	To track lead status and communication history 
+•	To improve conversion of leads into clients 
+•	To automate follow-up and reminder processes 
+•	To maintain structured workflow across departments 
+•	To ensure secure employee access through password management 
+________________________________________
+3. System Overview
+The system begins with capturing potential leads (companies requiring website development services). Each lead is recorded with essential details and categorized based on business type. The system then tracks the lead through various stages such as contact, follow-up, quotation, order processing, and final conversion into a customer.
+________________________________________
+
+1. Lead Segmentation (Company Category)
+At the time of lead entry, the system includes a Segmentation feature to classify companies based on their business type.
+•	Users must select or enter the company category, such as: 
+o	Restaurant 
+o	Saloon 
+o	School 
+o	Bank 
+o	Others 
+•	Purpose: 
+o	Helps in better organization of leads 
+o	Enables targeted communication and marketing strategies 
+o	Makes filtering and reporting easier 
+________________________________________
+2. Bank Module with Branch Management
+For companies categorized under Bank, the system includes a specialized structure:
+•	Bank Entry: 
+o	Each bank is entered only once in the system 
+o	Avoids duplicate entries 
+•	Branch Management: 
+o	Separate section to manage multiple branches under a bank 
+o	Each branch can store: 
+	Branch Name 
+	Location 
+	Contact Details 
+•	Purpose: 
+o	Maintains a clean and structured database 
+o	Supports multiple branches under a single organization 
+________________________________________
+3. Password Management System
+A dedicated module is included for managing employee access.
+•	Features: 
+o	Add new employee login credentials 
+o	Edit or update existing passwords 
+o	Role-based or user-based access control (optional enhancement) 
+•	Purpose: 
+o	Ensures secure system access 
+o	Allows administrators to manage user accounts efficiently 
+o	Improves overall system security 
+________________________________________
+
+4. Modules of the System
+4.1 Lead Entry Module
+•	Capture basic details: 
+o	Company Name 
+o	Phone Number 
+o	Location 
+•	Initial status is set to: "No Action" 
+________________________________________
+4.2 Lead Segmentation Module
+•	Classify companies based on category: 
+o	Restaurant 
+o	Saloon 
+o	School 
+o	Bank 
+o	Others 
+•	Helps in filtering, reporting, and targeted communication 
+________________________________________
+4.3 Lead Interaction Module
+•	Contact the company to understand requirements 
+•	Update lead status based on response: 
+o	Interested 
+o	Unwilling (interested later) 
+o	Not Interested 
+________________________________________
+4.4 Follow-up Management Module
+•	For Unwilling leads: 
+o	Users can enter follow-up duration (e.g., 2 days, 1 week) 
+o	The system automatically calculates the follow-up date from the current date 
+o	The calculated date is displayed in the follow-up field 
+•	Reminder System: 
+o	On the follow-up date: 
+	A popup reminder notification appears 
+	Reminder is shown to the assigned user (lead owner) when they log in 
+•	Allows updating status after follow-up 
+________________________________________
+4.5 Quotation Module
+•	For Interested leads: 
+o	Generate and send quotation 
+o	Track approval status 
+________________________________________
+4.6 Order Management Module
+•	Once quotation is approved: 
+o	Order form is created 
+o	Lead status updated to Completed (Converted) 
+________________________________________
+4.7 Department Workflow Module
+•	Orders move through: 
+1.	Marketing Order Section 
+2.	Accounts Section 
+________________________________________
+4.8 Bank & Branch Management Module
+•	For companies categorized as Bank: 
+o	Bank is entered only once 
+o	Separate section for managing multiple branches 
+•	Branch details include: 
+o	Branch Name 
+o	Location 
+o	Contact Information 
+________________________________________
+4.9 CRM Integration Module
+•	After project completion: 
+o	Client details are moved to CRM system 
+o	Maintains long-term relationship and service tracking 
+________________________________________
+4.10 Password Management Module
+•	Manage employee access: 
+o	Add new users 
+o	Edit/update passwords 
+o	Optional role-based access 
+•	Ensures system security and controlled access 
+________________________________________
+5. Workflow of the System
+1.	Lead is added with basic details and category 
+2.	Initial status set to No Action 
+3.	Company is contacted 
+4.	Status updated: 
+o	Interested → Move to quotation 
+o	Unwilling → Follow-up scheduled 
+o	Not Interested → Closed 
+5.	Follow-up reminders generated automatically 
+6.	Quotation sent and approved 
+7.	Order created and processed 
+8.	Order moves to marketing and accounts 
+9.	Project completed 
+10.	Client added to CRM 
+________________________________________
+
