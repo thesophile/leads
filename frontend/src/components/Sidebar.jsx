@@ -116,36 +116,22 @@ export default function Sidebar({
   const { user, logout } = useAuth()
   const menuSections = useMemo(() => filterMenu(user), [user])
 
-  // Track hovered section
-  const [hoveredSection, setHoveredSection] = useState(null)
-
-  // Track if user explicitly closed a section while hovering on it
-  const [explicitlyClosedHover, setExplicitlyClosedHover] = useState(null)
-  
-  // Track permanently pinned/clicked sections
-  const [openSections, setOpenSections] = useState(() => {
-    const activeSection = MENU_BASE.find((sec) =>
-      sec.items?.some((item) => item.path === window.location.pathname)
-    )
-    return activeSection ? [activeSection.id] : ['transaction']
-  })
+  // Track opened/clicked sections
+  const [openSections, setOpenSections] = useState(['transaction'])
 
   function toggleSection(id, isCurrentlyOpen) {
     if (isCurrentlyOpen) {
       // Close it
       setOpenSections((prev) => prev.filter((item) => item !== id))
-      setExplicitlyClosedHover(id)
     } else {
       // Open it
       setOpenSections((prev) => (prev.includes(id) ? prev : [...prev, id]))
-      setExplicitlyClosedHover(null)
     }
   }
 
   function handleNavigate(path, sectionId) {
     if (sectionId) {
       setOpenSections((prev) => (prev.includes(sectionId) ? prev : [...prev, sectionId]))
-      setExplicitlyClosedHover(null)
     }
     navigate(path)
     onCloseMobile?.()
@@ -211,25 +197,10 @@ export default function Sidebar({
                 (item) => location.pathname === item.path
               )
 
-              // Compute open state with priority to explicit click-close during hover
-              const isTemporarilyClosed = explicitlyClosedHover === section.id
-              const isHovered = hoveredSection === section.id
-              const isPinned = openSections.includes(section.id) || hasActiveChild
-
-              const isOpen = !isTemporarilyClosed && (isHovered || isPinned)
+              const isOpen = openSections.includes(section.id)
 
               return (
-                <li
-                  key={section.id}
-                  onMouseEnter={() => {
-                    setHoveredSection(section.id)
-                    setExplicitlyClosedHover(null)
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredSection(null)
-                    setExplicitlyClosedHover(null)
-                  }}
-                >
+                <li key={section.id}>
                   {/* Category Header Button */}
                   <button
                     type="button"
