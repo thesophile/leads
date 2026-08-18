@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../Layout/Layout'
 import { useAuth } from '../context/auth-context'
+import PasswordInput from '../components/PasswordInput'
 
 const inputClass =
   'w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100'
@@ -67,51 +68,33 @@ export default function ChangePassword() {
           )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
-            <div>
-              <label htmlFor="old" className="mb-1.5 block text-sm font-semibold text-slate-700">
-                Current password
-              </label>
-              <input
-                id="old"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                className={inputClass}
-                placeholder="••••••••"
-              />
-            </div>
-            <div>
-              <label htmlFor="new" className="mb-1.5 block text-sm font-semibold text-slate-700">
-                New password
-              </label>
-              <input
-                id="new"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className={inputClass}
-                placeholder="At least 8 characters"
-              />
-            </div>
-            <div>
-              <label htmlFor="new2" className="mb-1.5 block text-sm font-semibold text-slate-700">
-                Confirm new password
-              </label>
-              <input
-                id="new2"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={newPassword2}
-                onChange={(e) => setNewPassword2(e.target.value)}
-                className={inputClass}
-                placeholder="Repeat your new password"
-              />
-            </div>
+            <PasswordInput
+              id="old"
+              label="Current password"
+              value={oldPassword}
+              onChange={setOldPassword}
+              autoComplete="current-password"
+              className={inputClass}
+              placeholder="••••••••"
+            />
+            <PasswordInput
+              id="new"
+              label="New password"
+              value={newPassword}
+              onChange={setNewPassword}
+              autoComplete="new-password"
+              className={inputClass}
+              placeholder="At least 8 characters"
+            />
+            <PasswordInput
+              id="new2"
+              label="Confirm new password"
+              value={newPassword2}
+              onChange={setNewPassword2}
+              autoComplete="new-password"
+              className={inputClass}
+              placeholder="Repeat your new password"
+            />
 
             <div className="flex items-center gap-3 pt-2">
               <button

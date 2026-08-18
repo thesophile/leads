@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
+import PasswordInput from '../../components/PasswordInput'
 
 function PlusCircleIcon() {
   return (
@@ -127,6 +128,8 @@ const inputClass =
   'peer relative z-0 w-full rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-3 text-xs text-slate-800 transition-all focus:outline-none focus:ring-4 focus:border-brand-500 focus:ring-brand-500/10'
 
 function FloatingField({ label, id, value, onChange, type = 'text', icon }) {
+  const [show, setShow] = useState(false)
+  const isPassword = type === 'password'
   return (
     <div className="relative mt-2">
       {icon && (
@@ -136,12 +139,35 @@ function FloatingField({ label, id, value, onChange, type = 'text', icon }) {
       )}
       <input
         id={id}
-        type={type}
+        type={isPassword && show ? 'text' : type}
         placeholder=" "
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`${inputClass} ${icon ? 'pl-9' : ''}`}
+        className={`${inputClass} ${icon ? 'pl-9' : ''} ${isPassword ? 'pr-9' : ''}`}
       />
+      {isPassword && (
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          aria-label={show ? 'Hide password' : 'Show password'}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 rounded-md p-1 text-slate-400 transition hover:text-slate-600"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {show ? (
+              <>
+                <path d="M4 4l16 16" />
+                <path d="M9.6 5.7A9.6 9.6 0 0 1 12 5.5c5 0 8.6 4.2 9.5 6.5-.4.9-1.5 2.7-3.4 4.3M6.1 6.6C3.6 8.3 2.1 10.5 1.5 12c.9 2.3 4.5 6.5 10.5 6.5 2 0 3.8-.6 5.3-1.5" />
+                <path d="M10 10.2a2.5 2.5 0 0 0 3.5 3.6" />
+              </>
+            ) : (
+              <>
+                <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+                <circle cx="12" cy="12" r="2.8" />
+              </>
+            )}
+          </svg>
+        </button>
+      )}
       <label
         htmlFor={id}
         className={`absolute ${icon ? 'left-8' : 'left-3'} -top-2 z-10 bg-white px-1 text-[10px] font-medium text-slate-500 transition-all pointer-events-none peer-placeholder-shown:top-2 peer-placeholder-shown:text-xs peer-placeholder-shown:text-slate-400 peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600`}
@@ -582,13 +608,13 @@ export default function Admins() {
               Set a new password for <span className="font-semibold text-slate-700">{resetModal.name}</span>.
             </p>
             <form onSubmit={handleResetPassword} className="mt-4 space-y-3">
-              <input
-                type="password"
-                required
+              <PasswordInput
+                id="reset_pw"
                 value={resetPw}
-                onChange={(e) => setResetPw(e.target.value)}
-                placeholder="New password (min 8 chars)"
+                onChange={setResetPw}
+                autoComplete="new-password"
                 className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                placeholder="New password (min 8 chars)"
               />
               <div className="flex justify-end gap-2.5">
                 <button

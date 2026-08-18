@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/auth-context'
+import PasswordInput from '../components/PasswordInput'
 
 const inputClass =
   'w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100'
@@ -119,36 +120,24 @@ export default function ForgotPassword() {
                   placeholder="e.g. ab12-cd34-ef56"
                 />
               </div>
-              <div>
-                <label htmlFor="password" className="mb-1.5 block text-sm font-semibold text-slate-700">
-                  New password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={inputClass}
-                  placeholder="At least 8 characters"
-                />
-              </div>
-              <div>
-                <label htmlFor="password2" className="mb-1.5 block text-sm font-semibold text-slate-700">
-                  Confirm new password
-                </label>
-                <input
-                  id="password2"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={password2}
-                  onChange={(e) => setPassword2(e.target.value)}
-                  className={inputClass}
-                  placeholder="Repeat your new password"
-                />
-              </div>
+              <PasswordInput
+                id="password"
+                label="New password"
+                value={password}
+                onChange={setPassword}
+                autoComplete="new-password"
+                className={inputClass}
+                placeholder="At least 8 characters"
+              />
+              <PasswordInput
+                id="password2"
+                label="Confirm new password"
+                value={password2}
+                onChange={setPassword2}
+                autoComplete="new-password"
+                className={inputClass}
+                placeholder="Repeat your new password"
+              />
               <button
                 type="submit"
                 disabled={loading}
