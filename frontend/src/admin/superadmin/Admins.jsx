@@ -486,7 +486,7 @@ export default function Admins() {
                     {filteredAdmins.map((admin) => {
                       const protectedAcct = isProtected(admin)
                       return (
-                        <tr key={admin.id} className={`text-slate-600 transition-colors ${editingId === admin.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
+                        <tr key={admin.id} onClick={() => { if (!protectedAcct) handleEditClick(admin) }} className={`text-slate-600 transition-colors ${protectedAcct ? '' : 'cursor-pointer'} ${editingId === admin.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
                           <td className="py-1.5 pr-2 font-medium text-slate-800 text-xs">
                             {admin.name}
                             {admin.email === user?.email && (
@@ -513,7 +513,10 @@ export default function Admins() {
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => handleEditClick(admin)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (!protectedAcct) handleEditClick(admin)
+                                }}
                                 title={protectedAcct ? 'Superadmin accounts cannot be edited here' : 'Edit'}
                                 disabled={protectedAcct}
                                 className="rounded-lg p-1 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
@@ -522,7 +525,11 @@ export default function Admins() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => { setResetModal(admin); setResetPw('') }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setResetModal(admin)
+                                  setResetPw('')
+                                }}
                                 title="Reset password"
                                 className="rounded-lg p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
                               >
@@ -531,7 +538,10 @@ export default function Admins() {
                               {!protectedAcct && (
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleActive(admin)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleActive(admin)
+                                  }}
                                   title={admin.is_active ? 'Deactivate' : 'Activate'}
                                   className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
                                 >
@@ -541,7 +551,10 @@ export default function Admins() {
                               {!protectedAcct && (
                                 <button
                                   type="button"
-                                  onClick={() => setDeleteModal(admin)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDeleteModal(admin)
+                                  }}
                                   title="Delete"
                                   className="rounded-lg p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                                 >

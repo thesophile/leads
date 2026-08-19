@@ -327,7 +327,8 @@ export default function Categories() {
                     paginatedCategories.map((cat) => (
                       <tr
                         key={cat.id}
-                        className={`text-slate-600 transition-colors ${
+                        onClick={() => handleEditClick(cat)}
+                        className={`text-slate-600 transition-colors cursor-pointer ${
                           editingId === cat.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
@@ -351,7 +352,10 @@ export default function Categories() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setDeleteModalId(cat.id)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteModalId(cat.id)
+                              }}
                               title="Delete Category"
                               className="rounded-lg p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                             >

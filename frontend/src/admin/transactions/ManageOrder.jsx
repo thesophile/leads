@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
@@ -245,6 +245,10 @@ export default function ManageOrder() {
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState(null)
+  const [menuOffset, setMenuOffset] = useState(null)
+  const [activeMenuOrder, setActiveMenuOrder] = useState(null)
+  const menuRef = useRef(null)
+  const cardRef = useRef(null)
   const [toastMessage, setToastMessage] = useState('')
 
   // Modal State for Order Form Editor
@@ -270,6 +274,33 @@ export default function ManageOrder() {
   const [netVal, setNetVal] = useState('45,000.00')
   const [remarksVal, setRemarksVal] = useState('')
   const [submitMessage, setSubmitMessage] = useState('')
+
+  function handleToggleMenu(e, id, row) {
+    const cardRect = cardRef.current ? cardRef.current.getBoundingClientRect() : { left: 0, top: 0 }
+    setMenuOffset({ x: e.clientX - cardRect.left, y: e.clientY - cardRect.top })
+    setActiveMenuOrder(row)
+    setOpenDropdownId((prev) => (prev === id ? null : id))
+  }
+
+  useLayoutEffect(() => {
+    if (!openDropdownId || !menuOffset || !menuRef.current) return
+    const w = menuRef.current.offsetWidth
+    const h = menuRef.current.offsetHeight
+    const pad = 8
+    let left = menuOffset.x
+    let top = menuOffset.y + 12
+    if (cardRef.current) {
+      const cardRect = cardRef.current.getBoundingClientRect()
+      if (cardRect.left + left + w > window.innerWidth - pad) {
+        left = window.innerWidth - pad - cardRect.left - w
+      }
+      if (cardRect.top + top + h > window.innerHeight - pad) {
+        top = menuOffset.y - h - 12
+      }
+    }
+    menuRef.current.style.left = `${left}px`
+    menuRef.current.style.top = `${top}px`
+  }, [openDropdownId, menuOffset])
 
   function handleViewOrder(order) {
     navigate(`/orders/preview/${order.id}`, { state: { order } })
@@ -516,7 +547,7 @@ export default function ManageOrder() {
         </div>
 
         {/* Main Orders Table Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div ref={cardRef} className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           {/* Table Toolbar (Staff Filter + Status Filter + Search) */}
           <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -595,11 +626,9 @@ export default function ManageOrder() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order, idx) => {
-                    const isNearBottom = idx >= Math.max(1, filteredOrders.length - 2)
-
+                  filteredOrders.map((order) => {
                     return (
-                      <tr key={order.id} className="text-slate-600 hover:bg-slate-50/60 transition-colors">
+                      <tr key={order.id} onClick={(e) => handleToggleMenu(e, order.id, order)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                         {/* Order ID */}
                         <td className="py-2.5 pr-3 font-mono font-bold text-slate-950">
                           {order.id}
@@ -672,96 +701,13 @@ export default function ManageOrder() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setOpenDropdownId(openDropdownId === order.id ? null : order.id)
+                                handleToggleMenu(e, order.id, order)
                               }}
                               className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer mx-auto"
                               title="Order Actions"
                             >
                               <MoreVerticalIcon className="h-4 w-4" />
                             </button>
-
-                            {/* Floating Action Dropdown Menu */}
-                            {openDropdownId === order.id && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-30"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenDropdownId(null)
-                                  }}
-                                />
-                                <div
-                                  className={`absolute right-0 z-40 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100 text-left ${
-                                    isNearBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setOpenDropdownId(null)
-                                      handleViewOrder(order)
-                                    }}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
-                                  >
-                                    <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
-                                    <span>View Order Form</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setOpenDropdownId(null)
-                                      handleOpenOrderModal(order)
-                                    }}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
-                                  >
-                                    <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
-                                    <span>Edit Order Details</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'Sent to Client', e)}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
-                                  >
-                                    <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
-                                    <span>Mark as Sent to Client</span>
-                                  </button>
-
-                                  <div className="my-1 border-t border-slate-100" />
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'Pending', e)}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition cursor-pointer"
-                                  >
-                                    <span>Mark as Pending (Not Sent)</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setOpenDropdownId(null)
-                                      handleMarkAccepted(order)
-                                    }}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
-                                  >
-                                    <span>Mark Accepted</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleUpdateOrderStatus(order.id, 'Rejected', e)}
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 transition cursor-pointer"
-                                  >
-                                    <span>Mark Rejected</span>
-                                  </button>
-                                </div>
-                              </>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -777,6 +723,89 @@ export default function ManageOrder() {
               </tbody>
             </table>
           </div>
+
+          {/* Floating Action Popover (anchored to the card so it scrolls with the page) */}
+          {openDropdownId && activeMenuOrder && (
+            <>
+            <div
+              className="fixed inset-0 z-30"
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpenDropdownId(null)
+              }}
+            />
+            <div
+              ref={menuRef}
+              style={{ position: 'absolute', zIndex: 40 }}
+              className="w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100 text-left"
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpenDropdownId(null)
+                  handleViewOrder(activeMenuOrder)
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+              >
+                <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
+                <span>View Order Form</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpenDropdownId(null)
+                  handleOpenOrderModal(activeMenuOrder)
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
+              >
+                <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
+                <span>Edit Order Details</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Sent to Client', e)}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+              >
+                <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Mark as Sent to Client</span>
+              </button>
+
+              <div className="my-1 border-t border-slate-100" />
+
+              <button
+                type="button"
+                onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Pending', e)}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition cursor-pointer"
+              >
+                <span>Mark as Pending (Not Sent)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpenDropdownId(null)
+                  handleMarkAccepted(activeMenuOrder)
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
+              >
+                <span>Mark Accepted</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Rejected', e)}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 transition cursor-pointer"
+              >
+                <span>Mark Rejected</span>
+              </button>
+            </div>
+            </>
+          )}
         </div>
       </div>
 

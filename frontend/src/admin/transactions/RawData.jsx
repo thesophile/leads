@@ -643,7 +643,7 @@ export default function RawData() {
               <tbody className="divide-y divide-black">
                 {filteredData.length > 0 ? (
                   filteredData.map((item) => (
-                    <tr key={item.id} className="text-slate-600 hover:bg-slate-50/50 transition-colors">
+                    <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
                       {/* Company Name */}
                       <td className="py-2 pr-2 font-semibold text-slate-900 text-xs">
                         {item.company}
@@ -684,7 +684,10 @@ export default function RawData() {
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleEditClick(item)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleEditClick(item)
+                            }}
                             title="Edit Raw Data"
                             className="rounded-lg p-1 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors cursor-pointer"
                           >
@@ -692,7 +695,10 @@ export default function RawData() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setDeleteModalId(item.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDeleteModalId(item.id)
+                            }}
                             title="Delete Raw Data"
                             className="rounded-lg p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                           >

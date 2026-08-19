@@ -317,7 +317,8 @@ export default function Branch() {
                     paginatedBranches.map((br) => (
                       <tr
                         key={br.id}
-                        className={`text-slate-600 transition-colors ${
+                        onClick={() => handleEditClick(br)}
+                        className={`text-slate-600 transition-colors cursor-pointer ${
                           editingId === br.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
@@ -341,7 +342,10 @@ export default function Branch() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setDeleteModalId(br.id)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteModalId(br.id)
+                              }}
                               title="Delete Branch"
                               className="rounded-lg p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                             >

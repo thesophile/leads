@@ -508,7 +508,7 @@ export default function ClientDetails() {
               <tbody className="divide-y divide-slate-100">
                 {filteredRecords.length > 0 ? (
                   filteredRecords.map((rec) => (
-                    <tr key={rec.id} className="text-slate-600 hover:bg-slate-50/60 transition-colors">
+                    <tr key={rec.id} onClick={() => openEditModal(rec)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                       <td className="py-2.5 pr-3 font-mono font-bold text-slate-950">{rec.orderNo}</td>
                       <td className="py-2.5 pr-3">
                         <div className="font-semibold text-slate-900">{rec.clientName}</div>
@@ -532,7 +532,10 @@ export default function ClientDetails() {
                               <button
                                 key={att.id}
                                 type="button"
-                                onClick={() => setPreviewAttachment(att)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setPreviewAttachment(att)
+                                }}
                                 className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold cursor-pointer ${TYPE_STYLES[att.type] || TYPE_STYLES.Other}`}
                                 title={`Preview ${att.name}`}
                               >
@@ -548,6 +551,7 @@ export default function ClientDetails() {
                       <td className="py-2.5 pr-3">
                         <select
                           value={rec.status}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => handleStatusChange(rec.id, e.target.value)}
                           title="Change status"
                           aria-label={`Status for ${rec.clientName}`}
@@ -565,7 +569,10 @@ export default function ClientDetails() {
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openEditModal(rec)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditModal(rec)
+                            }}
                             className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
                             title="Edit"
                           >
@@ -573,7 +580,10 @@ export default function ClientDetails() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setDeleteId(rec.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDeleteId(rec.id)
+                            }}
                             className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-red-50 hover:text-red-600 transition cursor-pointer"
                             title="Delete"
                           >

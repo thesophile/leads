@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
@@ -322,6 +322,37 @@ export default function Managequotation() {
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState(null)
+  const [menuOffset, setMenuOffset] = useState(null)
+  const [activeMenuQuote, setActiveMenuQuote] = useState(null)
+  const menuRef = useRef(null)
+  const cardRef = useRef(null)
+
+  function handleToggleMenu(e, id, row) {
+    const cardRect = cardRef.current ? cardRef.current.getBoundingClientRect() : { left: 0, top: 0 }
+    setMenuOffset({ x: e.clientX - cardRect.left, y: e.clientY - cardRect.top })
+    setActiveMenuQuote(row)
+    setOpenDropdownId((prev) => (prev === id ? null : id))
+  }
+
+  useLayoutEffect(() => {
+    if (!openDropdownId || !menuOffset || !menuRef.current) return
+    const w = menuRef.current.offsetWidth
+    const h = menuRef.current.offsetHeight
+    const pad = 8
+    let left = menuOffset.x
+    let top = menuOffset.y + 12
+    if (cardRef.current) {
+      const cardRect = cardRef.current.getBoundingClientRect()
+      if (cardRect.left + left + w > window.innerWidth - pad) {
+        left = window.innerWidth - pad - cardRect.left - w
+      }
+      if (cardRect.top + top + h > window.innerHeight - pad) {
+        top = menuOffset.y - h - 12
+      }
+    }
+    menuRef.current.style.left = `${left}px`
+    menuRef.current.style.top = `${top}px`
+  }, [openDropdownId, menuOffset])
 
   // "Send for Approval" Modal State
   const [approvalModalOpen, setApprovalModalOpen] = useState(false)
@@ -637,7 +668,7 @@ export default function Managequotation() {
         </div>
 
         {/* Main Table Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
+        <div ref={cardRef} className="relative rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
           {/* Table Toolbar (Staff Filter + Status Filter + Search) */}
           <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -724,7 +755,8 @@ export default function Managequotation() {
                   filteredQuotations.map((quote) => (
                     <tr
                       key={quote.id}
-                      className="text-slate-600 hover:bg-slate-50/60 transition-colors"
+                      onClick={(e) => handleToggleMenu(e, quote.id, quote)}
+                      className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer"
                     >
                       {/* Customer */}
                       <td className="py-2.5 pr-3">
@@ -752,6 +784,7 @@ export default function Managequotation() {
                       <td className="py-2.5 pr-3">
                         <a
                           href={`tel:${quote.mobile}`}
+                          onClick={(e) => e.stopPropagation()}
                           className="font-mono text-xs text-slate-800 hover:text-brand-600 font-medium inline-flex items-center gap-1"
                           title="Click to Call"
                         >
@@ -812,77 +845,13 @@ export default function Managequotation() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation()
-                              setOpenDropdownId(openDropdownId === quote.id ? null : quote.id)
+                              handleToggleMenu(e, quote.id, quote)
                             }}
                             className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
                             title="Quotation Actions"
                           >
                             <MoreVerticalIcon className="h-4 w-4" />
                           </button>
-
-                          {/* Floating Dropdown Menu */}
-                          {openDropdownId === quote.id && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-30"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setOpenDropdownId(null)
-                                }}
-                              />
-                              <div className="absolute right-0 z-40 mt-1.5 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenDropdownId(null)
-                                    handleViewProposal(quote)
-                                  }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
-                                >
-                                  <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
-                                  <span>View Proposal</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenDropdownId(null)
-                                    handleOpenNewProposalModal(quote)
-                                  }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
-                                >
-                                  <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
-                                  <span>Edit Proposal</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleOpenApprovalModal(quote.id, e)}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
-                                >
-                                  <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
-                                  <span>Send for Approval</span>
-                                </button>
-
-                                <div className="my-1 border-t border-slate-100" />
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenDropdownId(null)
-                                    handleRevertQuotation(quote.id, e)
-                                  }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                >
-                                  <UndoIcon className="h-3.5 w-3.5 text-rose-600" />
-                                  <span>Revert to Telecalling</span>
-                                </button>
-                              </div>
-                            </>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -925,6 +894,74 @@ export default function Managequotation() {
               </button>
             </div>
           </div>
+
+          {/* Floating Action Popover (anchored to the card so it scrolls with the page) */}
+          {openDropdownId && activeMenuQuote && (
+            <>
+              <div
+                className="fixed inset-0 z-30"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpenDropdownId(null)
+                }}
+              />
+              <div
+                ref={menuRef}
+                style={{ position: 'absolute', zIndex: 40 }}
+                className="w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100"
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setOpenDropdownId(null)
+                    handleViewProposal(activeMenuQuote)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                >
+                  <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
+                  <span>View Proposal</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setOpenDropdownId(null)
+                    handleOpenNewProposalModal(activeMenuQuote)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
+                >
+                  <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
+                  <span>Edit Proposal</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => handleOpenApprovalModal(activeMenuQuote.id, e)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                >
+                  <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Send for Approval</span>
+                </button>
+
+                <div className="my-1 border-t border-slate-100" />
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setOpenDropdownId(null)
+                    handleRevertQuotation(activeMenuQuote.id, e)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                >
+                  <UndoIcon className="h-3.5 w-3.5 text-rose-600" />
+                  <span>Revert to Telecalling</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Quotation History Card (Matching Old Software Screenshot) */}
@@ -954,7 +991,7 @@ export default function Managequotation() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredQuotations.map((item) => (
-                  <tr key={`hist-${item.id}`} className="text-slate-600 hover:bg-slate-50/60 transition-colors">
+                  <tr key={`hist-${item.id}`} onClick={() => handleViewProposal(item)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                     <td className="py-2.5 pr-3 font-mono font-bold text-slate-900 whitespace-nowrap">{item.id}</td>
                     <td className="hidden md:table-cell py-2.5 pr-3 font-mono text-[11px] whitespace-nowrap">{item.date}</td>
                     <td className="py-2.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">₹{item.total}</td>
@@ -983,7 +1020,10 @@ export default function Managequotation() {
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => handleViewProposal(item)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleViewProposal(item)
+                          }}
                           className="rounded p-1 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition"
                           title="View Proposal Form"
                         >
@@ -991,7 +1031,10 @@ export default function Managequotation() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleOpenNewProposalModal(item)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleOpenNewProposalModal(item)
+                          }}
                           className="rounded p-1 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 transition"
                           title="Edit Proposal"
                         >

@@ -319,7 +319,8 @@ export default function Sources() {
                     paginatedSources.map((src) => (
                       <tr
                         key={src.id}
-                        className={`text-slate-600 transition-colors ${
+                        onClick={() => handleEditClick(src)}
+                        className={`text-slate-600 transition-colors cursor-pointer ${
                           editingId === src.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
@@ -343,7 +344,10 @@ export default function Sources() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setDeleteModalId(src.id)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteModalId(src.id)
+                              }}
                               title="Delete Source"
                               className="rounded-lg p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                             >

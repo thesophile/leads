@@ -535,7 +535,7 @@ export default function Staff() {
                   </thead>
                   <tbody className="divide-y divide-black">
                     {filteredStaff.map((emp) => (
-                      <tr key={emp.id} className={`text-slate-600 transition-colors ${editingId === emp.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
+                      <tr key={emp.id} onClick={() => handleEditClick(emp)} className={`text-slate-600 transition-colors cursor-pointer ${editingId === emp.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
                         <td className="py-1.5 pr-2">
                           <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[11px] font-bold">
                             {emp.staff_code || '—'}
@@ -566,7 +566,10 @@ export default function Staff() {
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => handleEditClick(emp)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEditClick(emp)
+                              }}
                               title="Edit"
                               className="rounded-lg p-1 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors cursor-pointer"
                             >
@@ -574,7 +577,11 @@ export default function Staff() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => { setResetModal(emp); setResetPw('') }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setResetModal(emp)
+                                setResetPw('')
+                              }}
                               title="Reset password"
                               className="rounded-lg p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
                             >
@@ -583,7 +590,10 @@ export default function Staff() {
                             {emp.email !== user?.email && (
                               <button
                                 type="button"
-                                onClick={() => handleToggleActive(emp)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleToggleActive(emp)
+                                }}
                                 title={emp.is_active ? 'Deactivate' : 'Activate'}
                                 className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
                               >
