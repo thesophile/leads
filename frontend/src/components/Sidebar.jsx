@@ -117,8 +117,13 @@ export default function Sidebar({
   const { user, logout } = useAuth()
   const menuSections = useMemo(() => filterMenu(user), [user])
 
-  // Track opened/clicked sections
-  const [openSections, setOpenSections] = useState(['transaction'])
+  // Track opened/clicked sections (auto-open the section containing the current page)
+  const [openSections, setOpenSections] = useState(() => {
+    const activeSection = MENU_BASE.find((sec) =>
+      sec.items?.some((item) => item.path === window.location.pathname)
+    )
+    return activeSection ? [activeSection.id] : ['transaction']
+  })
 
   function toggleSection(id, isCurrentlyOpen) {
     if (isCurrentlyOpen) {
@@ -135,7 +140,10 @@ export default function Sidebar({
       setOpenSections((prev) => (prev.includes(sectionId) ? prev : [...prev, sectionId]))
     }
     navigate(path)
-    onCloseMobile?.()
+    // Keep the sidebar/drawer open when choosing a submenu option so it isn't
+    // dismissed before the user finishes browsing. Only top-level items (which
+    // have no sectionId) close the mobile drawer.
+    if (!sectionId) onCloseMobile?.()
   }
 
   async function handleLogout() {
@@ -198,7 +206,7 @@ export default function Sidebar({
                 (item) => location.pathname === item.path
               )
 
-              const isOpen = openSections.includes(section.id)
+              const isOpen = openSections.includes(section.id) || hasActiveChild
 
               return (
                 <li key={section.id}>
