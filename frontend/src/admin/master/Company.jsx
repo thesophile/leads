@@ -219,7 +219,7 @@ export default function Company() {
             </p>
           </div>
         ) : (
-          <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+          <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
             {/* Header */}
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
