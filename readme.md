@@ -10,12 +10,13 @@ pip install -r requirements.txt
 
 frontend
 ```
+cd ~\Desktop\Codebase\leads\frontend
 npm run dev -- --mode dev
 ```
 
 Backend
 ```
-cd backend
+cd ~\Desktop\Codebase\leads\backend
 venv\Scripts\activate
 ```
 
