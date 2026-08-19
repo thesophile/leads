@@ -1,8 +1,23 @@
 from django.contrib import admin
+from django.core.exceptions import ValidationError
+from django import forms
 
 from common.admin import CompanyScopedAdminMixin
 
 from .models import Branch, Category, Source, Staff
+
+
+class BranchAdminForm(forms.ModelForm):
+    class Meta:
+        model = Branch
+        fields = '__all__'
+
+    def clean(self):
+        cleaned = super().clean()
+        company = cleaned.get('company')
+        if company is None:
+            raise ValidationError({'company': 'A company is required for a branch.'})
+        return cleaned
 
 
 @admin.register(Category)
@@ -17,7 +32,9 @@ class SourceAdmin(admin.ModelAdmin):
 
 @admin.register(Branch)
 class BranchAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
-    list_display = ('code', 'name', 'company')
+    form = BranchAdminForm
+    list_display = ('code', 'name', 'address', 'company')
+    search_fields = ('name', 'code', 'address')
 
 
 @admin.register(Staff)

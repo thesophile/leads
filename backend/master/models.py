@@ -31,6 +31,7 @@ class Branch(CommonMaster):
         blank=True,
         related_name='branches',
     )
+    address = models.CharField(max_length=200, blank=True)
 
 
 class Staff(models.Model):

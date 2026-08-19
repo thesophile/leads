@@ -1,22 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
-
-// Static branch master records
-const STATIC_BRANCHES = [
-  { id: '1', code: 'HQ01', name: 'Corporate Head Office (Calicut)' },
-  { id: '2', code: 'KC02', name: 'Kochi Regional Hub' },
-  { id: '3', code: 'TV03', name: 'Trivandrum City Branch' },
-  { id: '4', code: 'BL04', name: 'Bangalore Tech Branch' },
-  { id: '5', code: 'DX05', name: 'Dubai Global Office' },
-  { id: '6', code: 'CL06', name: 'Calicut Cyberpark Office' },
-  { id: '7', code: 'KN07', name: 'Kannur Regional Center' },
-  { id: '8', code: 'PL08', name: 'Palakkad Branch' },
-  { id: '9', code: 'TR09', name: 'Thrissur Central Branch' },
-  { id: '10', code: 'ML10', name: 'Malappuram District Branch' },
-  { id: '11', code: 'CH11', name: 'Chennai Commercial Branch' },
-  { id: '12', code: 'HY12', name: 'Hyderabad Operations Center' },
-  { id: '13', code: 'MB13', name: 'Mumbai Financial Hub' },
-]
+import { api } from '../../api/client'
 
 function PlusCircleIcon() {
   return (
@@ -51,6 +35,15 @@ function BuildingIcon({ className = 'w-3.5 h-3.5' }) {
       <path d="M4 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17" />
       <path d="M16 8h3a1 1 0 0 1 1 1v12" />
       <path d="M7 7h2M7 11h2M7 15h2M11 7h2M11 11h2M11 15h2M3 21h19" />
+    </svg>
+  )
+}
+
+function MapPinIcon({ className = 'w-3.5 h-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
     </svg>
   )
 }
@@ -104,64 +97,119 @@ function SpinnerIcon() {
 }
 
 export default function Branch() {
-  const [branches, setBranches] = useState(STATIC_BRANCHES)
+  const [branches, setBranches] = useState([])
   const [branchName, setBranchName] = useState('')
+  const [branchAddress, setBranchAddress] = useState('')
   const [editingId, setEditingId] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [toast, setToast] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deleteModalId, setDeleteModalId] = useState(null)
   const pageSize = 10
 
-  function handleSave(e) {
-    e.preventDefault()
-    if (!branchName.trim()) return
+  useEffect(() => {
+    let cancelled = false
 
-    if (editingId) {
-      setBranches((prev) =>
-        prev.map((br) =>
-          br.id === editingId ? { ...br, name: branchName.trim() } : br
-        )
-      )
-      setEditingId(null)
-    } else {
-      const prefix = (branchName.slice(0, 2) || 'BR').toUpperCase()
-      const newBranch = {
-        id: Date.now().toString(),
-        code: `${prefix}${Math.floor(10 + Math.random() * 90)}`,
-        name: branchName.trim(),
+    async function fetchData() {
+      try {
+        const data = await api.get('/master/branches/')
+        if (!cancelled) setBranches(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
       }
-      setBranches((prev) => [newBranch, ...prev])
     }
-    setBranchName('')
+
+    fetchData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setError('')
+    if (!branchName.trim()) {
+      setError('Branch name is required.')
+      return
+    }
+
+    try {
+      if (editingId) {
+        await api.patch(`/master/branches/${editingId}/`, {
+          name: branchName.trim(),
+          address: branchAddress.trim(),
+        })
+        showToast('Branch updated.')
+      } else {
+        await api.post('/master/branches/', {
+          name: branchName.trim(),
+          address: branchAddress.trim(),
+        })
+        showToast('Branch added.')
+      }
+      setBranchName('')
+      setBranchAddress('')
+      setEditingId(null)
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function refreshData() {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await api.get('/master/branches/')
+      setBranches(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   function handleEditClick(br) {
-    setIsLoading(true)
-    setTimeout(() => {
-      setEditingId(br.id)
-      setBranchName(br.name)
-      setIsLoading(false)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }, 400)
+    setEditingId(br.id)
+    setBranchName(br.name)
+    setBranchAddress(br.address || '')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleCancelEdit() {
     setEditingId(null)
     setBranchName('')
+    setBranchAddress('')
   }
 
-  function confirmDelete(id) {
-    setBranches((prev) => prev.filter((br) => br.id !== id))
+  async function confirmDelete(id) {
     setDeleteModalId(null)
+    try {
+      await api.del(`/master/branches/${id}/`)
+      showToast('Branch deleted.')
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   // Filtered branches based on search
   const filteredBranches = useMemo(() => {
+    if (!searchQuery.trim()) return branches
+    const q = searchQuery.toLowerCase()
     return branches.filter(
       (b) =>
-        b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.code.toLowerCase().includes(searchQuery.toLowerCase())
+        b.name.toLowerCase().includes(q) ||
+        (b.address || '').toLowerCase().includes(q)
     )
   }, [branches, searchQuery])
 
@@ -177,6 +225,21 @@ export default function Branch() {
   return (
     <Layout>
       <div className="space-y-6">
+        {toast && (
+          <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+            </span>
+            <span className="text-xs font-semibold text-slate-800">{toast}</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            {error}
+          </div>
+        )}
+
         {/* Main Grid: Left Add/Edit Form + Right Branch List Table */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
           {/* Left Form Card */}
@@ -237,6 +300,37 @@ export default function Branch() {
                   }`}
                 >
                   Branch Name
+                </label>
+              </div>
+
+              {/* Branch Address Floating Label Input */}
+              <div className="relative mt-2">
+                <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-slate-400">
+                  <MapPinIcon className="h-3.5 w-3.5" />
+                </span>
+                <input
+                  id="branch_address_input"
+                  type="text"
+                  placeholder="Branch Address"
+                  value={branchAddress}
+                  onChange={(e) => setBranchAddress(e.target.value)}
+                  className={`peer relative z-0 w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder-transparent transition-all focus:outline-none focus:ring-4 ${
+                    isEditing
+                      ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/10'
+                      : 'border-slate-200 focus:border-brand-500 focus:ring-brand-500/10'
+                  }`}
+                />
+                <label
+                  htmlFor="branch_address_input"
+                  className={`absolute left-8 bg-white px-1 text-[10px] font-medium transition-all z-10 cursor-text ${
+                    branchAddress
+                      ? '-top-2 text-slate-500'
+                      : 'top-2 text-xs text-slate-400 peer-placeholder-shown:text-xs peer-placeholder-shown:top-2'
+                  } peer-focus:-top-2 peer-focus:text-[10px] ${
+                    isEditing ? 'peer-focus:text-amber-600' : 'peer-focus:text-brand-600'
+                  }`}
+                >
+                  Address
                 </label>
               </div>
 
@@ -307,8 +401,8 @@ export default function Branch() {
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-black text-slate-800 font-bold uppercase tracking-wider text-[11px]">
-                    <th className="pb-2 font-semibold w-28">Code</th>
                     <th className="pb-2 font-semibold w-72">Branch Name</th>
+                    <th className="pb-2 font-semibold w-72">Address</th>
                     <th className="pb-2 font-semibold text-left">Actions</th>
                   </tr>
                 </thead>
@@ -322,13 +416,16 @@ export default function Branch() {
                           editingId === br.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
-                        <td className="py-1.5 pr-2">
-                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[11px] font-bold">
-                            {br.code}
-                          </span>
-                        </td>
                         <td className="py-1.5 pr-2 font-medium text-slate-700 text-xs">
                           {br.name}
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <span
+                            className="block max-w-[220px] truncate text-xs text-slate-500"
+                            title={br.address || ''}
+                          >
+                            {br.address || '—'}
+                          </span>
                         </td>
                         <td className="py-1.5 pr-2 text-left">
                           <div className="flex items-center gap-1.5">
@@ -358,7 +455,11 @@ export default function Branch() {
                   ) : (
                     <tr>
                       <td colSpan={3} className="py-6 text-center text-xs text-slate-400">
-                        No branches found matching "{searchQuery}"
+                        {isLoading
+                          ? 'Loading branches...'
+                          : searchQuery
+                            ? `No branches found matching "${searchQuery}"`
+                            : 'No branches yet. Use the form to add your first branch.'}
                       </td>
                     </tr>
                   )}
