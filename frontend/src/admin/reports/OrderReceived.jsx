@@ -353,7 +353,7 @@ export default function OrderReceived() {
 
   return (
     <Layout>
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* Printable Official Header */}
         <div className="hidden print:block border-b pb-4 mb-4">
           <div className="text-center">
@@ -364,7 +364,7 @@ export default function OrderReceived() {
         </div>
 
         {/* Top Header & Filter Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs print:hidden">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs print:hidden">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2.5 text-slate-800 font-bold text-base">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 font-black">

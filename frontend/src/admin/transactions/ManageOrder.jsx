@@ -496,7 +496,7 @@ export default function ManageOrder() {
 
   return (
     <Layout>
-      <div className="space-y-5">
+      <div className="space-y-4">
         {toastMessage && (
           <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
@@ -509,7 +509,7 @@ export default function ManageOrder() {
         )}
 
         {/* Top Header Card */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
               Manage Orders
@@ -547,9 +547,9 @@ export default function ManageOrder() {
         </div>
 
         {/* Main Orders Table Card */}
-        <div ref={cardRef} className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div ref={cardRef} className="relative rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           {/* Table Toolbar (Staff Filter + Status Filter + Search) */}
-          <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
+          <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               {/* Left Controls */}
               <div className="flex flex-wrap items-center gap-2.5">
@@ -609,19 +609,19 @@ export default function ManageOrder() {
           </div>
 
           {/* Orders Table */}
-          <div className="overflow-x-auto mt-3">
+          <div className="overflow-x-auto mt-2">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
-                  <th className="pb-2.5 pr-2 font-semibold">Order ID</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Customer</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Company</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Mobile</th>
-                  <th className="pb-2.5 pr-2 font-semibold">BDO / Staff</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Order Date</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Net Amount</th>
-                  <th className="pb-2.5 pr-2 font-semibold">Status</th>
-                  <th className="pb-2.5 pr-2 font-semibold text-center">Action</th>
+                  <th className="pb-2 pr-2 font-semibold">Order ID</th>
+                  <th className="pb-2 pr-2 font-semibold">Customer</th>
+                  <th className="pb-2 pr-2 font-semibold">Company</th>
+                  <th className="pb-2 pr-2 font-semibold">Mobile</th>
+                  <th className="pb-2 pr-2 font-semibold">BDO / Staff</th>
+                  <th className="pb-2 pr-2 font-semibold">Order Date</th>
+                  <th className="pb-2 pr-2 font-semibold">Net Amount</th>
+                  <th className="pb-2 pr-2 font-semibold">Status</th>
+                  <th className="pb-2 pr-2 font-semibold text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -630,44 +630,44 @@ export default function ManageOrder() {
                     return (
                       <tr key={order.id} onClick={(e) => handleToggleMenu(e, order.id, order)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                         {/* Order ID */}
-                        <td className="py-2.5 pr-3 font-mono font-bold text-slate-950">
+                        <td className="py-1 pr-3 font-mono font-bold text-slate-950">
                           {order.id}
                         </td>
 
                         {/* Customer */}
-                        <td className="py-2.5 pr-3 font-semibold text-slate-900">
+                        <td className="py-1 pr-3 font-semibold text-slate-900">
                           {order.customer}
                         </td>
 
                         {/* Company */}
-                        <td className="py-2.5 pr-3 text-slate-700 truncate max-w-[200px]" title={order.company}>
+                        <td className="py-1 pr-3 text-slate-700 truncate max-w-[200px]" title={order.company}>
                           {order.company}
                         </td>
 
                         {/* Mobile */}
-                        <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
+                        <td className="py-1 pr-3 font-mono text-[11px] text-slate-600">
                           {order.mobile}
                         </td>
 
                         {/* Staff */}
-                        <td className="py-2.5 pr-3">
+                        <td className="py-1 pr-3">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800">
                             <span>{order.proposalBy || order.bdm}</span>
                           </span>
                         </td>
 
                         {/* Order Date */}
-                        <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
+                        <td className="py-1 pr-3 font-mono text-[11px] text-slate-600">
                           {order.date}
                         </td>
 
                         {/* Net Amount */}
-                        <td className="py-2.5 pr-3 font-mono font-bold text-slate-900">
+                        <td className="py-1 pr-3 font-mono font-bold text-slate-900">
                           ₹{order.netAmount}
                         </td>
 
                         {/* Status */}
-                        <td className="py-2.5 pr-3">
+                        <td className="py-1 pr-3">
                           <span
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
                               order.status === 'Pending'
@@ -695,7 +695,7 @@ export default function ManageOrder() {
                         </td>
 
                         {/* Action: 3-Dot Action Menu */}
-                        <td className="py-2.5 pr-3 text-center">
+                        <td className="py-1 pr-3 text-center">
                           <div className="relative inline-block text-left">
                             <button
                               type="button"

@@ -92,7 +92,7 @@ export default function RawDataRegister() {
     <Layout>
       <div className="space-y-4">
         {/* Screen Only Header Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs print:hidden">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs print:hidden">
           {/* Top Bar: Title & Print + Search Box */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
@@ -272,35 +272,35 @@ export default function RawDataRegister() {
         </div>
 
         {/* Register Table Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs print:p-0 print:border-none print:shadow-none">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs print:p-0 print:border-none print:shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-bold text-[11px] print:border-black print:text-black">
-                  <th className="py-2.5 pr-4 font-bold">Date</th>
-                  <th className="py-2.5 pr-4 font-bold">Company</th>
-                  <th className="py-2.5 pr-4 font-bold">Number</th>
-                  <th className="py-2.5 pr-4 font-bold">Location</th>
-                  <th className="py-2.5 pr-2 font-bold">Staff</th>
+                  <th className="py-1.5 pr-4 font-bold">Date</th>
+                  <th className="py-1.5 pr-4 font-bold">Company</th>
+                  <th className="py-1.5 pr-4 font-bold">Number</th>
+                  <th className="py-1.5 pr-4 font-bold">Location</th>
+                  <th className="py-1.5 pr-2 font-bold">Staff</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 print:divide-slate-200">
                 {filteredData.length > 0 ? (
                   filteredData.map((row) => (
                     <tr key={row.id} className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
-                      <td className="py-2.5 pr-4 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap">
+                      <td className="py-1.5 pr-4 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap">
                         {row.date}
                       </td>
-                      <td className="py-2.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px]" title={row.company}>
+                      <td className="py-1.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px]" title={row.company}>
                         {row.company}
                       </td>
-                      <td className="py-2.5 pr-4 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap">
+                      <td className="py-1.5 pr-4 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap">
                         {row.number}
                       </td>
-                      <td className="py-2.5 pr-4 font-medium text-slate-700 print:text-black uppercase text-[11px]">
+                      <td className="py-1.5 pr-4 font-medium text-slate-700 print:text-black uppercase text-[11px]">
                         {row.location}
                       </td>
-                      <td className="py-2.5 pr-2 font-medium text-slate-800 print:text-black">
+                      <td className="py-1.5 pr-2 font-medium text-slate-800 print:text-black">
                         {row.staff}
                       </td>
                     </tr>

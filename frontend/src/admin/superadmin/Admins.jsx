@@ -443,7 +443,7 @@ export default function Admins() {
           </div>
 
           {/* Admin Table */}
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5">
                 <TableIcon />

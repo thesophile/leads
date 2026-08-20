@@ -455,9 +455,9 @@ export default function RawData() {
 
   return (
     <Layout>
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* Top Header Card */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
               Raw Data
@@ -492,7 +492,7 @@ export default function RawData() {
         </div>
 
         {/* Main Leads Table Container */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           {/* Table Toolbar (Filter by Employee + Source + Date Range + Search Box) */}
           <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

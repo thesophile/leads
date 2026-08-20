@@ -174,7 +174,7 @@ function ProgressCell({ done, target, barClass, format }) {
 
 function StatCard({ label, value, detail, progress, barClass, icon }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs sm:p-5">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
       <div className="flex items-start justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">

@@ -190,7 +190,7 @@ export default function Categories() {
         {/* Main Grid: Left Add/Edit Form + Right Category List Table */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
           {/* Left Form Card */}
-          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-xs lg:col-span-4 transition-all">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-xs lg:col-span-4 transition-all">
             {/* Loading Overlay */}
             {isLoading && (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/85 backdrop-blur-xs transition-opacity">
@@ -277,7 +277,7 @@ export default function Categories() {
           </div>
 
           {/* Right Category List Card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs lg:col-span-8">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs lg:col-span-8">
             {/* Header with Title & Search Input */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5">
