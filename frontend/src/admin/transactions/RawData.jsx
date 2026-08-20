@@ -25,15 +25,6 @@ const SOURCE_LIST = [
   'Manual Entry',
 ]
 
-const ASSIGNABLE_STAFF = [
-  { name: 'NIMISHA DAVIS', role: 'Senior Telecaller' },
-  { name: 'Shanu VR', role: 'Sales Lead' },
-  { name: 'Alex Joseph', role: 'BDM' },
-  { name: 'Priya Sharma', role: 'Telecaller' },
-  { name: 'Ananya Nair', role: 'Telecaller' },
-  { name: 'Rahul Varma', role: 'Sales Associate' },
-]
-
 const CATEGORIES = [
   'All Categories',
   'Hospital',
@@ -216,8 +207,9 @@ export default function RawData() {
 
   const canAssignLeads = !!user && (can(user, 'leads.assign') || user.is_superuser)
 
+  const [assignableStaff, setAssignableStaff] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
-  const [assignStaff, setAssignStaff] = useState('NIMISHA DAVIS')
+  const [assignStaff, setAssignStaff] = useState('')
   const [assignCategory, setAssignCategory] = useState('All Categories')
   const [assignFromDate, setAssignFromDate] = useState('')
   const [assignToDate, setAssignToDate] = useState('')
@@ -275,6 +267,27 @@ export default function RawData() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchStaff() {
+      try {
+        const data = await api.get('/auth/assignable-staff/')
+        if (!cancelled) {
+          setAssignableStaff(data)
+          if (data.length > 0) setAssignStaff((prev) => prev || data[0].name)
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }
+
+    if (canAssignLeads) fetchStaff()
+    return () => {
+      cancelled = true
+    }
+  }, [canAssignLeads])
 
   function showToast(msg) {
     setToast(msg)
@@ -926,11 +939,15 @@ export default function RawData() {
                     onChange={(e) => setAssignStaff(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-slate-50/50 px-3 py-2 text-xs font-semibold text-slate-800 transition focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/10 cursor-pointer"
                   >
-                    {ASSIGNABLE_STAFF.map((staff) => (
-                      <option key={staff.name} value={staff.name}>
-                        {staff.name} — ({staff.role})
-                      </option>
-                    ))}
+                    {assignableStaff.length === 0 ? (
+                      <option value="">No assignable staff</option>
+                    ) : (
+                      assignableStaff.map((staff) => (
+                        <option key={staff.name} value={staff.name}>
+                          {staff.name}{staff.role ? ` — (${staff.role})` : ''}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>

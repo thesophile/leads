@@ -128,3 +128,32 @@ class TelecallVisibilityTests(APITestCase):
             'call_status': 'Interested',
         }, format='json')
         self.assertEqual(resp.status_code, 404)
+
+
+class AssignableStaffListViewTests(APITestCase):
+    def setUp(self):
+        company = make_company('Acme')
+        self.manager = User.objects.create_user(
+            email='mgr@acme.com', password='x', name='Manager A',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        User.objects.create_user(
+            email='shanu@acme.com', password='x', name='Shanu VR',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        User.objects.create_user(
+            email='priya@acme.com', password='x', name='Priya Sharma',
+            role=company.roles.get(code='staff'), company=company,
+        )
+
+    def test_manager_lists_real_company_staff(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/auth/assignable-staff/')
+        self.assertEqual(resp.status_code, 200)
+        names = {s['name'] for s in resp.data}
+        self.assertEqual(names, {'Manager A', 'Shanu VR', 'Priya Sharma'})
+
+    def test_staff_cannot_list_assignable_staff(self):
+        self.client.force_authenticate(User.objects.get(email='shanu@acme.com'))
+        resp = self.client.get('/api/auth/assignable-staff/')
+        self.assertEqual(resp.status_code, 403)

@@ -4,24 +4,6 @@ import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 
-const CALLERS = [
-  'All Callers',
-  'NIMISHA DAVIS',
-  'Shanu VR',
-  'Alex Joseph',
-  'Priya Sharma',
-  'Ananya Nair',
-]
-
-const ASSIGNABLE_STAFF = [
-  { name: 'NIMISHA DAVIS', role: 'Senior Telecaller' },
-  { name: 'Shanu VR', role: 'Sales Lead' },
-  { name: 'Alex Joseph', role: 'BDM' },
-  { name: 'Priya Sharma', role: 'Telecaller' },
-  { name: 'Ananya Nair', role: 'Telecaller' },
-  { name: 'Rahul Varma', role: 'Sales Associate' },
-]
-
 const STATUSES = [
   'All Status',
   'Pending Call',
@@ -105,8 +87,27 @@ export default function Telecall() {
   const [telecallList, setTelecallList] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [assignableStaff, setAssignableStaff] = useState([])
 
   const canViewAll = !!user && (can(user, 'leads.view_all') || user.is_superuser)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchStaff() {
+      try {
+        const data = await api.get('/auth/assignable-staff/')
+        if (!cancelled) setAssignableStaff(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }
+
+    fetchStaff()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -403,9 +404,10 @@ export default function Telecall() {
                       onChange={(e) => setSelectedCaller(e.target.value)}
                       className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                     >
-                      {CALLERS.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
+                      <option value="All Callers">All Callers</option>
+                      {assignableStaff.map((staff) => (
+                        <option key={staff.name} value={staff.name}>
+                          {staff.name}
                         </option>
                       ))}
                     </select>
@@ -911,11 +913,15 @@ export default function Telecall() {
                           onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
                           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         >
-                          {ASSIGNABLE_STAFF.map((staff) => (
-                            <option key={staff.name} value={staff.name}>
-                              {staff.name}
-                            </option>
-                          ))}
+                          {assignableStaff.length === 0 ? (
+                            <option value="">No assignable staff</option>
+                          ) : (
+                            assignableStaff.map((staff) => (
+                              <option key={staff.name} value={staff.name}>
+                                {staff.name}
+                              </option>
+                            ))
+                          )}
                         </select>
                       </div>
 
