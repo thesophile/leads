@@ -446,29 +446,32 @@ export default function RawData() {
     }
   }
 
-  function handleExecuteAssign(e) {
+  async function handleExecuteAssign(e) {
     e.preventDefault()
+    if (isSaving) return
+    setError('')
 
-    let remainingToAssign = assignCount
-    setRawDataList((prev) =>
-      prev.map((item) => {
-        if (!item.assignedTo && remainingToAssign > 0) {
-          remainingToAssign--
-          return {
-            ...item,
-            assignedTo: assignStaff,
-          }
-        }
-        return item
+    setIsSaving(true)
+    try {
+      const res = await api.post('/transactions/raw-leads/assign/', {
+        assigned_to: assignStaff,
+        category: assignCategory,
+        from_date: assignFromDate,
+        to_date: assignToDate,
+        count: assignCount,
       })
-    )
-
-    setAssignSuccessMessage(`✓ Successfully allocated lead(s) to ${assignStaff}!`)
-    resetAssignDirty()
-    setTimeout(() => {
-      setAssignSuccessMessage('')
-      setAssignModalOpen(false)
-    }, 1200)
+      setAssignSuccessMessage(`✓ Successfully allocated ${res.assigned} lead(s) to ${assignStaff}!`)
+      resetAssignDirty()
+      await refreshData()
+      setTimeout(() => {
+        setAssignSuccessMessage('')
+        setAssignModalOpen(false)
+      }, 1200)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const totalUnassignedCount = useMemo(

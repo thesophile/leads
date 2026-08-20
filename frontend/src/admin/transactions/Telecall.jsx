@@ -1,223 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Layout from '../../Layout/Layout'
-
-// Static realistic telecalling leads database with rich call history trail
-const STATIC_TELECALL_DATA = [
-  {
-    id: 'TC-101',
-    company: 'NEW LIFE MATERNITY HOSPITAL',
-    contact: 'Dr. Sarah Ahmed',
-    phone: '8714546783',
-    email: 'info@newlifehospital.com',
-    category: 'Hospital',
-    city: 'Calicut',
-    assignedTo: 'Priya Sharma',
-    callStatus: 'Interested',
-    priority: 'Hot', // Assessed after call
-    remarks: 'Very interested in CRM software for 3 clinic branches. Wants a demo this Thursday at 3 PM.',
-    lastCallDate: '12 Aug 2026',
-    nextFollowUpDate: '2026-08-14',
-    nextFollowUpTime: '03:00 PM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H1',
-        dateTime: '12 Aug 2026, 02:45 PM',
-        caller: 'Priya Sharma',
-        report: 'Called Dr. Sarah Ahmed. She requested an online ERP demo for 3 clinic branches.',
-        followUp: '14 Aug 2026, 03:00 PM',
-        status: 'Interested',
-      },
-      {
-        id: 'H2',
-        dateTime: '10 Aug 2026, 11:30 AM',
-        caller: 'Priya Sharma',
-        report: 'Initial connection call. Receptionist transferred to director Dr. Sarah.',
-        followUp: '12 Aug 2026, 02:30 PM',
-        status: 'Follow Up',
-      },
-    ],
-  },
-  {
-    id: 'TC-102',
-    company: 'SHADES.IN LUXURY EYEWEAR',
-    contact: 'Rahul Menon',
-    phone: '9845123991',
-    email: 'contact@shades.in',
-    category: 'Cosmetics Store',
-    city: 'Kochi',
-    assignedTo: 'Alex Joseph',
-    callStatus: 'Follow Up',
-    priority: 'Warm',
-    remarks: 'Spoke with store manager. Decision maker traveling, asked to call back on Monday.',
-    lastCallDate: '12 Aug 2026',
-    nextFollowUpDate: '2026-08-17',
-    nextFollowUpTime: '11:00 AM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H3',
-        dateTime: '12 Aug 2026, 10:15 AM',
-        caller: 'Alex Joseph',
-        report: 'Spoke with showroom manager. Managing director is in Dubai, returning Monday.',
-        followUp: '17 Aug 2026, 11:00 AM',
-        status: 'Follow Up',
-      },
-    ],
-  },
-  {
-    id: 'TC-103',
-    company: 'MANZOOR SUPER SPECIALITY HOSPITAL',
-    contact: 'Dr. Manzoor Ali',
-    phone: '9447118234',
-    email: 'admin@manzoorhospital.org',
-    category: 'Hospital',
-    city: 'Trivandrum',
-    assignedTo: 'Priya Sharma',
-    callStatus: 'Quotation Requested',
-    priority: 'Hot',
-    remarks: 'Approved initial proposal. Requested formal quotation with 10 user licenses.',
-    lastCallDate: '11 Aug 2026',
-    nextFollowUpDate: '2026-08-13',
-    nextFollowUpTime: '10:30 AM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H4',
-        dateTime: '11 Aug 2026, 04:30 PM',
-        caller: 'Priya Sharma',
-        report: 'Doctor reviewed demo video on WhatsApp. Requested formal commercial quotation with tax breakup.',
-        followUp: '13 Aug 2026, 10:30 AM',
-        status: 'Quotation Requested',
-      },
-      {
-        id: 'H5',
-        dateTime: '08 Aug 2026, 01:15 PM',
-        caller: 'Priya Sharma',
-        report: 'Sent introductory brochure and feature comparison PDF.',
-        followUp: '11 Aug 2026, 04:00 PM',
-        status: 'Follow Up',
-      },
-    ],
-  },
-  {
-    id: 'TC-104',
-    company: 'URBAN LIVING INTERIORS',
-    contact: 'Deepak Varma',
-    phone: '9744882190',
-    email: 'projects@urbanliving.in',
-    category: 'Interior Designers',
-    city: 'Calicut',
-    assignedTo: 'Shanu VR',
-    callStatus: 'Not Reachable',
-    priority: 'Cold',
-    remarks: 'Ringing no response on primary mobile. Tried twice.',
-    lastCallDate: '11 Aug 2026',
-    nextFollowUpDate: '2026-08-12',
-    nextFollowUpTime: '04:00 PM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H6',
-        dateTime: '11 Aug 2026, 03:20 PM',
-        caller: 'Shanu VR',
-        report: 'Dialed phone. Call went unanswered after 5 rings.',
-        followUp: '12 Aug 2026, 04:00 PM',
-        status: 'Not Reachable',
-      },
-    ],
-  },
-  {
-    id: 'TC-105',
-    company: 'ROYAL PALACE CONVENTION CENTRE',
-    contact: 'Kabeer Khan',
-    phone: '9567112004',
-    email: 'events@royalpalace.com',
-    category: 'Convention Center',
-    city: 'Thrissur',
-    assignedTo: 'Ananya Nair',
-    callStatus: 'Follow Up',
-    priority: 'Warm',
-    remarks: 'Requested pricing brochure on WhatsApp before booking meeting.',
-    lastCallDate: '10 Aug 2026',
-    nextFollowUpDate: '2026-08-15',
-    nextFollowUpTime: '02:00 PM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H7',
-        dateTime: '10 Aug 2026, 05:00 PM',
-        caller: 'Ananya Nair',
-        report: 'Requested detailed event booking package pricing via WhatsApp.',
-        followUp: '15 Aug 2026, 02:00 PM',
-        status: 'Follow Up',
-      },
-    ],
-  },
-  {
-    id: 'TC-106',
-    company: 'GLOW & SHINE BEAUTY SALON',
-    contact: 'Farzana K',
-    phone: '9123456780',
-    email: 'glowandshine@gmail.com',
-    category: 'Salon & Spa',
-    city: 'Kochi',
-    assignedTo: null, // Unassigned
-    callStatus: 'Pending Call',
-    priority: null, // NOT SET
-    remarks: 'Newly imported raw contact. Waiting for staff assignment and first call.',
-    lastCallDate: '-',
-    nextFollowUpDate: '',
-    nextFollowUpTime: '',
-    hasFollowUp: false,
-    history: [],
-  },
-  {
-    id: 'TC-107',
-    company: 'APEX AUTO SPA & DETAILING',
-    contact: 'Vipin Das',
-    phone: '9895001122',
-    email: 'apexautospa@yahoo.com',
-    category: 'Auto Wash',
-    city: 'Kannur',
-    assignedTo: null, // Unassigned
-    callStatus: 'Pending Call',
-    priority: null, // NOT SET
-    remarks: 'Website lead intake. Pending telecaller distribution.',
-    lastCallDate: '-',
-    nextFollowUpDate: '',
-    nextFollowUpTime: '',
-    hasFollowUp: false,
-    history: [],
-  },
-  {
-    id: 'TC-108',
-    company: 'KALYAN GRAND RESIDENCY',
-    contact: 'Suresh Kumar',
-    phone: '9847229911',
-    email: 'gm@kalyangrand.com',
-    category: 'Convention Center',
-    city: 'Kochi',
-    assignedTo: 'NIMISHA DAVIS',
-    callStatus: 'Quotation Requested',
-    priority: 'Hot',
-    remarks: 'Looking for integrated billing setup for banquet hall. Needs quotation urgently.',
-    lastCallDate: '12 Aug 2026',
-    nextFollowUpDate: '2026-08-13',
-    nextFollowUpTime: '02:30 PM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H8',
-        dateTime: '12 Aug 2026, 12:00 PM',
-        caller: 'NIMISHA DAVIS',
-        report: 'Spoke with General Manager. Discussed hall booking automation and requested quote.',
-        followUp: '13 Aug 2026, 02:30 PM',
-        status: 'Quotation Requested',
-      },
-    ],
-  },
-]
+import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 
 const CALLERS = [
   'All Callers',
@@ -316,7 +101,46 @@ function HistoryIcon({ className = 'w-4 h-4 text-brand-600' }) {
 }
 
 export default function Telecall() {
-  const [telecallList, setTelecallList] = useState(STATIC_TELECALL_DATA)
+  const { user } = useAuth()
+  const [telecallList, setTelecallList] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const canViewAll = !!user && (can(user, 'leads.view_all') || user.is_superuser)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchData() {
+      try {
+        const data = await api.get('/transactions/tele-calls/')
+        if (!cancelled) setTelecallList(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function refreshData() {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await api.get('/transactions/tele-calls/')
+      setTelecallList(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Top Tab: 'all' | 'assigned' | 'unassigned' | 'followup'
   const [activeTab, setActiveTab] = useState('all')
 
@@ -394,7 +218,7 @@ export default function Telecall() {
     openDrawer()
   }
 
-  function handleSaveCall(e) {
+  async function handleSaveCall(e) {
     e.preventDefault()
     if (!activeLead) return
 
@@ -407,40 +231,23 @@ export default function Telecall() {
 
     const isActuallyCalled = formData.callStatus !== 'Pending Call'
 
-    const newHistoryEntry = isActuallyCalled
-      ? {
-          id: `H_${Date.now()}`,
-          dateTime: '12 Aug 2026, 03:00 PM',
-          caller: formData.assignedTo,
-          report: formData.remarks || 'Call outcome updated.',
-          followUp: formData.nextFollowUpDate
-            ? `${formData.nextFollowUpDate}, ${formData.nextFollowUpTime}`
-            : 'No follow up',
-          status: formData.callStatus,
-        }
-      : null
-
-    setTelecallList((prev) =>
-      prev.map((item) =>
-        item.id === activeLead.id
-          ? {
-              ...item,
-              assignedTo: formData.assignedTo,
-              callStatus: formData.callStatus,
-              priority: isActuallyCalled ? formData.priority : (item.priority || formData.priority),
-              remarks: formData.remarks || item.remarks,
-              nextFollowUpDate: formData.nextFollowUpDate,
-              nextFollowUpTime: formData.nextFollowUpTime,
-              hasFollowUp: isFollowUp,
-              lastCallDate: isActuallyCalled ? 'Today' : item.lastCallDate,
-              history: newHistoryEntry
-                ? [newHistoryEntry, ...(item.history || [])]
-                : (item.history || []),
-            }
-          : item
-      )
-    )
-    closeDrawer()
+    setError('')
+    try {
+      await api.patch(`/transactions/tele-calls/${activeLead.id}/`, {
+        assigned_to: formData.assignedTo,
+        call_status: formData.callStatus,
+        priority: isActuallyCalled ? formData.priority : (activeLead.priority || formData.priority),
+        remarks: formData.remarks || activeLead.remarks,
+        next_follow_up_date: formData.nextFollowUpDate,
+        next_follow_up_time: formData.nextFollowUpTime,
+        has_follow_up: isFollowUp,
+        last_call_date: isActuallyCalled ? 'Today' : activeLead.lastCallDate,
+      })
+      await refreshData()
+      closeDrawer()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   // Filtered Telecall leads
@@ -687,7 +494,9 @@ export default function Telecall() {
                   <th className="pb-2.5 pr-2 font-semibold min-w-[180px]">Company</th>
                   <th className="pb-2.5 pr-2 font-semibold min-w-[110px]">Mobile</th>
                   <th className="pb-2.5 pr-2 font-semibold min-w-[100px]">Category</th>
-                  <th className="pb-2.5 pr-2 font-semibold min-w-[120px]">Assigned To</th>
+                  {canViewAll && (
+                    <th className="pb-2.5 pr-2 font-semibold min-w-[120px]">Assigned To</th>
+                  )}
                   <th className="pb-2.5 pr-2 font-semibold min-w-[120px]">Call Status</th>
                   <th className="pb-2.5 pr-2 font-semibold min-w-[80px]">Priority</th>
                   <th className="pb-2.5 pr-2 font-semibold text-left min-w-[110px]">Action</th>
@@ -738,19 +547,21 @@ export default function Telecall() {
                         </td>
 
                         {/* Assigned Caller */}
-                        <td className="py-1.5 pr-3">
-                          {lead.assignedTo ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                              <span>{lead.assignedTo}</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
-                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              <span>Not Assigned</span>
-                            </span>
-                          )}
-                        </td>
+                        {canViewAll && (
+                          <td className="py-1.5 pr-3">
+                            {lead.assignedTo ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                <span>{lead.assignedTo}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                <span>Not Assigned</span>
+                              </span>
+                            )}
+                          </td>
+                        )}
 
                         {/* Call Status Badge */}
                         <td className="py-1.5 pr-3">
@@ -846,8 +657,12 @@ export default function Telecall() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
-                      No telecalling leads found matching criteria in this tab.
+                    <td colSpan={canViewAll ? 7 : 6} className="py-8 text-center text-xs text-slate-400">
+                      {isLoading
+                        ? 'Loading tele-call leads...'
+                        : error
+                        ? error
+                        : 'No telecalling leads found matching criteria in this tab.'}
                     </td>
                   </tr>
                 )}

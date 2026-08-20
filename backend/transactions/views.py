@@ -10,8 +10,8 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can
 
-from .models import RawLead
-from .serializers import RawLeadSerializer
+from .models import RawLead, TelecallLead
+from .serializers import RawLeadSerializer, TelecallLeadSerializer
 
 
 def generate_raw_id():
@@ -21,6 +21,15 @@ def generate_raw_id():
         if candidate not in existing:
             return candidate
     return f'RAW-{random.randint(1000000, 9999999)}'
+
+
+def generate_telecall_id():
+    existing = set(TelecallLead.objects.values_list('id', flat=True))
+    for _ in range(200):
+        candidate = f'TC-{random.randint(10000, 99999)}'
+        if candidate not in existing:
+            return candidate
+    return f'TC-{random.randint(100000, 999999)}'
 
 
 def scoped_queryset(user):
@@ -33,6 +42,19 @@ def scoped_queryset(user):
         )
     # Regular staff only see the records they added themselves.
     return RawLead.objects.filter(added_by=user.name)
+
+
+def telecall_scoped_queryset(user):
+    """Return the TelecallLead queryset visible to ``user``.
+
+    Managers/admins/superusers (holding ``leads.view_all``) see every assigned
+    lead for their company (plus legacy unassigned rows); regular staff only see
+    the leads assigned to them. Everything is scoped to the user's company.
+    """
+    qs = TelecallLead.objects.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+    if not user.is_superuser and not user.has_permission('leads.view_all'):
+        qs = qs.filter(assigned_to=user.name)
+    return qs
 
 
 def format_display_date(value):
@@ -177,6 +199,142 @@ class RawLeadDetailView(APIView):
         user = request.user
         is_own = lead.added_by == user.name
         if not (user.has_permission('leads.delete') and is_own) and not user.has_permission('leads.delete_all'):
+            return Response(
+                {'detail': 'You do not have permission to delete this lead.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        lead.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RawLeadAssignView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not can(request.user, 'leads.assign'):
+            return Response(
+                {'detail': 'You do not have permission to assign leads to staff.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        assigned_to = (request.data.get('assigned_to') or '').strip()
+        if not assigned_to:
+            return Response(
+                {'detail': 'assigned_to: This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        category = (request.data.get('category') or '').strip()
+        from_date = request.data.get('from_date') or ''
+        to_date = request.data.get('to_date') or ''
+        try:
+            count = int(request.data.get('count') or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if count <= 0:
+            count = 1
+
+        queryset = scoped_queryset(request.user).filter(assigned_to='')
+        if category and category != 'All Categories':
+            queryset = queryset.filter(category=category)
+        if from_date:
+            queryset = queryset.filter(date__gte=from_date)
+        if to_date:
+            queryset = queryset.filter(date__lte=to_date)
+
+        raw_leads = list(queryset.order_by('-created_at')[:count])
+
+        created = []
+        for raw in raw_leads:
+            try:
+                lead = TelecallLead.objects.create(
+                    id=generate_telecall_id(),
+                    company=raw.company,
+                    tenant=raw.tenant,
+                    contact=raw.contact,
+                    phone=raw.phone,
+                    email=raw.email,
+                    category=raw.category,
+                    city=raw.city,
+                    assigned_to=assigned_to,
+                    call_status='Pending Call',
+                    remarks='Newly assigned from raw data.',
+                )
+            except IntegrityError:
+                continue
+            created.append(lead)
+            raw.assigned_to = assigned_to
+            raw.save(update_fields=['assigned_to', 'updated_at'])
+
+        return Response(
+            {
+                'assigned': len(created),
+                'assigned_to': assigned_to,
+                'leads': TelecallLeadSerializer(created, many=True).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class TelecallLeadListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'telecall.view'):
+            return Response(
+                {'detail': 'You do not have permission to view tele-call leads.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        leads = telecall_scoped_queryset(request.user)
+        return Response(TelecallLeadSerializer(leads.order_by('-created_at'), many=True).data)
+
+
+class TelecallLeadDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        try:
+            return telecall_scoped_queryset(self.request.user).get(pk=pk)
+        except TelecallLead.DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        lead = self.get_object(pk)
+        if lead is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        user = request.user
+        is_own = lead.assigned_to == user.name
+        can_edit = user.has_permission('telecall.edit') or is_own
+        if not can_edit:
+            return Response(
+                {'detail': 'You do not have permission to edit this lead.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        for field in ('company', 'contact', 'phone', 'email', 'category', 'city'):
+            if field in request.data:
+                value = request.data.get(field)
+                if isinstance(value, str):
+                    value = value.strip()
+                setattr(lead, field, value)
+        for field in ('assigned_to', 'call_status', 'priority', 'remarks',
+                      'last_call_date', 'next_follow_up_date', 'next_follow_up_time'):
+            if field in request.data:
+                value = request.data.get(field)
+                if isinstance(value, str):
+                    value = value.strip()
+                setattr(lead, field, value)
+        if 'has_follow_up' in request.data:
+            lead.has_follow_up = bool(request.data.get('has_follow_up'))
+        lead.save()
+        return Response(TelecallLeadSerializer(lead).data)
+
+    def delete(self, request, pk):
+        lead = self.get_object(pk)
+        if lead is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        user = request.user
+        is_own = lead.assigned_to == user.name
+        if not user.has_permission('leads.delete_all') and not (
+            user.has_permission('leads.delete') and is_own
+        ):
             return Response(
                 {'detail': 'You do not have permission to delete this lead.'},
                 status=status.HTTP_403_FORBIDDEN,

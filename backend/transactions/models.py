@@ -46,6 +46,7 @@ class RawLead(models.Model):
     date = models.DateField(null=True, blank=True)
     display_date = models.CharField(max_length=50, blank=True)
     added_by = models.CharField(max_length=120, blank=True)
+    assigned_to = models.CharField(max_length=120, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
