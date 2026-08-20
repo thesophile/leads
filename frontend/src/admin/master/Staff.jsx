@@ -673,7 +673,15 @@ export default function Staff() {
 
       {/* New employee credentials modal */}
       {showCredentials && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCredentials(null)
+              setResetModal(null)
+            }
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
             <div className="flex items-center gap-2.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
@@ -707,7 +715,15 @@ export default function Staff() {
 
       {/* Reset password modal */}
       {resetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCredentials(null)
+              setResetModal(null)
+            }
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
             <h3 className="text-base font-bold text-slate-900">Reset password</h3>
             <p className="mt-2 text-sm text-slate-500">

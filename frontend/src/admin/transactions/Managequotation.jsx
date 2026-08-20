@@ -4,6 +4,8 @@ import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Layout from '../../Layout/Layout'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
+import ConfirmDialog from '../../components/ConfirmDialog'
+import useDirty from '../../utils/useDirty'
 
 const QUILL_MODULES = {
   toolbar: [
@@ -388,6 +390,7 @@ export default function Managequotation() {
       )
     )
     setApprovalSent(`✓ Proposal sent to ${selectedAdmin} for approval`)
+    resetApprovalDirty()
     setTimeout(() => {
       setApprovalModalOpen(false)
       setApprovalSent('')
@@ -428,6 +431,48 @@ export default function Managequotation() {
   const [remarksVal, setRemarksVal] = useState('')
   const [submitMessage, setSubmitMessage] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [discardProposalOpen, setDiscardProposalOpen] = useState(false)
+  const [discardApprovalOpen, setDiscardApprovalOpen] = useState(false)
+
+  const { dirty: proposalDirty, reset: resetProposalDirty } = useDirty(
+    proposalModalOpen,
+    useMemo(
+      () => ({
+        bdm,
+        qtnBy,
+        customerPerson,
+        companyName,
+        mobileNum,
+        categoryName,
+        scopeHtml,
+        termsHtml,
+        totalVal,
+        discountVal,
+        sourceVal,
+        currencyVal,
+        remarksVal,
+      }),
+      [
+        bdm, qtnBy, customerPerson, companyName, mobileNum, categoryName,
+        scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal,
+      ]
+    )
+  )
+
+  const { dirty: approvalDirty, reset: resetApprovalDirty } = useDirty(
+    approvalModalOpen,
+    useMemo(() => ({ selectedAdmin }), [selectedAdmin])
+  )
+
+  function requestCloseProposal() {
+    if (proposalDirty) setDiscardProposalOpen(true)
+    else setProposalModalOpen(false)
+  }
+
+  function requestCloseApproval() {
+    if (approvalDirty) setDiscardApprovalOpen(true)
+    else setApprovalModalOpen(false)
+  }
 
   function handleSelectTemplate(templateId) {
     setSelectedTemplateId(templateId)
@@ -587,6 +632,7 @@ export default function Managequotation() {
       setSubmitMessage('✓ New Proposal created. Now choose an admin to send for approval.')
     }
 
+    resetProposalDirty()
     setTimeout(() => {
       setSubmitMessage('')
       setProposalModalOpen(false)
@@ -1053,7 +1099,12 @@ export default function Managequotation() {
 
       {/* "New Proposal" Modal (Matching User's Reference Screenshot) */}
       {proposalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !proposalDirty) setProposalModalOpen(false)
+          }}
+        >
           <div className="w-full max-w-3xl my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
             {/* Modal Header with Quick Template Selector */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-slate-200 bg-white">
@@ -1084,7 +1135,7 @@ export default function Managequotation() {
 
               <button
                 type="button"
-                onClick={() => setProposalModalOpen(false)}
+                onClick={requestCloseProposal}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
               >
                 <CloseIcon />
@@ -1259,7 +1310,7 @@ export default function Managequotation() {
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setProposalModalOpen(false)}
+                  onClick={requestCloseProposal}
                   className="rounded-md bg-slate-600 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 transition cursor-pointer"
                 >
                   Close
@@ -1278,7 +1329,12 @@ export default function Managequotation() {
 
       {/* "Send for Approval" Modal (Select Approving Admin) */}
       {approvalModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !approvalDirty) setApprovalModalOpen(false)
+          }}
+        >
           <div className="w-full max-w-md my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
@@ -1290,7 +1346,7 @@ export default function Managequotation() {
               </div>
               <button
                 type="button"
-                onClick={() => setApprovalModalOpen(false)}
+                onClick={requestCloseApproval}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
               >
                 <CloseIcon />
@@ -1374,7 +1430,7 @@ export default function Managequotation() {
             <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
               <button
                 type="button"
-                onClick={() => setApprovalModalOpen(false)}
+                onClick={requestCloseApproval}
                 className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
                 Cancel
@@ -1392,6 +1448,26 @@ export default function Managequotation() {
           </div>
         </div>
       )}
+
+      {/* Discard Changes Confirms */}
+      <ConfirmDialog
+        open={discardProposalOpen}
+        onCancel={() => setDiscardProposalOpen(false)}
+        onConfirm={() => {
+          setDiscardProposalOpen(false)
+          setProposalModalOpen(false)
+          resetProposalDirty()
+        }}
+      />
+      <ConfirmDialog
+        open={discardApprovalOpen}
+        onCancel={() => setDiscardApprovalOpen(false)}
+        onConfirm={() => {
+          setDiscardApprovalOpen(false)
+          setApprovalModalOpen(false)
+          resetApprovalDirty()
+        }}
+      />
     </Layout>
   )
 }

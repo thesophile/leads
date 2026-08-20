@@ -695,7 +695,12 @@ export default function OrderReceived() {
 
         {/* Quick View Modal */}
         {selectedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedOrder(null)
+            }}
+          >
             <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">

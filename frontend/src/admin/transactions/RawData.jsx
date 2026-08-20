@@ -3,6 +3,8 @@ import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import Layout from '../../Layout/Layout'
 import { can } from '../../utils/permissions'
+import ConfirmDialog from '../../components/ConfirmDialog'
+import useDirty from '../../utils/useDirty'
 
 const STAFF_LIST = [
   'All Employees',
@@ -221,6 +223,38 @@ export default function RawData() {
   const [assignToDate, setAssignToDate] = useState('')
   const [assignCount, setAssignCount] = useState(50)
   const [assignSuccessMessage, setAssignSuccessMessage] = useState('')
+  const [discardAssignOpen, setDiscardAssignOpen] = useState(false)
+  const [discardImportOpen, setDiscardImportOpen] = useState(false)
+  const [discardDrawerOpen, setDiscardDrawerOpen] = useState(false)
+
+  const { dirty: assignDirty, reset: resetAssignDirty } = useDirty(
+    assignModalOpen,
+    useMemo(
+      () => ({
+        assignStaff,
+        assignCategory,
+        assignFromDate,
+        assignToDate,
+        assignCount,
+      }),
+      [assignStaff, assignCategory, assignFromDate, assignToDate, assignCount]
+    )
+  )
+
+  const { dirty: importDirty, reset: resetImportDirty } = useDirty(
+    importModalOpen,
+    useMemo(() => ({ importedFileName }), [importedFileName])
+  )
+
+  function requestCloseAssign() {
+    if (assignDirty) setDiscardAssignOpen(true)
+    else setAssignModalOpen(false)
+  }
+
+  function requestCloseImport() {
+    if (importDirty) setDiscardImportOpen(true)
+    else setImportModalOpen(false)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -283,6 +317,13 @@ export default function RawData() {
     setTimeout(() => setDrawerVisible(false), 300)
   }
 
+  const { dirty: drawerDirty, reset: resetDrawerDirty } = useDirty(drawerVisible, formData)
+
+  function requestCloseDrawer() {
+    if (drawerDirty) setDiscardDrawerOpen(true)
+    else closeDrawer()
+  }
+
   function handleOpenAdd() {
     setEditingId(null)
     setFormData({
@@ -327,6 +368,7 @@ export default function RawData() {
         showToast('Raw data added.')
       }
       setEditingId(null)
+      resetDrawerDirty()
       closeDrawer()
       await refreshData()
     } catch (err) {
@@ -383,6 +425,7 @@ export default function RawData() {
       }
     } finally {
       setIsImporting(false)
+      resetImportDirty()
       setTimeout(() => {
         setImportModalOpen(false)
         setImportedFileName('')
@@ -421,6 +464,7 @@ export default function RawData() {
     )
 
     setAssignSuccessMessage(`✓ Successfully allocated lead(s) to ${assignStaff}!`)
+    resetAssignDirty()
     setTimeout(() => {
       setAssignSuccessMessage('')
       setAssignModalOpen(false)
@@ -823,7 +867,12 @@ export default function RawData() {
 
       {/* Assign Leads to Staff Modal (Managers and above only) */}
       {assignModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !assignDirty) setAssignModalOpen(false)
+          }}
+        >
           <div className="flex max-h-full w-full flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150 sm:max-w-xl">
             {/* Modal Header */}
             <div className="flex shrink-0 items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/70">
@@ -842,7 +891,7 @@ export default function RawData() {
               </div>
               <button
                 type="button"
-                onClick={() => setAssignModalOpen(false)}
+                onClick={requestCloseAssign}
                 aria-label="Close"
                 className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
               >
@@ -993,7 +1042,7 @@ export default function RawData() {
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setAssignModalOpen(false)}
+                  onClick={requestCloseAssign}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel
@@ -1012,7 +1061,12 @@ export default function RawData() {
 
       {/* Bulk Excel/CSV Import Modal */}
       {importModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !importDirty) setImportModalOpen(false)
+          }}
+        >
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -1023,7 +1077,7 @@ export default function RawData() {
               </div>
               <button
                 type="button"
-                onClick={() => setImportModalOpen(false)}
+                onClick={requestCloseImport}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
               >
                 <CloseIcon />
@@ -1065,7 +1119,7 @@ export default function RawData() {
               <div className="flex items-center justify-end gap-2.5 pt-2">
                 <button
                   type="button"
-                  onClick={() => setImportModalOpen(false)}
+                  onClick={requestCloseImport}
                   disabled={isImporting}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1092,7 +1146,7 @@ export default function RawData() {
             className={`absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-300 ${
               drawerOpen ? 'opacity-100' : 'opacity-0'
             }`}
-            onClick={closeDrawer}
+            onClick={requestCloseDrawer}
           />
 
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
@@ -1115,7 +1169,7 @@ export default function RawData() {
                 </div>
                 <button
                   type="button"
-                  onClick={closeDrawer}
+                  onClick={requestCloseDrawer}
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
                 >
                   <CloseIcon />
@@ -1316,7 +1370,7 @@ export default function RawData() {
               <div className="p-4 border-t border-slate-100 flex items-center gap-2.5 bg-slate-50/50">
                 <button
                   type="button"
-                  onClick={closeDrawer}
+                  onClick={requestCloseDrawer}
                   disabled={isSaving}
                   className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1338,7 +1392,12 @@ export default function RawData() {
 
       {/* Duplicate Found Modal */}
       {duplicateRecord && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDuplicateRecord(null)
+          }}
+        >
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-600">
@@ -1419,7 +1478,12 @@ export default function RawData() {
 
       {/* Delete Confirmation Modal */}
       {deleteModalId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteModalId(null)
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
             <h3 className="text-base font-bold text-slate-900">Delete Raw Data</h3>
             <p className="mt-2 text-sm text-slate-500">
@@ -1444,6 +1508,35 @@ export default function RawData() {
           </div>
         </div>
       )}
+
+      {/* Discard Changes Confirms */}
+      <ConfirmDialog
+        open={discardAssignOpen}
+        onCancel={() => setDiscardAssignOpen(false)}
+        onConfirm={() => {
+          setDiscardAssignOpen(false)
+          setAssignModalOpen(false)
+          resetAssignDirty()
+        }}
+      />
+      <ConfirmDialog
+        open={discardImportOpen}
+        onCancel={() => setDiscardImportOpen(false)}
+        onConfirm={() => {
+          setDiscardImportOpen(false)
+          setImportModalOpen(false)
+          resetImportDirty()
+        }}
+      />
+      <ConfirmDialog
+        open={discardDrawerOpen}
+        onCancel={() => setDiscardDrawerOpen(false)}
+        onConfirm={() => {
+          setDiscardDrawerOpen(false)
+          closeDrawer()
+          resetDrawerDirty()
+        }}
+      />
     </Layout>
   )
 }

@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
+import ConfirmDialog from '../../components/ConfirmDialog'
+import useDirty from '../../utils/useDirty'
 
 const ATTACHMENT_TYPES = ['SRS Document', 'Business Card', 'Voice Clip', 'Other']
 
@@ -259,6 +261,23 @@ export default function ClientDetails() {
 
   const [previewAttachment, setPreviewAttachment] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
+  const [discardOpen, setDiscardOpen] = useState(false)
+
+  const { dirty, reset } = useDirty(
+    modalOpen,
+    useMemo(
+      () => ({
+        ...form,
+        attachmentCount: newAttachments.length,
+      }),
+      [form, newAttachments]
+    )
+  )
+
+  function requestClose() {
+    if (dirty) setDiscardOpen(true)
+    else setModalOpen(false)
+  }
 
   // Clear router state after prefill so a refresh doesn't reopen the form
   useEffect(() => {
@@ -370,6 +389,7 @@ export default function ClientDetails() {
 
     setModalOpen(false)
     setNewAttachments([])
+    reset()
     setTimeout(() => setToastMessage(''), 2500)
   }
 
@@ -608,7 +628,12 @@ export default function ClientDetails() {
 
       {/* Add / Edit Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !dirty) setModalOpen(false)
+          }}
+        >
           <div className="w-full max-w-2xl my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-3.5 bg-white">
               <h3 className="text-sm font-bold text-slate-900">
@@ -616,7 +641,7 @@ export default function ClientDetails() {
               </h3>
               <button
                 type="button"
-                onClick={() => setModalOpen(false)}
+                onClick={requestClose}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
               >
                 <CloseIcon />
@@ -788,7 +813,7 @@ export default function ClientDetails() {
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
+                  onClick={requestClose}
                   className="rounded-lg bg-slate-600 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 transition cursor-pointer"
                 >
                   Cancel
@@ -807,7 +832,12 @@ export default function ClientDetails() {
 
       {/* Preview Attachment Modal */}
       {previewAttachment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewAttachment(null)
+          }}
+        >
           <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -871,7 +901,12 @@ export default function ClientDetails() {
 
       {/* Delete Confirmation Modal */}
       {deleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteId(null)
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl text-center animate-in fade-in zoom-in-95 duration-150">
             <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600">
               <TrashIcon className="h-5 w-5" />
@@ -899,6 +934,17 @@ export default function ClientDetails() {
           </div>
         </div>
       )}
+
+      {/* Discard Changes Confirm */}
+      <ConfirmDialog
+        open={discardOpen}
+        onCancel={() => setDiscardOpen(false)}
+        onConfirm={() => {
+          setDiscardOpen(false)
+          setModalOpen(false)
+          reset()
+        }}
+      />
 
       {/* Toast */}
       {toastMessage && (

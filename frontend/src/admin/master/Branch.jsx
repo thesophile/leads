@@ -515,7 +515,12 @@ export default function Branch() {
 
       {/* Delete Confirmation Modal */}
       {deleteModalId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteModalId(null)
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
             <h3 className="text-base font-bold text-slate-900">Delete Branch</h3>
             <p className="mt-2 text-sm text-slate-500">
