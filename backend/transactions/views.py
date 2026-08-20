@@ -1,6 +1,7 @@
 import random
 from datetime import date
 
+from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -52,6 +53,32 @@ def format_display_date(value):
     return value.strftime('%d %b %Y') if value else ''
 
 
+def find_duplicate_lead(user, company):
+    """Return an existing RawLead with the same normalized company name, from
+    across the org (not just the current user's own records)."""
+    queryset = RawLead.objects.all()
+    if not user.is_superuser:
+        queryset = queryset.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+    return queryset.filter(company__iexact=company).only(
+        'id', 'company', 'contact', 'phone', 'category', 'city', 'added_by',
+        'display_date', 'date',
+    ).first()
+
+
+def duplicate_response(existing):
+    added_by = existing.added_by or 'another user'
+    when = existing.display_date or (format_display_date(existing.date) if existing.date else '')
+    when_text = f' on {when}' if when else ''
+    return Response(
+        {
+            'detail': f'This lead was already entered by {added_by}{when_text}. '
+                      f'Please use the existing record.',
+            'existing': RawLeadSerializer(existing).data,
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 class RawLeadListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -66,21 +93,33 @@ class RawLeadListView(APIView):
                 {'detail': 'company: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        existing = find_duplicate_lead(request.user, company)
+        if existing is not None:
+            return duplicate_response(existing)
+        phone = request.data.get('phone', '').strip()
         lead_date = date.today()
-        lead = RawLead.objects.create(
-            id=generate_raw_id(),
-            company=company,
-            tenant=request.user.company,
-            contact=request.data.get('contact', '').strip(),
-            phone=request.data.get('phone', '').strip(),
-            email=request.data.get('email', '').strip(),
-            category=request.data.get('category', '').strip(),
-            source=request.data.get('source', '').strip(),
-            city=request.data.get('city', '').strip(),
-            date=lead_date,
-            display_date=format_display_date(lead_date),
-            added_by=request.user.name,
-        )
+        try:
+            lead = RawLead.objects.create(
+                id=generate_raw_id(),
+                company=company,
+                tenant=request.user.company,
+                contact=request.data.get('contact', '').strip(),
+                phone=phone,
+                email=request.data.get('email', '').strip(),
+                category=request.data.get('category', '').strip(),
+                source=request.data.get('source', '').strip(),
+                city=request.data.get('city', '').strip(),
+                date=lead_date,
+                display_date=format_display_date(lead_date),
+                added_by=request.user.name,
+            )
+        except IntegrityError:
+            # Concurrent duplicate insert lost the race at the DB level:
+            # return the existing record as a clean 409 instead of a 500.
+            existing = find_duplicate_lead(request.user, company)
+            if existing is not None:
+                return duplicate_response(existing)
+            raise
         return Response(RawLeadSerializer(lead).data, status=status.HTTP_201_CREATED)
 
 
@@ -97,7 +136,21 @@ class RawLeadDetailView(APIView):
         lead = self.get_object(pk)
         if lead is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        for field in ('company', 'contact', 'phone', 'category', 'source', 'city'):
+        if 'company' in request.data:
+            company = request.data.get('company', '').strip()
+            if not company:
+                return Response(
+                    {'detail': 'company: This field may not be blank.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if lead.company.strip().lower() != company.lower():
+                # Changing the name to one that already exists would violate the
+                # unique constraint — surface it as a friendly duplicate instead.
+                conflict = find_duplicate_lead(request.user, company)
+                if conflict is not None and conflict.id != lead.id:
+                    return duplicate_response(conflict)
+            lead.company = company
+        for field in ('contact', 'phone', 'category', 'source', 'city'):
             if field in request.data:
                 value = request.data.get(field)
                 if isinstance(value, str):
@@ -105,7 +158,13 @@ class RawLeadDetailView(APIView):
                 setattr(lead, field, value)
         if 'email' in request.data:
             lead.email = request.data.get('email', '').strip()
-        lead.save()
+        try:
+            lead.save()
+        except IntegrityError:
+            conflict = find_duplicate_lead(request.user, lead.company)
+            if conflict is not None and conflict.id != lead.id:
+                return duplicate_response(conflict)
+            raise
         return Response(RawLeadSerializer(lead).data)
 
     def delete(self, request, pk):

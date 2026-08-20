@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Lower
 
 
 class ProposalTemplate(models.Model):
@@ -22,6 +23,13 @@ class ProposalTemplate(models.Model):
 class RawLead(models.Model):
     id = models.CharField(max_length=20, primary_key=True)
     company = models.CharField(max_length=200)
+    # Stored MySQL generated column of LOWER(company), used to enforce
+    # case-insensitive company-name uniqueness at the database level.
+    company_key = models.GeneratedField(
+        expression=Lower('company'),
+        output_field=models.CharField(max_length=200),
+        db_persist=True,
+    )
     tenant = models.ForeignKey(
         'accounts.Company',
         on_delete=models.PROTECT,
@@ -43,6 +51,12 @@ class RawLead(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company_key'],
+                name='uniq_rawlead_company_key',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.id} - {self.company}'

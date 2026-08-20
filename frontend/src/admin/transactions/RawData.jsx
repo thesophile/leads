@@ -176,6 +176,9 @@ export default function RawData() {
   const [editingId, setEditingId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteModalId, setDeleteModalId] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [duplicateRecord, setDuplicateRecord] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -227,6 +230,8 @@ export default function RawData() {
   })
 
   function openDrawer() {
+    setIsSaving(false)
+    setDuplicateRecord(null)
     setDrawerVisible(true)
     requestAnimationFrame(() => setDrawerOpen(true))
   }
@@ -266,9 +271,11 @@ export default function RawData() {
 
   async function handleSave(e) {
     e.preventDefault()
+    if (isSaving) return
     setError('')
     if (!formData.company.trim()) return
 
+    setIsSaving(true)
     try {
       if (editingId) {
         await api.patch(`/transactions/raw-leads/${editingId}/`, formData)
@@ -281,12 +288,19 @@ export default function RawData() {
       closeDrawer()
       await refreshData()
     } catch (err) {
-      setError(err.message)
+      if (err.status === 409 && err.data?.existing) {
+        setDuplicateRecord(err.data.existing)
+      } else {
+        setError(err.message)
+      }
+    } finally {
+      setIsSaving(false)
     }
   }
 
   async function handleBulkImport(e) {
     e.preventDefault()
+    if (isImporting) return
     setError('')
     if (!importedFileName) return
 
@@ -312,6 +326,7 @@ export default function RawData() {
       },
     ]
 
+    setIsImporting(true)
     try {
       await Promise.all(
         importedSample.map((record) => api.post('/transactions/raw-leads/', record))
@@ -319,8 +334,13 @@ export default function RawData() {
       setImportSuccessMessage(`Successfully imported 2 leads from ${importedFileName}!`)
       await refreshData()
     } catch (err) {
-      setError(err.message)
+      if (err.status === 409 && err.data?.existing) {
+        setDuplicateRecord(err.data.existing)
+      } else {
+        setError(err.message)
+      }
     } finally {
+      setIsImporting(false)
       setTimeout(() => {
         setImportModalOpen(false)
         setImportedFileName('')
@@ -449,7 +469,7 @@ export default function RawData() {
               className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-brand-600/20 transition-all hover:bg-brand-700 active:scale-[0.98] cursor-pointer"
             >
               <PlusIcon />
-              <span>+ Add Raw Data</span>
+              <span>Add Raw Data</span>
             </button>
           </div>
         </div>
@@ -774,16 +794,17 @@ export default function RawData() {
                 <button
                   type="button"
                   onClick={() => setImportModalOpen(false)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  disabled={isImporting}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={!importedFileName}
-                  className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 disabled:opacity-50 transition cursor-pointer"
+                  disabled={isImporting || !importedFileName}
+                  className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 disabled:opacity-50 transition cursor-pointer disabled:cursor-not-allowed"
                 >
-                  Upload & Import
+                  {isImporting ? 'Importing…' : 'Upload & Import'}
                 </button>
               </div>
             </form>
@@ -1024,18 +1045,101 @@ export default function RawData() {
                 <button
                   type="button"
                   onClick={closeDrawer}
-                  className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  disabled={isSaving}
+                  className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="flex-1 rounded-xl bg-brand-600 py-2.5 text-xs font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 transition cursor-pointer"
+                  disabled={isSaving}
+                  className="flex-1 rounded-xl bg-brand-600 py-2.5 text-xs font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {editingId ? 'Update Raw Data' : 'Save Raw Data'}
+                  {isSaving ? 'Saving…' : editingId ? 'Update Raw Data' : 'Save Raw Data'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate Found Modal */}
+      {duplicateRecord && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v4M12 16h.01" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Duplicate Lead Found</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  This lead has already been entered. Please use the existing record.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-2.5">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Company</span>
+                <span className="text-xs font-bold text-slate-800 text-right">{duplicateRecord.company}</span>
+              </div>
+              {duplicateRecord.contact && (
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Contact</span>
+                  <span className="text-xs font-medium text-slate-700 text-right">{duplicateRecord.contact}</span>
+                </div>
+              )}
+              {duplicateRecord.phone && (
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Mobile</span>
+                  <span className="text-xs font-mono font-medium text-slate-700 text-right">{duplicateRecord.phone}</span>
+                </div>
+              )}
+              {duplicateRecord.category && (
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Category</span>
+                  <span className="text-xs font-medium text-slate-700 text-right">{duplicateRecord.category}</span>
+                </div>
+              )}
+              {duplicateRecord.city && (
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Location</span>
+                  <span className="text-xs font-medium text-slate-700 text-right">{duplicateRecord.city}</span>
+                </div>
+              )}
+              <div className="flex items-start justify-between gap-3 border-t border-slate-200 pt-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Entered by</span>
+                <span className="text-xs font-bold text-brand-600 text-right">{duplicateRecord.addedBy || '—'}</span>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Date</span>
+                <span className="text-xs font-medium text-slate-700 text-right">{duplicateRecord.displayDate || '—'}</span>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDuplicateRecord(null)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Got it
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateRecord(null)
+                  closeDrawer()
+                }}
+                className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 transition cursor-pointer"
+              >
+                Close Entry
+              </button>
             </div>
           </div>
         </div>
