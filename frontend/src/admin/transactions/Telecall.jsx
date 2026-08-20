@@ -114,7 +114,7 @@ export default function Telecall() {
 
     async function fetchData() {
       try {
-        const data = await api.get('/transactions/tele-calls/')
+        const data = await api.get('/transactions/leads/?status=assigned')
         if (!cancelled) setTelecallList(data)
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -133,7 +133,7 @@ export default function Telecall() {
     setIsLoading(true)
     setError('')
     try {
-      const data = await api.get('/transactions/tele-calls/')
+      const data = await api.get('/transactions/leads/?status=assigned')
       setTelecallList(data)
     } catch (err) {
       setError(err.message)
@@ -142,7 +142,7 @@ export default function Telecall() {
     }
   }
 
-  // Top Tab: 'all' | 'assigned' | 'unassigned' | 'followup'
+  // Top Tab: 'all' | 'assigned'
   const [activeTab, setActiveTab] = useState('all')
 
   // Selected Lead for Follow-Up History
@@ -172,15 +172,9 @@ export default function Telecall() {
     [telecallList, selectedLeadId]
   )
 
-  // Calculations for tab badges & KPI metrics
-  const totalAssignedCount = useMemo(
-    () => telecallList.filter((item) => item.assignedTo !== null).length,
-    [telecallList]
-  )
-  const totalUnassignedCount = useMemo(
-    () => telecallList.filter((item) => item.assignedTo === null).length,
-    [telecallList]
-  )
+  // Calculations for tab badges & KPI metrics. The Telecall list only contains
+  // assigned (status=assigned) leads, so all rows carry an assignee.
+  const totalAssignedCount = telecallList.length
   const hotLeadsCount = useMemo(
     () => telecallList.filter((l) => l.priority === 'Hot').length,
     [telecallList]
@@ -234,7 +228,7 @@ export default function Telecall() {
 
     setError('')
     try {
-      await api.patch(`/transactions/tele-calls/${activeLead.id}/`, {
+      await api.patch(`/transactions/leads/${activeLead.id}/`, {
         assigned_to: formData.assignedTo,
         call_status: formData.callStatus,
         priority: isActuallyCalled ? formData.priority : (activeLead.priority || formData.priority),
@@ -254,19 +248,15 @@ export default function Telecall() {
   // Filtered Telecall leads
   const filteredLeads = useMemo(() => {
     return telecallList.filter((item) => {
-      // 1. Assignment Tab Filter
-      if (activeTab === 'assigned' && item.assignedTo === null) return false
-      if (activeTab === 'unassigned' && item.assignedTo !== null) return false
-
-      // 2. Caller filter
+      // 1. Caller filter
       const matchesCaller =
         selectedCaller === 'All Callers' || item.assignedTo === selectedCaller
 
-      // 3. Status filter
+      // 2. Status filter
       const matchesStatus =
         selectedStatus === 'All Status' || item.callStatus === selectedStatus
 
-      // 4. Priority filter
+      // 3. Priority filter
       let matchesPriority = true
       if (selectedPriority === 'Hot') {
         matchesPriority = item.priority === 'Hot'
@@ -276,7 +266,7 @@ export default function Telecall() {
         matchesPriority = item.priority === 'Cold'
       }
 
-      // 5. Search query
+      // 4. Search query
       const matchesSearch =
         item.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -286,7 +276,7 @@ export default function Telecall() {
 
       return matchesCaller && matchesStatus && matchesPriority && matchesSearch
     })
-  }, [telecallList, activeTab, selectedCaller, selectedStatus, selectedPriority, searchQuery])
+  }, [telecallList, selectedCaller, selectedStatus, selectedPriority, searchQuery])
 
   return (
     <Layout>
@@ -327,7 +317,7 @@ export default function Telecall() {
 
         {/* Main Table Container */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs sm:p-4">
-          {/* Top Segmented Tabs: [ All Leads | Assigned Leads | Not Assigned | Follow Up Scheduled ] */}
+          {/* Top Segmented Tabs: [ All Leads | Assigned Leads | Follow Up Scheduled ] */}
           <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-100 pb-3.5 mb-3.5 lg:flex-row lg:items-center">
             <div className="inline-flex w-full max-w-full overflow-x-auto rounded-xl bg-slate-100 p-1 border border-slate-200/60 whitespace-nowrap lg:w-auto">
               {/* All Leads Tab */}
@@ -362,23 +352,6 @@ export default function Telecall() {
                   {totalAssignedCount}
                 </span>
               </button>
-
-              {/* Not Assigned Leads Tab */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('unassigned')}
-                className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === 'unassigned'
-                    ? 'bg-white text-amber-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                <span>Not Assigned</span>
-                <span className="rounded-full bg-amber-100 px-1.5 py-0.2 text-[10px] font-bold text-amber-700">
-                  {totalUnassignedCount}
-                </span>
-              </button>
             </div>
 
             {/* Instruction Tip */}
@@ -392,9 +365,8 @@ export default function Telecall() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               {/* Left Controls: Caller Filter + Status Filter + Priority Filter Pills */}
               <div className="flex flex-wrap items-center gap-2.5">
-                {/* Assigned Caller Dropdown (Only relevant if not in Unassigned tab) */}
-                {activeTab !== 'unassigned' && (
-                  <div className="flex items-center gap-1.5">
+                {/* Assigned Caller Dropdown */}
+                <div className="flex items-center gap-1.5">
                     <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                       <UserFilterIcon />
                       <span>Caller:</span>
@@ -412,10 +384,9 @@ export default function Telecall() {
                       ))}
                     </select>
                   </div>
-                )}
 
                 {/* Status Dropdown (Right Next to Caller) */}
-                <div className={`flex items-center gap-1.5 ${activeTab !== 'unassigned' ? 'pl-2 sm:border-l sm:border-slate-200' : ''}`}>
+                <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">
                   <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                     <CheckCircleIcon />
                     <span>Status:</span>

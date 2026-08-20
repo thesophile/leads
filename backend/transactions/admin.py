@@ -6,11 +6,10 @@ from .models import (
     Attachment,
     CallHistory,
     ClientDetail,
+    Lead,
     Order,
     ProposalTemplate,
     Quotation,
-    RawLead,
-    TelecallLead,
 )
 
 
@@ -24,19 +23,11 @@ class ProposalTemplateAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'default_total', 'default_discount')
 
 
-@admin.register(RawLead)
-class RawLeadAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+@admin.register(Lead)
+class LeadAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
     company_field = 'tenant'
-    list_display = ('id', 'company', 'phone', 'category', 'source', 'date')
-    list_filter = ('category', 'source', 'added_by')
-    search_fields = ('company', 'contact', 'phone', 'id')
-
-
-@admin.register(TelecallLead)
-class TelecallLeadAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
-    company_field = 'tenant'
-    list_display = ('id', 'company', 'phone', 'assigned_to', 'call_status', 'priority')
-    list_filter = ('call_status', 'priority', 'assigned_to')
+    list_display = ('id', 'company', 'phone', 'category', 'source', 'status', 'assigned_to', 'call_status')
+    list_filter = ('status', 'category', 'source', 'added_by', 'assigned_to', 'call_status')
     search_fields = ('company', 'contact', 'phone', 'id')
     inlines = [CallHistoryInline]
 

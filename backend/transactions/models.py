@@ -20,7 +20,27 @@ class ProposalTemplate(models.Model):
         return self.name
 
 
-class RawLead(models.Model):
+class Lead(models.Model):
+    """A single lead that progresses through the pipeline via its ``status``.
+
+    ``raw`` leads appear in the Raw Data screen; ``assigned`` leads appear in the
+    Tele Call screen. Later stages (quotation / order / client) reserve the same
+    lifecycle: frontends render by status, so nothing is copied or deleted.
+    """
+
+    STATUS_RAW = 'raw'
+    STATUS_ASSIGNED = 'assigned'
+    STATUS_QUOTATION = 'quotation'
+    STATUS_ORDER = 'order'
+    STATUS_CLIENT = 'client'
+    STATUS_CHOICES = [
+        (STATUS_RAW, 'Raw'),
+        (STATUS_ASSIGNED, 'Assigned'),
+        (STATUS_QUOTATION, 'Quotation'),
+        (STATUS_ORDER, 'Order'),
+        (STATUS_CLIENT, 'Client'),
+    ]
+
     id = models.CharField(max_length=20, primary_key=True)
     company = models.CharField(max_length=200)
     # Stored MySQL generated column of LOWER(company), used to enforce
@@ -47,38 +67,11 @@ class RawLead(models.Model):
     display_date = models.CharField(max_length=50, blank=True)
     added_by = models.CharField(max_length=120, blank=True)
     assigned_to = models.CharField(max_length=120, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        constraints = [
-            models.UniqueConstraint(
-                fields=['company_key'],
-                name='uniq_rawlead_company_key',
-            ),
-        ]
-
-    def __str__(self):
-        return f'{self.id} - {self.company}'
-
-
-class TelecallLead(models.Model):
-    id = models.CharField(max_length=20, primary_key=True)
-    company = models.CharField(max_length=200)
-    tenant = models.ForeignKey(
-        'accounts.Company',
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name='+',
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_RAW,
     )
-    contact = models.CharField(max_length=120, blank=True)
-    phone = models.CharField(max_length=20, blank=True)
-    email = models.EmailField(blank=True)
-    category = models.CharField(max_length=100, blank=True)
-    city = models.CharField(max_length=100, blank=True)
-    assigned_to = models.CharField(max_length=120, blank=True)
     call_status = models.CharField(max_length=40, default='Pending Call')
     priority = models.CharField(max_length=20, blank=True)
     remarks = models.TextField(blank=True)
@@ -91,13 +84,18 @@ class TelecallLead(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company_key'],
+                name='uniq_lead_company_key',
+            ),
+        ]
     def __str__(self):
         return f'{self.id} - {self.company}'
 
 
 class CallHistory(models.Model):
-    lead = models.ForeignKey(TelecallLead, on_delete=models.CASCADE, related_name='history')
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='history')
     date_time = models.CharField(max_length=50, blank=True)
     caller = models.CharField(max_length=120, blank=True)
     report = models.TextField(blank=True)

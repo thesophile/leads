@@ -253,7 +253,7 @@ export default function RawData() {
 
     async function fetchData() {
       try {
-        const data = await api.get('/transactions/raw-leads/')
+        const data = await api.get('/transactions/leads/?status=raw')
         if (!cancelled) setRawDataList(data)
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -298,7 +298,7 @@ export default function RawData() {
     setIsLoading(true)
     setError('')
     try {
-      const data = await api.get('/transactions/raw-leads/')
+      const data = await api.get('/transactions/leads/?status=raw')
       setRawDataList(data)
     } catch (err) {
       setError(err.message)
@@ -374,10 +374,10 @@ export default function RawData() {
     setIsSaving(true)
     try {
       if (editingId) {
-        await api.patch(`/transactions/raw-leads/${editingId}/`, formData)
+        await api.patch(`/transactions/leads/${editingId}/`, formData)
         showToast('Raw data updated.')
       } else {
-        await api.post('/transactions/raw-leads/', formData)
+        await api.post('/transactions/leads/', formData)
         showToast('Raw data added.')
       }
       setEditingId(null)
@@ -426,7 +426,7 @@ export default function RawData() {
     setIsImporting(true)
     try {
       await Promise.all(
-        importedSample.map((record) => api.post('/transactions/raw-leads/', record))
+        importedSample.map((record) => api.post('/transactions/leads/', record))
       )
       setImportSuccessMessage(`Successfully imported 2 leads from ${importedFileName}!`)
       await refreshData()
@@ -451,7 +451,7 @@ export default function RawData() {
     setDeleteModalId(null)
     setError('')
     try {
-      await api.del(`/transactions/raw-leads/${id}/`)
+      await api.del(`/transactions/leads/${id}/`)
       showToast('Raw data deleted.')
       await refreshData()
     } catch (err) {
@@ -466,7 +466,7 @@ export default function RawData() {
 
     setIsSaving(true)
     try {
-      const res = await api.post('/transactions/raw-leads/assign/', {
+      const res = await api.post('/transactions/leads/assign/', {
         assigned_to: assignStaff,
         category: assignCategory,
         from_date: assignFromDate,
@@ -487,10 +487,8 @@ export default function RawData() {
     }
   }
 
-  const totalUnassignedCount = useMemo(
-    () => rawDataList.filter((item) => !item.assignedTo).length,
-    [rawDataList]
-  )
+  // Raw Data only lists unassigned (status=raw) leads.
+  const totalUnassignedCount = rawDataList.length
 
   // Filtered Leads based on search, staff, source, and date range
   const filteredData = useMemo(() => {
