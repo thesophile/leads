@@ -7,18 +7,75 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Node
+node_modules/
+dist/
+dist-ssr/
 *.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Django
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+
+# Django migrations
+# Uncomment if you do NOT want to commit migrations
+# **/migrations/*.py
+# !**/migrations/__init__.py
+
+# Environment variables / secrets
+.env
+.env.*
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.pyre/
+
+# Packaging
+*.egg
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+*.whl
+
+# Jupyter
+.ipynb_checkpoints/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
+*.njsproj
 *.sln
 *.sw?
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
