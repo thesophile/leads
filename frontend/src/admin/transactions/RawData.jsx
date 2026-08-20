@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import Layout from '../../Layout/Layout'
+import { can } from '../../utils/permissions'
 
 const STAFF_LIST = [
   'All Employees',
@@ -211,8 +212,7 @@ export default function RawData() {
   const [isImporting, setIsImporting] = useState(false)
   const [duplicateRecord, setDuplicateRecord] = useState(null)
 
-  const canAssignLeads =
-    !!user && (user.is_superuser || user.role === 'admin' || user.role === 'manager')
+  const canAssignLeads = !!user && (can(user, 'leads.assign') || user.is_superuser)
 
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assignStaff, setAssignStaff] = useState('NIMISHA DAVIS')

@@ -8,24 +8,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import can
+
 from .models import RawLead
 from .serializers import RawLeadSerializer
-
-
-def is_admin(user):
-    return bool(
-        user
-        and user.is_authenticated
-        and (user.is_superuser or getattr(user, 'role', '') == 'admin')
-    )
-
-
-def is_manager_or_admin(user):
-    return bool(
-        user
-        and user.is_authenticated
-        and (user.is_superuser or getattr(user, 'role', '') in ('admin', 'manager'))
-    )
 
 
 def generate_raw_id():
@@ -40,7 +26,7 @@ def generate_raw_id():
 def scoped_queryset(user):
     if user.is_superuser:
         return RawLead.objects.all()
-    if is_manager_or_admin(user):
+    if user.has_permission('leads.view_all'):
         # Managers/admins see their company's records plus legacy unassigned rows.
         return RawLead.objects.filter(
             Q(tenant=user.company) | Q(tenant__isnull=True)
@@ -83,10 +69,20 @@ class RawLeadListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        if not can(request.user, 'leads.view'):
+            return Response(
+                {'detail': 'You do not have permission to view leads.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         leads = scoped_queryset(request.user)
         return Response(RawLeadSerializer(leads.order_by('-created_at'), many=True).data)
 
     def post(self, request):
+        if not can(request.user, 'leads.create'):
+            return Response(
+                {'detail': 'You do not have permission to add leads.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         company = request.data.get('company', '').strip()
         if not company:
             return Response(
@@ -136,6 +132,13 @@ class RawLeadDetailView(APIView):
         lead = self.get_object(pk)
         if lead is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        user = request.user
+        is_own = lead.added_by == user.name
+        if not (user.has_permission('leads.edit_own') and is_own) and not user.has_permission('leads.edit_all'):
+            return Response(
+                {'detail': 'You do not have permission to edit this lead.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if 'company' in request.data:
             company = request.data.get('company', '').strip()
             if not company:
@@ -171,5 +174,12 @@ class RawLeadDetailView(APIView):
         lead = self.get_object(pk)
         if lead is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        user = request.user
+        is_own = lead.added_by == user.name
+        if not (user.has_permission('leads.delete') and is_own) and not user.has_permission('leads.delete_all'):
+            return Response(
+                {'detail': 'You do not have permission to delete this lead.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         lead.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

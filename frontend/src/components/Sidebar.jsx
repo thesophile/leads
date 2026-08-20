@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/auth-context'
+import { can } from '../utils/permissions'
 
 // Grid icon matching the screenshot (3x3 rounded squares)
 function LeadsGridIcon() {
@@ -49,32 +50,32 @@ const MENU_BASE = [
     id: 'master-data',
     label: 'Master Data',
     items: [
-      { id: 'company', label: 'Company', path: '/company' },
-      { id: 'branches', label: 'Branches', path: '/branches' },
-      { id: 'categories', label: 'Categories', path: '/categories' },
-      { id: 'sources', label: 'Sources', path: '/sources' },
-      { id: 'staff', label: 'Staff', path: '/staff', adminOnly: true },
+      { id: 'company', label: 'Company', path: '/company', perm: 'company.view' },
+      { id: 'branches', label: 'Branches', path: '/branches', perm: 'branch.view' },
+      { id: 'categories', label: 'Categories', path: '/categories', perm: 'category.view' },
+      { id: 'sources', label: 'Sources', path: '/sources', perm: 'source.view' },
+      { id: 'staff', label: 'Staff', path: '/staff', perm: 'staff.manage' },
     ],
   },
   {
     id: 'transaction',
     label: 'Transaction',
     items: [
-      { id: 'raw-data', label: 'Raw Data', path: '/raw-leads' },
-      { id: 'tele-call', label: 'Tele Call', path: '/tele-calling' },
-      { id: 'quotations', label: 'Manage Quotation', path: '/quotations' },
-      { id: 'orders', label: 'Manage Order', path: '/orders' },
-      { id: 'client-details', label: 'Client Details', path: '/client-details' },
+      { id: 'raw-data', label: 'Raw Data', path: '/raw-leads', perm: 'leads.view' },
+      { id: 'tele-call', label: 'Tele Call', path: '/tele-calling', perm: 'telecall.view' },
+      { id: 'quotations', label: 'Manage Quotation', path: '/quotations', perm: 'quotation.view' },
+      { id: 'orders', label: 'Manage Order', path: '/orders', perm: 'order.view' },
+      { id: 'client-details', label: 'Client Details', path: '/client-details', perm: 'client.view' },
     ],
   },
   {
     id: 'reports',
     label: 'Reports',
     items: [
-      { id: 'raw-data-register', label: 'Raw Data Register', path: '/raw-data-register' },
-      { id: 'telecalling-register', label: 'Telecalling Register', path: '/telecalling-register' },
-      { id: 'quotation-submitted-register', label: 'Quotation Submitted Register', path: '/quotation-submitted-register' },
-      { id: 'order-received-register', label: 'Converted Clients Register', path: '/order-received-register' },
+      { id: 'raw-data-register', label: 'Raw Data Register', path: '/raw-data-register', perm: 'reports.view' },
+      { id: 'telecalling-register', label: 'Telecalling Register', path: '/telecalling-register', perm: 'reports.view' },
+      { id: 'quotation-submitted-register', label: 'Quotation Submitted Register', path: '/quotation-submitted-register', perm: 'reports.view' },
+      { id: 'order-received-register', label: 'Converted Clients Register', path: '/order-received-register', perm: 'reports.view' },
     ],
   },
   {
@@ -95,13 +96,12 @@ const MENU_BASE = [
 ]
 
 function filterMenu(user) {
-  const isAdmin = user && (user.role === 'admin' || user.is_superuser)
   const isSuperAdmin = user && user.is_superuser
   return MENU_BASE.map((section) => {
     if (section.isDirect || !section.items) return section
     const items = section.items.filter((item) => {
       if (item.superAdminOnly) return isSuperAdmin
-      if (item.adminOnly) return isAdmin
+      if (item.perm) return can(user, item.perm)
       return true
     })
     return items.length > 0 ? { ...section, items } : null
@@ -278,7 +278,7 @@ export default function Sidebar({
               </div>
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold text-slate-800">{user.name}</p>
-                <p className="truncate text-[10px] capitalize text-slate-400">{user.role}</p>
+                <p className="truncate text-[10px] capitalize text-slate-400">{user.role?.name || 'Super Admin'}</p>
               </div>
             </div>
           )}

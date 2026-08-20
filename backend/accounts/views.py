@@ -1,15 +1,19 @@
 import logging
+import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .permissions import IsAdmin, IsSuperuser
+from .permissions import IsSuperuser, can, require_permission
+from .models import Role
+from .rbac import FLAT_PERMISSIONS, PERMISSION_GROUPS
 from .serializers import (
     AdminManageSerializer,
     AdminRegisterSerializer,
@@ -20,6 +24,7 @@ from .serializers import (
     PasswordResetByAdminSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    RoleSerializer,
     StaffCreateSerializer,
     StaffUpdateSerializer,
     UserSerializer,
@@ -55,9 +60,11 @@ class RegisterView(APIView):
 
 
 class StaffListView(APIView):
-    """Admin-only: list and create staff accounts for the admin's own company."""
+    """Role-managers (admin/manager): list and create staff accounts for their
+    own company. Creating a staff member requires the 'staff.manage' permission
+    on the caller's company role."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = [require_permission('staff.manage')]
 
     def get(self, request):
         users = User.objects.filter(company=request.user.company).order_by('name')
@@ -71,9 +78,9 @@ class StaffListView(APIView):
 
 
 class StaffDetailView(APIView):
-    """Admin-only: update staff of the admin's own company."""
+    """Role-managers (admin/manager): update staff of their own company."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = [require_permission('staff.manage')]
 
     def get_object(self, pk):
         try:
@@ -85,16 +92,16 @@ class StaffDetailView(APIView):
         user = self.get_object(pk)
         if user is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = StaffUpdateSerializer(user, data=request.data, partial=True)
+        serializer = StaffUpdateSerializer(user, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(UserSerializer(user).data)
 
 
 class StaffResetPasswordView(APIView):
-    """Admin-only: set a new password for a staff account in their company."""
+    """Role-managers (admin/manager): set a new password for staff of their company."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = [require_permission('staff.manage')]
 
     def post(self, request, pk):
         try:
@@ -108,13 +115,138 @@ class StaffResetPasswordView(APIView):
         return Response({'detail': 'Password updated successfully.'})
 
 
+class PermissionCatalogView(APIView):
+    """Authenticated users: the catalog of every permission the role editor can assign."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(PERMISSION_GROUPS)
+
+
+class RoleListView(APIView):
+    """List company roles (any authenticated user) or create one (roles.manage)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        roles = Role.objects.all() if request.user.is_superuser else Role.objects.filter(company=request.user.company)
+        return Response(RoleSerializer(roles.order_by('name'), many=True).data)
+
+    def post(self, request):
+        if not can(request.user, 'roles.manage'):
+            return Response(
+                {'detail': 'You do not have permission to manage roles.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        company = request.user.company
+        if company is None:
+            return Response(
+                {'detail': 'A company is required to create roles.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = str(request.data.get('name', '')).strip()
+        if not name:
+            return Response({'detail': 'name: This field is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        raw_code = str(request.data.get('code', '')).strip().lower()
+        code = re.sub(r'[^a-z0-9_]+', '_', raw_code)[:50]
+        if not code:
+            return Response({'detail': 'code: This field is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if Role.objects.filter(company=company, code=code).exists():
+            return Response(
+                {'detail': 'A role with this code already exists in your company.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        permissions = request.data.get('permissions', [])
+        unknown = set(permissions) - set(FLAT_PERMISSIONS)
+        if unknown:
+            return Response(
+                {'detail': f'Unknown permissions: {sorted(unknown)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        role = Role.objects.create(
+            company=company,
+            code=code,
+            name=name,
+            permissions=sorted(set(permissions)),
+        )
+        return Response(RoleSerializer(role).data, status=status.HTTP_201_CREATED)
+
+
+class RoleDetailView(APIView):
+    """Edit (rename / re-permission) or delete a company role. roles.manage only."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        try:
+            return Role.objects.get(pk=pk, company=self.request.user.company)
+        except Role.DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        if not can(request.user, 'roles.manage'):
+            return Response(
+                {'detail': 'You do not have permission to manage roles.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        role = self.get_object(pk)
+        if role is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if role.is_system and 'permissions' in request.data:
+            # System admin role keeps the full permission set; only the label can change.
+            return Response(
+                {"detail": "The system admin role's permissions cannot be changed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = request.data.get('name')
+        if name is not None:
+            name = name.strip()
+            if not name:
+                return Response({'detail': 'name: This field may not be blank.'}, status=status.HTTP_400_BAD_REQUEST)
+            role.name = name
+        permissions = request.data.get('permissions')
+        if permissions is not None and not role.is_system:
+            unknown = set(permissions) - set(FLAT_PERMISSIONS)
+            if unknown:
+                return Response(
+                    {'detail': f'Unknown permissions: {sorted(unknown)}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            role.permissions = sorted(set(permissions))
+        role.save()
+        return Response(RoleSerializer(role).data)
+
+    def delete(self, request, pk):
+        if not can(request.user, 'roles.manage'):
+            return Response(
+                {'detail': 'You do not have permission to manage roles.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        role = self.get_object(pk)
+        if role is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if role.is_system:
+            return Response(
+                {'detail': 'The system admin role cannot be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if role.users.exists():
+            return Response(
+                {'detail': 'This role is assigned to users and cannot be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        role.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class SuperuserAdminListView(APIView):
     """Superuser-only: list and create admin accounts across all companies."""
 
     permission_classes = [IsSuperuser]
 
     def get(self, request):
-        admins = User.objects.filter(role=User.Role.ADMIN).order_by('name')
+        admins = User.objects.filter(Q(role__is_system=True) | Q(is_superuser=True)).order_by('name')
         return Response(UserSerializer(admins, many=True).data)
 
     def post(self, request):
@@ -131,7 +263,7 @@ class SuperuserAdminDetailView(APIView):
 
     def get_object(self, pk):
         try:
-            return User.objects.get(pk=pk, role=User.Role.ADMIN)
+            return User.objects.get(pk=pk)
         except User.DoesNotExist:
             return None
 
@@ -174,7 +306,7 @@ class SuperuserAdminResetPasswordView(APIView):
 
     def post(self, request, pk):
         try:
-            user = User.objects.get(pk=pk, role=User.Role.ADMIN)
+            user = User.objects.get(pk=pk)
         except User.DoesNotExist:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = PasswordResetByAdminSerializer(data=request.data)

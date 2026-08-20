@@ -41,23 +41,23 @@ function App() {
         {/* Protected app routes */}
         <Route path="/change-password" element={guard(<ChangePassword />)} />
         <Route path="/dashboard" element={guard(<Dashboard />)} />
-        <Route path="/categories" element={guard(<Categories />)} />
-        <Route path="/sources" element={guard(<Sources />)} />
-        <Route path="/company" element={guard(<Company />)} />
-        <Route path="/branches" element={guard(<Branch />)} />
-        <Route path="/staff" element={guard(<Staff />, { adminOnly: true })} />
-        <Route path="/raw-leads" element={guard(<RawData />)} />
-        <Route path="/tele-calling" element={guard(<Telecall />)} />
-        <Route path="/quotations" element={guard(<Managequotation />)} />
-        <Route path="/quotations/preview/:id" element={guard(<ProposalPreview />)} />
-        <Route path="/orders" element={guard(<ManageOrder />)} />
-        <Route path="/orders/preview/:id" element={guard(<OrderPreview />)} />
-        <Route path="/client-details" element={guard(<ClientDetails />)} />
-        <Route path="/raw-data-register" element={guard(<RawDataRegister />)} />
-        <Route path="/telecalling-register" element={guard(<TelecalligRegister />)} />
-        <Route path="/quotation-submitted-register" element={guard(<QuotationRegister />)} />
-        <Route path="/order-received-register" element={guard(<OrderReceived />)} />
-        <Route path="/order-received" element={guard(<OrderReceived />)} />
+        <Route path="/categories" element={guard(<Categories />, { perm: 'category.view' })} />
+        <Route path="/sources" element={guard(<Sources />, { perm: 'source.view' })} />
+        <Route path="/company" element={guard(<Company />, { perm: 'company.view' })} />
+        <Route path="/branches" element={guard(<Branch />, { perm: 'branch.view' })} />
+        <Route path="/staff" element={guard(<Staff />, { perm: 'staff.manage' })} />
+        <Route path="/raw-leads" element={guard(<RawData />, { perm: 'leads.view' })} />
+        <Route path="/tele-calling" element={guard(<Telecall />, { perm: 'telecall.view' })} />
+        <Route path="/quotations" element={guard(<Managequotation />, { perm: 'quotation.view' })} />
+        <Route path="/quotations/preview/:id" element={guard(<ProposalPreview />, { perm: 'quotation.view' })} />
+        <Route path="/orders" element={guard(<ManageOrder />, { perm: 'order.view' })} />
+        <Route path="/orders/preview/:id" element={guard(<OrderPreview />, { perm: 'order.view' })} />
+        <Route path="/client-details" element={guard(<ClientDetails />, { perm: 'client.view' })} />
+        <Route path="/raw-data-register" element={guard(<RawDataRegister />, { perm: 'reports.view' })} />
+        <Route path="/telecalling-register" element={guard(<TelecalligRegister />, { perm: 'reports.view' })} />
+        <Route path="/quotation-submitted-register" element={guard(<QuotationRegister />, { perm: 'reports.view' })} />
+        <Route path="/order-received-register" element={guard(<OrderReceived />, { perm: 'reports.view' })} />
+        <Route path="/order-received" element={guard(<OrderReceived />, { perm: 'reports.view' })} />
         <Route path="/settings" element={guard(<Settings />)} />
         <Route path="/notifications" element={guard(<Notifications />)} />
         <Route path="/admins" element={guard(<Admins />, { superAdminOnly: true })} />

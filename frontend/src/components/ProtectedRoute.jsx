@@ -1,7 +1,8 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/auth-context'
+import { can } from '../utils/permissions'
 
-export default function ProtectedRoute({ children, adminOnly = false, superAdminOnly = false }) {
+export default function ProtectedRoute({ children, adminOnly = false, superAdminOnly = false, perm }) {
   const { isAuthenticated, loading, user } = useAuth()
   const location = useLocation()
 
@@ -24,7 +25,11 @@ export default function ProtectedRoute({ children, adminOnly = false, superAdmin
     return <Navigate to="/dashboard" replace />
   }
 
-  if (adminOnly && user && user.role !== 'admin' && !user.is_superuser) {
+  if (perm && user && !can(user, perm)) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  if (adminOnly && user && !can(user, 'staff.manage') && !user.is_superuser) {
     return <Navigate to="/dashboard" replace />
   }
 

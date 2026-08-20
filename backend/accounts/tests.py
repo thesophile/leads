@@ -17,6 +17,10 @@ def make_company(name):
     return Company.objects.get_or_create(name=name)[0]
 
 
+def admin_role(company):
+    return company.roles.get(code='admin')
+
+
 class RegistrationTests(TestCase):
     def test_registered_admin_is_not_superuser(self):
         serializer = AdminRegisterSerializer(data={
@@ -29,7 +33,7 @@ class RegistrationTests(TestCase):
         })
         self.assertTrue(serializer.is_valid(), serializer.errors)
         user = serializer.save()
-        self.assertEqual(user.role, User.Role.ADMIN)
+        self.assertEqual(user.role.code, 'admin')
         self.assertTrue(user.is_staff)
         self.assertFalse(user.is_superuser)
         self.assertEqual(user.company.name, 'Acme Corp')
@@ -53,7 +57,7 @@ class StaffListScopingTests(APITestCase):
         acme, globex = make_company('Acme'), make_company('Globex')
         self.admin_a = User.objects.create_user(
             email='admin_a@acme.com', password='x', name='Admin A',
-            role=User.Role.ADMIN, company=acme,
+            role=admin_role(acme), company=acme,
         )
         User.objects.create_user(email='staff_a@acme.com', password='x', name='Staff A', company=acme)
         User.objects.create_user(email='staff_b@globex.com', password='x', name='Staff B', company=globex)
@@ -71,11 +75,11 @@ class AdminQuerysetScopingTests(TestCase):
         acme, globex = make_company('Acme'), make_company('Globex')
         self.admin_a = User.objects.create_user(
             email='admin_a@acme.com', password='x', name='Admin A',
-            role=User.Role.ADMIN, is_staff=True, company=acme,
+            role=admin_role(acme), is_staff=True, company=acme,
         )
         User.objects.create_user(
             email='admin_b@globex.com', password='x', name='Admin B',
-            role=User.Role.ADMIN, is_staff=True, company=globex,
+            role=admin_role(globex), is_staff=True, company=globex,
         )
         User.objects.create_user(email='staff_a@acme.com', password='x', name='Staff A', company=acme)
 
@@ -110,11 +114,11 @@ class SuperuserAdminManagementTests(APITestCase):
         )
         self.admin_a = User.objects.create_user(
             email='admin_a@acme.com', password='x', name='Admin A',
-            role=User.Role.ADMIN, company=acme,
+            role=admin_role(acme), company=acme,
         )
         self.admin_b = User.objects.create_user(
             email='admin_b@globex.com', password='x', name='Admin B',
-            role=User.Role.ADMIN, company=globex,
+            role=admin_role(globex), company=globex,
         )
         User.objects.create_user(email='staff_a@acme.com', password='x', name='Staff A', company=acme)
 
@@ -145,7 +149,7 @@ class SuperuserAdminManagementTests(APITestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(Company.objects.filter(name='Globex').count(), 1)
         user = User.objects.get(email='new_admin@globex.com')
-        self.assertEqual(user.role, User.Role.ADMIN)
+        self.assertEqual(user.role.code, 'admin')
         self.assertTrue(user.is_staff)
         self.assertFalse(user.is_superuser)
 

@@ -6,15 +6,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import can
+
 from .models import Branch
-
-
-def is_admin(user):
-    return bool(
-        user
-        and user.is_authenticated
-        and (user.is_superuser or getattr(user, 'role', '') == 'admin')
-    )
 
 
 class BranchSerializer(serializers.ModelSerializer):
@@ -49,7 +43,7 @@ class BranchListView(APIView):
         return Response(BranchSerializer(branches.order_by('name'), many=True).data)
 
     def post(self, request):
-        if not is_admin(request.user):
+        if not can(request.user, 'branch.manage'):
             return Response(
                 {'detail': 'You do not have permission to create branches.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -89,7 +83,7 @@ class BranchDetailView(APIView):
             return None
 
     def patch(self, request, pk):
-        if not is_admin(request.user):
+        if not can(request.user, 'branch.manage'):
             return Response(
                 {'detail': 'You do not have permission to edit branches.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -113,7 +107,7 @@ class BranchDetailView(APIView):
         return Response(BranchSerializer(branch).data)
 
     def delete(self, request, pk):
-        if not is_admin(request.user):
+        if not can(request.user, 'branch.manage'):
             return Response(
                 {'detail': 'You do not have permission to delete branches.'},
                 status=status.HTTP_403_FORBIDDEN,

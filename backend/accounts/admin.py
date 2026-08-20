@@ -4,13 +4,15 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from common.admin import CompanyScopedAdminMixin
 
+from .models import Role
+
 User = get_user_model()
 
 
 @admin.register(User)
 class UserAdmin(CompanyScopedAdminMixin, DjangoUserAdmin):
     ordering = ['email']
-    list_display = ['email', 'name', 'company', 'role', 'is_active', 'is_staff']
+    list_display = ['email', 'name', 'company', 'role_name', 'is_active', 'is_staff']
     list_filter = ['role', 'is_active', 'is_staff', 'company']
     search_fields = ['email', 'name', 'phone', 'company']
     fieldsets = (
@@ -25,6 +27,15 @@ class UserAdmin(CompanyScopedAdminMixin, DjangoUserAdmin):
             'fields': ('email', 'name', 'phone', 'company', 'role', 'password1', 'password2'),
         }),
     )
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'role' and not request.user.is_superuser and request.user.company_id:
+            kwargs['queryset'] = Role.objects.filter(company=request.user.company)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    @admin.display(description='Role')
+    def role_name(self, obj):
+        return obj.role.name if obj.role_id else '—'
 
     def get_fieldsets(self, request, obj=None):
         if getattr(request.user, 'is_superuser', False):

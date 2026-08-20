@@ -3,14 +3,7 @@ import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import PasswordInput from '../../components/PasswordInput'
-
-const ROLES = [
-  { value: 'staff', label: 'Staff' },
-  { value: 'telecaller', label: 'Telecaller' },
-  { value: 'bd', label: 'Business Development' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'accounts', label: 'Accounts' },
-]
+import { can } from '../../utils/permissions'
 
 function PlusCircleIcon() {
   return (
@@ -186,8 +179,11 @@ function FloatingField({ label, id, value, onChange, type = 'text', icon }) {
 
 export default function Staff() {
   const { user } = useAuth()
+  const [tab, setTab] = useState('staff')
   const [staffList, setStaffList] = useState([])
   const [branches, setBranches] = useState([])
+  const [roles, setRoles] = useState([])
+  const [permissionCatalog, setPermissionCatalog] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -196,7 +192,7 @@ export default function Staff() {
     email: '',
     phone: '',
     branch: '',
-    role: 'staff',
+    role: null,
     password: '',
   })
   const [editingId, setEditingId] = useState(null)
@@ -206,18 +202,29 @@ export default function Staff() {
   const [resetPw, setResetPw] = useState('')
   const [toast, setToast] = useState('')
 
+  // Roles & Permissions editor state
+  const [editingRole, setEditingRole] = useState(null) // role object being edited
+  const [roleFormName, setRoleFormName] = useState('')
+  const [roleFormCode, setRoleFormCode] = useState('')
+  const [roleFormPermissions, setRoleFormPermissions] = useState([])
+  const [isNewRole, setIsNewRole] = useState(false)
+
   useEffect(() => {
     let cancelled = false
 
     async function fetchData() {
       try {
-        const [users, branchRes] = await Promise.all([
+        const [users, branchRes, roleRes, permRes] = await Promise.all([
           api.get('/auth/users/'),
           api.get('/master/branches/').catch(() => []),
+          api.get('/auth/roles/').catch(() => []),
+          api.get('/auth/permissions/').catch(() => []),
         ])
         if (!cancelled) {
           setStaffList(users)
           setBranches(branchRes)
+          setRoles(roleRes)
+          setPermissionCatalog(permRes.length ? permRes : [])
         }
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -273,8 +280,8 @@ export default function Staff() {
           name: formData.name,
           phone: formData.phone,
           branch: formData.branch,
-          role: formData.role,
         }
+        if (formData.role) payload.role = formData.role
         await api.patch(`/auth/users/${editingId}/`, payload)
         showToast('Employee updated.')
       } else {
@@ -290,7 +297,7 @@ export default function Staff() {
         setShowCredentials({ email: created.email, password: formData.password })
         showToast('Employee added.')
       }
-      setFormData({ name: '', email: '', phone: '', branch: '', role: 'staff', password: '' })
+      setFormData({ name: '', email: '', phone: '', branch: '', role: null, password: '' })
       setEditingId(null)
       await refreshData()
     } catch (err) {
@@ -306,7 +313,7 @@ export default function Staff() {
       email: emp.email || '',
       phone: emp.phone || '',
       branch: emp.branch_name || '',
-      role: emp.role || 'staff',
+      role: emp.role?.id ?? null,
       password: '',
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -314,7 +321,7 @@ export default function Staff() {
 
   function handleCancelEdit() {
     setEditingId(null)
-    setFormData({ name: '', email: '', phone: '', branch: '', role: 'staff', password: '' })
+    setFormData({ name: '', email: '', phone: '', branch: '', role: null, password: '' })
   }
 
   async function handleToggleActive(emp) {
@@ -352,7 +359,7 @@ export default function Staff() {
         s.name.toLowerCase().includes(q) ||
         (s.email || '').toLowerCase().includes(q) ||
         (s.staff_code || '').toLowerCase().includes(q) ||
-        (s.role || '').toLowerCase().includes(q)
+        (s.role_name || '').toLowerCase().includes(q)
     )
   }, [staffList, searchQuery])
 
@@ -384,12 +391,58 @@ export default function Staff() {
           </p>
         </div>
 
+        {can(user, 'roles.manage') && (
+          <div className="flex items-center gap-1 border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setTab('staff')}
+              className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+                tab === 'staff'
+                  ? 'border-brand-600 text-brand-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Staff
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('roles')}
+              className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+                tab === 'roles'
+                  ? 'border-brand-600 text-brand-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Roles & Permissions
+            </button>
+          </div>
+        )}
+
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             {error}
           </div>
         )}
 
+        {tab === 'roles' ? (
+          <RolesEditor
+            roles={roles}
+            permissionCatalog={permissionCatalog}
+            editingRole={editingRole}
+            setEditingRole={setEditingRole}
+            roleFormName={roleFormName}
+            setRoleFormName={setRoleFormName}
+            roleFormCode={roleFormCode}
+            setRoleFormCode={setRoleFormCode}
+            roleFormPermissions={roleFormPermissions}
+            setRoleFormPermissions={setRoleFormPermissions}
+            isNewRole={isNewRole}
+            setIsNewRole={setIsNewRole}
+            setRoles={setRoles}
+            showToast={showToast}
+            setError={setError}
+          />
+        ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr] items-start">
           {/* Form Card */}
           <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4.5 shadow-xs transition-all">
@@ -443,13 +496,14 @@ export default function Staff() {
                 </span>
                 <select
                   id="emp_role"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  value={formData.role ?? ''}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value ? Number(e.target.value) : null })}
                   className={`${inputClass} cursor-pointer pl-9`}
                 >
-                  {ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
+                  <option value="" disabled hidden>Select Role</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id} className="text-slate-800">
+                      {r.name}
                     </option>
                   ))}
                 </select>
@@ -549,7 +603,7 @@ export default function Staff() {
                         </td>
                         <td className="py-1.5 pr-2 text-slate-600 text-xs">{emp.email}</td>
                         <td className="py-1.5 pr-2">
-                          <span className="capitalize text-slate-600">{emp.role}</span>
+                          <span className="capitalize text-slate-600">{emp.role_name || '—'}</span>
                         </td>
                         <td className="py-1.5 pr-2">
                           {emp.is_active ? (
@@ -614,6 +668,7 @@ export default function Staff() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {/* New employee credentials modal */}
@@ -687,5 +742,259 @@ export default function Staff() {
         </div>
       )}
     </Layout>
+  )
+}
+
+function RolesEditor({
+  roles,
+  permissionCatalog,
+  editingRole,
+  setEditingRole,
+  roleFormName,
+  setRoleFormName,
+  roleFormCode,
+  setRoleFormCode,
+  roleFormPermissions,
+  setRoleFormPermissions,
+  isNewRole,
+  setIsNewRole,
+  setRoles,
+  showToast,
+  setError,
+}) {
+  const [saveError, setSaveError] = useState('')
+
+  function startNewRole() {
+    setIsNewRole(true)
+    setEditingRole(null)
+    setRoleFormName('')
+    setRoleFormCode('')
+    setRoleFormPermissions([])
+    setSaveError('')
+  }
+
+  function startEditRole(role) {
+    setIsNewRole(false)
+    setEditingRole(role)
+    setRoleFormName(role.name)
+    setRoleFormCode(role.code)
+    setRoleFormPermissions(Array.isArray(role.permissions) ? role.permissions : [])
+    setSaveError('')
+  }
+
+  function togglePermission(key) {
+    setRoleFormPermissions((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    )
+  }
+
+  async function saveRole() {
+    setSaveError('')
+    if (!roleFormName.trim()) {
+      setSaveError('Role name is required.')
+      return
+    }
+    try {
+      if (isNewRole) {
+        await api.post('/auth/roles/', {
+          name: roleFormName.trim(),
+          code: roleFormCode.trim(),
+          permissions: roleFormPermissions,
+        })
+        showToast('Role created.')
+      } else if (editingRole) {
+        await api.patch(`/auth/roles/${editingRole.id}/`, {
+          name: roleFormName.trim(),
+          permissions: roleFormPermissions,
+        })
+        showToast('Role updated.')
+      }
+      const roleRes = await api.get('/auth/roles/').catch(() => [])
+      setRoles(roleRes)
+      setIsNewRole(false)
+      setEditingRole(null)
+      setRoleFormName('')
+      setRoleFormCode('')
+      setRoleFormPermissions([])
+    } catch (err) {
+      setError(err.message)
+      setSaveError(err.message)
+    }
+  }
+
+  async function deleteRole(role) {
+    if (!window.confirm(`Delete the "${role.name}" role?`)) return
+    try {
+      await api.del(`/auth/roles/${role.id}/`)
+      showToast(`Role "${role.name}" deleted.`)
+      const roleRes = await api.get('/auth/roles/').catch(() => [])
+      setRoles(roleRes)
+      if (editingRole?.id === role.id) {
+        setIsNewRole(false)
+        setEditingRole(null)
+      }
+    } catch (err) {
+      setError(err.message)
+      setSaveError(err.message)
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr] items-start">
+      {/* Role list / create panel */}
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-3">Roles</h2>
+        <ul className="space-y-2">
+          {roles.filter((role) => role.code !== 'admin').map((role) => (
+            <li key={role.id}>
+              <button
+                type="button"
+                onClick={() => startEditRole(role)}
+                className={`w-full flex items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-colors cursor-pointer ${
+                  editingRole?.id === role.id
+                    ? 'border-brand-500 bg-brand-50'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+              >
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">{role.name}</div>
+                  <div className="text-[10px] text-slate-400">
+                    {role.is_system ? 'System role' : `${role.users_count} user${role.users_count === 1 ? '' : 's'}`}
+                  </div>
+                </div>
+                {role.is_system && (
+                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-600">
+                    Fixed
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          onClick={startNewRole}
+          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 cursor-pointer"
+        >
+          <PlusCircleIcon /> New Role
+        </button>
+      </div>
+
+      {/* Editor */}
+      <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        {isNewRole || editingRole ? (
+          <>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h2 className="text-base font-bold text-slate-900">
+                {isNewRole ? 'New Role' : `Edit "${editingRole.name}"`}
+              </h2>
+              {editingRole && !editingRole.is_system && (
+                <button
+                  type="button"
+                  onClick={() => deleteRole(editingRole)}
+                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 cursor-pointer"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4 max-w-sm space-y-3">
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Role name</label>
+                <input
+                  type="text"
+                  value={roleFormName}
+                  onChange={(e) => setRoleFormName(e.target.value)}
+                  disabled={editingRole?.is_system}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  placeholder="e.g. Sales Manager"
+                />
+              </div>
+              {isNewRole && (
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Code</label>
+                  <input
+                    type="text"
+                    value={roleFormCode}
+                    onChange={(e) => setRoleFormCode(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    placeholder="e.g. sales_manager"
+                  />
+                </div>
+              )}
+
+              {saveError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+                  {saveError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={saveRole}
+                  className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white shadow-md transition-all cursor-pointer ${
+                    editingRole?.is_system ? 'bg-brand-600 hover:bg-brand-700' : 'bg-brand-600 hover:bg-brand-700'
+                  }`}
+                >
+                  <SaveIcon /> {isNewRole ? 'Create Role' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNewRole(false)
+                    setEditingRole(null)
+                    setSaveError('')
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <h3 className="mb-3 text-sm font-bold text-slate-800">Permissions</h3>
+              {editingRole?.is_system ? (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                  The system admin role always has every permission. Only its name can be changed.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {permissionCatalog.map((group) => (
+                    <div key={group.key} className="rounded-xl border border-slate-200 p-4">
+                      <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                        {group.label}
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {group.permissions.map(([key, label]) => (
+                          <label
+                            key={key}
+                            className="flex items-center gap-2.5 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700 cursor-pointer hover:bg-slate-100"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={roleFormPermissions.includes(key)}
+                              onChange={() => togglePermission(key)}
+                              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="py-16 text-center text-sm text-slate-400">
+            Select a role on the left to edit its permissions, or create a new role.
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

@@ -3,7 +3,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework import serializers
 
-from .models import Company
+from .models import Company, Role
+from .rbac import FLAT_PERMISSIONS
 
 User = get_user_model()
 
@@ -14,19 +15,57 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'email', 'phone', 'address', 'website']
 
 
+class RoleSerializer(serializers.ModelSerializer):
+    users_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Role
+        fields = ['id', 'code', 'name', 'permissions', 'is_system', 'users_count']
+        read_only_fields = ['id', 'code', 'is_system', 'users_count']
+
+    def validate_name(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('Role name is required.')
+        return value
+
+    def validate_permissions(self, value):
+        unknown = set(value) - FLAT_PERMISSIONS
+        if unknown:
+            raise serializers.ValidationError(f'Unknown permissions: {sorted(unknown)}')
+        return sorted(set(value))
+
+    def get_users_count(self, obj):
+        return obj.users.count()
+
+
 class UserSerializer(serializers.ModelSerializer):
     initials = serializers.CharField(read_only=True)
     staff_code = serializers.SerializerMethodField()
     branch_name = serializers.SerializerMethodField()
     company = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    role_name = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'phone', 'company', 'role', 'initials', 'staff_code', 'branch_name', 'is_active', 'is_superuser', 'date_joined']
+        fields = ['id', 'email', 'name', 'phone', 'company', 'role', 'role_name', 'permissions', 'initials', 'staff_code', 'branch_name', 'is_active', 'is_superuser', 'date_joined']
         read_only_fields = ['id', 'is_active', 'is_superuser', 'date_joined']
 
     def get_company(self, obj):
         return obj.company.name if obj.company else ''
+
+    def get_role(self, obj):
+        if obj.role_id is None:
+            return None
+        return {'id': obj.role_id, 'name': obj.role.name, 'code': obj.role.code}
+
+    def get_role_name(self, obj):
+        return obj.role.name if obj.role_id else ''
+
+    def get_permissions(self, obj):
+        return obj.permissions
 
     def get_staff_code(self, obj):
         profile = getattr(obj, 'staff_profile', None)
@@ -62,8 +101,11 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
 
         company_name = validated_data.pop('company').strip()
         company, _ = Company.objects.get_or_create(name=company_name)
+        from .rbac import seed_default_roles
+
+        seed_default_roles(company)  # idempotent: ensures roles exist for the company
         validated_data.pop('password2')
-        validated_data['role'] = User.Role.ADMIN
+        validated_data['role'] = company.roles.filter(code='admin').first()
         validated_data['is_staff'] = True
         # Intentionally NOT a superuser: this endpoint is publicly reachable,
         # so the registering company admin must not get cross-tenant access.
@@ -97,8 +139,11 @@ class AdminManageSerializer(serializers.ModelSerializer):
 
         company_name = validated_data.pop('company').strip()
         company, _ = Company.objects.get_or_create(name=company_name)
+        from .rbac import seed_default_roles
+
+        seed_default_roles(company)  # idempotent: ensures roles exist for the company
         validated_data.pop('password2')
-        validated_data['role'] = User.Role.ADMIN
+        validated_data['role'] = company.roles.filter(code='admin').first()
         validated_data['is_staff'] = True
         # Still never a superuser: platform-level access stays with the
         # superadmin who is creating this account.
@@ -117,14 +162,27 @@ class StaffCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
     branch = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.none(), required=False, allow_null=True)
 
     class Meta:
         model = User
         fields = ['name', 'email', 'phone', 'mobile', 'branch', 'role', 'password']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        company = getattr(request.user, 'company', None) if request else None
+        if company is not None:
+            self.fields['role'].queryset = company.roles.all()
+
     def validate(self, attrs):
-        if attrs.get('role') == User.Role.ADMIN:
-            raise serializers.ValidationError({'role': 'Admins cannot be created here.'})
+        role = attrs.get('role')
+        if role is not None:
+            owner = self.context['request'].user
+            if role.company != owner.company:
+                raise serializers.ValidationError({'role': 'This role does not belong to your company.'})
+            if role.is_system:
+                raise serializers.ValidationError({'role': 'The system admin role cannot be assigned here.'})
         return attrs
 
     def create(self, validated_data):
@@ -153,7 +211,7 @@ class StaffCreateSerializer(serializers.ModelSerializer):
         StaffModel.objects.create(
             code=code,
             name=user.name,
-            role=user.get_role_display(),
+            role=user.role.name if user.role_id else '',
             mobile=mobile,
             email=user.email,
             branch=branch,
@@ -172,15 +230,24 @@ class StaffCreateSerializer(serializers.ModelSerializer):
 class StaffUpdateSerializer(serializers.ModelSerializer):
     mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
     branch = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.none(), required=False, allow_null=True)
     is_active = serializers.BooleanField(required=False)
 
     class Meta:
         model = User
         fields = ['name', 'phone', 'mobile', 'branch', 'role', 'is_active']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        company = getattr(request.user, 'company', None) if request else None
+        if company is not None:
+            self.fields['role'].queryset = company.roles.all()
+
     def validate(self, attrs):
-        if attrs.get('role') == User.Role.ADMIN:
-            raise serializers.ValidationError({'role': 'Admins cannot be reassigned here.'})
+        role = attrs.get('role')
+        if role is not None and role.is_system:
+            raise serializers.ValidationError({'role': 'The system admin role cannot be assigned here.'})
         return attrs
 
     def update(self, instance, validated_data):
@@ -191,7 +258,11 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         if mobile is not None:
             validated_data['phone'] = mobile
         if role is not None:
-            validated_data['role'] = role
+            # If the user being edited is the admin, keep their admin role.
+            if instance.role_id and instance.role.is_system:
+                pass
+            else:
+                validated_data['role'] = role
 
         instance = super().update(instance, validated_data)
 
@@ -206,7 +277,7 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
                         name=branch_name, company=instance.company
                     ).first()
                 profile.branch = branch
-            profile.role = instance.get_role_display()
+            profile.role = instance.role.name if instance.role_id else ''
             profile.name = instance.name
             profile.email = instance.email
             profile.save()
