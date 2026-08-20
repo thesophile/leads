@@ -1,113 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
 import Layout from '../../Layout/Layout'
-
-// Pure intake raw data records with ISO date stamps and source
-const STATIC_RAW_DATA = [
-  {
-    id: 'RAW-005627',
-    company: 'NEW LIFE MATERNITY HOSPITAL',
-    contact: 'Dr. Sarah Ahmed',
-    phone: '8714546783',
-    email: 'info@newlifehospital.com',
-    category: 'Hospital',
-    source: 'Google Search',
-    city: 'Calicut',
-    date: '2026-08-12',
-    displayDate: '12 Aug 2026',
-    addedBy: 'Priya Sharma',
-  },
-  {
-    id: 'RAW-005628',
-    company: 'SHADES.IN LUXURY EYEWEAR',
-    contact: 'Rahul Menon',
-    phone: '9845123991',
-    email: 'contact@shades.in',
-    category: 'Cosmetics Store',
-    source: 'Instagram Campaign',
-    city: 'Kochi',
-    date: '2026-08-12',
-    displayDate: '12 Aug 2026',
-    addedBy: 'Alex Joseph',
-  },
-  {
-    id: 'RAW-005629',
-    company: 'MANZOOR SUPER SPECIALITY HOSPITAL',
-    contact: 'Dr. Manzoor Ali',
-    phone: '9447118234',
-    email: 'admin@manzoorhospital.org',
-    category: 'Hospital',
-    source: 'Customer Referral',
-    city: 'Trivandrum',
-    date: '2026-08-11',
-    displayDate: '11 Aug 2026',
-    addedBy: 'Priya Sharma',
-  },
-  {
-    id: 'RAW-005630',
-    company: 'URBAN LIVING INTERIORS',
-    contact: 'Deepak Varma',
-    phone: '9744882190',
-    email: 'projects@urbanliving.in',
-    category: 'Interior Designers',
-    source: 'Official Website',
-    city: 'Calicut',
-    date: '2026-08-11',
-    displayDate: '11 Aug 2026',
-    addedBy: 'Shanu VR',
-  },
-  {
-    id: 'RAW-005631',
-    company: 'ROYAL PALACE CONVENTION CENTRE',
-    contact: 'Kabeer Khan',
-    phone: '9567112004',
-    email: 'events@royalpalace.com',
-    category: 'Convention Center',
-    source: 'Facebook Ads',
-    city: 'Thrissur',
-    date: '2026-08-10',
-    displayDate: '10 Aug 2026',
-    addedBy: 'Ananya Nair',
-  },
-  {
-    id: 'RAW-005632',
-    company: 'GLOW & SHINE BEAUTY SALON',
-    contact: 'Farzana K',
-    phone: '9123456780',
-    email: 'glowandshine@gmail.com',
-    category: 'Salon & Spa',
-    source: 'Instagram Campaign',
-    city: 'Kochi',
-    date: '2026-08-08',
-    displayDate: '08 Aug 2026',
-    addedBy: 'Priya Sharma',
-  },
-  {
-    id: 'RAW-005633',
-    company: 'APEX AUTO SPA & DETAILING',
-    contact: 'Vipin Das',
-    phone: '9895001122',
-    email: 'apexautospa@yahoo.com',
-    category: 'Auto Wash',
-    source: 'Manual Entry',
-    city: 'Kannur',
-    date: '2026-08-05',
-    displayDate: '05 Aug 2026',
-    addedBy: 'Alex Joseph',
-  },
-  {
-    id: 'RAW-005634',
-    company: 'ZENITH DENTAL SPECIALITY CLINIC',
-    contact: 'Dr. Faizal Rahman',
-    phone: '9745110099',
-    email: 'contact@zenithdental.com',
-    category: 'Hospital',
-    source: 'Google Search',
-    city: 'Calicut',
-    date: '2026-08-01',
-    displayDate: '01 Aug 2026',
-    addedBy: 'Shanu VR',
-  },
-]
 
 const STAFF_LIST = [
   'All Employees',
@@ -264,7 +158,11 @@ function TagIcon({ className = 'w-3.5 h-3.5' }) {
 }
 
 export default function RawData() {
-  const [rawDataList, setRawDataList] = useState(STATIC_RAW_DATA)
+  const { user } = useAuth()
+  const [rawDataList, setRawDataList] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [toast, setToast] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Employees')
   const [selectedSource, setSelectedSource] = useState('All Sources')
   const [dateFilterType, setDateFilterType] = useState('All Time')
@@ -278,6 +176,44 @@ export default function RawData() {
   const [editingId, setEditingId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteModalId, setDeleteModalId] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchData() {
+      try {
+        const data = await api.get('/transactions/raw-leads/')
+        if (!cancelled) setRawDataList(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  async function refreshData() {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await api.get('/transactions/raw-leads/')
+      setRawDataList(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Drawer Form State - pure contact intake
   const [formData, setFormData] = useState({
@@ -328,36 +264,35 @@ export default function RawData() {
     openDrawer()
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault()
+    setError('')
     if (!formData.company.trim()) return
 
-    if (editingId) {
-      setRawDataList((prev) =>
-        prev.map((l) => (l.id === editingId ? { ...l, ...formData } : l))
-      )
-    } else {
-      const todayISO = new Date().toISOString().split('T')[0]
-      const newRawRecord = {
-        id: `RAW-0056${rawDataList.length + 30}`,
-        date: todayISO,
-        displayDate: 'Today',
-        addedBy: 'Super Admin',
-        ...formData,
+    try {
+      if (editingId) {
+        await api.patch(`/transactions/raw-leads/${editingId}/`, formData)
+        showToast('Raw data updated.')
+      } else {
+        await api.post('/transactions/raw-leads/', formData)
+        showToast('Raw data added.')
       }
-      setRawDataList((prev) => [newRawRecord, ...prev])
+      setEditingId(null)
+      closeDrawer()
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
     }
-    closeDrawer()
   }
 
-  function handleBulkImport(e) {
+  async function handleBulkImport(e) {
     e.preventDefault()
+    setError('')
     if (!importedFileName) return
 
-    // Simulated bulk import adding realistic raw leads
+    // Bulk import adds realistic raw leads through the API
     const importedSample = [
       {
-        id: `RAW-0056${Date.now().toString().slice(-4)}1`,
         company: 'ROYAL DENTAL HEALTHCARE',
         contact: 'Dr. John Mathew',
         phone: '9847002233',
@@ -365,12 +300,8 @@ export default function RawData() {
         category: 'Hospital',
         source: 'Google Search',
         city: 'Kochi',
-        date: '2026-08-12',
-        displayDate: 'Today',
-        addedBy: 'Super Admin (Excel Import)',
       },
       {
-        id: `RAW-0056${Date.now().toString().slice(-4)}2`,
         company: 'AURORA BOUTIQUE & APPARELS',
         contact: 'Sunitha Nair',
         phone: '9744119988',
@@ -378,24 +309,36 @@ export default function RawData() {
         category: 'Fancy Shops',
         source: 'Instagram Campaign',
         city: 'Calicut',
-        date: '2026-08-12',
-        displayDate: 'Today',
-        addedBy: 'Super Admin (Excel Import)',
       },
     ]
 
-    setRawDataList((prev) => [...importedSample, ...prev])
-    setImportSuccessMessage(`Successfully imported 2 leads from ${importedFileName}!`)
-    setTimeout(() => {
-      setImportModalOpen(false)
-      setImportedFileName('')
-      setImportSuccessMessage('')
-    }, 1200)
+    try {
+      await Promise.all(
+        importedSample.map((record) => api.post('/transactions/raw-leads/', record))
+      )
+      setImportSuccessMessage(`Successfully imported 2 leads from ${importedFileName}!`)
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setTimeout(() => {
+        setImportModalOpen(false)
+        setImportedFileName('')
+        setImportSuccessMessage('')
+      }, 1200)
+    }
   }
 
-  function confirmDelete(id) {
-    setRawDataList((prev) => prev.filter((l) => l.id !== id))
+  async function confirmDelete(id) {
     setDeleteModalId(null)
+    setError('')
+    try {
+      await api.del(`/transactions/raw-leads/${id}/`)
+      showToast('Raw data deleted.')
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   // Filtered Leads based on search, staff, source, and date range
@@ -456,6 +399,21 @@ export default function RawData() {
   return (
     <Layout>
       <div className="space-y-4">
+        {toast && (
+          <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+            </span>
+            <span className="text-xs font-semibold text-slate-800">{toast}</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            {error}
+          </div>
+        )}
+
         {/* Top Header Card */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div>
@@ -646,7 +604,13 @@ export default function RawData() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
-                {filteredData.length > 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                      Loading raw data...
+                    </td>
+                  </tr>
+                ) : filteredData.length > 0 ? (
                   filteredData.map((item) => (
                     <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
                       {/* Company Name */}
@@ -853,7 +817,7 @@ export default function RawData() {
                   <p className="text-xs text-slate-500 mt-0.5">
                     {editingId
                       ? `Updating details for ${editingId}`
-                      : 'Capture contact and company information'}
+                      : `Capture contact and company information · added by ${user?.name || 'you'}`}
                   </p>
                 </div>
                 <button
