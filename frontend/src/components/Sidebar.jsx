@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/auth-context'
 import { can } from '../utils/permissions'
@@ -108,6 +108,11 @@ function filterMenu(user) {
   }).filter(Boolean)
 }
 
+// The sidebar is rendered fresh by every page (each page wraps itself in <Layout>),
+// so it remounts on navigation. Persist its open sections here so they survive remounts.
+let persistedOpenSections = null
+let persistedNavScrollTop = 0
+
 export default function Sidebar({
   mobileOpen = false,
   onCloseMobile,
@@ -116,14 +121,27 @@ export default function Sidebar({
   const location = useLocation()
   const { user, logout } = useAuth()
   const menuSections = useMemo(() => filterMenu(user), [user])
+  const navRef = useRef(null)
 
-  // Track opened/clicked sections (auto-open the section containing the current page)
+  useLayoutEffect(() => {
+    if (navRef.current) navRef.current.scrollTop = persistedNavScrollTop
+  }, [])
+
+  // Track opened sections, keeping any persisted from before this remount and
+  // auto-opening the section containing the current page
   const [openSections, setOpenSections] = useState(() => {
     const activeSection = MENU_BASE.find((sec) =>
       sec.items?.some((item) => item.path === window.location.pathname)
     )
-    return activeSection ? [activeSection.id] : ['transaction']
+    if (activeSection && persistedOpenSections && !persistedOpenSections.includes(activeSection.id)) {
+      return [...persistedOpenSections, activeSection.id]
+    }
+    return persistedOpenSections || (activeSection ? [activeSection.id] : ['transaction'])
   })
+
+  useEffect(() => {
+    persistedOpenSections = openSections
+  }, [openSections])
 
   function toggleSection(id, isCurrentlyOpen) {
     if (isCurrentlyOpen) {
@@ -177,7 +195,11 @@ export default function Sidebar({
         </div>
 
         {/* Navigation List */}
-        <nav className="flex-1 overflow-y-auto px-2 py-3.5">
+        <nav
+          ref={navRef}
+          onScroll={(e) => { persistedNavScrollTop = e.currentTarget.scrollTop }}
+          className="flex-1 overflow-y-auto px-2 py-3.5"
+        >
           <ul className="space-y-1.5 font-medium">
             {menuSections.map((section) => {
               if (section.isDirect) {
@@ -206,7 +228,7 @@ export default function Sidebar({
                 (item) => location.pathname === item.path
               )
 
-              const isOpen = openSections.includes(section.id) || hasActiveChild
+              const isOpen = openSections.includes(section.id)
 
               return (
                 <li key={section.id}>
