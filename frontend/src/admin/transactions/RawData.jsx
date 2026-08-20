@@ -459,9 +459,14 @@ export default function RawData() {
         {/* Top Header Card */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              Raw Data
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">
+                Raw Data
+              </h1>
+              <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-600 border border-brand-200/60">
+                {rawDataList.length}
+              </span>
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Intake and capture raw customer contacts before telecalling qualification.
             </p>
