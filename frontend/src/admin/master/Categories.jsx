@@ -337,7 +337,7 @@ export default function Categories() {
                             {cat.code}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-2 font-medium text-slate-700 text-xs">
+                        <td className="py-1.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={cat.name}>
                           {cat.name}
                         </td>
                         <td className="py-1.5 pr-2 text-left">

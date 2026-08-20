@@ -640,7 +640,7 @@ export default function ManageOrder() {
                         </td>
 
                         {/* Company */}
-                        <td className="py-2.5 pr-3 text-slate-700">
+                        <td className="py-2.5 pr-3 text-slate-700 truncate max-w-[200px]" title={order.company}>
                           {order.company}
                         </td>
 

@@ -487,7 +487,7 @@ export default function Admins() {
                       const protectedAcct = isProtected(admin)
                       return (
                         <tr key={admin.id} onClick={() => { if (!protectedAcct) handleEditClick(admin) }} className={`text-slate-600 transition-colors ${protectedAcct ? '' : 'cursor-pointer'} ${editingId === admin.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
-                          <td className="py-1.5 pr-2 font-medium text-slate-800 text-xs">
+                          <td className="py-1.5 pr-2 font-medium text-slate-800 text-xs truncate max-w-[180px]" title={admin.name}>
                             {admin.name}
                             {admin.email === user?.email && (
                               <span className="ml-1.5 rounded bg-brand-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-brand-600">You</span>
@@ -497,7 +497,7 @@ export default function Admins() {
                             )}
                           </td>
                           <td className="py-1.5 pr-2 text-slate-600 text-xs">{admin.email}</td>
-                          <td className="py-1.5 pr-2 text-slate-600 text-xs">{admin.company || '—'}</td>
+                          <td className="py-1.5 pr-2 text-slate-600 text-xs truncate max-w-[160px]" title={admin.company || ''}>{admin.company || '—'}</td>
                           <td className="py-1.5 pr-2">
                             {admin.is_active ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">

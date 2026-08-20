@@ -291,7 +291,7 @@ export default function RawDataRegister() {
                       <td className="py-2.5 pr-4 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap">
                         {row.date}
                       </td>
-                      <td className="py-2.5 pr-4 font-semibold text-slate-900 print:text-black">
+                      <td className="py-2.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px]" title={row.company}>
                         {row.company}
                       </td>
                       <td className="py-2.5 pr-4 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap">

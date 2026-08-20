@@ -759,8 +759,8 @@ export default function Managequotation() {
                       className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer"
                     >
                       {/* Customer */}
-                      <td className="py-2.5 pr-3">
-                        <p className="font-semibold text-slate-900 text-xs">
+                      <td className="py-2.5 pr-3 min-w-0">
+                        <p className="font-semibold text-slate-900 text-xs truncate max-w-[160px]" title={quote.customer}>
                           {quote.customer}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-0.5">
@@ -769,8 +769,8 @@ export default function Managequotation() {
                       </td>
 
                       {/* Company */}
-                      <td className="hidden sm:table-cell py-2.5 pr-3">
-                        <p className="font-semibold text-slate-900 text-xs">
+                      <td className="hidden sm:table-cell py-2.5 pr-3 min-w-0">
+                        <p className="font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={quote.company}>
                           {quote.company}
                         </p>
                         {quote.city && (
@@ -996,8 +996,8 @@ export default function Managequotation() {
                     <td className="hidden md:table-cell py-2.5 pr-3 font-mono text-[11px] whitespace-nowrap">{item.date}</td>
                     <td className="py-2.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">₹{item.total}</td>
                     <td className="hidden sm:table-cell py-2.5 pr-3 font-mono text-slate-500 whitespace-nowrap">₹{item.discount}</td>
-                    <td className="hidden md:table-cell py-2.5 pr-3 font-medium text-slate-800">{item.qtnBy || item.staff}</td>
-                    <td className="hidden lg:table-cell py-2.5 pr-3 font-medium text-slate-800">{item.bdm || 'Husna'}</td>
+                    <td className="hidden md:table-cell py-2.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.qtnBy || item.staff}>{item.qtnBy || item.staff}</td>
+                    <td className="hidden lg:table-cell py-2.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.bdm || 'Husna'}>{item.bdm || 'Husna'}</td>
                     <td className="py-2.5 pr-3 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${

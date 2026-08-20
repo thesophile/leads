@@ -782,7 +782,7 @@ export default function Telecall() {
                             {isSelected && (
                               <span className="h-1.5 w-1.5 rounded-full bg-brand-600 shrink-0" />
                             )}
-                            <p className="font-semibold text-slate-900 text-xs">
+                            <p className="font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={lead.company}>
                               {lead.company}
                             </p>
                           </div>

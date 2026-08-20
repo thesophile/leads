@@ -584,7 +584,7 @@ export default function OrderReceived() {
                       </td>
 
                       <td className="py-3 px-3">
-                        <div className="font-bold text-slate-900 leading-snug">{order.company}</div>
+                        <div className="font-bold text-slate-900 leading-snug truncate max-w-[200px]" title={order.company}>{order.company}</div>
                         <div className="text-[11px] text-slate-500">
                           {order.customer} • <span className="font-mono">{order.mobile}</span>
                         </div>

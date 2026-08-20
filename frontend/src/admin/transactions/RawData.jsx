@@ -645,7 +645,7 @@ export default function RawData() {
                   filteredData.map((item) => (
                     <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
                       {/* Company Name */}
-                      <td className="py-2 pr-2 font-semibold text-slate-900 text-xs">
+                      <td className="py-2 pr-2 font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={item.company}>
                         {item.company}
                       </td>
 

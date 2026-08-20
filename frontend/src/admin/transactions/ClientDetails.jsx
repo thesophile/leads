@@ -510,9 +510,9 @@ export default function ClientDetails() {
                   filteredRecords.map((rec) => (
                     <tr key={rec.id} onClick={() => openEditModal(rec)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                       <td className="py-2.5 pr-3 font-mono font-bold text-slate-950">{rec.orderNo}</td>
-                      <td className="py-2.5 pr-3">
-                        <div className="font-semibold text-slate-900">{rec.clientName}</div>
-                        <div className="text-[11px] text-slate-500">{rec.company}</div>
+                      <td className="py-2.5 pr-3 min-w-0">
+                        <div className="font-semibold text-slate-900 truncate max-w-[160px]" title={rec.clientName}>{rec.clientName}</div>
+                        <div className="text-[11px] text-slate-500 truncate max-w-[160px]" title={rec.company}>{rec.company}</div>
                       </td>
                       <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">{rec.mobile}</td>
                       <td className="py-2.5 pr-3">

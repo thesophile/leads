@@ -416,7 +416,7 @@ export default function Branch() {
                           editingId === br.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
-                        <td className="py-1.5 pr-2 font-medium text-slate-700 text-xs">
+                        <td className="py-1.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={br.name}>
                           {br.name}
                         </td>
                         <td className="py-1.5 pr-2">

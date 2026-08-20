@@ -541,7 +541,7 @@ export default function Staff() {
                             {emp.staff_code || '—'}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-2 font-medium text-slate-800 text-xs">
+                        <td className="py-1.5 pr-2 font-medium text-slate-800 text-xs truncate max-w-[180px]" title={emp.name}>
                           {emp.name}
                           {emp.email === user?.email && (
                             <span className="ml-1.5 rounded bg-brand-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-brand-600">You</span>
