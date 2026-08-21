@@ -95,6 +95,18 @@ class AssignLeadsToStaffTests(APITestCase):
         self.assertEqual(len(resp.data), 5)
 
 
+def test_assigned_legacy_lead_gains_tenant(self):
+        make_raw_lead(self.company, 'Legacy Co', tenant=None)
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': 'Shanu VR', 'count': 10,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.client.force_authenticate(self.target)
+        resp = self.client.get('/api/transactions/leads/?status=assigned')
+        self.assertIn('RL-Legacy Co', {l['id'] for l in resp.data})
+
+
 class LeadVisibilityTests(APITestCase):
     def setUp(self):
         company = make_company('Acme')

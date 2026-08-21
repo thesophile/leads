@@ -37,11 +37,11 @@ def scoped_queryset(user, status_filter='all'):
             # Managers/admins see their company's records plus legacy rows.
             qs = qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
         else:
-            # Regular staff see the leads they added themselves plus the
-            # leads that were assigned to them within their own company.
+            # Regular staff see the leads assigned to them within their own
+            # company, plus the leads they still hold in raw status.
             qs = qs.filter(
-                Q(added_by=user.name)
-                | Q(tenant=user.company, assigned_to=user.name)
+                Q(tenant=user.company, assigned_to=user.name)
+                | Q(added_by=user.name, status=Lead.STATUS_RAW)
             )
     if status_filter and status_filter != 'all':
         qs = qs.filter(status=status_filter)
@@ -192,6 +192,8 @@ class LeadDetailView(APIView):
                 setattr(lead, field, value)
         if 'has_follow_up' in request.data:
             lead.has_follow_up = bool(request.data.get('has_follow_up'))
+        if 'assigned_to' in request.data and lead.assigned_to and user.company:
+            lead.tenant = user.company
         try:
             lead.save()
         except IntegrityError:
@@ -254,11 +256,12 @@ class LeadAssignView(APIView):
         updated = []
         for lead in leads:
             lead.assigned_to = assigned_to
+            lead.tenant = request.user.company
             lead.status = Lead.STATUS_ASSIGNED
             lead.call_status = 'Pending Call'
             lead.remarks = 'Newly assigned from raw data.'
             lead.save(update_fields=[
-                'assigned_to', 'status', 'call_status', 'remarks', 'updated_at',
+                'assigned_to', 'tenant', 'status', 'call_status', 'remarks', 'updated_at',
             ])
             updated.append(lead)
 
