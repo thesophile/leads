@@ -138,24 +138,6 @@ function FileTextIcon({ className = 'h-4 w-4' }) {
   )
 }
 
-function PlusIcon({ className = 'h-4 w-4' }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  )
-}
-
-function CheckCircleIcon({ className = 'h-3.5 w-3.5' }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
-  )
-}
-
 function UndoIcon({ className = 'h-3.5 w-3.5' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -303,19 +285,6 @@ export default function Managequotation() {
       setApprovalModalOpen(false)
       setApprovalSent('')
     }, 1100)
-  }
-
-  function handleRowStatusChange(quoteId, newStatus) {
-    setQuotationsList((prev) =>
-      prev.map((item) =>
-        item.id === quoteId
-          ? {
-              ...item,
-              status: newStatus,
-            }
-          : item
-      )
-    )
   }
 
   // "New Proposal" Modal State (matching user's reference screenshot)
@@ -552,21 +521,6 @@ export default function Managequotation() {
   }
 
   // Quick Action: Super Admin Instant Approve
-  function handleApproveQuotation(quoteId, e) {
-    e.stopPropagation()
-    setQuotationsList((prev) =>
-      prev.map((item) =>
-        item.id === quoteId
-          ? {
-              ...item,
-              status: 'Approved',
-              remarks: `${item.remarks || ''} (Approved by Admin for Client Delivery)`.trim(),
-            }
-          : item
-      )
-    )
-  }
-
   function handleRevertQuotation(quoteId, e) {
     e.stopPropagation()
     if (window.confirm('Are you sure you want to revert this quotation back to Telecalling?')) {

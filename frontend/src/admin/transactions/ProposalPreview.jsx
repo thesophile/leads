@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import Layout from '../../Layout/Layout'
@@ -280,11 +280,10 @@ const PAGE_CLASS =
   'print-page mx-auto flex w-full max-w-[210mm] flex-col min-h-[297mm] bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm'
 
 export default function ProposalPreview() {
-  const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [proposalData, setProposalData] = useState(() => {
+  const proposalData = useMemo(() => {
     if (location.state?.proposal) {
       const p = location.state.proposal
       return {
@@ -309,35 +308,9 @@ export default function ProposalPreview() {
       }
     }
     return DEFAULT_PROPOSAL
-  })
+  }, [location.state])
 
   const [isSent, setIsSent] = useState(proposalData.status === 'Pending Approval')
-
-  useEffect(() => {
-    if (location.state?.proposal) {
-      const p = location.state.proposal
-      setProposalData((prev) => ({
-        ...prev,
-        id: p.id || prev.id,
-        orderDate: p.date || prev.orderDate,
-        customerCompany: p.company || prev.customerCompany,
-        customerPerson: p.customer || prev.customerPerson,
-        customerPhone: p.mobile || prev.customerPhone,
-        customerLocation: p.city || prev.customerLocation,
-        bdm: p.bdm || p.staff || prev.bdm,
-        quotationBy: p.qtnBy || p.staff || prev.quotationBy,
-        category: p.category || prev.category,
-        sources: p.source || prev.sources,
-        total: p.total || prev.total,
-        discount: p.discount || prev.discount,
-        net: p.netAmount || prev.net,
-        proposalSummaryHtml: p.proposalScope || prev.proposalSummaryHtml,
-        proposalInDetailsHtml: p.proposalInDetailsHtml || prev.proposalInDetailsHtml,
-        proposalDetailsContinuedHtml: p.proposalDetailsContinuedHtml || prev.proposalDetailsContinuedHtml,
-        status: p.status || prev.status,
-      }))
-    }
-  }, [location.state])
 
   function handlePrint() {
     window.print()
