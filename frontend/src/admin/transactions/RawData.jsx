@@ -499,7 +499,7 @@ export default function RawData() {
         category: assignCategory,
         from_date: assignFromDate,
         to_date: assignToDate,
-        count: assignCount,
+        count: assignCountToUse,
       })
       setAssignSuccessMessage(`✓ Successfully allocated ${res.assigned} lead(s) to ${formatAssignStaffSummary(assignStaffList)}!`)
       resetAssignDirty()
@@ -518,6 +518,7 @@ export default function RawData() {
 
   // Raw Data only lists unassigned (status=raw) leads.
   const totalUnassignedCount = rawDataList.length
+  const assignCountToUse = Math.min(assignCount, totalUnassignedCount || assignCount)
 
   // Filtered Leads based on search, staff, source, and date range
   const filteredData = useMemo(() => {
@@ -1085,20 +1086,26 @@ export default function RawData() {
                       Leads to Assign:
                     </span>
                     <div className="flex items-center gap-1.5">
-                      {[25, 50, 100, 200].map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => setAssignCount(preset)}
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer border ${
-                            assignCount === preset
-                              ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
-                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {preset}
-                        </button>
-                      ))}
+                      {[25, 50, 100, 200].map((preset) => {
+                        const disabled = preset > totalUnassignedCount
+                        return (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setAssignCount(preset)}
+                            disabled={disabled}
+                            className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition border ${
+                              disabled
+                                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                : assignCount === preset
+                                  ? 'bg-brand-600 text-white border-brand-600 shadow-xs cursor-pointer'
+                                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 cursor-pointer'
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -1110,7 +1117,7 @@ export default function RawData() {
                       type="number"
                       min="1"
                       max={totalUnassignedCount || 100}
-                      value={assignCount}
+                      value={assignCountToUse}
                       onChange={(e) => setAssignCount(Number(e.target.value))}
                       className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-bold text-slate-800 focus:border-brand-500 focus:outline-none"
                     />
@@ -1121,7 +1128,7 @@ export default function RawData() {
               {/* Live Info Banner */}
               <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 flex items-center justify-between text-xs">
                 <span className="text-slate-600">
-                  Ready to assign <strong className="text-slate-900">{assignCount}</strong> leads out of{' '}
+                  Ready to assign <strong className="text-slate-900">{assignCountToUse}</strong> leads out of{' '}
                   <strong className="text-brand-600">{totalUnassignedCount}</strong> unassigned records in pool.
                 </span>
               </div>
