@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
-from transactions.models import Lead
+from transactions.models import CallHistory, Lead
 
 User = get_user_model()
 
@@ -174,6 +174,33 @@ class LeadVisibilityTests(APITestCase):
             'call_status': 'Interested',
         }, format='json')
         self.assertEqual(resp.status_code, 404)
+
+    def test_logging_a_call_writes_history(self):
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'call_status': 'Interested',
+            'priority': 'Hot',
+            'remarks': 'Client eager to proceed.',
+            'has_follow_up': True,
+            'next_follow_up_date': '2026-08-25',
+            'next_follow_up_time': '10:00 AM',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        entry = CallHistory.objects.get(lead_id='TC-1')
+        self.assertEqual(entry.status, 'Interested')
+        self.assertEqual(entry.caller, 'Shanu VR')
+        self.assertEqual(entry.report, 'Client eager to proceed.')
+        self.assertEqual(entry.follow_up, '2026-08-25 10:00 AM')
+        self.assertEqual(resp.data['history'][0]['status'], 'Interested')
+        self.assertEqual(resp.data['history'][0]['followUp'], '2026-08-25 10:00 AM')
+
+    def test_pending_call_does_not_write_history(self):
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'call_status': 'Pending Call',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(CallHistory.objects.filter(lead_id='TC-1').exists())
 
 
 class AssignableStaffListViewTests(APITestCase):

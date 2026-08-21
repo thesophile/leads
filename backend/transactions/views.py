@@ -1,5 +1,5 @@
 import random
-from datetime import date
+from datetime import date, datetime
 
 from django.db import IntegrityError
 from django.db.models import Q
@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can
 
-from .models import Lead
+from .models import CallHistory, Lead
 from .serializers import LeadSerializer
 
 
@@ -201,6 +201,23 @@ class LeadDetailView(APIView):
             if conflict is not None and conflict.id != lead.id:
                 return duplicate_response(conflict)
             raise
+        if 'call_status' in request.data and lead.call_status != 'Pending Call':
+            report = request.data.get('remarks')
+            if report is None:
+                report = lead.remarks
+            follow_up = ''
+            if lead.has_follow_up and lead.next_follow_up_date:
+                follow_up = lead.next_follow_up_date
+                if lead.next_follow_up_time:
+                    follow_up = f'{follow_up} {lead.next_follow_up_time}'
+            CallHistory.objects.create(
+                lead=lead,
+                date_time=datetime.now().strftime('%d-%m-%Y %I:%M %p'),
+                caller=user.name,
+                report=report,
+                follow_up=follow_up,
+                status=lead.call_status,
+            )
         return Response(LeadSerializer(lead).data)
 
     def delete(self, request, pk):

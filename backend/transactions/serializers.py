@@ -1,9 +1,19 @@
 from rest_framework import serializers
 
-from .models import Lead
+from .models import CallHistory, Lead
+
+
+class CallHistorySerializer(serializers.ModelSerializer):
+    dateTime = serializers.CharField(source='date_time', read_only=True)
+    followUp = serializers.CharField(source='follow_up', read_only=True)
+
+    class Meta:
+        model = CallHistory
+        fields = ['id', 'dateTime', 'caller', 'report', 'followUp', 'status']
 
 
 class LeadSerializer(serializers.ModelSerializer):
+    history = CallHistorySerializer(many=True, read_only=True)
     displayDate = serializers.CharField(source='display_date', required=False, allow_blank=True)
     addedBy = serializers.CharField(source='added_by', required=False, allow_blank=True)
     assignedTo = serializers.CharField(source='assigned_to', required=False, allow_blank=True)
@@ -36,4 +46,5 @@ class LeadSerializer(serializers.ModelSerializer):
             'nextFollowUpDate',
             'nextFollowUpTime',
             'hasFollowUp',
+            'history',
         ]
