@@ -836,42 +836,42 @@ export default function RawData() {
                   filteredData.map((item) => (
                     <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
                       {/* Company Name */}
-                      <td className="py-2 pr-2 font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={item.company}>
+                      <td className="py-0.5 pr-2 font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={item.company}>
                         {item.company}
                       </td>
 
                       {/* Contact Person */}
-                      <td className="py-2 pr-2 font-medium text-slate-700 text-xs">
+                      <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs">
                         {item.contact}
                       </td>
 
                       {/* Phone */}
-                      <td className="py-2 pr-2 font-mono text-xs text-slate-700">
+                      <td className="py-0.5 pr-2 font-mono text-xs text-slate-700">
                         {item.phone}
                       </td>
 
                       {/* Email */}
-                      <td className="py-2 pr-2 text-slate-500 text-xs truncate max-w-[180px]">
+                      <td className="py-0.5 pr-2 text-slate-500 text-xs truncate max-w-[180px]">
                         {item.email}
                       </td>
 
                       {/* Category */}
-                      <td className="py-2 pr-2 font-medium text-slate-800 text-xs">
+                      <td className="py-0.5 pr-2 font-medium text-slate-800 text-xs">
                         {item.category}
                       </td>
 
                       {/* Location */}
-                      <td className="py-2 pr-2 text-slate-600 text-xs">
+                      <td className="py-0.5 pr-2 text-slate-600 text-xs">
                         {item.city}
                       </td>
 
                       {/* Date */}
-                      <td className="py-2 pr-2 text-slate-400 text-[11px]">
+                      <td className="py-0.5 pr-2 text-slate-400 text-[11px]">
                         {item.displayDate}
                       </td>
 
                       {/* Actions */}
-                      <td className="py-2 pr-2 text-left">
+                      <td className="py-0.5 pr-2 text-left">
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"

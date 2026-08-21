@@ -453,7 +453,7 @@ export default function Telecall() {
                         }`}
                       >
                         {/* Company */}
-                        <td className="py-1.5 pr-3">
+                        <td className="py-0.5 pr-3">
                           <div className="flex items-center gap-1.5">
                             {isSelected && (
                               <span className="h-1.5 w-1.5 rounded-full bg-brand-600 shrink-0" />
@@ -465,7 +465,7 @@ export default function Telecall() {
                         </td>
 
                         {/* Phone */}
-                        <td className="py-1.5 pr-3">
+                        <td className="py-0.5 pr-3">
                           <a
                             href={`tel:${lead.phone}`}
                             onClick={(e) => e.stopPropagation()}
@@ -478,13 +478,13 @@ export default function Telecall() {
                         </td>
 
                         {/* Category */}
-                        <td className="py-1.5 pr-3 font-medium text-slate-800 text-xs">
+                        <td className="py-0.5 pr-3 font-medium text-slate-800 text-xs">
                           {lead.category}
                         </td>
 
                         {/* Assigned Caller */}
                         {canViewAll && (
-                          <td className="py-1.5 pr-3">
+                          <td className="py-0.5 pr-3">
                             {lead.assignedTo ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -500,7 +500,7 @@ export default function Telecall() {
                         )}
 
                         {/* Call Status Badge */}
-                        <td className="py-1.5 pr-3">
+                        <td className="py-0.5 pr-3">
                           <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold">
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${
@@ -550,7 +550,7 @@ export default function Telecall() {
                         </td>
 
                         {/* Priority */}
-                        <td className="py-1.5 pr-3">
+                        <td className="py-0.5 pr-3">
                           {lead.priority ? (
                             <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
                               <span
@@ -582,7 +582,7 @@ export default function Telecall() {
                         </td>
 
                         {/* Action Button: Log Call / Assign */}
-                        <td className="py-1.5 pr-3 text-left">
+                        <td className="py-0.5 pr-3 text-left">
                           <button
                             type="button"
                             onClick={(e) => handleOpenCallModal(lead, e)}
@@ -700,22 +700,22 @@ export default function Telecall() {
                     selectedLeadForHistory.history.map((h) => (
                       <tr key={h.id} className="text-slate-600 hover:bg-slate-50/50">
                         {/* Date & Time */}
-                        <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-700">
+                        <td className="py-0.5 pr-3 font-mono text-[11px] text-slate-700">
                           {h.dateTime}
                         </td>
 
                         {/* Caller */}
-                        <td className="py-1.5 pr-3 font-medium text-slate-900">
+                        <td className="py-0.5 pr-3 font-medium text-slate-900">
                           {h.caller}
                         </td>
 
                         {/* Report */}
-                        <td className="py-1.5 pr-3 text-slate-700">
+                        <td className="py-0.5 pr-3 text-slate-700">
                           {h.report}
                         </td>
 
                         {/* Follow Up */}
-                        <td className="py-1.5 pr-3">
+                        <td className="py-0.5 pr-3">
                           <span className="font-semibold text-blue-700 text-xs flex items-center gap-1">
                             <CalendarDaysIcon className="h-3 w-3 text-blue-500" />
                             <span>{h.followUp}</span>
@@ -723,7 +723,7 @@ export default function Telecall() {
                         </td>
 
                         {/* Status */}
-                        <td className="py-1.5 pr-3 text-left">
+                        <td className="py-0.5 pr-3 text-left">
                           <span
                             className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${
                               h.status === 'Interested'

@@ -805,7 +805,7 @@ export default function Managequotation() {
                       className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer"
                     >
                       {/* Customer */}
-                      <td className="py-1.5 pr-3 min-w-0">
+                      <td className="py-0.5 pr-3 min-w-0">
                         <p className="font-semibold text-slate-900 text-xs truncate max-w-[160px]" title={quote.customer}>
                           {quote.customer}
                         </p>
@@ -815,7 +815,7 @@ export default function Managequotation() {
                       </td>
 
                       {/* Company */}
-                      <td className="hidden sm:table-cell py-1.5 pr-3 min-w-0">
+                      <td className="hidden sm:table-cell py-0.5 pr-3 min-w-0">
                         <p className="font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={quote.company}>
                           {quote.company}
                         </p>
@@ -827,7 +827,7 @@ export default function Managequotation() {
                       </td>
 
                       {/* Mobile */}
-                      <td className="py-1.5 pr-3">
+                      <td className="py-0.5 pr-3">
                         <a
                           href={`tel:${quote.mobile}`}
                           onClick={(e) => e.stopPropagation()}
@@ -840,7 +840,7 @@ export default function Managequotation() {
                       </td>
 
                       {/* Staff */}
-                      <td className="hidden md:table-cell py-1.5 pr-3">
+                      <td className="hidden md:table-cell py-0.5 pr-3">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           <span>{quote.staff || quote.qtnBy}</span>
@@ -848,12 +848,12 @@ export default function Managequotation() {
                       </td>
 
                       {/* Date */}
-                      <td className="hidden md:table-cell py-1.5 pr-3 font-mono text-[11px] text-slate-600">
+                      <td className="hidden md:table-cell py-0.5 pr-3 font-mono text-[11px] text-slate-600">
                         {quote.date}
                       </td>
 
                       {/* Status Badge */}
-                      <td className="py-1.5 pr-3">
+                      <td className="py-0.5 pr-3">
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
                             quote.status === 'Not Sent'
@@ -885,7 +885,7 @@ export default function Managequotation() {
                       </td>
 
                       {/* Action: 3-Dot Action Menu */}
-                      <td className="py-1.5 pr-3 text-left">
+                      <td className="py-0.5 pr-3 text-left">
                         <div className="relative inline-block text-left">
                           <button
                             type="button"
@@ -1038,13 +1038,13 @@ export default function Managequotation() {
               <tbody className="divide-y divide-slate-100">
                 {filteredQuotations.map((item) => (
                   <tr key={`hist-${item.id}`} onClick={() => handleViewProposal(item)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
-                    <td className="py-1.5 pr-3 font-mono font-bold text-slate-900 whitespace-nowrap">{item.id}</td>
-                    <td className="hidden md:table-cell py-1.5 pr-3 font-mono text-[11px] whitespace-nowrap">{item.date}</td>
-                    <td className="py-1.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">₹{item.total}</td>
-                    <td className="hidden sm:table-cell py-1.5 pr-3 font-mono text-slate-500 whitespace-nowrap">₹{item.discount}</td>
-                    <td className="hidden md:table-cell py-1.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.qtnBy || item.staff}>{item.qtnBy || item.staff}</td>
-                    <td className="hidden lg:table-cell py-1.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.bdm || 'Husna'}>{item.bdm || 'Husna'}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">
+                    <td className="py-0.5 pr-3 font-mono font-bold text-slate-900 whitespace-nowrap">{item.id}</td>
+                    <td className="hidden md:table-cell py-0.5 pr-3 font-mono text-[11px] whitespace-nowrap">{item.date}</td>
+                    <td className="py-0.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">₹{item.total}</td>
+                    <td className="hidden sm:table-cell py-0.5 pr-3 font-mono text-slate-500 whitespace-nowrap">₹{item.discount}</td>
+                    <td className="hidden md:table-cell py-0.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.qtnBy || item.staff}>{item.qtnBy || item.staff}</td>
+                    <td className="hidden lg:table-cell py-0.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.bdm || 'Husna'}>{item.bdm || 'Husna'}</td>
+                    <td className="py-0.5 pr-3 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${
                           item.status === 'Not Sent'
@@ -1061,8 +1061,8 @@ export default function Managequotation() {
                         {item.status}
                       </span>
                     </td>
-                    <td className="hidden md:table-cell py-1.5 pr-3 text-slate-500 max-w-xs truncate">{item.remarks || item.notes || '-'}</td>
-                    <td className="py-1.5 pr-3 text-center">
+                    <td className="hidden md:table-cell py-0.5 pr-3 text-slate-500 max-w-xs truncate">{item.remarks || item.notes || '-'}</td>
+                    <td className="py-0.5 pr-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           type="button"

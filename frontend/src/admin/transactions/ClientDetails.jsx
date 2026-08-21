@@ -529,23 +529,23 @@ export default function ClientDetails() {
                 {filteredRecords.length > 0 ? (
                   filteredRecords.map((rec) => (
                     <tr key={rec.id} onClick={() => openEditModal(rec)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
-                      <td className="py-1.5 pr-3 font-mono font-bold text-slate-950">{rec.orderNo}</td>
-                      <td className="py-1.5 pr-3 min-w-0">
+                      <td className="py-0.5 pr-3 font-mono font-bold text-slate-950">{rec.orderNo}</td>
+                      <td className="py-0.5 pr-3 min-w-0">
                         <div className="font-semibold text-slate-900 truncate max-w-[160px]" title={rec.clientName}>{rec.clientName}</div>
                         <div className="text-[11px] text-slate-500 truncate max-w-[160px]" title={rec.company}>{rec.company}</div>
                       </td>
-                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600">{rec.mobile}</td>
-                      <td className="py-1.5 pr-3">
+                      <td className="py-0.5 pr-3 font-mono text-[11px] text-slate-600">{rec.mobile}</td>
+                      <td className="py-0.5 pr-3">
                         <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                           {rec.category}
                         </span>
                       </td>
-                      <td className="py-1.5 pr-3">
+                      <td className="py-0.5 pr-3">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800">
                           {rec.collectedBy}
                         </span>
                       </td>
-                      <td className="py-1.5 pr-3">
+                      <td className="py-0.5 pr-3">
                         {rec.attachments.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {rec.attachments.map((att) => (
@@ -568,7 +568,7 @@ export default function ClientDetails() {
                           <span className="text-[11px] text-slate-400">No attachments</span>
                         )}
                       </td>
-                      <td className="py-1.5 pr-3">
+                      <td className="py-0.5 pr-3">
                         <select
                           value={rec.status}
                           onClick={(e) => e.stopPropagation()}
@@ -585,7 +585,7 @@ export default function ClientDetails() {
                           <option value="Details Pending">Details Pending</option>
                         </select>
                       </td>
-                      <td className="py-1.5 pr-3 text-center">
+                      <td className="py-0.5 pr-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
