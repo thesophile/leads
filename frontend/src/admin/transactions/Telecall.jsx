@@ -14,6 +14,7 @@ const STATUSES = [
   'Not Reachable',
   'Busy',
   'Not Interested',
+  'For Future',
 ]
 
 function PhoneCallIcon({ className = 'h-4 w-4' }) {
@@ -516,6 +517,8 @@ export default function Telecall() {
                                   ? 'bg-blue-500'
                                   : lead.callStatus === 'Busy'
                                   ? 'bg-orange-400'
+                                  : lead.callStatus === 'For Future'
+                                  ? 'bg-teal-500'
                                   : 'bg-rose-500'
                               }`}
                             />
@@ -535,6 +538,8 @@ export default function Telecall() {
                                   ? 'text-blue-700'
                                   : lead.callStatus === 'Busy'
                                   ? 'text-orange-700'
+                                  : lead.callStatus === 'For Future'
+                                  ? 'text-teal-700'
                                   : 'text-rose-700'
                               }`}
                             >
@@ -874,6 +879,7 @@ export default function Telecall() {
                           <option value="Not Reachable">Not Reachable</option>
                           <option value="Busy">Busy / Meeting</option>
                           <option value="Not Interested">Not Interested</option>
+                          <option value="For Future">For Future</option>
                         </select>
                       </div>
                     </div>
