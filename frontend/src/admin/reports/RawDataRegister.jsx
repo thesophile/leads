@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
+import { api } from '../../api/client'
 
 const INITIAL_RAW_DATA_REGISTER = [
   { id: 1, date: '11-08-2026', rawDate: '2026-08-11', company: 'LAVENDER BEAUTY LOUNGE, CHETTIKULANGARA', number: '9567484794', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
@@ -25,17 +26,35 @@ const INITIAL_RAW_DATA_REGISTER = [
   { id: 21, date: '08-08-2026', rawDate: '2026-08-08', company: 'CALICUT AYURVEDIC WELLNESS RETREAT', number: '9495110842', location: 'KOZHIKODE', staff: 'Bincy', category: 'Clinic' },
 ]
 
-const CATEGORIES = ['All Category', 'Beauty Parlour', 'Salon', 'Hospital', 'Clinic', 'Resort', 'Boutique']
 const STAFF_LIST = ['All Staff', 'Malavika', 'Husna', 'Bincy', 'Alex Joseph', 'Priya Sharma', 'NIMISHA DAVIS', 'Ananya Nair', 'Shanu VR']
 const LOCATIONS = ['All Locations', 'ALLEPPEY', 'THRISSUR', 'ERNAKULAM', 'KOZHIKODE', 'TRIVANDRUM', 'KANNUR', 'PALAKKAD']
 
 export default function RawDataRegister() {
+  const [categoryOptions, setCategoryOptions] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
   const [staff, setStaff] = useState('All Staff')
   const [location, setLocation] = useState('All Locations')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchCategories() {
+      try {
+        const data = await api.get('/master/categories/')
+        if (!cancelled) setCategoryOptions(data)
+      } catch {
+        // Report filters can fall back to an empty category list.
+      }
+    }
+
+    fetchCategories()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Applied Filter state
   const [appliedFilters, setAppliedFilters] = useState({
@@ -174,9 +193,10 @@ export default function RawDataRegister() {
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
               >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
+                <option value="All Category">All Category</option>
+                {categoryOptions.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    {cat.name}
                   </option>
                 ))}
               </select>

@@ -25,17 +25,6 @@ const SOURCE_LIST = [
   'Manual Entry',
 ]
 
-const CATEGORIES = [
-  'All Categories',
-  'Hospital',
-  'Cosmetics Store',
-  'Salon & Spa',
-  'Interior Designers',
-  'Convention Center',
-  'Auto Wash',
-  'Fancy Shops',
-]
-
 function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -208,6 +197,7 @@ export default function RawData() {
   const canAssignLeads = !!user && (can(user, 'leads.assign') || user.is_superuser)
 
   const [assignableStaff, setAssignableStaff] = useState([])
+  const [categoryOptions, setCategoryOptions] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assignStaff, setAssignStaff] = useState('')
   const [assignCategory, setAssignCategory] = useState('All Categories')
@@ -288,6 +278,24 @@ export default function RawData() {
       cancelled = true
     }
   }, [canAssignLeads])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchCategories() {
+      try {
+        const data = await api.get('/master/categories/')
+        if (!cancelled) setCategoryOptions(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }
+
+    fetchCategories()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function showToast(msg) {
     setToast(msg)
@@ -971,9 +979,10 @@ export default function RawData() {
                       onChange={(e) => setAssignCategory(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none cursor-pointer"
                     >
-                      {CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
+                      <option value="All Categories">All Categories</option>
+                      {categoryOptions.map((cat) => (
+                        <option key={cat.id} value={cat.name}>
+                          {cat.name}
                         </option>
                       ))}
                     </select>
@@ -1315,14 +1324,11 @@ export default function RawData() {
                     <option value="" disabled hidden>
                       Select Category
                     </option>
-                    <option value="Hospital">Hospital</option>
-                    <option value="Cosmetics Store">Cosmetics Store</option>
-                    <option value="Salon & Spa">Salon & Spa</option>
-                    <option value="Interior Designers">Interior Designers</option>
-                    <option value="Convention Center">Convention Center</option>
-                    <option value="Auto Wash">Auto Wash</option>
-                    <option value="Fancy Shops">Fancy Shops</option>
-                    <option value="Theater">Theater</option>
+                    {categoryOptions.map((cat) => (
+                      <option key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
                   </select>
                   <label
                     htmlFor="drawer_category"
