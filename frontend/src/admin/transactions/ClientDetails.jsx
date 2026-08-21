@@ -525,7 +525,7 @@ export default function ClientDetails() {
                   <th className="pb-2.5 pr-2 font-semibold text-center">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-300">
                 {filteredRecords.length > 0 ? (
                   filteredRecords.map((rec) => (
                     <tr key={rec.id} onClick={() => openEditModal(rec)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
