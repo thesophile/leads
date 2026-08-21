@@ -215,6 +215,9 @@ class LeadDetailView(APIView):
             if conflict is not None and conflict.id != lead.id:
                 return duplicate_response(conflict)
             raise
+        if lead.call_status == 'Quotation Requested' and lead.status != Lead.STATUS_QUOTATION:
+            lead.status = Lead.STATUS_QUOTATION
+            lead.save(update_fields=['status', 'updated_at'])
         if 'call_status' in request.data and lead.call_status != 'Pending Call':
             report = request.data.get('remarks')
             if report is None:

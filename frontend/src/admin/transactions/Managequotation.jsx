@@ -1,8 +1,9 @@
-import { useState, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Layout from '../../Layout/Layout'
+import { api } from '../../api/client'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
@@ -29,150 +30,31 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
-// Realistic initial dataset for quotations and proposals
-const INITIAL_QUOTATIONS_DATA = [
-  {
-    id: 'QT-2026-001',
-    leadId: 'TC-103',
-    customer: 'Dr. Manzoor Ali',
-    company: 'MANZOOR SUPER SPECIALITY HOSPITAL',
-    mobile: '9447118234',
-    email: 'admin@manzoorhospital.org',
-    category: 'Hospital',
-    city: 'Trivandrum',
-    bdm: 'Alex Joseph',
-    qtnBy: 'Priya Sharma',
-    staff: 'Priya Sharma',
-    date: '12 Aug 2026',
-    status: 'Pending Approval',
-    total: '1,45,000',
-    discount: '10,000',
-    netAmount: '1,35,000',
-    currency: 'INR (₹)',
-    source: 'Google Search',
-    proposalScope: `<h3>Hospital CRM & OPD Automation Suite</h3>
-<p>Complete deployment of 10 multi-doctor concurrent licenses including OPD patient registration and billing POS.</p>`,
-    termsConditions: `<p>50% advance on sign-off, 50% upon deployment.</p>`,
-    remarks: 'Submitted custom quotation for MD approval. Special discount applied.',
-  },
-  {
-    id: 'QT-2026-002',
-    leadId: 'TC-108',
-    customer: 'Suresh Kumar',
-    company: 'KALYAN GRAND RESIDENCY',
-    mobile: '9847229911',
-    email: 'gm@kalyangrand.com',
-    category: 'Convention Center',
-    city: 'Kochi',
-    bdm: 'Shanu VR',
-    qtnBy: 'NIMISHA DAVIS',
-    staff: 'NIMISHA DAVIS',
-    date: '12 Aug 2026',
-    status: 'Approved',
-    total: '88,500',
-    discount: '5,000',
-    netAmount: '83,500',
-    currency: 'INR (₹)',
-    source: 'Official Website',
-    proposalScope: `<h3>Banquet & Convention Reservation Portal</h3>
-<p>End-to-end event scheduling, billing, and catering management system.</p>`,
-    termsConditions: `<p>Payment: 100% advance before cloud deployment. Validity: 15 Days.</p>`,
-    remarks: 'Approved by Super Admin. Order execution underway.',
-  },
-  {
-    id: 'QT-2026-003',
-    leadId: 'TC-101',
-    customer: 'Dr. Sarah Ahmed',
-    company: 'NEW LIFE MATERNITY HOSPITAL',
-    mobile: '8714546783',
-    email: 'info@newlifehospital.com',
-    category: 'Hospital',
-    city: 'Calicut',
-    bdm: 'Alex Joseph',
-    qtnBy: 'Priya Sharma',
-    staff: 'Priya Sharma',
-    date: '11 Aug 2026',
+function mapLeadToQuotation(lead) {
+  return {
+    id: lead.id,
+    leadId: lead.id,
+    customer: lead.contact || '',
+    company: lead.company || '',
+    mobile: lead.phone || '',
+    email: lead.email || '',
+    category: lead.category || '',
+    city: lead.city || '',
+    bdm: lead.assignedTo || '',
+    qtnBy: lead.addedBy || '',
+    staff: lead.assignedTo || lead.addedBy || '',
+    date: lead.displayDate || lead.date || '',
     status: 'Not Sent',
-    total: '2,10,000',
-    discount: '0',
-    netAmount: '2,10,000',
+    total: '',
+    discount: '',
+    netAmount: '',
     currency: 'INR (₹)',
-    source: 'Customer Referral',
-    proposalScope: `<h3>Maternity Hospital OPD & Patient Records Suite</h3>
-<p>Multi-branch cloud connectivity for 3 maternity clinic branches.</p>`,
-    termsConditions: `<p>30 Days validity. Free migration of historical patient records.</p>`,
-    remarks: 'Received from Telecalling. Draft proposal not sent yet.',
-  },
-  {
-    id: 'QT-2026-004',
-    leadId: 'TC-105',
-    customer: 'Kabeer Khan',
-    company: 'ROYAL PALACE CONVENTION CENTRE',
-    mobile: '9567112004',
-    email: 'events@royalpalace.com',
-    category: 'Convention Center',
-    city: 'Thrissur',
-    bdm: 'Shanu VR',
-    qtnBy: 'Ananya Nair',
-    staff: 'Ananya Nair',
-    date: '10 Aug 2026',
-    status: 'Rejected',
-    total: '95,000',
-    discount: '5,000',
-    netAmount: '90,000',
-    currency: 'INR (₹)',
-    source: 'Instagram Campaign',
-    proposalScope: `<p>Smart venue booking with online advance payment gateway integration.</p>`,
-    termsConditions: `<p>Payment terms exceeded requested budget ceiling.</p>`,
-    remarks: 'Rejected by MD due to discount terms. Revision requested.',
-  },
-  {
-    id: 'QT-2026-005',
-    leadId: 'TC-102',
-    customer: 'Rahul Menon',
-    company: 'SHADES.IN LUXURY EYEWEAR',
-    mobile: '9845123991',
-    email: 'contact@shades.in',
-    category: 'Cosmetics Store',
-    city: 'Kochi',
-    bdm: 'Alex Joseph',
-    qtnBy: 'Alex Joseph',
-    staff: 'Alex Joseph',
-    date: '09 Aug 2026',
-    status: 'Sent to Client',
-    total: '55,000',
-    discount: '8,000',
-    netAmount: '47,000',
-    currency: 'INR (₹)',
-    source: 'Facebook Ads',
-    proposalScope: `<p>Retail POS, barcode generation and stock inventory sync.</p>`,
-    termsConditions: `<p>Custom discount approved for 2 years cloud subscription.</p>`,
-    remarks: 'Approved proposal sent directly to client via WhatsApp and email.',
-  },
-  {
-    id: 'QT-2026-006',
-    leadId: 'TC-110',
-    customer: 'Meera Nambiar',
-    company: 'AYURVEDA WELLNESS SANCTUARY',
-    mobile: '9746221100',
-    email: 'meera@ayursanctuary.in',
-    category: 'Clinic',
-    city: 'Palakkad',
-    bdm: 'Shanu VR',
-    qtnBy: 'NIMISHA DAVIS',
-    staff: 'NIMISHA DAVIS',
-    date: '08 Aug 2026',
-    status: 'Not Sent',
-    total: '1,20,000',
-    discount: '15,000',
-    netAmount: '1,05,000',
-    currency: 'INR (₹)',
-    source: 'Google Search',
-    proposalScope: `<p>Ayurvedic therapy appointment booking and recurring package tracker.</p>`,
-    termsConditions: `<p>Scope revised to include SMS reminders package.</p>`,
-    remarks: 'Fresh lead from Telecaller Sariga. Proposal needs to be drafted.',
-  },
-]
+    source: lead.source || '',
+    proposalScope: '',
+    termsConditions: '',
+    remarks: lead.remarks || '',
+  }
+}
 
 const STAFF_LIST = [
   'All Staff',
@@ -319,7 +201,9 @@ function SendIcon({ className = 'h-3.5 w-3.5' }) {
 
 export default function Managequotation() {
   const navigate = useNavigate()
-  const [quotationsList, setQuotationsList] = useState(INITIAL_QUOTATIONS_DATA)
+  const [quotationsList, setQuotationsList] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
@@ -328,6 +212,26 @@ export default function Managequotation() {
   const [activeMenuQuote, setActiveMenuQuote] = useState(null)
   const menuRef = useRef(null)
   const cardRef = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchData() {
+      try {
+        const data = await api.get('/transactions/leads/?status=quotation')
+        if (!cancelled) setQuotationsList(data.map(mapLeadToQuotation))
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function handleToggleMenu(e, id, row) {
     const cardRect = cardRef.current ? cardRef.current.getBoundingClientRect() : { left: 0, top: 0 }
@@ -905,7 +809,11 @@ export default function Managequotation() {
                 ) : (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
-                      No quotation records found matching the criteria.
+                      {isLoading
+                        ? 'Loading quotations...'
+                        : error
+                        ? error
+                        : 'No quotation records found matching the criteria.'}
                     </td>
                   </tr>
                 )}

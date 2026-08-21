@@ -222,6 +222,25 @@ class LeadVisibilityTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['callStatus'], 'Interested')
 
+    def test_quotation_requested_moves_lead_out_of_telecall(self):
+        # Setting call_status to 'Quotation Requested' flips the lead to the
+        # quotation stage: it leaves the assigned (telecall) list and appears
+        # in the quotation list.
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'call_status': 'Quotation Requested',
+            'remarks': 'Client asked for a quotation.',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['callStatus'], 'Quotation Requested')
+        self.assertEqual(resp.data['status'], 'quotation')
+
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/leads/?status=quotation')
+        self.assertEqual({l['id'] for l in resp.data}, {'TC-1'})
+        resp = self.client.get('/api/transactions/leads/?status=assigned')
+        self.assertEqual({l['id'] for l in resp.data}, set())
+
     def test_staff_cannot_update_others_lead(self):
         # Priya cannot see (and therefore cannot edit) a lead assigned to Shanu.
         self.client.force_authenticate(self.priya)
