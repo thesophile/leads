@@ -107,7 +107,7 @@ export default function Branch() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deleteModalId, setDeleteModalId] = useState(null)
-  const pageSize = 10
+  const pageSize = 50
 
   useEffect(() => {
     let cancelled = false
@@ -416,10 +416,10 @@ export default function Branch() {
                           editingId === br.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
-                        <td className="py-1.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={br.name}>
+                        <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={br.name}>
                           {br.name}
                         </td>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-0.5 pr-2">
                           <span
                             className="block max-w-[220px] truncate text-xs text-slate-500"
                             title={br.address || ''}
@@ -427,7 +427,7 @@ export default function Branch() {
                             {br.address || '—'}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-2 text-left">
+                        <td className="py-0.5 pr-2 text-left">
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"

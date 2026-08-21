@@ -96,7 +96,7 @@ export default function Categories() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deleteModalId, setDeleteModalId] = useState(null)
-  const pageSize = 10
+  const pageSize = 50
 
   useEffect(() => {
     let cancelled = false
@@ -366,15 +366,15 @@ export default function Categories() {
                           editingId === cat.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
-                        <td className="py-1.5 pr-2">
+                        <td className="py-0.5 pr-2">
                           <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[11px] font-bold">
                             {cat.code}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={cat.name}>
+                        <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={cat.name}>
                           {cat.name}
                         </td>
-                        <td className="py-1.5 pr-2 text-left">
+                        <td className="py-0.5 pr-2 text-left">
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"

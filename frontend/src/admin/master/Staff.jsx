@@ -590,22 +590,22 @@ export default function Staff() {
                   <tbody className="divide-y divide-black">
                     {filteredStaff.map((emp) => (
                       <tr key={emp.id} onClick={() => handleEditClick(emp)} className={`text-slate-600 transition-colors cursor-pointer ${editingId === emp.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-0.5 pr-2">
                           <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[11px] font-bold">
                             {emp.staff_code || '—'}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-2 font-medium text-slate-800 text-xs truncate max-w-[180px]" title={emp.name}>
+                        <td className="py-0.5 pr-2 font-medium text-slate-800 text-xs truncate max-w-[180px]" title={emp.name}>
                           {emp.name}
                           {emp.email === user?.email && (
                             <span className="ml-1.5 rounded bg-brand-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-brand-600">You</span>
                           )}
                         </td>
-                        <td className="py-1.5 pr-2 text-slate-600 text-xs">{emp.email}</td>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-0.5 pr-2 text-slate-600 text-xs">{emp.email}</td>
+                        <td className="py-0.5 pr-2">
                           <span className="capitalize text-slate-600">{emp.role_name || '—'}</span>
                         </td>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-0.5 pr-2">
                           {emp.is_active ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
@@ -616,7 +616,7 @@ export default function Staff() {
                             </span>
                           )}
                         </td>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-0.5 pr-2">
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
