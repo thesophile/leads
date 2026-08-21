@@ -324,8 +324,9 @@ export default function Telecall() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               {/* Left Controls: Caller Filter + Status Filter + Priority Filter Pills */}
               <div className="flex flex-wrap items-center gap-2.5">
-                {/* Assigned Caller Dropdown */}
-                <div className="flex items-center gap-1.5">
+                {/* Assigned Caller Dropdown (only for manager/admin who see all callers) */}
+                {canViewAll && (
+                  <div className="flex items-center gap-1.5">
                     <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                       <UserFilterIcon />
                       <span>Caller:</span>
@@ -343,9 +344,10 @@ export default function Telecall() {
                       ))}
                     </select>
                   </div>
+                )}
 
                 {/* Status Dropdown (Right Next to Caller) */}
-                <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">
+                <div className={`flex items-center gap-1.5 ${canViewAll ? 'pl-2 sm:border-l sm:border-slate-200' : ''}`}>
                   <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                     <CheckCircleIcon />
                     <span>Status:</span>
