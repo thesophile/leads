@@ -4,6 +4,8 @@ import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
+import { can } from '../../utils/permissions'
+import { useAuth } from '../../context/auth-context'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
@@ -201,6 +203,8 @@ function SendIcon({ className = 'h-3.5 w-3.5' }) {
 
 export default function Managequotation() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canFilterByStaff = !!user && (can(user, 'leads.view_all') || user.is_superuser)
   const [quotationsList, setQuotationsList] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -625,22 +629,24 @@ export default function Managequotation() {
               {/* Left Controls */}
               <div className="flex flex-wrap items-center gap-2.5">
                 {/* Staff Filter */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-semibold text-slate-500">
-                    Staff:
-                  </span>
-                  <select
-                    value={selectedStaff}
-                    onChange={(e) => setSelectedStaff(e.target.value)}
-                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
-                  >
-                    {STAFF_LIST.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {canFilterByStaff && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      Staff:
+                    </span>
+                    <select
+                      value={selectedStaff}
+                      onChange={(e) => setSelectedStaff(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                    >
+                      {STAFF_LIST.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Status Filter */}
                 <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">
