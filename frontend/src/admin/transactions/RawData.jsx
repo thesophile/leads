@@ -473,6 +473,12 @@ export default function RawData() {
     )
   }
 
+  function toggleAllAssignStaff() {
+    const allNames = assignableStaff.map((s) => s.name)
+    const allSelected = assignStaffList.length === allNames.length && allNames.length > 0
+    setAssignStaffList(allSelected ? [] : allNames)
+  }
+
   function formatAssignStaffSummary(names) {
     const joined = names.join(', ')
     const maxLen = 42
@@ -1007,24 +1013,37 @@ export default function RawData() {
                         {assignableStaff.length === 0 ? (
                           <p className="px-3 py-2 text-xs text-slate-400">No assignable staff</p>
                         ) : (
-                          assignableStaff.map((staff) => {
-                            const isChecked = assignStaffList.includes(staff.name)
-                            return (
+                          [
+                            <label
+                              key="__all__"
+                              className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={
+                                  assignStaffList.length === assignableStaff.length && assignableStaff.length > 0
+                                }
+                                onChange={toggleAllAssignStaff}
+                                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                              />
+                              <span className="font-semibold text-slate-800">All staff</span>
+                            </label>,
+                            ...assignableStaff.map((staff) => (
                               <label
                                 key={staff.name}
                                 className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
                               >
                                 <input
                                   type="checkbox"
-                                  checked={isChecked}
+                                  checked={assignStaffList.includes(staff.name)}
                                   onChange={() => toggleAssignStaff(staff.name)}
                                   className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
                                 />
                                 <span className="font-semibold text-slate-800">{staff.name}</span>
                                 {staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
                               </label>
-                            )
-                          })
+                            )),
+                          ]
                         )}
                       </div>
                     </>
