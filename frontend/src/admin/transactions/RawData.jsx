@@ -195,6 +195,7 @@ export default function RawData() {
     ? ['All Employees', ...employeeNames]
     : ['My entries', 'All Employees']
   const [categoryOptions, setCategoryOptions] = useState([])
+  const [sourceOptions, setSourceOptions] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assignStaffList, setAssignStaffList] = useState([])
   const [assignStaffOpen, setAssignStaffOpen] = useState(false)
@@ -289,6 +290,24 @@ export default function RawData() {
     }
 
     fetchCategories()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchSources() {
+      try {
+        const data = await api.get('/master/sources/')
+        if (!cancelled) setSourceOptions(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }
+
+    fetchSources()
     return () => {
       cancelled = true
     }
@@ -1451,12 +1470,11 @@ export default function RawData() {
                     <option value="" disabled hidden>
                       Select Source
                     </option>
-                    <option value="Google Search">Google Search</option>
-                    <option value="Official Website">Official Website</option>
-                    <option value="Instagram Campaign">Instagram Campaign</option>
-                    <option value="Facebook Ads">Facebook Ads</option>
-                    <option value="Customer Referral">Customer Referral</option>
-                    <option value="Manual Entry">Manual Entry</option>
+                    {sourceOptions.map((src) => (
+                      <option key={src.id} value={src.name}>
+                        {src.name}
+                      </option>
+                    ))}
                   </select>
                   <label
                     htmlFor="drawer_source"
