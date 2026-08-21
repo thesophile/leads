@@ -18,8 +18,5 @@ Backend
 ```
 cd ~\Desktop\Codebase\leads\backend
 venv\Scripts\activate
-```
-
-```
 Python manage.py runserver
 ```

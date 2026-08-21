@@ -25,26 +25,6 @@ const SOURCE_LIST = [
   'Manual Entry',
 ]
 
-const ASSIGNABLE_STAFF = [
-  { name: 'NIMISHA DAVIS', role: 'Senior Telecaller' },
-  { name: 'Shanu VR', role: 'Sales Lead' },
-  { name: 'Alex Joseph', role: 'BDM' },
-  { name: 'Priya Sharma', role: 'Telecaller' },
-  { name: 'Ananya Nair', role: 'Telecaller' },
-  { name: 'Rahul Varma', role: 'Sales Associate' },
-]
-
-const CATEGORIES = [
-  'All Categories',
-  'Hospital',
-  'Cosmetics Store',
-  'Salon & Spa',
-  'Interior Designers',
-  'Convention Center',
-  'Auto Wash',
-  'Fancy Shops',
-]
-
 function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -216,8 +196,10 @@ export default function RawData() {
 
   const canAssignLeads = !!user && (can(user, 'leads.assign') || user.is_superuser)
 
+  const [assignableStaff, setAssignableStaff] = useState([])
+  const [categoryOptions, setCategoryOptions] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
-  const [assignStaff, setAssignStaff] = useState('NIMISHA DAVIS')
+  const [assignStaff, setAssignStaff] = useState('')
   const [assignCategory, setAssignCategory] = useState('All Categories')
   const [assignFromDate, setAssignFromDate] = useState('')
   const [assignToDate, setAssignToDate] = useState('')
@@ -261,7 +243,7 @@ export default function RawData() {
 
     async function fetchData() {
       try {
-        const data = await api.get('/transactions/raw-leads/')
+        const data = await api.get('/transactions/leads/?status=raw')
         if (!cancelled) setRawDataList(data)
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -276,6 +258,45 @@ export default function RawData() {
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchStaff() {
+      try {
+        const data = await api.get('/auth/assignable-staff/')
+        if (!cancelled) {
+          setAssignableStaff(data)
+          if (data.length > 0) setAssignStaff((prev) => prev || data[0].name)
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }
+
+    if (canAssignLeads) fetchStaff()
+    return () => {
+      cancelled = true
+    }
+  }, [canAssignLeads])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchCategories() {
+      try {
+        const data = await api.get('/master/categories/')
+        if (!cancelled) setCategoryOptions(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }
+
+    fetchCategories()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   function showToast(msg) {
     setToast(msg)
     setTimeout(() => setToast(''), 3000)
@@ -285,7 +306,7 @@ export default function RawData() {
     setIsLoading(true)
     setError('')
     try {
-      const data = await api.get('/transactions/raw-leads/')
+      const data = await api.get('/transactions/leads/?status=raw')
       setRawDataList(data)
     } catch (err) {
       setError(err.message)
@@ -361,10 +382,10 @@ export default function RawData() {
     setIsSaving(true)
     try {
       if (editingId) {
-        await api.patch(`/transactions/raw-leads/${editingId}/`, formData)
+        await api.patch(`/transactions/leads/${editingId}/`, formData)
         showToast('Raw data updated.')
       } else {
-        await api.post('/transactions/raw-leads/', formData)
+        await api.post('/transactions/leads/', formData)
         showToast('Raw data added.')
       }
       setEditingId(null)
@@ -413,7 +434,7 @@ export default function RawData() {
     setIsImporting(true)
     try {
       await Promise.all(
-        importedSample.map((record) => api.post('/transactions/raw-leads/', record))
+        importedSample.map((record) => api.post('/transactions/leads/', record))
       )
       setImportSuccessMessage(`Successfully imported 2 leads from ${importedFileName}!`)
       await refreshData()
@@ -438,7 +459,7 @@ export default function RawData() {
     setDeleteModalId(null)
     setError('')
     try {
-      await api.del(`/transactions/raw-leads/${id}/`)
+      await api.del(`/transactions/leads/${id}/`)
       showToast('Raw data deleted.')
       await refreshData()
     } catch (err) {
@@ -446,35 +467,36 @@ export default function RawData() {
     }
   }
 
-  function handleExecuteAssign(e) {
+  async function handleExecuteAssign(e) {
     e.preventDefault()
+    if (isSaving) return
+    setError('')
 
-    let remainingToAssign = assignCount
-    setRawDataList((prev) =>
-      prev.map((item) => {
-        if (!item.assignedTo && remainingToAssign > 0) {
-          remainingToAssign--
-          return {
-            ...item,
-            assignedTo: assignStaff,
-          }
-        }
-        return item
+    setIsSaving(true)
+    try {
+      const res = await api.post('/transactions/leads/assign/', {
+        assigned_to: assignStaff,
+        category: assignCategory,
+        from_date: assignFromDate,
+        to_date: assignToDate,
+        count: assignCount,
       })
-    )
-
-    setAssignSuccessMessage(`✓ Successfully allocated lead(s) to ${assignStaff}!`)
-    resetAssignDirty()
-    setTimeout(() => {
-      setAssignSuccessMessage('')
-      setAssignModalOpen(false)
-    }, 1200)
+      setAssignSuccessMessage(`✓ Successfully allocated ${res.assigned} lead(s) to ${assignStaff}!`)
+      resetAssignDirty()
+      await refreshData()
+      setTimeout(() => {
+        setAssignSuccessMessage('')
+        setAssignModalOpen(false)
+      }, 1200)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const totalUnassignedCount = useMemo(
-    () => rawDataList.filter((item) => !item.assignedTo).length,
-    [rawDataList]
-  )
+  // Raw Data only lists unassigned (status=raw) leads.
+  const totalUnassignedCount = rawDataList.length
 
   // Filtered Leads based on search, staff, source, and date range
   const filteredData = useMemo(() => {
@@ -923,11 +945,15 @@ export default function RawData() {
                     onChange={(e) => setAssignStaff(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-slate-50/50 px-3 py-2 text-xs font-semibold text-slate-800 transition focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/10 cursor-pointer"
                   >
-                    {ASSIGNABLE_STAFF.map((staff) => (
-                      <option key={staff.name} value={staff.name}>
-                        {staff.name} — ({staff.role})
-                      </option>
-                    ))}
+                    {assignableStaff.length === 0 ? (
+                      <option value="">No assignable staff</option>
+                    ) : (
+                      assignableStaff.map((staff) => (
+                        <option key={staff.name} value={staff.name}>
+                          {staff.name}{staff.role ? ` — (${staff.role})` : ''}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>
@@ -953,9 +979,10 @@ export default function RawData() {
                       onChange={(e) => setAssignCategory(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none cursor-pointer"
                     >
-                      {CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
+                      <option value="All Categories">All Categories</option>
+                      {categoryOptions.map((cat) => (
+                        <option key={cat.id} value={cat.name}>
+                          {cat.name}
                         </option>
                       ))}
                     </select>
@@ -1297,14 +1324,11 @@ export default function RawData() {
                     <option value="" disabled hidden>
                       Select Category
                     </option>
-                    <option value="Hospital">Hospital</option>
-                    <option value="Cosmetics Store">Cosmetics Store</option>
-                    <option value="Salon & Spa">Salon & Spa</option>
-                    <option value="Interior Designers">Interior Designers</option>
-                    <option value="Convention Center">Convention Center</option>
-                    <option value="Auto Wash">Auto Wash</option>
-                    <option value="Fancy Shops">Fancy Shops</option>
-                    <option value="Theater">Theater</option>
+                    {categoryOptions.map((cat) => (
+                      <option key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
                   </select>
                   <label
                     htmlFor="drawer_category"

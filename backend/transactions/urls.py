@@ -1,8 +1,13 @@
 from django.urls import path
 
-from .views import RawLeadDetailView, RawLeadListView
+from .views import (
+    LeadAssignView,
+    LeadDetailView,
+    LeadListView,
+)
 
 urlpatterns = [
-    path('raw-leads/', RawLeadListView.as_view(), name='transactions-raw-leads-list'),
-    path('raw-leads/<pk>/', RawLeadDetailView.as_view(), name='transactions-raw-lead-detail'),
+    path('leads/', LeadListView.as_view(), name='transactions-leads-list'),
+    path('leads/assign/', LeadAssignView.as_view(), name='transactions-leads-assign'),
+    path('leads/<pk>/', LeadDetailView.as_view(), name='transactions-lead-detail'),
 ]

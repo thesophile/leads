@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from rest_framework.test import APITestCase
 
-from transactions.admin import RawLeadAdmin
-from transactions.models import RawLead
+from transactions.admin import LeadAdmin
+from transactions.models import Lead
 
 from .admin import UserAdmin
 from .models import Company
@@ -100,9 +100,9 @@ class AdminQuerysetScopingTests(TestCase):
         self.assertIn('admin_b@globex.com', emails)
 
     def test_lead_admin_scoped_by_tenant(self):
-        RawLead.objects.create(id='RL-1', company='Hospital One', tenant=self.admin_a.company)
-        RawLead.objects.create(id='RL-2', company='Hospital Two')
-        qs = RawLeadAdmin(RawLead, admin.site).get_queryset(self._request_for(self.admin_a))
+        Lead.objects.create(id='RL-1', company='Hospital One', tenant=self.admin_a.company)
+        Lead.objects.create(id='RL-2', company='Hospital Two')
+        qs = LeadAdmin(Lead, admin.site).get_queryset(self._request_for(self.admin_a))
         self.assertEqual(set(qs.values_list('id', flat=True)), {'RL-1'})
 
 

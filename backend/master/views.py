@@ -8,7 +8,13 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can
 
-from .models import Branch
+from .models import Branch, Category
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['id', 'code', 'name']
 
 
 class BranchSerializer(serializers.ModelSerializer):
@@ -26,6 +32,17 @@ def generate_branch_code(name):
     prefix = re.sub(r'[^A-Za-z]', '', name)[:2].upper() or 'BR'
     base = f'{prefix}'
     existing = set(Branch.objects.filter(code__startswith=base).values_list('code', flat=True))
+    for _ in range(100):
+        candidate = f'{base}{random.randint(10, 99)}'
+        if candidate not in existing:
+            return candidate
+    return f'{base}{random.randint(100, 999)}'
+
+
+def generate_category_code(name):
+    prefix = re.sub(r'[^A-Za-z]', '', name)[:2].upper() or 'CT'
+    base = f'{prefix}'
+    existing = set(Category.objects.filter(code__startswith=base).values_list('code', flat=True))
     for _ in range(100):
         candidate = f'{base}{random.randint(10, 99)}'
         if candidate not in existing:
@@ -120,6 +137,81 @@ class BranchDetailView(APIView):
         except Exception:
             return Response(
                 {'detail': 'This branch is in use and cannot be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CategoryListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        categories = Category.objects.all().order_by('name')
+        return Response(CategorySerializer(categories, many=True).data)
+
+    def post(self, request):
+        if not can(request.user, 'category.manage'):
+            return Response(
+                {'detail': 'You do not have permission to create categories.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        name = request.data.get('name', '').strip()
+        if not name:
+            return Response(
+                {'detail': 'name: This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        category = Category.objects.create(
+            name=name,
+            code=generate_category_code(name),
+        )
+        return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
+
+
+class CategoryDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        try:
+            return Category.objects.get(pk=pk)
+        except Category.DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        if not can(request.user, 'category.manage'):
+            return Response(
+                {'detail': 'You do not have permission to edit categories.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        category = self.get_object(pk)
+        if category is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        name = request.data.get('name')
+        if name is not None:
+            name = name.strip()
+            if not name:
+                return Response(
+                    {'detail': 'name: This field may not be blank.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            category.name = name
+        category.save()
+        return Response(CategorySerializer(category).data)
+
+    def delete(self, request, pk):
+        if not can(request.user, 'category.manage'):
+            return Response(
+                {'detail': 'You do not have permission to delete categories.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        category = self.get_object(pk)
+        if category is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            category.delete()
+        except Exception:
+            return Response(
+                {'detail': 'This category is in use and cannot be deleted.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)

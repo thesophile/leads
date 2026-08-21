@@ -10,29 +10,42 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can
 
-from .models import RawLead
-from .serializers import RawLeadSerializer
+from .models import Lead
+from .serializers import LeadSerializer
 
 
-def generate_raw_id():
-    existing = set(RawLead.objects.values_list('id', flat=True))
+def generate_lead_id():
+    existing = set(Lead.objects.values_list('id', flat=True))
     for _ in range(200):
-        candidate = f'RAW-{random.randint(100000, 999999)}'
+        candidate = f'LEAD-{random.randint(100000, 999999)}'
         if candidate not in existing:
             return candidate
-    return f'RAW-{random.randint(1000000, 9999999)}'
+    return f'LEAD-{random.randint(1000000, 9999999)}'
 
 
-def scoped_queryset(user):
-    if user.is_superuser:
-        return RawLead.objects.all()
-    if user.has_permission('leads.view_all'):
-        # Managers/admins see their company's records plus legacy unassigned rows.
-        return RawLead.objects.filter(
-            Q(tenant=user.company) | Q(tenant__isnull=True)
-        )
-    # Regular staff only see the records they added themselves.
-    return RawLead.objects.filter(added_by=user.name)
+def scoped_queryset(user, status_filter='all'):
+    """Return the Lead queryset visible to ``user``.
+
+    Superusers see everything. Managers/admins (``leads.view_all``) see their
+    company's records plus legacy unassigned rows. Regular staff see the
+    records they added themselves plus the leads assigned to them. An optional
+    ``status_filter`` narrows the result by lead status.
+    """
+    qs = Lead.objects.all()
+    if not user.is_superuser:
+        if user.has_permission('leads.view_all'):
+            # Managers/admins see their company's records plus legacy rows.
+            qs = qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+        else:
+            # Regular staff see the leads assigned to them within their own
+            # company, plus the leads they still hold in raw status.
+            qs = qs.filter(
+                Q(tenant=user.company, assigned_to=user.name)
+                | Q(added_by=user.name, status=Lead.STATUS_RAW)
+            )
+    if status_filter and status_filter != 'all':
+        qs = qs.filter(status=status_filter)
+    return qs
 
 
 def format_display_date(value):
@@ -40,14 +53,15 @@ def format_display_date(value):
 
 
 def find_duplicate_lead(user, company):
-    """Return an existing RawLead with the same normalized company name, from
-    across the org (not just the current user's own records)."""
-    queryset = RawLead.objects.all()
+    """Return an existing Lead with the same normalized company name, from
+    across the org (not just the current user's own records) and regardless
+    of its current status."""
+    queryset = Lead.objects.all()
     if not user.is_superuser:
         queryset = queryset.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
     return queryset.filter(company__iexact=company).only(
         'id', 'company', 'contact', 'phone', 'category', 'city', 'added_by',
-        'display_date', 'date',
+        'display_date', 'date', 'status',
     ).first()
 
 
@@ -59,23 +73,24 @@ def duplicate_response(existing):
         {
             'detail': f'This lead was already entered by {added_by}{when_text}. '
                       f'Please use the existing record.',
-            'existing': RawLeadSerializer(existing).data,
+            'existing': LeadSerializer(existing).data,
         },
         status=status.HTTP_409_CONFLICT,
     )
 
 
-class RawLeadListView(APIView):
+class LeadListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not can(request.user, 'leads.view'):
+        if not can(request.user, 'leads.view', 'telecall.view'):
             return Response(
                 {'detail': 'You do not have permission to view leads.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        leads = scoped_queryset(request.user)
-        return Response(RawLeadSerializer(leads.order_by('-created_at'), many=True).data)
+        status_filter = request.query_params.get('status') or 'raw'
+        leads = scoped_queryset(request.user, status_filter)
+        return Response(LeadSerializer(leads.order_by('-created_at'), many=True).data)
 
     def post(self, request):
         if not can(request.user, 'leads.create'):
@@ -95,8 +110,8 @@ class RawLeadListView(APIView):
         phone = request.data.get('phone', '').strip()
         lead_date = date.today()
         try:
-            lead = RawLead.objects.create(
-                id=generate_raw_id(),
+            lead = Lead.objects.create(
+                id=generate_lead_id(),
                 company=company,
                 tenant=request.user.company,
                 contact=request.data.get('contact', '').strip(),
@@ -108,6 +123,7 @@ class RawLeadListView(APIView):
                 date=lead_date,
                 display_date=format_display_date(lead_date),
                 added_by=request.user.name,
+                status=Lead.STATUS_RAW,
             )
         except IntegrityError:
             # Concurrent duplicate insert lost the race at the DB level:
@@ -116,16 +132,16 @@ class RawLeadListView(APIView):
             if existing is not None:
                 return duplicate_response(existing)
             raise
-        return Response(RawLeadSerializer(lead).data, status=status.HTTP_201_CREATED)
+        return Response(LeadSerializer(lead).data, status=status.HTTP_201_CREATED)
 
 
-class RawLeadDetailView(APIView):
+class LeadDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
         try:
             return scoped_queryset(self.request.user).get(pk=pk)
-        except RawLead.DoesNotExist:
+        except Lead.DoesNotExist:
             return None
 
     def patch(self, request, pk):
@@ -134,7 +150,13 @@ class RawLeadDetailView(APIView):
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         user = request.user
         is_own = lead.added_by == user.name
-        if not (user.has_permission('leads.edit_own') and is_own) and not user.has_permission('leads.edit_all'):
+        if lead.status == Lead.STATUS_RAW:
+            can_edit = (user.has_permission('leads.edit_all')
+                        or (user.has_permission('leads.edit_own') and is_own))
+        else:
+            # Assigned leads are edited by the assigned staff or telecall editors.
+            can_edit = user.has_permission('telecall.edit') or lead.assigned_to == user.name
+        if not can_edit:
             return Response(
                 {'detail': 'You do not have permission to edit this lead.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -161,6 +183,17 @@ class RawLeadDetailView(APIView):
                 setattr(lead, field, value)
         if 'email' in request.data:
             lead.email = request.data.get('email', '').strip()
+        for field in ('assigned_to', 'call_status', 'priority', 'remarks',
+                      'last_call_date', 'next_follow_up_date', 'next_follow_up_time'):
+            if field in request.data:
+                value = request.data.get(field)
+                if isinstance(value, str):
+                    value = value.strip()
+                setattr(lead, field, value)
+        if 'has_follow_up' in request.data:
+            lead.has_follow_up = bool(request.data.get('has_follow_up'))
+        if 'assigned_to' in request.data and lead.assigned_to and user.company:
+            lead.tenant = user.company
         try:
             lead.save()
         except IntegrityError:
@@ -168,7 +201,7 @@ class RawLeadDetailView(APIView):
             if conflict is not None and conflict.id != lead.id:
                 return duplicate_response(conflict)
             raise
-        return Response(RawLeadSerializer(lead).data)
+        return Response(LeadSerializer(lead).data)
 
     def delete(self, request, pk):
         lead = self.get_object(pk)
@@ -183,3 +216,60 @@ class RawLeadDetailView(APIView):
             )
         lead.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LeadAssignView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not can(request.user, 'leads.assign'):
+            return Response(
+                {'detail': 'You do not have permission to assign leads to staff.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        assigned_to = (request.data.get('assigned_to') or '').strip()
+        if not assigned_to:
+            return Response(
+                {'detail': 'assigned_to: This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        category = (request.data.get('category') or '').strip()
+        from_date = request.data.get('from_date') or ''
+        to_date = request.data.get('to_date') or ''
+        try:
+            count = int(request.data.get('count') or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if count <= 0:
+            count = 1
+
+        queryset = scoped_queryset(request.user, Lead.STATUS_RAW).filter(assigned_to='')
+        if category and category != 'All Categories':
+            queryset = queryset.filter(category=category)
+        if from_date:
+            queryset = queryset.filter(date__gte=from_date)
+        if to_date:
+            queryset = queryset.filter(date__lte=to_date)
+
+        leads = list(queryset.order_by('-created_at')[:count])
+
+        updated = []
+        for lead in leads:
+            lead.assigned_to = assigned_to
+            lead.tenant = request.user.company
+            lead.status = Lead.STATUS_ASSIGNED
+            lead.call_status = 'Pending Call'
+            lead.remarks = 'Newly assigned from raw data.'
+            lead.save(update_fields=[
+                'assigned_to', 'tenant', 'status', 'call_status', 'remarks', 'updated_at',
+            ])
+            updated.append(lead)
+
+        return Response(
+            {
+                'assigned': len(updated),
+                'assigned_to': assigned_to,
+                'leads': LeadSerializer(updated, many=True).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )

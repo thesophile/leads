@@ -1,241 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Layout from '../../Layout/Layout'
-
-// Static realistic telecalling leads database with rich call history trail
-const STATIC_TELECALL_DATA = [
-  {
-    id: 'TC-101',
-    company: 'NEW LIFE MATERNITY HOSPITAL',
-    contact: 'Dr. Sarah Ahmed',
-    phone: '8714546783',
-    email: 'info@newlifehospital.com',
-    category: 'Hospital',
-    city: 'Calicut',
-    assignedTo: 'Priya Sharma',
-    callStatus: 'Interested',
-    priority: 'Hot', // Assessed after call
-    remarks: 'Very interested in CRM software for 3 clinic branches. Wants a demo this Thursday at 3 PM.',
-    lastCallDate: '12 Aug 2026',
-    nextFollowUpDate: '2026-08-14',
-    nextFollowUpTime: '03:00 PM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H1',
-        dateTime: '12 Aug 2026, 02:45 PM',
-        caller: 'Priya Sharma',
-        report: 'Called Dr. Sarah Ahmed. She requested an online ERP demo for 3 clinic branches.',
-        followUp: '14 Aug 2026, 03:00 PM',
-        status: 'Interested',
-      },
-      {
-        id: 'H2',
-        dateTime: '10 Aug 2026, 11:30 AM',
-        caller: 'Priya Sharma',
-        report: 'Initial connection call. Receptionist transferred to director Dr. Sarah.',
-        followUp: '12 Aug 2026, 02:30 PM',
-        status: 'Follow Up',
-      },
-    ],
-  },
-  {
-    id: 'TC-102',
-    company: 'SHADES.IN LUXURY EYEWEAR',
-    contact: 'Rahul Menon',
-    phone: '9845123991',
-    email: 'contact@shades.in',
-    category: 'Cosmetics Store',
-    city: 'Kochi',
-    assignedTo: 'Alex Joseph',
-    callStatus: 'Follow Up',
-    priority: 'Warm',
-    remarks: 'Spoke with store manager. Decision maker traveling, asked to call back on Monday.',
-    lastCallDate: '12 Aug 2026',
-    nextFollowUpDate: '2026-08-17',
-    nextFollowUpTime: '11:00 AM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H3',
-        dateTime: '12 Aug 2026, 10:15 AM',
-        caller: 'Alex Joseph',
-        report: 'Spoke with showroom manager. Managing director is in Dubai, returning Monday.',
-        followUp: '17 Aug 2026, 11:00 AM',
-        status: 'Follow Up',
-      },
-    ],
-  },
-  {
-    id: 'TC-103',
-    company: 'MANZOOR SUPER SPECIALITY HOSPITAL',
-    contact: 'Dr. Manzoor Ali',
-    phone: '9447118234',
-    email: 'admin@manzoorhospital.org',
-    category: 'Hospital',
-    city: 'Trivandrum',
-    assignedTo: 'Priya Sharma',
-    callStatus: 'Quotation Requested',
-    priority: 'Hot',
-    remarks: 'Approved initial proposal. Requested formal quotation with 10 user licenses.',
-    lastCallDate: '11 Aug 2026',
-    nextFollowUpDate: '2026-08-13',
-    nextFollowUpTime: '10:30 AM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H4',
-        dateTime: '11 Aug 2026, 04:30 PM',
-        caller: 'Priya Sharma',
-        report: 'Doctor reviewed demo video on WhatsApp. Requested formal commercial quotation with tax breakup.',
-        followUp: '13 Aug 2026, 10:30 AM',
-        status: 'Quotation Requested',
-      },
-      {
-        id: 'H5',
-        dateTime: '08 Aug 2026, 01:15 PM',
-        caller: 'Priya Sharma',
-        report: 'Sent introductory brochure and feature comparison PDF.',
-        followUp: '11 Aug 2026, 04:00 PM',
-        status: 'Follow Up',
-      },
-    ],
-  },
-  {
-    id: 'TC-104',
-    company: 'URBAN LIVING INTERIORS',
-    contact: 'Deepak Varma',
-    phone: '9744882190',
-    email: 'projects@urbanliving.in',
-    category: 'Interior Designers',
-    city: 'Calicut',
-    assignedTo: 'Shanu VR',
-    callStatus: 'Not Reachable',
-    priority: 'Cold',
-    remarks: 'Ringing no response on primary mobile. Tried twice.',
-    lastCallDate: '11 Aug 2026',
-    nextFollowUpDate: '2026-08-12',
-    nextFollowUpTime: '04:00 PM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H6',
-        dateTime: '11 Aug 2026, 03:20 PM',
-        caller: 'Shanu VR',
-        report: 'Dialed phone. Call went unanswered after 5 rings.',
-        followUp: '12 Aug 2026, 04:00 PM',
-        status: 'Not Reachable',
-      },
-    ],
-  },
-  {
-    id: 'TC-105',
-    company: 'ROYAL PALACE CONVENTION CENTRE',
-    contact: 'Kabeer Khan',
-    phone: '9567112004',
-    email: 'events@royalpalace.com',
-    category: 'Convention Center',
-    city: 'Thrissur',
-    assignedTo: 'Ananya Nair',
-    callStatus: 'Follow Up',
-    priority: 'Warm',
-    remarks: 'Requested pricing brochure on WhatsApp before booking meeting.',
-    lastCallDate: '10 Aug 2026',
-    nextFollowUpDate: '2026-08-15',
-    nextFollowUpTime: '02:00 PM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H7',
-        dateTime: '10 Aug 2026, 05:00 PM',
-        caller: 'Ananya Nair',
-        report: 'Requested detailed event booking package pricing via WhatsApp.',
-        followUp: '15 Aug 2026, 02:00 PM',
-        status: 'Follow Up',
-      },
-    ],
-  },
-  {
-    id: 'TC-106',
-    company: 'GLOW & SHINE BEAUTY SALON',
-    contact: 'Farzana K',
-    phone: '9123456780',
-    email: 'glowandshine@gmail.com',
-    category: 'Salon & Spa',
-    city: 'Kochi',
-    assignedTo: null, // Unassigned
-    callStatus: 'Pending Call',
-    priority: null, // NOT SET
-    remarks: 'Newly imported raw contact. Waiting for staff assignment and first call.',
-    lastCallDate: '-',
-    nextFollowUpDate: '',
-    nextFollowUpTime: '',
-    hasFollowUp: false,
-    history: [],
-  },
-  {
-    id: 'TC-107',
-    company: 'APEX AUTO SPA & DETAILING',
-    contact: 'Vipin Das',
-    phone: '9895001122',
-    email: 'apexautospa@yahoo.com',
-    category: 'Auto Wash',
-    city: 'Kannur',
-    assignedTo: null, // Unassigned
-    callStatus: 'Pending Call',
-    priority: null, // NOT SET
-    remarks: 'Website lead intake. Pending telecaller distribution.',
-    lastCallDate: '-',
-    nextFollowUpDate: '',
-    nextFollowUpTime: '',
-    hasFollowUp: false,
-    history: [],
-  },
-  {
-    id: 'TC-108',
-    company: 'KALYAN GRAND RESIDENCY',
-    contact: 'Suresh Kumar',
-    phone: '9847229911',
-    email: 'gm@kalyangrand.com',
-    category: 'Convention Center',
-    city: 'Kochi',
-    assignedTo: 'NIMISHA DAVIS',
-    callStatus: 'Quotation Requested',
-    priority: 'Hot',
-    remarks: 'Looking for integrated billing setup for banquet hall. Needs quotation urgently.',
-    lastCallDate: '12 Aug 2026',
-    nextFollowUpDate: '2026-08-13',
-    nextFollowUpTime: '02:30 PM',
-    hasFollowUp: true,
-    history: [
-      {
-        id: 'H8',
-        dateTime: '12 Aug 2026, 12:00 PM',
-        caller: 'NIMISHA DAVIS',
-        report: 'Spoke with General Manager. Discussed hall booking automation and requested quote.',
-        followUp: '13 Aug 2026, 02:30 PM',
-        status: 'Quotation Requested',
-      },
-    ],
-  },
-]
-
-const CALLERS = [
-  'All Callers',
-  'NIMISHA DAVIS',
-  'Shanu VR',
-  'Alex Joseph',
-  'Priya Sharma',
-  'Ananya Nair',
-]
-
-const ASSIGNABLE_STAFF = [
-  { name: 'NIMISHA DAVIS', role: 'Senior Telecaller' },
-  { name: 'Shanu VR', role: 'Sales Lead' },
-  { name: 'Alex Joseph', role: 'BDM' },
-  { name: 'Priya Sharma', role: 'Telecaller' },
-  { name: 'Ananya Nair', role: 'Telecaller' },
-  { name: 'Rahul Varma', role: 'Sales Associate' },
-]
+import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 
 const STATUSES = [
   'All Status',
@@ -316,8 +83,52 @@ function HistoryIcon({ className = 'w-4 h-4 text-brand-600' }) {
 }
 
 export default function Telecall() {
-  const [telecallList, setTelecallList] = useState(STATIC_TELECALL_DATA)
-  // Top Tab: 'all' | 'assigned' | 'unassigned' | 'followup'
+  const { user } = useAuth()
+  const [telecallList, setTelecallList] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const canViewAll = !!user && (can(user, 'leads.view_all') || user.is_superuser)
+
+  const callerOptions = useMemo(
+    () => [...new Set(telecallList.map((l) => l.assignedTo).filter(Boolean))],
+    [telecallList]
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchData() {
+      try {
+        const data = await api.get('/transactions/leads/?status=assigned')
+        if (!cancelled) setTelecallList(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function refreshData() {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await api.get('/transactions/leads/?status=assigned')
+      setTelecallList(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Top Tab: 'all' | 'assigned'
   const [activeTab, setActiveTab] = useState('all')
 
   // Selected Lead for Follow-Up History
@@ -347,15 +158,9 @@ export default function Telecall() {
     [telecallList, selectedLeadId]
   )
 
-  // Calculations for tab badges & KPI metrics
-  const totalAssignedCount = useMemo(
-    () => telecallList.filter((item) => item.assignedTo !== null).length,
-    [telecallList]
-  )
-  const totalUnassignedCount = useMemo(
-    () => telecallList.filter((item) => item.assignedTo === null).length,
-    [telecallList]
-  )
+  // Calculations for tab badges & KPI metrics. The Telecall list only contains
+  // assigned (status=assigned) leads, so all rows carry an assignee.
+  const totalAssignedCount = telecallList.length
   const hotLeadsCount = useMemo(
     () => telecallList.filter((l) => l.priority === 'Hot').length,
     [telecallList]
@@ -384,7 +189,7 @@ export default function Telecall() {
     setActiveLead(lead)
     setSelectedLeadId(lead.id)
     setFormData({
-      assignedTo: lead.assignedTo || 'NIMISHA DAVIS',
+      assignedTo: lead.assignedTo || callerOptions[0] || '',
       callStatus: lead.callStatus || 'Pending Call',
       priority: lead.priority || null, // Keep null if not rated yet
       remarks: lead.remarks || '',
@@ -394,7 +199,7 @@ export default function Telecall() {
     openDrawer()
   }
 
-  function handleSaveCall(e) {
+  async function handleSaveCall(e) {
     e.preventDefault()
     if (!activeLead) return
 
@@ -407,58 +212,37 @@ export default function Telecall() {
 
     const isActuallyCalled = formData.callStatus !== 'Pending Call'
 
-    const newHistoryEntry = isActuallyCalled
-      ? {
-          id: `H_${Date.now()}`,
-          dateTime: '12 Aug 2026, 03:00 PM',
-          caller: formData.assignedTo,
-          report: formData.remarks || 'Call outcome updated.',
-          followUp: formData.nextFollowUpDate
-            ? `${formData.nextFollowUpDate}, ${formData.nextFollowUpTime}`
-            : 'No follow up',
-          status: formData.callStatus,
-        }
-      : null
-
-    setTelecallList((prev) =>
-      prev.map((item) =>
-        item.id === activeLead.id
-          ? {
-              ...item,
-              assignedTo: formData.assignedTo,
-              callStatus: formData.callStatus,
-              priority: isActuallyCalled ? formData.priority : (item.priority || formData.priority),
-              remarks: formData.remarks || item.remarks,
-              nextFollowUpDate: formData.nextFollowUpDate,
-              nextFollowUpTime: formData.nextFollowUpTime,
-              hasFollowUp: isFollowUp,
-              lastCallDate: isActuallyCalled ? 'Today' : item.lastCallDate,
-              history: newHistoryEntry
-                ? [newHistoryEntry, ...(item.history || [])]
-                : (item.history || []),
-            }
-          : item
-      )
-    )
-    closeDrawer()
+    setError('')
+    try {
+      await api.patch(`/transactions/leads/${activeLead.id}/`, {
+        assigned_to: formData.assignedTo,
+        call_status: formData.callStatus,
+        priority: isActuallyCalled ? formData.priority : (activeLead.priority || formData.priority),
+        remarks: formData.remarks || activeLead.remarks,
+        next_follow_up_date: formData.nextFollowUpDate,
+        next_follow_up_time: formData.nextFollowUpTime,
+        has_follow_up: isFollowUp,
+        last_call_date: isActuallyCalled ? 'Today' : activeLead.lastCallDate,
+      })
+      await refreshData()
+      closeDrawer()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   // Filtered Telecall leads
   const filteredLeads = useMemo(() => {
     return telecallList.filter((item) => {
-      // 1. Assignment Tab Filter
-      if (activeTab === 'assigned' && item.assignedTo === null) return false
-      if (activeTab === 'unassigned' && item.assignedTo !== null) return false
-
-      // 2. Caller filter
+      // 1. Caller filter
       const matchesCaller =
         selectedCaller === 'All Callers' || item.assignedTo === selectedCaller
 
-      // 3. Status filter
+      // 2. Status filter
       const matchesStatus =
         selectedStatus === 'All Status' || item.callStatus === selectedStatus
 
-      // 4. Priority filter
+      // 3. Priority filter
       let matchesPriority = true
       if (selectedPriority === 'Hot') {
         matchesPriority = item.priority === 'Hot'
@@ -468,7 +252,7 @@ export default function Telecall() {
         matchesPriority = item.priority === 'Cold'
       }
 
-      // 5. Search query
+      // 4. Search query
       const matchesSearch =
         item.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -478,7 +262,7 @@ export default function Telecall() {
 
       return matchesCaller && matchesStatus && matchesPriority && matchesSearch
     })
-  }, [telecallList, activeTab, selectedCaller, selectedStatus, selectedPriority, searchQuery])
+  }, [telecallList, selectedCaller, selectedStatus, selectedPriority, searchQuery])
 
   return (
     <Layout>
@@ -519,7 +303,7 @@ export default function Telecall() {
 
         {/* Main Table Container */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs sm:p-4">
-          {/* Top Segmented Tabs: [ All Leads | Assigned Leads | Not Assigned | Follow Up Scheduled ] */}
+          {/* Top Segmented Tabs: [ All Leads | Assigned Leads | Follow Up Scheduled ] */}
           <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-100 pb-3.5 mb-3.5 lg:flex-row lg:items-center">
             <div className="inline-flex w-full max-w-full overflow-x-auto rounded-xl bg-slate-100 p-1 border border-slate-200/60 whitespace-nowrap lg:w-auto">
               {/* All Leads Tab */}
@@ -554,23 +338,6 @@ export default function Telecall() {
                   {totalAssignedCount}
                 </span>
               </button>
-
-              {/* Not Assigned Leads Tab */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('unassigned')}
-                className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === 'unassigned'
-                    ? 'bg-white text-amber-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                <span>Not Assigned</span>
-                <span className="rounded-full bg-amber-100 px-1.5 py-0.2 text-[10px] font-bold text-amber-700">
-                  {totalUnassignedCount}
-                </span>
-              </button>
             </div>
 
             {/* Instruction Tip */}
@@ -584,9 +351,8 @@ export default function Telecall() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               {/* Left Controls: Caller Filter + Status Filter + Priority Filter Pills */}
               <div className="flex flex-wrap items-center gap-2.5">
-                {/* Assigned Caller Dropdown (Only relevant if not in Unassigned tab) */}
-                {activeTab !== 'unassigned' && (
-                  <div className="flex items-center gap-1.5">
+                {/* Assigned Caller Dropdown */}
+                <div className="flex items-center gap-1.5">
                     <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                       <UserFilterIcon />
                       <span>Caller:</span>
@@ -596,17 +362,17 @@ export default function Telecall() {
                       onChange={(e) => setSelectedCaller(e.target.value)}
                       className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                     >
-                      {CALLERS.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
+                      <option value="All Callers">All Callers</option>
+                      {callerOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
                         </option>
                       ))}
                     </select>
                   </div>
-                )}
 
                 {/* Status Dropdown (Right Next to Caller) */}
-                <div className={`flex items-center gap-1.5 ${activeTab !== 'unassigned' ? 'pl-2 sm:border-l sm:border-slate-200' : ''}`}>
+                <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">
                   <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                     <CheckCircleIcon />
                     <span>Status:</span>
@@ -687,7 +453,9 @@ export default function Telecall() {
                   <th className="pb-2.5 pr-2 font-semibold min-w-[180px]">Company</th>
                   <th className="pb-2.5 pr-2 font-semibold min-w-[110px]">Mobile</th>
                   <th className="pb-2.5 pr-2 font-semibold min-w-[100px]">Category</th>
-                  <th className="pb-2.5 pr-2 font-semibold min-w-[120px]">Assigned To</th>
+                  {canViewAll && (
+                    <th className="pb-2.5 pr-2 font-semibold min-w-[120px]">Assigned To</th>
+                  )}
                   <th className="pb-2.5 pr-2 font-semibold min-w-[120px]">Call Status</th>
                   <th className="pb-2.5 pr-2 font-semibold min-w-[80px]">Priority</th>
                   <th className="pb-2.5 pr-2 font-semibold text-left min-w-[110px]">Action</th>
@@ -738,19 +506,21 @@ export default function Telecall() {
                         </td>
 
                         {/* Assigned Caller */}
-                        <td className="py-1.5 pr-3">
-                          {lead.assignedTo ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                              <span>{lead.assignedTo}</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
-                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              <span>Not Assigned</span>
-                            </span>
-                          )}
-                        </td>
+                        {canViewAll && (
+                          <td className="py-1.5 pr-3">
+                            {lead.assignedTo ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                <span>{lead.assignedTo}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                <span>Not Assigned</span>
+                              </span>
+                            )}
+                          </td>
+                        )}
 
                         {/* Call Status Badge */}
                         <td className="py-1.5 pr-3">
@@ -846,8 +616,12 @@ export default function Telecall() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
-                      No telecalling leads found matching criteria in this tab.
+                    <td colSpan={canViewAll ? 7 : 6} className="py-8 text-center text-xs text-slate-400">
+                      {isLoading
+                        ? 'Loading tele-call leads...'
+                        : error
+                        ? error
+                        : 'No leads assigned.'}
                     </td>
                   </tr>
                 )}
@@ -1096,11 +870,15 @@ export default function Telecall() {
                           onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
                           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         >
-                          {ASSIGNABLE_STAFF.map((staff) => (
-                            <option key={staff.name} value={staff.name}>
-                              {staff.name}
-                            </option>
-                          ))}
+                          {callerOptions.length === 0 ? (
+                            <option value="">No callers assigned</option>
+                          ) : (
+                            callerOptions.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))
+                          )}
                         </select>
                       </div>
 

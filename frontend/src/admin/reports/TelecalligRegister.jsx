@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
+import { api } from '../../api/client'
 
 const INITIAL_TELECALLING_REGISTER = [
   { id: 1, date: '10-08-2026', rawDate: '2026-08-10', lastCalledDate: '11-08-2026', company: 'N K BALAKRISHNAN MEMORIAL HOSPITAL', number: '4672284102', location: 'KSGD', staff: 'Malavika', category: 'Hospital', status: 'Not Interested' },
@@ -18,12 +19,12 @@ const INITIAL_TELECALLING_REGISTER = [
   { id: 14, date: '07-08-2026', rawDate: '2026-08-07', lastCalledDate: '09-08-2026', company: 'SHADES.IN LUXURY EYEWEAR', number: '9845123991', location: 'ERNAKULAM', staff: 'Alex Joseph', category: 'Boutique', status: 'Converted' },
 ]
 
-const CATEGORIES = ['All Category', 'Hospital', 'Furniture', 'Glass', 'Salon', 'Beauty Parlour', 'Resort', 'Boutique']
 const STAFF_LIST = ['All Staff', 'Malavika', 'Husna', 'Bincy', 'Alex Joseph', 'Priya Sharma', 'NIMISHA DAVIS', 'Ananya Nair', 'Shanu VR']
 const STATUS_LIST = ['All Status', 'Called', 'Not Interested', 'Quotation Requested', 'Follow Up', 'Converted', 'Wrong Number']
 const LOCATIONS = ['All Locations', 'KSGD', 'ALLEPPEY', 'THRISSUR', 'ERNAKULAM', 'KOZHIKODE', 'TRIVANDRUM', 'PALAKKAD']
 
 export default function TelecalligRegister() {
+  const [categoryOptions, setCategoryOptions] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
@@ -31,6 +32,24 @@ export default function TelecalligRegister() {
   const [status, setStatus] = useState('All Status')
   const [location, setLocation] = useState('All Locations')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchCategories() {
+      try {
+        const data = await api.get('/master/categories/')
+        if (!cancelled) setCategoryOptions(data)
+      } catch {
+        // Report filters can fall back to an empty category list.
+      }
+    }
+
+    fetchCategories()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
@@ -175,9 +194,10 @@ export default function TelecalligRegister() {
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
               >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
+                <option value="All Category">All Category</option>
+                {categoryOptions.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    {cat.name}
                   </option>
                 ))}
               </select>

@@ -1,27 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
-
-// Sample master categories data matching the screenshot
-const INITIAL_CATEGORIES = [
-  { id: '1', code: 'CO092', name: 'COSMETICS STORE' },
-  { id: '2', code: 'AU091', name: 'AUTO WASH' },
-  { id: '3', code: 'DE091', name: 'DECOR STORES' },
-  { id: '4', code: 'IN091', name: 'INTERIOR DESIGNERS' },
-  { id: '5', code: 'FA090', name: 'FANCY SHOPS' },
-  { id: '6', code: 'PE088', name: 'PERFUME SHOPE' },
-  { id: '7', code: 'SH087', name: 'SHOPPING MALL' },
-  { id: '8', code: 'GL090', name: 'GLASS SHOP' },
-  { id: '9', code: 'PL090', name: 'PLYWOOD&HARDWARE' },
-  { id: '10', code: 'EN085', name: 'ENTERTAINMENT PARK' },
-  { id: '11', code: 'HO083', name: 'Hospital' },
-  { id: '12', code: 'CA082', name: 'CAFES&REASTURANT' },
-  { id: '13', code: 'RE081', name: 'REASTURANT' },
-  { id: '14', code: 'CO080', name: 'CONVENTION CENTER' },
-  { id: '15', code: 'TH079', name: 'THEATER' },
-  { id: '16', code: 'ED078', name: 'EDUCATION & SCHOOL' },
-  { id: '17', code: 'CL077', name: 'CLINIC & HEALTHCARE' },
-  { id: '18', code: 'SA076', name: 'SALON & SPA' },
-]
+import { api } from '../../api/client'
 
 function PlusCircleIcon() {
   return (
@@ -108,52 +87,85 @@ function SpinnerIcon() {
 }
 
 export default function Categories() {
-  const [categories, setCategories] = useState(INITIAL_CATEGORIES)
+  const [categories, setCategories] = useState([])
   const [categoryName, setCategoryName] = useState('')
   const [editingId, setEditingId] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [toast, setToast] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deleteModalId, setDeleteModalId] = useState(null)
   const pageSize = 10
 
-  // Generate category code automatically
-  function generateCode(name) {
-    const prefix = (name.slice(0, 2) || 'CT').toUpperCase()
-    const num = Math.floor(100 + Math.random() * 900)
-    return `${prefix}${num}`
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchData() {
+      try {
+        const data = await api.get('/master/categories/')
+        if (!cancelled) setCategories(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
   }
 
-  function handleSave(e) {
+  async function refreshData() {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await api.get('/master/categories/')
+      setCategories(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleSave(e) {
     e.preventDefault()
+    if (isLoading) return
+    setError('')
     if (!categoryName.trim()) return
 
-    if (editingId) {
-      setCategories((prev) =>
-        prev.map((cat) =>
-          cat.id === editingId ? { ...cat, name: categoryName.trim() } : cat
-        )
-      )
-      setEditingId(null)
-    } else {
-      const newCategory = {
-        id: Date.now().toString(),
-        code: generateCode(categoryName),
-        name: categoryName.trim(),
+    try {
+      if (editingId) {
+        await api.patch(`/master/categories/${editingId}/`, {
+          name: categoryName.trim(),
+        })
+        showToast('Category updated.')
+      } else {
+        await api.post('/master/categories/', {
+          name: categoryName.trim(),
+        })
+        showToast('Category added.')
       }
-      setCategories((prev) => [newCategory, ...prev])
+      setEditingId(null)
+      setCategoryName('')
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
     }
-    setCategoryName('')
   }
 
   function handleEditClick(cat) {
-    setIsLoading(true)
-    setTimeout(() => {
-      setEditingId(cat.id)
-      setCategoryName(cat.name)
-      setIsLoading(false)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }, 450)
+    setEditingId(cat.id)
+    setCategoryName(cat.name)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleCancelEdit() {
@@ -161,9 +173,16 @@ export default function Categories() {
     setCategoryName('')
   }
 
-  function confirmDelete(id) {
-    setCategories((prev) => prev.filter((cat) => cat.id !== id))
+  async function confirmDelete(id) {
     setDeleteModalId(null)
+    setError('')
+    try {
+      await api.del(`/master/categories/${id}/`)
+      showToast('Category deleted.')
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   // Filtered categories based on search
@@ -186,6 +205,21 @@ export default function Categories() {
 
   return (
     <Layout>
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+          </span>
+          <span className="text-xs font-semibold text-slate-800">{toast}</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+          {error}
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Main Grid: Left Add/Edit Form + Right Category List Table */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
@@ -368,7 +402,11 @@ export default function Categories() {
                   ) : (
                     <tr>
                       <td colSpan={3} className="py-6 text-center text-xs text-slate-400">
-                        No categories found matching "{searchQuery}"
+                        {isLoading
+                          ? 'Loading categories...'
+                          : searchQuery
+                            ? `No categories found matching "${searchQuery}"`
+                            : 'No categories yet. Use the form to add your first category.'}
                       </td>
                     </tr>
                   )}

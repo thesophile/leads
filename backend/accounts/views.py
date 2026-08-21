@@ -77,6 +77,33 @@ class StaffListView(APIView):
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
+class StaffAssigneeListView(APIView):
+    """List assignable staff for the current user's company.
+
+    Used to populate the "Assign Leads to Staff" dropdown. Requires the same
+    permission as assignment (``leads.assign`` or ``telecall.assign``).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'leads.assign', 'telecall.assign'):
+            return Response(
+                {'detail': 'You do not have permission to assign leads to staff.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        users = (
+            User.objects
+            .filter(company=request.user.company)
+            .exclude(is_superuser=True)
+            .order_by('name')
+        )
+        return Response([
+            {'name': u.name, 'role': (u.role.name if u.role_id else '')}
+            for u in users
+        ])
+
+
 class StaffDetailView(APIView):
     """Role-managers (admin/manager): update staff of their own company."""
 
