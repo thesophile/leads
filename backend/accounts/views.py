@@ -87,7 +87,7 @@ class StaffAssigneeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not can(request.user, 'leads.assign', 'telecall.assign'):
+        if not can(request.user, 'leads.assign', 'telecall.assign', 'leads.view_all'):
             return Response(
                 {'detail': 'You do not have permission to assign leads to staff.'},
                 status=status.HTTP_403_FORBIDDEN,

@@ -30,18 +30,27 @@ def scoped_queryset(user, status_filter='all'):
     """Return the Lead queryset visible to ``user``.
 
     Superusers see everything. Managers/admins (``leads.view_all``) see their
-    company's records plus legacy unassigned rows. Regular staff see the
-    records they added themselves plus the leads assigned to them. An optional
-    ``status_filter`` narrows the result by lead status.
+    company's records plus legacy unassigned rows. Staff with
+    ``leads.view_raw_all`` see all raw data in the company but otherwise only
+    the leads assigned to them. An optional ``status_filter`` narrows the
+    result by lead status.
     """
     qs = Lead.objects.all()
     if not user.is_superuser:
         if user.has_permission('leads.view_all'):
             # Managers/admins see their company's records plus legacy rows.
             qs = qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+        elif user.has_permission('leads.view_raw_all'):
+            # Raw data is public in the company; otherwise staff only see
+            # the leads assigned to them.
+            qs = qs.filter(
+                Q(status=Lead.STATUS_RAW, tenant=user.company)
+                | Q(status=Lead.STATUS_RAW, tenant__isnull=True)
+                | Q(tenant=user.company, assigned_to=user.name)
+            )
         else:
-            # Regular staff see the leads assigned to them within their own
-            # company, plus the leads they still hold in raw status.
+            # Staff without view_raw_all see the leads assigned to them plus
+            # the leads they still hold in raw status.
             qs = qs.filter(
                 Q(tenant=user.company, assigned_to=user.name)
                 | Q(added_by=user.name, status=Lead.STATUS_RAW)

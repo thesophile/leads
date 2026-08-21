@@ -12,6 +12,7 @@ PERMISSION_GROUPS = [
         'permissions': [
             ('leads.view', 'View leads'),
             ('leads.view_all', 'View all company leads'),
+            ('leads.view_raw_all', 'View all raw leads'),
             ('leads.create', 'Add leads'),
             ('leads.edit_own', 'Edit own leads'),
             ('leads.edit_all', 'Edit any company lead'),
@@ -108,7 +109,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'reports.view', 'reports.export',
     ],
     'staff': [
-        'leads.view', 'leads.create', 'leads.edit_own', 'leads.delete',
+        'leads.view', 'leads.view_raw_all', 'leads.create', 'leads.edit_own', 'leads.delete',
         'telecall.view',
         'quotation.view',
         'client.view',

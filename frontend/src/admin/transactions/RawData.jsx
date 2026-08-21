@@ -6,15 +6,6 @@ import { can } from '../../utils/permissions'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
 
-const STAFF_LIST = [
-  'All Employees',
-  'Shanu VR',
-  'Alex Joseph',
-  'Priya Sharma',
-  'Ananya Nair',
-  'Rahul Varma',
-]
-
 const SOURCE_LIST = [
   'All Sources',
   'Google Search',
@@ -173,11 +164,13 @@ function TagIcon({ className = 'w-3.5 h-3.5' }) {
 
 export default function RawData() {
   const { user } = useAuth()
+  const isManager = can(user, 'leads.view_all')
+  const defaultStaffFilter = isManager ? 'All Employees' : 'My entries'
   const [rawDataList, setRawDataList] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
-  const [selectedStaff, setSelectedStaff] = useState('All Employees')
+  const [selectedStaff, setSelectedStaff] = useState(defaultStaffFilter)
   const [selectedSource, setSelectedSource] = useState('All Sources')
   const [dateFilterType, setDateFilterType] = useState('All Time')
   const [startDate, setStartDate] = useState('')
@@ -197,6 +190,10 @@ export default function RawData() {
   const canAssignLeads = !!user && (can(user, 'leads.assign') || user.is_superuser)
 
   const [assignableStaff, setAssignableStaff] = useState([])
+  const employeeNames = isManager ? assignableStaff.map((s) => s.name) : []
+  const staffOptions = isManager
+    ? ['All Employees', ...employeeNames]
+    : ['My entries', 'All Employees']
   const [categoryOptions, setCategoryOptions] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assignStaffList, setAssignStaffList] = useState([])
@@ -273,11 +270,11 @@ export default function RawData() {
       }
     }
 
-    if (canAssignLeads) fetchStaff()
+    if (isManager || canAssignLeads) fetchStaff()
     return () => {
       cancelled = true
     }
-  }, [canAssignLeads])
+  }, [canAssignLeads, isManager])
 
   useEffect(() => {
     let cancelled = false
@@ -538,7 +535,9 @@ export default function RawData() {
     return rawDataList.filter((l) => {
       // 1. Staff Filter
       const matchesStaff =
-        selectedStaff === 'All Employees' || l.addedBy === selectedStaff
+        selectedStaff === 'All Employees' ||
+        (selectedStaff === 'My entries' && l.addedBy === user?.name) ||
+        l.addedBy === selectedStaff
 
       // 2. Source Filter
       const matchesSource =
@@ -571,16 +570,16 @@ export default function RawData() {
 
       return matchesStaff && matchesSource && matchesSearch && matchesDate
     })
-  }, [rawDataList, selectedStaff, selectedSource, searchQuery, dateFilterType, startDate, endDate])
+  }, [rawDataList, selectedStaff, selectedSource, searchQuery, dateFilterType, startDate, endDate, user?.name])
 
   const hasActiveFilters =
-    selectedStaff !== 'All Employees' ||
+    selectedStaff !== defaultStaffFilter ||
     selectedSource !== 'All Sources' ||
     dateFilterType !== 'All Time' ||
     searchQuery.trim() !== ''
 
   function clearAllFilters() {
-    setSelectedStaff('All Employees')
+    setSelectedStaff(defaultStaffFilter)
     setSelectedSource('All Sources')
     setDateFilterType('All Time')
     setStartDate('')
@@ -676,7 +675,7 @@ export default function RawData() {
                     onChange={(e) => setSelectedStaff(e.target.value)}
                     className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                   >
-                    {STAFF_LIST.map((staff) => (
+                    {staffOptions.map((staff) => (
                       <option key={staff} value={staff}>
                         {staff}
                       </option>

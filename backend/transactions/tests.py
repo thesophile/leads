@@ -167,6 +167,18 @@ class LeadVisibilityTests(APITestCase):
         Lead.objects.create(
             id='RL-1', company='Brand New Co', added_by='Shanu VR', tenant=company,
         )
+        Lead.objects.create(
+            id='RL-2', company='Second Co', added_by='Priya Sharma', tenant=company,
+        )
+        staff_perms = company.roles.get(code='staff').permissions
+        raw_less_role = company.roles.create(
+            code='staff_no_raw', name='Staff (no raw)',
+            permissions=[p for p in staff_perms if p != 'leads.view_raw_all'],
+        )
+        self.raw_less_staff = User.objects.create_user(
+            email='rawless@acme.com', password='x', name='Ray Less',
+            role=raw_less_role, company=company,
+        )
 
     def test_manager_sees_all_assigned_leads(self):
         self.client.force_authenticate(self.manager)
@@ -181,10 +193,21 @@ class LeadVisibilityTests(APITestCase):
         resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual({l['id'] for l in resp.data}, {'TC-1'})
 
-    def test_staff_sees_own_raw_leads(self):
+    def test_staff_sees_all_company_raw_leads(self):
+        # Raw data is public within the company for staff with view_raw_all.
         self.client.force_authenticate(self.shanu)
         resp = self.client.get('/api/transactions/leads/?status=raw')
-        self.assertEqual({l['id'] for l in resp.data}, {'RL-1'})
+        self.assertEqual({l['id'] for l in resp.data}, {'RL-1', 'RL-2'})
+
+    def test_staff_without_view_raw_all_sees_only_own_raw_leads(self):
+        self.client.force_authenticate(self.raw_less_staff)
+        resp = self.client.get('/api/transactions/leads/?status=raw')
+        self.assertEqual({l['id'] for l in resp.data}, set())
+
+    def test_staff_without_view_raw_all_sees_only_own_assigned_leads(self):
+        self.client.force_authenticate(self.raw_less_staff)
+        resp = self.client.get('/api/transactions/leads/?status=assigned')
+        self.assertEqual(resp.data, [])
 
     def test_other_staff_sees_nothing(self):
         self.client.force_authenticate(self.priya)
