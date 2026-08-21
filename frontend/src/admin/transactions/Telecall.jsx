@@ -151,6 +151,7 @@ export default function Telecall() {
     nextFollowUpDate: '',
     nextFollowUpTime: '10:00 AM',
   })
+  const [isSaving, setIsSaving] = useState(false)
 
   // Currently selected lead object for History card
   const selectedLeadForHistory = useMemo(
@@ -181,11 +182,15 @@ export default function Telecall() {
 
   function closeDrawer() {
     setDrawerOpen(false)
-    setTimeout(() => setDrawerVisible(false), 300)
+    setTimeout(() => {
+      setDrawerVisible(false)
+      setIsSaving(false)
+    }, 300)
   }
 
   function handleOpenCallModal(lead, e) {
     if (e) e.stopPropagation()
+    setIsSaving(false)
     setActiveLead(lead)
     setSelectedLeadId(lead.id)
     setFormData({
@@ -201,7 +206,7 @@ export default function Telecall() {
 
   async function handleSaveCall(e) {
     e.preventDefault()
-    if (!activeLead) return
+    if (isSaving || !activeLead) return
 
     const isFollowUp =
       formData.callStatus === 'Follow Up' ||
@@ -213,11 +218,12 @@ export default function Telecall() {
     const isActuallyCalled = formData.callStatus !== 'Pending Call'
 
     setError('')
+    setIsSaving(true)
     try {
       await api.patch(`/transactions/leads/${activeLead.id}/`, {
         assigned_to: formData.assignedTo,
         call_status: formData.callStatus,
-        priority: isActuallyCalled ? formData.priority : (activeLead.priority || formData.priority),
+        priority: (isActuallyCalled ? formData.priority : (activeLead.priority || formData.priority)) || '',
         remarks: formData.remarks || activeLead.remarks,
         next_follow_up_date: formData.nextFollowUpDate,
         next_follow_up_time: formData.nextFollowUpTime,
@@ -227,6 +233,7 @@ export default function Telecall() {
       await refreshData()
       closeDrawer()
     } catch (err) {
+      setIsSaving(false)
       setError(err.message)
     }
   }
@@ -1012,16 +1019,25 @@ export default function Telecall() {
                 <button
                   type="button"
                   onClick={closeDrawer}
-                  className="flex-1 rounded-lg border border-slate-300 bg-white py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  disabled={isSaving}
+                  className="flex-1 rounded-lg border border-slate-300 bg-white py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   form="telecall-form"
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-brand-700"
+                  disabled={isSaving}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <CheckCircleIcon className="h-4 w-4" />
+                  {isSaving ? (
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                      <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <CheckCircleIcon className="h-4 w-4" />
+                  )}
                   Save Feedback
                 </button>
               </div>

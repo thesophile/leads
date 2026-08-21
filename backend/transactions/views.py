@@ -187,7 +187,9 @@ class LeadDetailView(APIView):
                       'last_call_date', 'next_follow_up_date', 'next_follow_up_time'):
             if field in request.data:
                 value = request.data.get(field)
-                if isinstance(value, str):
+                if value is None:
+                    value = ''
+                elif isinstance(value, str):
                     value = value.strip()
                 setattr(lead, field, value)
         if 'has_follow_up' in request.data:
