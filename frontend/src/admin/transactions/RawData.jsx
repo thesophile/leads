@@ -517,8 +517,15 @@ export default function RawData() {
   }
 
   // Raw Data only lists unassigned (status=raw) leads.
-  const totalUnassignedCount = rawDataList.length
-  const assignCountToUse = Math.min(assignCount, totalUnassignedCount || assignCount)
+  const totalUnassignedCount = useMemo(() => {
+    return rawDataList.filter((l) => {
+      if (assignCategory !== 'All Categories' && l.category !== assignCategory) return false
+      if (assignFromDate && !(l.date && l.date >= assignFromDate)) return false
+      if (assignToDate && !(l.date && l.date <= assignToDate)) return false
+      return true
+    }).length
+  }, [rawDataList, assignCategory, assignFromDate, assignToDate])
+  const assignCountToUse = Math.min(assignCount, totalUnassignedCount)
 
   // Filtered Leads based on search, staff, source, and date range
   const filteredData = useMemo(() => {
@@ -1129,7 +1136,7 @@ export default function RawData() {
               <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 flex items-center justify-between text-xs">
                 <span className="text-slate-600">
                   Ready to assign <strong className="text-slate-900">{assignCountToUse}</strong> leads out of{' '}
-                  <strong className="text-brand-600">{totalUnassignedCount}</strong> unassigned records in pool.
+                  <strong className="text-brand-600">{totalUnassignedCount}</strong> unassigned records matching filters.
                 </span>
               </div>
 
