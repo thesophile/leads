@@ -8,12 +8,18 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can
 
-from .models import Branch, Category
+from .models import Branch, Category, Source
 
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
+        fields = ['id', 'code', 'name']
+
+
+class SourceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Source
         fields = ['id', 'code', 'name']
 
 
@@ -43,6 +49,17 @@ def generate_category_code(name):
     prefix = re.sub(r'[^A-Za-z]', '', name)[:2].upper() or 'CT'
     base = f'{prefix}'
     existing = set(Category.objects.filter(code__startswith=base).values_list('code', flat=True))
+    for _ in range(100):
+        candidate = f'{base}{random.randint(10, 99)}'
+        if candidate not in existing:
+            return candidate
+    return f'{base}{random.randint(100, 999)}'
+
+
+def generate_source_code(name):
+    prefix = re.sub(r'[^A-Za-z]', '', name)[:2].upper() or 'SC'
+    base = f'{prefix}'
+    existing = set(Source.objects.filter(code__startswith=base).values_list('code', flat=True))
     for _ in range(100):
         candidate = f'{base}{random.randint(10, 99)}'
         if candidate not in existing:
@@ -212,6 +229,81 @@ class CategoryDetailView(APIView):
         except Exception:
             return Response(
                 {'detail': 'This category is in use and cannot be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SourceListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sources = Source.objects.all().order_by('name')
+        return Response(SourceSerializer(sources, many=True).data)
+
+    def post(self, request):
+        if not can(request.user, 'source.manage'):
+            return Response(
+                {'detail': 'You do not have permission to create sources.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        name = request.data.get('name', '').strip()
+        if not name:
+            return Response(
+                {'detail': 'name: This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        source = Source.objects.create(
+            name=name,
+            code=generate_source_code(name),
+        )
+        return Response(SourceSerializer(source).data, status=status.HTTP_201_CREATED)
+
+
+class SourceDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        try:
+            return Source.objects.get(pk=pk)
+        except Source.DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        if not can(request.user, 'source.manage'):
+            return Response(
+                {'detail': 'You do not have permission to edit sources.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        source = self.get_object(pk)
+        if source is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        name = request.data.get('name')
+        if name is not None:
+            name = name.strip()
+            if not name:
+                return Response(
+                    {'detail': 'name: This field may not be blank.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            source.name = name
+        source.save()
+        return Response(SourceSerializer(source).data)
+
+    def delete(self, request, pk):
+        if not can(request.user, 'source.manage'):
+            return Response(
+                {'detail': 'You do not have permission to delete sources.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        source = self.get_object(pk)
+        if source is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            source.delete()
+        except Exception:
+            return Response(
+                {'detail': 'This source is in use and cannot be deleted.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)

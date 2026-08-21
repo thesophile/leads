@@ -1,24 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
-
-// Static source master records matching BRD & CRM standards
-const STATIC_SOURCES = [
-  { id: '1', code: 'GO01', name: 'Google Search & SEO' },
-  { id: '2', code: 'WB02', name: 'Official Website' },
-  { id: '3', code: 'RF03', name: 'Customer Referral' },
-  { id: '4', code: 'FB04', name: 'Facebook Ads' },
-  { id: '5', code: 'IG05', name: 'Instagram Campaign' },
-  { id: '6', code: 'EX06', name: 'Existing Customer' },
-  { id: '7', code: 'DB07', name: 'Internal Database' },
-  { id: '8', code: 'AD08', name: 'Print & Billboard Advertisement' },
-  { id: '9', code: 'EH09', name: 'Business Exhibition & Expo' },
-  { id: '10', code: 'MN10', name: 'Manual Walk-in Entry' },
-  { id: '11', code: 'LI11', name: 'LinkedIn B2B Outreach' },
-  { id: '12', code: 'WA12', name: 'WhatsApp Business API' },
-  { id: '13', code: 'EM13', name: 'Email Marketing Campaign' },
-  { id: '14', code: 'TS14', name: 'Trade Show Conference' },
-  { id: '15', code: 'PT15', name: 'Channel Partner Network' },
-]
+import { api } from '../../api/client'
 
 function PlusCircleIcon() {
   return (
@@ -106,46 +88,85 @@ function SpinnerIcon() {
 }
 
 export default function Sources() {
-  const [sources, setSources] = useState(STATIC_SOURCES)
+  const [sources, setSources] = useState([])
   const [sourceName, setSourceName] = useState('')
   const [editingId, setEditingId] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [toast, setToast] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deleteModalId, setDeleteModalId] = useState(null)
   const pageSize = 10
 
-  function handleSave(e) {
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchData() {
+      try {
+        const data = await api.get('/master/sources/')
+        if (!cancelled) setSources(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  async function refreshData() {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await api.get('/master/sources/')
+      setSources(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleSave(e) {
     e.preventDefault()
+    if (isLoading) return
+    setError('')
     if (!sourceName.trim()) return
 
-    if (editingId) {
-      setSources((prev) =>
-        prev.map((src) =>
-          src.id === editingId ? { ...src, name: sourceName.trim() } : src
-        )
-      )
-      setEditingId(null)
-    } else {
-      const prefix = (sourceName.slice(0, 2) || 'SC').toUpperCase()
-      const newSource = {
-        id: Date.now().toString(),
-        code: `${prefix}${Math.floor(10 + Math.random() * 90)}`,
-        name: sourceName.trim(),
+    try {
+      if (editingId) {
+        await api.patch(`/master/sources/${editingId}/`, {
+          name: sourceName.trim(),
+        })
+        showToast('Source updated.')
+      } else {
+        await api.post('/master/sources/', {
+          name: sourceName.trim(),
+        })
+        showToast('Source added.')
       }
-      setSources((prev) => [newSource, ...prev])
+      setEditingId(null)
+      setSourceName('')
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
     }
-    setSourceName('')
   }
 
   function handleEditClick(src) {
-    setIsLoading(true)
-    setTimeout(() => {
-      setEditingId(src.id)
-      setSourceName(src.name)
-      setIsLoading(false)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }, 400)
+    setEditingId(src.id)
+    setSourceName(src.name)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleCancelEdit() {
@@ -153,9 +174,16 @@ export default function Sources() {
     setSourceName('')
   }
 
-  function confirmDelete(id) {
-    setSources((prev) => prev.filter((src) => src.id !== id))
+  async function confirmDelete(id) {
     setDeleteModalId(null)
+    setError('')
+    try {
+      await api.del(`/master/sources/${id}/`)
+      showToast('Source deleted.')
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   // Filtered sources based on search
@@ -178,6 +206,21 @@ export default function Sources() {
 
   return (
     <Layout>
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+          </span>
+          <span className="text-xs font-semibold text-slate-800">{toast}</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+          {error}
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Main Grid: Left Add/Edit Form + Right Source List Table */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
@@ -360,7 +403,11 @@ export default function Sources() {
                   ) : (
                     <tr>
                       <td colSpan={3} className="py-6 text-center text-xs text-slate-400">
-                        No sources found matching "{searchQuery}"
+                        {isLoading
+                          ? 'Loading sources...'
+                          : searchQuery
+                            ? `No sources found matching "${searchQuery}"`
+                            : 'No sources yet. Add your first source.'}
                       </td>
                     </tr>
                   )}
