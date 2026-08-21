@@ -1,6 +1,7 @@
 import random
 from datetime import date, datetime
 
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework import status
@@ -12,6 +13,8 @@ from accounts.permissions import can
 
 from .models import CallHistory, Lead
 from .serializers import LeadSerializer
+
+User = get_user_model()
 
 
 def generate_lead_id():
@@ -246,12 +249,28 @@ class LeadAssignView(APIView):
                 {'detail': 'You do not have permission to assign leads to staff.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        assigned_to = (request.data.get('assigned_to') or '').strip()
+        assigned_raw = request.data.get('assigned_to')
+        if isinstance(assigned_raw, str):
+            assigned_raw = [assigned_raw]
+        assigned_to = [str(n).strip() for n in (assigned_raw or []) if str(n).strip()]
         if not assigned_to:
             return Response(
-                {'detail': 'assigned_to: This field is required.'},
+                {'detail': 'assigned_to: At least one staff member is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if request.user.company:
+            valid_names = set(
+                User.objects
+                .filter(company=request.user.company)
+                .exclude(is_superuser=True)
+                .values_list('name', flat=True)
+            )
+            unknown = [name for name in assigned_to if name not in valid_names]
+            if unknown:
+                return Response(
+                    {'detail': f'assigned_to: Unknown staff member(s): {", ".join(unknown)}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         category = (request.data.get('category') or '').strip()
         from_date = request.data.get('from_date') or ''
         to_date = request.data.get('to_date') or ''
@@ -273,8 +292,9 @@ class LeadAssignView(APIView):
         leads = list(queryset.order_by('-created_at')[:count])
 
         updated = []
-        for lead in leads:
-            lead.assigned_to = assigned_to
+        for index, lead in enumerate(leads):
+            assignee = assigned_to[index % len(assigned_to)]
+            lead.assigned_to = assignee
             lead.tenant = request.user.company
             lead.status = Lead.STATUS_ASSIGNED
             lead.call_status = 'Pending Call'

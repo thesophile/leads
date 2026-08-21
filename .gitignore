@@ -67,7 +67,6 @@ pip-wheel-metadata/
 *.suo
 *.ntvs*
 *.njsproj
-*.njsproj
 *.sln
 *.sw?
 

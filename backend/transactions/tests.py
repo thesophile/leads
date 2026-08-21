@@ -58,7 +58,7 @@ class AssignLeadsToStaffTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.data['assigned'], 3)
-        self.assertEqual(resp.data['assigned_to'], 'Shanu VR')
+        self.assertEqual(resp.data['assigned_to'], ['Shanu VR'])
         # No new records are created: 6 total leads, 3 flip to assigned.
         self.assertEqual(Lead.objects.count(), 6)
         self.assertEqual(Lead.objects.filter(status='assigned').count(), 3)
@@ -93,6 +93,38 @@ class AssignLeadsToStaffTests(APITestCase):
         resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 5)
+
+    def test_assign_to_multiple_staff_distributes_round_robin(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': ['Shanu VR', 'Staff A'], 'count': 5,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['assigned'], 5)
+        self.assertEqual(set(resp.data['assigned_to']), {'Shanu VR', 'Staff A'})
+        self.assertEqual(
+            Lead.objects.filter(assigned_to='Shanu VR', status='assigned').count(),
+            3,
+        )
+        self.assertEqual(
+            Lead.objects.filter(assigned_to='Staff A', status='assigned').count(),
+            2,
+        )
+        self.assertEqual(Lead.objects.filter(status='raw').count(), 1)
+
+    def test_assign_rejects_empty_staff_list(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': [], 'count': 2,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_assign_rejects_unknown_staff(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': ['Shanu VR', 'Ghost User'], 'count': 2,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
 
 
 def test_assigned_legacy_lead_gains_tenant(self):

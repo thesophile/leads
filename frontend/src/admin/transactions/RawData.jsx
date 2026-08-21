@@ -199,7 +199,8 @@ export default function RawData() {
   const [assignableStaff, setAssignableStaff] = useState([])
   const [categoryOptions, setCategoryOptions] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
-  const [assignStaff, setAssignStaff] = useState('')
+  const [assignStaffList, setAssignStaffList] = useState([])
+  const [assignStaffOpen, setAssignStaffOpen] = useState(false)
   const [assignCategory, setAssignCategory] = useState('All Categories')
   const [assignFromDate, setAssignFromDate] = useState('')
   const [assignToDate, setAssignToDate] = useState('')
@@ -213,13 +214,13 @@ export default function RawData() {
     assignModalOpen,
     useMemo(
       () => ({
-        assignStaff,
+        assignStaffList,
         assignCategory,
         assignFromDate,
         assignToDate,
         assignCount,
       }),
-      [assignStaff, assignCategory, assignFromDate, assignToDate, assignCount]
+      [assignStaffList, assignCategory, assignFromDate, assignToDate, assignCount]
     )
   )
 
@@ -266,7 +267,6 @@ export default function RawData() {
         const data = await api.get('/auth/assignable-staff/')
         if (!cancelled) {
           setAssignableStaff(data)
-          if (data.length > 0) setAssignStaff((prev) => prev || data[0].name)
         }
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -467,25 +467,46 @@ export default function RawData() {
     }
   }
 
+  function toggleAssignStaff(name) {
+    setAssignStaffList((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+    )
+  }
+
+  function formatAssignStaffSummary(names) {
+    const joined = names.join(', ')
+    const maxLen = 42
+    if (joined.length <= maxLen) return joined
+    let cut = joined.slice(0, maxLen)
+    const lastComma = cut.lastIndexOf(', ')
+    if (lastComma > 0) cut = cut.slice(0, lastComma)
+    return `${cut}…`
+  }
+
   async function handleExecuteAssign(e) {
     e.preventDefault()
     if (isSaving) return
     setError('')
+    if (assignStaffList.length === 0) {
+      setError('Please select at least one staff member.')
+      return
+    }
 
     setIsSaving(true)
     try {
       const res = await api.post('/transactions/leads/assign/', {
-        assigned_to: assignStaff,
+        assigned_to: assignStaffList,
         category: assignCategory,
         from_date: assignFromDate,
         to_date: assignToDate,
         count: assignCount,
       })
-      setAssignSuccessMessage(`✓ Successfully allocated ${res.assigned} lead(s) to ${assignStaff}!`)
+      setAssignSuccessMessage(`✓ Successfully allocated ${res.assigned} lead(s) to ${formatAssignStaffSummary(assignStaffList)}!`)
       resetAssignDirty()
       await refreshData()
       setTimeout(() => {
         setAssignSuccessMessage('')
+        setAssignStaffList([])
         setAssignModalOpen(false)
       }, 1200)
     } catch (err) {
@@ -933,28 +954,73 @@ export default function RawData() {
                       Select Staff Member
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Target: <strong>{assignStaff}</strong></span>
-                  </div>
+                  <span className="text-[11px] font-medium text-slate-500">
+                    {assignStaffList.length === 0
+                      ? 'None selected'
+                      : `${assignStaffList.length} selected`}
+                  </span>
                 </div>
 
                 <div className="relative mt-1">
-                  <select
-                    value={assignStaff}
-                    onChange={(e) => setAssignStaff(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-50/50 px-3 py-2 text-xs font-semibold text-slate-800 transition focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/10 cursor-pointer"
+                  {/* Multi-select trigger */}
+                  <button
+                    type="button"
+                    onClick={() => setAssignStaffOpen((v) => !v)}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-slate-50/50 px-3 py-2 text-left text-xs transition cursor-pointer ${
+                      assignStaffOpen
+                        ? 'border-brand-500 ring-2 ring-brand-500/10'
+                        : 'border-slate-300'
+                    }`}
                   >
-                    {assignableStaff.length === 0 ? (
-                      <option value="">No assignable staff</option>
-                    ) : (
-                      assignableStaff.map((staff) => (
-                        <option key={staff.name} value={staff.name}>
-                          {staff.name}{staff.role ? ` — (${staff.role})` : ''}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                    <span className={`truncate font-semibold ${
+                      assignStaffList.length === 0 ? 'text-slate-400' : 'text-slate-800'
+                    }`}>
+                      {assignStaffList.length === 0
+                        ? 'Select staff members…'
+                        : formatAssignStaffSummary(assignStaffList)}
+                    </span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${assignStaffOpen ? 'rotate-180' : ''}`}
+                      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+
+                  {/* Checkbox dropdown panel */}
+                  {assignStaffOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setAssignStaffOpen(false)}
+                      />
+                      <div className="absolute left-0 right-0 z-20 mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                        {assignableStaff.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-slate-400">No assignable staff</p>
+                        ) : (
+                          assignableStaff.map((staff) => {
+                            const isChecked = assignStaffList.includes(staff.name)
+                            return (
+                              <label
+                                key={staff.name}
+                                className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => toggleAssignStaff(staff.name)}
+                                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                                />
+                                <span className="font-semibold text-slate-800">{staff.name}</span>
+                                {staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
+                              </label>
+                            )
+                          })
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1076,9 +1142,10 @@ export default function RawData() {
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition active:scale-[0.98] cursor-pointer"
+                  disabled={isSaving || assignStaffList.length === 0}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <span>✓ Assign {assignCount} Lead(s) to {assignStaff}</span>
+                  <span>✓ Assign {assignCount} Lead(s) to {assignStaffList.length > 0 ? `${assignStaffList.length} Staff` : 'Select Staff'}</span>
                 </button>
               </div>
             </form>
