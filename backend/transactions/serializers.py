@@ -86,6 +86,12 @@ class LeadSerializer(serializers.ModelSerializer):
         ]
 
     def get_quotation(self, obj):
+        quotations = self.context.get('quotations')
+        if quotations is not None:
+            quotation = quotations.get(obj.id)
+            if quotation is None:
+                return None
+            return QuotationSerializer(quotation).data
         quotation = Quotation.objects.filter(lead_id=obj.id).first()
         if quotation is None:
             return None

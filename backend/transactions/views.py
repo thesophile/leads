@@ -101,8 +101,17 @@ class LeadListView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         status_filter = request.query_params.get('status') or 'raw'
-        leads = scoped_queryset(request.user, status_filter)
-        return Response(LeadSerializer(leads.order_by('-created_at'), many=True).data)
+        leads = scoped_queryset(request.user, status_filter).order_by('-created_at')
+        leads = leads.prefetch_related('history')
+        quotations = {
+            quotation.lead_id: quotation
+            for quotation in Quotation.objects.filter(
+                lead_id__in=leads.values_list('id', flat=True)
+            )
+        }
+        return Response(
+            LeadSerializer(leads, many=True, context={'quotations': quotations}).data
+        )
 
     def post(self, request):
         if not can(request.user, 'leads.create'):

@@ -113,7 +113,7 @@ class CallHistory(models.Model):
 
 class Quotation(models.Model):
     id = models.CharField(max_length=30, primary_key=True)
-    lead_id = models.CharField(max_length=30, blank=True)
+    lead_id = models.CharField(max_length=30, blank=True, db_index=True)
     customer = models.CharField(max_length=120, blank=True)
     company = models.CharField(max_length=200)
     tenant = models.ForeignKey(

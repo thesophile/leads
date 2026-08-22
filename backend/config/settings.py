@@ -104,6 +104,10 @@ DATABASES = {
     }
 }
 
+# Reuse the database connection across requests to avoid re-connecting
+# (and re-handshaking) on every request in development.
+CONN_MAX_AGE = 60
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
