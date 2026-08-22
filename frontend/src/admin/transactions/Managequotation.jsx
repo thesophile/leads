@@ -320,6 +320,17 @@ export default function Managequotation() {
   const [sourceVal, setSourceVal] = useState('Google Search')
   const [currencyVal, setCurrencyVal] = useState('INR (₹)')
   const [remarksVal, setRemarksVal] = useState('')
+  const [validationErrors, setValidationErrors] = useState({})
+
+  function clearError(field) {
+    setValidationErrors((prev) => {
+      if (!(field in prev)) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
   const [submitMessage, setSubmitMessage] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [discardProposalOpen, setDiscardProposalOpen] = useState(false)
@@ -422,6 +433,7 @@ export default function Managequotation() {
 
   // Open "New Proposal" Modal
   function handleOpenNewProposalModal(quote = null) {
+    setValidationErrors({})
     if (quote) {
       setEditingProposalId(quote.id)
       setBdm(quote.bdm || quote.staff || 'Alex Joseph')
@@ -457,9 +469,31 @@ export default function Managequotation() {
     setProposalModalOpen(true)
   }
 
+  function validateProposalForm() {
+    const errors = {}
+    const stripHtml = (html) => (html ? String(html).replace(/<[^>]*>/g, '').trim() : '')
+    const rules = [
+      { key: 'customerPerson', label: 'Client Name', value: customerPerson.trim() },
+      { key: 'scopeHtml', label: 'Scope & Deliverables', value: stripHtml(scopeHtml) },
+      { key: 'termsHtml', label: 'Proposal in Detail', value: stripHtml(termsHtml) },
+      { key: 'totalVal', label: 'Total', value: totalVal.trim() },
+    ]
+    rules.forEach(({ key, label, value }) => {
+      if (!value) errors[key] = `${label} is required`
+    })
+    return errors
+  }
+
   // Handle Proposal Submission for Approval
   async function handleSubmitProposal(e) {
     e.preventDefault()
+
+    const errors = validateProposalForm()
+    setValidationErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setSubmitMessage('Please fill in the required fields highlighted below.')
+      return
+    }
 
     const currentScope = scopeHtml
     const currentTerms = termsHtml
@@ -501,10 +535,10 @@ export default function Managequotation() {
       const newProposal = {
         id: nextApprovalId,
         leadId: `LEAD-${Date.now().toString().slice(-4)}`,
-        customer: customerPerson || 'New Contact',
-        company: companyName || 'New Client Enterprise',
-        mobile: mobileNum || '9800000000',
-        email: 'info@client.com',
+        customer: customerPerson,
+        company: companyName,
+        mobile: mobileNum,
+        email: '',
         category: categoryName,
         city: 'Kerala',
         bdm,
@@ -1135,9 +1169,17 @@ export default function Managequotation() {
                     type="text"
                     placeholder="Customer / Contact Person"
                     value={customerPerson}
-                    onChange={(e) => setCustomerPerson(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    onChange={(e) => {
+                      setCustomerPerson(e.target.value)
+                      clearError('customerPerson')
+                    }}
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${validationErrors.customerPerson ? 'border-rose-400' : 'border-slate-300'}`}
                   />
+                  {validationErrors.customerPerson && (
+                    <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                      {validationErrors.customerPerson}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1146,17 +1188,25 @@ export default function Managequotation() {
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Scope &amp; Deliverables
                 </label>
-                <div className="rounded-lg border border-slate-300 overflow-hidden bg-white shadow-2xs">
+                <div className={`rounded-lg border overflow-hidden bg-white shadow-2xs ${validationErrors.scopeHtml ? 'border-rose-400' : 'border-slate-300'}`}>
                   <ReactQuill
                     theme="snow"
                     className="quill-tall"
                     value={scopeHtml}
-                    onChange={setScopeHtml}
+                    onChange={(value) => {
+                      setScopeHtml(value)
+                      clearError('scopeHtml')
+                    }}
                     modules={QUILL_MODULES}
                     formats={QUILL_FORMATS}
                     placeholder="Enter detailed deliverables, software features, and module breakdown..."
                   />
                 </div>
+                {validationErrors.scopeHtml && (
+                  <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                    {validationErrors.scopeHtml}
+                  </p>
+                )}
               </div>
 
               {/* Rich Text Editor 2 - Proposal in Detail */}
@@ -1164,17 +1214,25 @@ export default function Managequotation() {
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Proposal in Detail
                 </label>
-                <div className="rounded-lg border border-slate-300 overflow-hidden bg-white shadow-2xs">
+                <div className={`rounded-lg border overflow-hidden bg-white shadow-2xs ${validationErrors.termsHtml ? 'border-rose-400' : 'border-slate-300'}`}>
                   <ReactQuill
                     theme="snow"
                     className="quill-tall"
                     value={termsHtml}
-                    onChange={setTermsHtml}
+                    onChange={(value) => {
+                      setTermsHtml(value)
+                      clearError('termsHtml')
+                    }}
                     modules={QUILL_MODULES}
                     formats={QUILL_FORMATS}
                     placeholder="Enter detailed technical architecture, module breakdown, milestone roadmap, SLA, warranty, and commercial terms..."
                   />
                 </div>
+                {validationErrors.termsHtml && (
+                  <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                    {validationErrors.termsHtml}
+                  </p>
+                )}
               </div>
 
               {/* Financial & Source Grid */}
@@ -1187,9 +1245,17 @@ export default function Managequotation() {
                     type="text"
                     placeholder="Total Amount"
                     value={totalVal}
-                    onChange={(e) => setTotalVal(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    onChange={(e) => {
+                      setTotalVal(e.target.value)
+                      clearError('totalVal')
+                    }}
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${validationErrors.totalVal ? 'border-rose-400' : 'border-slate-300'}`}
                   />
+                  {validationErrors.totalVal && (
+                    <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                      {validationErrors.totalVal}
+                    </p>
+                  )}
                 </div>
 
                 <div>
