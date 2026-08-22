@@ -406,9 +406,9 @@ export default function Branch() {
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-black text-slate-800 font-bold uppercase tracking-wider text-[11px]">
-                    <th className="pb-2 font-semibold w-72">Branch Name</th>
-                    <th className="pb-2 font-semibold w-72">Address</th>
-                    <th className="pb-2 font-semibold text-left">Actions</th>
+                    <th className="pb-2 font-semibold w-48">Branch Name</th>
+                    <th className="pb-2 font-semibold">Address</th>
+                    <th className="pb-2 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
@@ -421,19 +421,19 @@ export default function Branch() {
                           editingId === br.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
-                        <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={br.name}>
+                        <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[180px]" title={br.name}>
                           {truncateName(br.name)}
                         </td>
                         <td className="py-0.5 pr-2">
                           <span
-                            className="block max-w-[220px] truncate text-xs text-slate-500"
+                            className="block truncate text-xs text-slate-500"
                             title={br.address || ''}
                           >
                             {br.address || '—'}
                           </span>
                         </td>
-                        <td className="py-0.5 pr-2 text-left">
-                          <div className="flex items-center gap-1.5">
+                        <td className="py-0.5 pr-2 text-right">
+                          <div className="flex items-center gap-1.5 justify-end">
                             <button
                               type="button"
                               onClick={() => handleEditClick(br)}
