@@ -69,6 +69,23 @@ function BuildingIcon({ className = 'w-3.5 h-3.5' }) {
   )
 }
 
+function PhoneIcon({ className = 'w-3.5 h-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  )
+}
+
+function LockIcon({ className = 'w-3.5 h-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
 function SaveIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -170,6 +187,36 @@ function FloatingField({ label, id, value, onChange, type = 'text', icon }) {
       <label
         htmlFor={id}
         className={`absolute ${icon ? 'left-8' : 'left-3'} -top-2 z-10 bg-white px-1 text-[10px] font-medium text-slate-500 transition-all pointer-events-none peer-placeholder-shown:top-2 peer-placeholder-shown:text-xs peer-placeholder-shown:text-slate-400 peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600`}
+      >
+        {label}
+      </label>
+    </div>
+  )
+}
+
+function FloatingSelect({ label, id, value, onChange, icon, children }) {
+  return (
+    <div className="relative mt-2">
+      {icon && (
+        <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-slate-400">
+          {icon}
+        </span>
+      )}
+      <select
+        id={id}
+        value={value}
+        onChange={onChange}
+        className={`${inputClass} ${icon ? 'pl-9' : ''} peer cursor-pointer ${value ? '' : 'text-slate-400'}`}
+      >
+        {children}
+      </select>
+      <label
+        htmlFor={id}
+        className={`absolute ${icon ? 'left-8' : 'left-3'} z-10 bg-white px-1 font-medium transition-all pointer-events-none ${
+          value
+            ? '-top-2 text-[10px] text-slate-500 peer-focus:text-brand-600'
+            : 'top-2 text-xs text-slate-400 peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600'
+        }`}
       >
         {label}
       </label>
@@ -463,58 +510,42 @@ export default function Staff() {
 
               <FloatingField label="Email" id="emp_email" type="email" value={formData.email} onChange={(v) => setFormData({ ...formData, email: v })} icon={<MailIcon />} />
 
-              <FloatingField label="Phone" id="emp_phone" value={formData.phone} onChange={(v) => setFormData({ ...formData, phone: v })} />
+              <FloatingField label="Phone" id="emp_phone" value={formData.phone} onChange={(v) => setFormData({ ...formData, phone: v })} icon={<PhoneIcon />} />
 
-              <div className="relative mt-2">
-                <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-slate-400">
-                  <BuildingIcon />
-                </span>
-                <select
-                  id="emp_branch"
-                  value={formData.branch}
-                  onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                  className={`${inputClass} ${formData.branch ? '' : 'text-slate-400'} cursor-pointer pl-9`}
-                >
-                  <option value="" disabled hidden>
-                    Select Branch
+              <FloatingSelect
+                label="Branch"
+                id="emp_branch"
+                value={formData.branch}
+                onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                icon={<BuildingIcon />}
+              >
+                <option value="" disabled hidden />
+                {branches.length === 0 && <option value="" disabled>No branches yet</option>}
+                {branches.map((b) => (
+                  <option key={b.id} value={b.name} className="text-slate-800">
+                    {b.name}
                   </option>
-                  {branches.length === 0 && <option value="" disabled>No branches yet</option>}
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.name} className="text-slate-800">
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-                <label htmlFor="emp_branch" className="absolute left-8 -top-2 z-10 bg-white px-1 text-[10px] font-medium pointer-events-none text-slate-500">
-                  Branch
-                </label>
-              </div>
+                ))}
+              </FloatingSelect>
 
-              <div className="relative mt-2">
-                <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-slate-400">
-                  <BriefcaseIcon />
-                </span>
-                <select
-                  id="emp_role"
-                  value={formData.role ?? ''}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value ? Number(e.target.value) : null })}
-                  className={`${inputClass} cursor-pointer pl-9`}
-                >
-                  <option value="" disabled hidden>Select Role</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id} className="text-slate-800">
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-                <label htmlFor="emp_role" className="absolute left-8 -top-2 z-10 bg-white px-1 text-[10px] font-medium pointer-events-none text-slate-500">
-                  Role
-                </label>
-              </div>
+              <FloatingSelect
+                label="Role"
+                id="emp_role"
+                value={formData.role ?? ''}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value ? Number(e.target.value) : null })}
+                icon={<BriefcaseIcon />}
+              >
+                <option value="" disabled hidden />
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id} className="text-slate-800">
+                    {r.name}
+                  </option>
+                ))}
+              </FloatingSelect>
 
               {!isEditing && (
                 <>
-                  <FloatingField label="Password" id="emp_pw" type="password" value={formData.password} onChange={(v) => setFormData({ ...formData, password: v })} />
+                  <FloatingField label="Password" id="emp_pw" type="password" value={formData.password} onChange={(v) => setFormData({ ...formData, password: v })} icon={<LockIcon />} />
                   <p className="text-[10px] text-slate-400">
                     This is the password the employee uses to sign in.
                   </p>

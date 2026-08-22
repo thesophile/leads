@@ -59,6 +59,23 @@ function BuildingIcon({ className = 'w-3.5 h-3.5' }) {
   )
 }
 
+function PhoneIcon({ className = 'w-3.5 h-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  )
+}
+
+function LockIcon({ className = 'w-3.5 h-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
 function SaveIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -402,7 +419,7 @@ export default function Admins() {
 
               <FloatingField label="Email" id="adm_email" type="email" value={formData.email} onChange={(v) => setFormData({ ...formData, email: v })} icon={<MailIcon />} />
 
-              <FloatingField label="Phone" id="adm_phone" value={formData.phone} onChange={(v) => setFormData({ ...formData, phone: v })} />
+              <FloatingField label="Phone" id="adm_phone" value={formData.phone} onChange={(v) => setFormData({ ...formData, phone: v })} icon={<PhoneIcon />} />
 
               {!isEditing && (
                 <FloatingField label="Company" id="adm_company" value={formData.company} onChange={(v) => setFormData({ ...formData, company: v })} icon={<BuildingIcon />} />
@@ -410,7 +427,7 @@ export default function Admins() {
 
               {!isEditing && (
                 <>
-                  <FloatingField label="Password" id="adm_pw" type="password" value={formData.password} onChange={(v) => setFormData({ ...formData, password: v })} />
+                  <FloatingField label="Password" id="adm_pw" type="password" value={formData.password} onChange={(v) => setFormData({ ...formData, password: v })} icon={<LockIcon />} />
                   <p className="text-[10px] text-slate-400">
                     This is the password the admin uses to sign in.
                   </p>
