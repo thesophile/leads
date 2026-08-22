@@ -780,8 +780,10 @@ export default function Managequotation() {
                       <td className="py-0.5 pr-3">
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
-                            quote.status === 'Not Sent' || quote.status === 'Quotation Requested'
+                            quote.status === 'Quotation Requested'
                               ? 'border-purple-200 bg-purple-50 text-purple-700'
+                              : quote.status === 'Not Sent'
+                              ? 'border-cyan-200 bg-cyan-50 text-cyan-700'
                               : quote.status === 'Pending Approval'
                               ? 'border-amber-200 bg-amber-50 text-amber-700'
                               : quote.status === 'Approved'
@@ -793,8 +795,10 @@ export default function Managequotation() {
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
-                              quote.status === 'Not Sent' || quote.status === 'Quotation Requested'
+                              quote.status === 'Quotation Requested'
                                 ? 'bg-purple-500'
+                                : quote.status === 'Not Sent'
+                                ? 'bg-cyan-500'
                                 : quote.status === 'Pending Approval'
                                 ? 'bg-amber-500 animate-pulse'
                                 : quote.status === 'Approved'
@@ -992,8 +996,10 @@ export default function Managequotation() {
                     <td className="py-0.5 pr-3 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${
-                          item.status === 'Not Sent' || item.status === 'Quotation Requested'
+                          item.status === 'Quotation Requested'
                             ? 'bg-purple-50 text-purple-700 border-purple-200'
+                            : item.status === 'Not Sent'
+                            ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
                             : item.status === 'Pending Approval'
                             ? 'bg-amber-50 text-amber-700 border-amber-200'
                             : item.status === 'Approved'
