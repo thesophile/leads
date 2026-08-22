@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/auth-context'
 
 export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const navigate = useNavigate()
   const { user } = useAuth()
 
   return (
@@ -31,7 +32,14 @@ export default function Layout({ children }) {
               </svg>
             </button>
             <div className="flex items-center gap-2">
-              <span className="text-base font-extrabold tracking-tight text-slate-900">LEADS</span>
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard')}
+                aria-label="Go to dashboard"
+                className="text-base font-extrabold tracking-tight text-slate-900"
+              >
+                LEADS
+              </button>
             </div>
           </div>
 

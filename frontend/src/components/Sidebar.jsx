@@ -193,13 +193,21 @@ export default function Sidebar({
           mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
         }`}
       >
-        {/* Header Branding */}
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 px-3.5">
+        {/* Header Branding — dashboard on desktop, just closes drawer on mobile */}
+        <button
+          type="button"
+          onClick={() => {
+            if (!mobileOpen) navigate('/dashboard')
+            onCloseMobile?.()
+          }}
+          aria-label="Go to dashboard"
+          className="flex h-16 w-full shrink-0 items-center gap-2 border-b border-slate-200 px-3.5 text-left transition-colors hover:bg-slate-50"
+        >
           <LeadsGridIcon />
           <span className="text-base font-extrabold tracking-tight text-slate-900">
             LEADS
           </span>
-        </div>
+        </button>
 
         {/* Navigation List */}
         <nav
