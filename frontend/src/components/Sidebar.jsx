@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/auth-context'
 import { can } from '../utils/permissions'
+import ConfirmDialog from './ConfirmDialog'
 
 // Grid icon matching the screenshot (3x3 rounded squares)
 function LeadsGridIcon() {
@@ -122,6 +123,7 @@ export default function Sidebar({
   const { user, logout } = useAuth()
   const menuSections = useMemo(() => filterMenu(user), [user])
   const navRef = useRef(null)
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
 
   useLayoutEffect(() => {
     if (navRef.current) navRef.current.scrollTop = persistedNavScrollTop
@@ -164,7 +166,12 @@ export default function Sidebar({
     if (!sectionId) onCloseMobile?.()
   }
 
-  async function handleLogout() {
+  function handleLogout() {
+    setConfirmLogoutOpen(true)
+  }
+
+  async function confirmLogout() {
+    setConfirmLogoutOpen(false)
     await logout()
     navigate('/login')
     onCloseMobile?.()
@@ -314,6 +321,17 @@ export default function Sidebar({
           </button>
         </div>
       </aside>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmDialog
+        open={confirmLogoutOpen}
+        title="Log out of Leads?"
+        message="You will be signed out of your account. You can sign back in anytime to pick up where you left off."
+        cancelLabel="Cancel"
+        confirmLabel="Logout"
+        onCancel={() => setConfirmLogoutOpen(false)}
+        onConfirm={confirmLogout}
+      />
     </>
   )
 }
