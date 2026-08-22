@@ -6,16 +6,6 @@ import { can } from '../../utils/permissions'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
 
-const SOURCE_LIST = [
-  'All Sources',
-  'Google Search',
-  'Official Website',
-  'Instagram Campaign',
-  'Facebook Ads',
-  'Customer Referral',
-  'Manual Entry',
-]
-
 function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -708,17 +698,18 @@ export default function RawData() {
                     <GlobeIcon />
                     <span>Source:</span>
                   </span>
-                  <select
-                    value={selectedSource}
-                    onChange={(e) => setSelectedSource(e.target.value)}
-                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
-                  >
-                    {SOURCE_LIST.map((src) => (
-                      <option key={src} value={src}>
-                        {src}
-                      </option>
-                    ))}
-                  </select>
+<select
+                      value={selectedSource}
+                      onChange={(e) => setSelectedSource(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                    >
+                      <option value="All Sources">All Sources</option>
+                      {sourceOptions.map((src) => (
+                        <option key={src.id} value={src.name}>
+                          {src.name}
+                        </option>
+                      ))}
+                    </select>
                 </div>
 
                 {/* Date Filter Dropdown */}
