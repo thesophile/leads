@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import CallHistory, Lead
+from .models import CallHistory, Lead, Quotation
 
 
 class CallHistorySerializer(serializers.ModelSerializer):
@@ -12,8 +12,43 @@ class CallHistorySerializer(serializers.ModelSerializer):
         fields = ['id', 'dateTime', 'caller', 'report', 'followUp', 'status']
 
 
+class QuotationSerializer(serializers.ModelSerializer):
+    leadId = serializers.CharField(source='lead_id', required=False, allow_blank=True)
+    qtnBy = serializers.CharField(source='qtn_by', required=False, allow_blank=True)
+    netAmount = serializers.CharField(source='net_amount', required=False, allow_blank=True)
+    proposalScope = serializers.CharField(source='proposal_scope', required=False, allow_blank=True)
+    termsConditions = serializers.CharField(source='terms_conditions', required=False, allow_blank=True)
+
+    class Meta:
+        model = Quotation
+        fields = [
+            'id',
+            'leadId',
+            'customer',
+            'company',
+            'mobile',
+            'email',
+            'category',
+            'city',
+            'bdm',
+            'qtnBy',
+            'staff',
+            'date',
+            'status',
+            'total',
+            'discount',
+            'netAmount',
+            'currency',
+            'source',
+            'proposalScope',
+            'termsConditions',
+            'remarks',
+        ]
+
+
 class LeadSerializer(serializers.ModelSerializer):
     history = CallHistorySerializer(many=True, read_only=True)
+    quotation = serializers.SerializerMethodField()
     displayDate = serializers.CharField(source='display_date', required=False, allow_blank=True)
     addedBy = serializers.CharField(source='added_by', required=False, allow_blank=True)
     assignedTo = serializers.CharField(source='assigned_to', required=False, allow_blank=True)
@@ -47,4 +82,11 @@ class LeadSerializer(serializers.ModelSerializer):
             'nextFollowUpTime',
             'hasFollowUp',
             'history',
+            'quotation',
         ]
+
+    def get_quotation(self, obj):
+        quotation = Quotation.objects.filter(lead_id=obj.id).first()
+        if quotation is None:
+            return None
+        return QuotationSerializer(quotation).data

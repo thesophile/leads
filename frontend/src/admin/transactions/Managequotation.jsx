@@ -33,29 +33,30 @@ const QUILL_FORMATS = [
 ]
 
 function mapLeadToQuotation(lead) {
+  const q = lead.quotation
   return {
     id: lead.id,
     leadId: lead.id,
-    customer: lead.contact || '',
-    company: lead.company || '',
-    mobile: lead.phone || '',
-    email: lead.email || '',
-    category: lead.category || '',
-    city: lead.city || '',
-    bdm: lead.assignedTo || '',
-    qtnBy: lead.addedBy || '',
-    staff: lead.assignedTo || lead.addedBy || '',
-    date: lead.displayDate || lead.date || '',
-    status: 'Not Sent',
-    total: '',
-    discount: '',
-    netAmount: '',
-    currency: 'INR (₹)',
-    source: lead.source || '',
-    proposalScope: '',
-    termsConditions: '',
-    hasProposal: false,
-    remarks: lead.remarks || '',
+    customer: q?.customer || lead.contact || '',
+    company: q?.company || lead.company || '',
+    mobile: q?.mobile || lead.phone || '',
+    email: q?.email || lead.email || '',
+    category: q?.category || lead.category || '',
+    city: q?.city || lead.city || '',
+    bdm: q?.bdm || lead.assignedTo || '',
+    qtnBy: q?.qtnBy || lead.addedBy || '',
+    staff: q?.staff || lead.assignedTo || lead.addedBy || '',
+    date: q?.date || lead.displayDate || lead.date || '',
+    status: q ? q.status || 'Not Sent' : 'Quotation Requested',
+    total: q?.total || '',
+    discount: q?.discount || '',
+    netAmount: q?.netAmount || '',
+    currency: q?.currency || 'INR (₹)',
+    source: q?.source || lead.source || '',
+    proposalScope: q?.proposalScope || '',
+    termsConditions: q?.termsConditions || '',
+    hasProposal: !!q,
+    remarks: q?.remarks || lead.remarks || '',
   }
 }
 
@@ -70,6 +71,7 @@ const STAFF_LIST = [
 
 const STATUS_LIST = [
   'All Status',
+  'Quotation Requested',
   'Not Sent',
   'Pending Approval',
   'Approved',
@@ -266,8 +268,9 @@ export default function Managequotation() {
     setApprovalModalOpen(true)
   }
 
-  function handleConfirmSendForApproval() {
+  async function handleConfirmSendForApproval() {
     if (!selectedAdmin) return
+    const quote = quotationsList.find((item) => item.id === approvalQuoteId)
     setQuotationsList((prev) =>
       prev.map((item) =>
         item.id === approvalQuoteId
@@ -282,6 +285,16 @@ export default function Managequotation() {
     )
     setApprovalSent(`✓ Proposal sent to ${selectedAdmin} for approval`)
     resetApprovalDirty()
+    if (quote?.leadId) {
+      try {
+        await api.put(`/transactions/quotations/${quote.leadId}/`, {
+          status: 'Pending Approval',
+          remarks: `Sent to ${selectedAdmin} for approval`,
+        })
+      } catch (err) {
+        console.error('Failed to persist approval status', err)
+      }
+    }
     setTimeout(() => {
       setApprovalModalOpen(false)
       setApprovalSent('')
@@ -387,7 +400,7 @@ export default function Managequotation() {
 
   // Status Metrics
   const notSentCount = useMemo(
-    () => quotationsList.filter((q) => q.status === 'Not Sent').length,
+    () => quotationsList.filter((q) => q.status === 'Not Sent' || q.status === 'Quotation Requested').length,
     [quotationsList]
   )
   const pendingApprovalCount = useMemo(
@@ -447,38 +460,41 @@ export default function Managequotation() {
   }
 
   // Handle Proposal Submission for Approval
-  function handleSubmitProposal(e) {
+  async function handleSubmitProposal(e) {
     e.preventDefault()
 
     const currentScope = scopeHtml
     const currentTerms = termsHtml
     let nextApprovalId = null
+    let targetQuote = null
+    let persistLeadId = null
 
     if (editingProposalId) {
       // Update existing
       nextApprovalId = editingProposalId
+      persistLeadId = editingProposalId
+      const existing =
+        quotationsList.find((item) => item.id === editingProposalId) || {}
+      targetQuote = {
+        ...existing,
+        bdm,
+        qtnBy,
+        customer: customerPerson || existing.customer,
+        company: companyName || existing.company,
+        mobile: mobileNum || existing.mobile,
+        total: totalVal,
+        discount: discountVal,
+        netAmount: totalVal,
+        currency: currencyVal,
+        source: sourceVal,
+        proposalScope: currentScope,
+        termsConditions: currentTerms,
+        hasProposal: true,
+        status: existing.status === 'Quotation Requested' ? 'Not Sent' : existing.status,
+        remarks: remarksVal,
+      }
       setQuotationsList((prev) =>
-        prev.map((item) =>
-          item.id === editingProposalId
-            ? {
-                ...item,
-                bdm,
-                qtnBy,
-                customer: customerPerson || item.customer,
-                company: companyName || item.company,
-                mobile: mobileNum || item.mobile,
-                total: totalVal,
-                discount: discountVal,
-                netAmount: totalVal,
-                currency: currencyVal,
-                source: sourceVal,
-                proposalScope: currentScope,
-                termsConditions: currentTerms,
-                hasProposal: true,
-                remarks: remarksVal,
-              }
-            : item
-        )
+        prev.map((item) => (item.id === editingProposalId ? targetQuote : item))
       )
       setSubmitMessage('✓ Proposal details saved. Now choose an admin to send for approval.')
     } else {
@@ -508,8 +524,38 @@ export default function Managequotation() {
         hasProposal: true,
         remarks: remarksVal,
       }
+      targetQuote = newProposal
       setQuotationsList([newProposal, ...quotationsList])
       setSubmitMessage('✓ New Proposal created. Now choose an admin to send for approval.')
+    }
+
+    if (persistLeadId) {
+      try {
+        await api.put(`/transactions/quotations/${persistLeadId}/`, {
+          customer: targetQuote.customer,
+          company: targetQuote.company,
+          mobile: targetQuote.mobile,
+          email: targetQuote.email,
+          category: targetQuote.category,
+          city: targetQuote.city,
+          bdm: targetQuote.bdm,
+          qtnBy: targetQuote.qtnBy,
+          staff: targetQuote.staff,
+          date: targetQuote.date,
+          status: targetQuote.status,
+          total: targetQuote.total,
+          discount: targetQuote.discount,
+          netAmount: targetQuote.netAmount,
+          currency: targetQuote.currency,
+          source: targetQuote.source,
+          proposalScope: targetQuote.proposalScope,
+          termsConditions: targetQuote.termsConditions,
+          remarks: targetQuote.remarks,
+        })
+      } catch (err) {
+        setSubmitMessage(`Failed to save proposal: ${err.message}`)
+        return
+      }
     }
 
     resetProposalDirty()
@@ -523,11 +569,15 @@ export default function Managequotation() {
     }, 900)
   }
 
-  // Quick Action: Super Admin Instant Approve
-  function handleRevertQuotation(quoteId, e) {
+  // Quick Action: Revert quotation back to Telecalling
+  async function handleRevertQuotation(quote, e) {
     e.stopPropagation()
-    if (window.confirm('Are you sure you want to revert this quotation back to Telecalling?')) {
-      setQuotationsList((prev) => prev.filter((item) => item.id !== quoteId))
+    if (!window.confirm('Are you sure you want to revert this quotation back to Telecalling?')) return
+    try {
+      if (quote.leadId) await api.del(`/transactions/quotations/${quote.leadId}/`)
+      setQuotationsList((prev) => prev.filter((item) => item.id !== quote.id))
+    } catch (err) {
+      window.alert(`Failed to revert quotation: ${err.message}`)
     }
   }
 
@@ -730,7 +780,7 @@ export default function Managequotation() {
                       <td className="py-0.5 pr-3">
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
-                            quote.status === 'Not Sent'
+                            quote.status === 'Not Sent' || quote.status === 'Quotation Requested'
                               ? 'border-purple-200 bg-purple-50 text-purple-700'
                               : quote.status === 'Pending Approval'
                               ? 'border-amber-200 bg-amber-50 text-amber-700'
@@ -743,7 +793,7 @@ export default function Managequotation() {
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
-                              quote.status === 'Not Sent'
+                              quote.status === 'Not Sent' || quote.status === 'Quotation Requested'
                                 ? 'bg-purple-500'
                                 : quote.status === 'Pending Approval'
                                 ? 'bg-amber-500 animate-pulse'
@@ -893,7 +943,7 @@ export default function Managequotation() {
                   onClick={(e) => {
                     e.stopPropagation()
                     setOpenDropdownId(null)
-                    handleRevertQuotation(activeMenuQuote.id, e)
+                    handleRevertQuotation(activeMenuQuote, e)
                   }}
                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                 >
@@ -942,7 +992,7 @@ export default function Managequotation() {
                     <td className="py-0.5 pr-3 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${
-                          item.status === 'Not Sent'
+                          item.status === 'Not Sent' || item.status === 'Quotation Requested'
                             ? 'bg-purple-50 text-purple-700 border-purple-200'
                             : item.status === 'Pending Approval'
                             ? 'bg-amber-50 text-amber-700 border-amber-200'

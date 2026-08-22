@@ -11,8 +11,8 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can
 
-from .models import CallHistory, Lead
-from .serializers import LeadSerializer
+from .models import CallHistory, Lead, Quotation
+from .serializers import LeadSerializer, QuotationSerializer
 
 User = get_user_model()
 
@@ -249,6 +249,68 @@ class LeadDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         lead.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class QuotationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    QUOTATION_FIELDS = {
+        'customer': 'customer',
+        'company': 'company',
+        'mobile': 'mobile',
+        'email': 'email',
+        'category': 'category',
+        'city': 'city',
+        'bdm': 'bdm',
+        'qtnBy': 'qtn_by',
+        'staff': 'staff',
+        'date': 'date',
+        'status': 'status',
+        'total': 'total',
+        'discount': 'discount',
+        'netAmount': 'net_amount',
+        'currency': 'currency',
+        'source': 'source',
+        'proposalScope': 'proposal_scope',
+        'termsConditions': 'terms_conditions',
+        'remarks': 'remarks',
+    }
+
+    def put(self, request, lead_id):
+        if not can(request.user, 'quotation.view'):
+            return Response(
+                {'detail': 'You do not have permission to manage quotations.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        lead = scoped_queryset(request.user).filter(pk=lead_id).first()
+        if lead is None:
+            return Response(
+                {'detail': 'Lead not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        if quotation is None:
+            quotation = Quotation(id=lead_id, lead_id=lead_id, tenant=request.user.company, company=lead.company)
+        for camel, field in self.QUOTATION_FIELDS.items():
+            if camel in request.data:
+                value = request.data.get(camel)
+                setattr(quotation, field, value if value is not None else '')
+        quotation.save()
+        return Response(QuotationSerializer(quotation).data)
+
+    def delete(self, request, lead_id):
+        if not can(request.user, 'quotation.view'):
+            return Response(
+                {'detail': 'You do not have permission to manage quotations.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        Quotation.objects.filter(lead_id=lead_id).delete()
+        lead = scoped_queryset(request.user).filter(pk=lead_id).first()
+        if lead is not None:
+            lead.status = Lead.STATUS_ASSIGNED
+            lead.call_status = 'Pending Call'
+            lead.save(update_fields=['status', 'call_status', 'updated_at'])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
