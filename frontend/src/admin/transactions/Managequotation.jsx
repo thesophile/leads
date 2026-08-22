@@ -54,6 +54,7 @@ function mapLeadToQuotation(lead) {
     source: lead.source || '',
     proposalScope: '',
     termsConditions: '',
+    hasProposal: false,
     remarks: lead.remarks || '',
   }
 }
@@ -473,6 +474,7 @@ export default function Managequotation() {
                 source: sourceVal,
                 proposalScope: currentScope,
                 termsConditions: currentTerms,
+                hasProposal: true,
                 remarks: remarksVal,
               }
             : item
@@ -503,6 +505,7 @@ export default function Managequotation() {
         source: sourceVal,
         proposalScope: currentScope,
         termsConditions: currentTerms,
+        hasProposal: true,
         remarks: remarksVal,
       }
       setQuotationsList([newProposal, ...quotationsList])
@@ -665,7 +668,14 @@ export default function Managequotation() {
                   filteredQuotations.map((quote) => (
                     <tr
                       key={quote.id}
-                      onClick={(e) => handleToggleMenu(e, quote.id, quote)}
+                      onClick={(e) => {
+                        if (!quote.hasProposal) {
+                          setOpenDropdownId(null)
+                          handleOpenNewProposalModal(quote)
+                        } else {
+                          handleToggleMenu(e, quote.id, quote)
+                        }
+                      }}
                       className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer"
                     >
                       {/* Customer */}
@@ -824,40 +834,57 @@ export default function Managequotation() {
                 style={{ position: 'absolute', zIndex: 40 }}
                 className="w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100"
               >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setOpenDropdownId(null)
-                    handleViewProposal(activeMenuQuote)
-                  }}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
-                >
-                  <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
-                  <span>View Proposal</span>
-                </button>
+                {activeMenuQuote.hasProposal ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpenDropdownId(null)
+                        handleViewProposal(activeMenuQuote)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                    >
+                      <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
+                      <span>View Proposal</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setOpenDropdownId(null)
-                    handleOpenNewProposalModal(activeMenuQuote)
-                  }}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
-                >
-                  <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
-                  <span>Edit Proposal</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpenDropdownId(null)
+                        handleOpenNewProposalModal(activeMenuQuote)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
+                    >
+                      <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
+                      <span>Edit Proposal</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={(e) => handleOpenApprovalModal(activeMenuQuote.id, e)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
-                >
-                  <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>Send for Approval</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenApprovalModal(activeMenuQuote.id, e)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                    >
+                      <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>Send for Approval</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOpenDropdownId(null)
+                      handleOpenNewProposalModal(activeMenuQuote)
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                  >
+                    <FileTextIcon className="h-3.5 w-3.5 text-blue-600" />
+                    <span>Create Proposal</span>
+                  </button>
+                )}
 
                 <div className="my-1 border-t border-slate-100" />
 
