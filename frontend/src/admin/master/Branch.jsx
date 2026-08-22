@@ -87,6 +87,10 @@ function SearchIcon() {
   )
 }
 
+function truncateName(name) {
+  return name.length > 25 ? name.slice(0, 25) + '…' : name
+}
+
 function SpinnerIcon() {
   return (
     <svg className="animate-spin h-7 w-7 text-brand-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -281,6 +285,7 @@ export default function Branch() {
                   id="branch_name_input"
                   type="text"
                   placeholder="Branch Name"
+                  maxLength={50}
                   value={branchName}
                   onChange={(e) => setBranchName(e.target.value)}
                   className={`peer relative z-0 w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder-transparent transition-all focus:outline-none focus:ring-4 ${
@@ -417,7 +422,7 @@ export default function Branch() {
                         }`}
                       >
                         <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={br.name}>
-                          {br.name}
+                          {truncateName(br.name)}
                         </td>
                         <td className="py-0.5 pr-2">
                           <span

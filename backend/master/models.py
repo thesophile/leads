@@ -24,6 +24,7 @@ class Source(CommonMaster):
 
 
 class Branch(CommonMaster):
+    name = models.CharField(max_length=50)
     company = models.ForeignKey(
         'accounts.Company',
         on_delete=models.PROTECT,
