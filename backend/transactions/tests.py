@@ -127,18 +127,6 @@ class AssignLeadsToStaffTests(APITestCase):
         self.assertEqual(resp.status_code, 400)
 
 
-def test_assigned_legacy_lead_gains_tenant(self):
-        make_raw_lead(self.company, 'Legacy Co', tenant=None)
-        self.client.force_authenticate(self.manager)
-        resp = self.client.post('/api/transactions/leads/assign/', {
-            'assigned_to': 'Shanu VR', 'count': 10,
-        }, format='json')
-        self.assertEqual(resp.status_code, 201)
-        self.client.force_authenticate(self.target)
-        resp = self.client.get('/api/transactions/leads/?status=assigned')
-        self.assertIn('RL-Legacy Co', {l['id'] for l in resp.data})
-
-
 class LeadVisibilityTests(APITestCase):
     def setUp(self):
         company = make_company('Acme')
@@ -304,3 +292,45 @@ class AssignableStaffListViewTests(APITestCase):
         self.client.force_authenticate(User.objects.get(email='shanu@acme.com'))
         resp = self.client.get('/api/auth/assignable-staff/')
         self.assertEqual(resp.status_code, 403)
+
+
+class LeadDuplicateScopingTests(APITestCase):
+    def setUp(self):
+        company = make_company('Acme')
+        other = make_company('Globex')
+        self.manager = User.objects.create_user(
+            email='mgr@acme.com', password='x', name='Manager A',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.other_manager = User.objects.create_user(
+            email='mgr@globex.com', password='x', name='Manager B',
+            role=other.roles.get(code='manager'), company=other,
+        )
+        Lead.objects.filter(tenant__isnull=True).delete()
+
+    def test_same_tenant_duplicate_is_rejected(self):
+        self.client.force_authenticate(self.manager)
+        first = self.client.post('/api/transactions/leads/', {
+            'company': 'Cafe Day', 'phone': '111',
+        }, format='json')
+        self.assertEqual(first.status_code, 201)
+        duplicate = self.client.post('/api/transactions/leads/', {
+            'company': 'CAFE DAY', 'phone': '222',
+        }, format='json')
+        self.assertEqual(duplicate.status_code, 409)
+
+    def test_cross_tenant_same_company_name_is_allowed(self):
+        self.client.force_authenticate(self.manager)
+        first = self.client.post('/api/transactions/leads/', {
+            'company': 'State Bank of India', 'phone': '111',
+        }, format='json')
+        self.assertEqual(first.status_code, 201)
+        self.client.force_authenticate(self.other_manager)
+        second = self.client.post('/api/transactions/leads/', {
+            'company': 'STATE BANK OF INDIA', 'phone': '222',
+        }, format='json')
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(
+            Lead.objects.filter(company__iexact='State Bank of India').count(),
+            2,
+        )

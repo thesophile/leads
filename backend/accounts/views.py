@@ -44,8 +44,8 @@ def get_tokens_for_user(user):
 
 
 class RegisterView(APIView):
-    """Admin self-registration. Always creates an ADMIN/superuser account
-    for the registering company's admin."""
+    """Company admin self-registration. Creates a staff-level admin (never a
+    superuser) for the registering company."""
 
     permission_classes = [AllowAny]
 
@@ -87,7 +87,7 @@ class StaffAssigneeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not can(request.user, 'leads.assign', 'telecall.assign', 'leads.view_all'):
+        if not can(request.user, 'leads.assign', 'telecall.assign'):
             return Response(
                 {'detail': 'You do not have permission to assign leads to staff.'},
                 status=status.HTTP_403_FORBIDDEN,

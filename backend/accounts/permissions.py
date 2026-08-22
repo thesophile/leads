@@ -29,13 +29,6 @@ def require_permission(*keys):
     return RolePermission
 
 
-class IsAdmin(BasePermission):
-    """Company admin: holds the ``roles.manage`` permission, or a superuser."""
-
-    def has_permission(self, request, view):
-        return can(request.user, 'roles.manage')
-
-
 class IsSuperuser(BasePermission):
     """Allows access only to superusers (platform-level administrators)."""
 

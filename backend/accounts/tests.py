@@ -184,3 +184,37 @@ class SuperuserAdminManagementTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.admin_b.refresh_from_db()
         self.assertTrue(self.admin_b.check_password('NewPass123!'))
+
+
+class StaffRenamePropagationTests(APITestCase):
+    def setUp(self):
+        from transactions.models import CallHistory, Lead
+
+        company = make_company('Acme')
+        self.manager = User.objects.create_user(
+            email='mgr@acme.com', password='x', name='Manager A',
+            role=admin_role(company), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@acme.com', password='x', name='Shanu VR', company=company,
+        )
+        self.lead = Lead.objects.create(
+            id='RL-1', company='Hospital One', assigned_to='Shanu VR',
+            added_by='Shanu VR', tenant=company,
+        )
+        CallHistory.objects.create(
+            lead=self.lead, caller='Shanu VR', report='First call', status='Interested',
+        )
+
+    def test_renaming_staff_keeps_assignments_and_history(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'name': 'Shanu Kumar',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.lead.refresh_from_db()
+        from transactions.models import CallHistory
+
+        self.assertEqual(self.lead.assigned_to, 'Shanu Kumar')
+        self.assertEqual(self.lead.added_by, 'Shanu Kumar')
+        self.assertEqual(CallHistory.objects.get(lead=self.lead).caller, 'Shanu Kumar')

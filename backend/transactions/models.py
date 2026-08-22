@@ -86,8 +86,8 @@ class Lead(models.Model):
         ordering = ['-created_at']
         constraints = [
             models.UniqueConstraint(
-                fields=['company_key'],
-                name='uniq_lead_company_key',
+                fields=['tenant', 'company_key'],
+                name='uniq_lead_tenant_company_key',
             ),
         ]
     def __str__(self):

@@ -287,9 +287,9 @@ class QuotationView(APIView):
     }
 
     def put(self, request, lead_id):
-        if not can(request.user, 'quotation.view'):
+        if not can(request.user, 'quotation.create', 'quotation.edit'):
             return Response(
-                {'detail': 'You do not have permission to manage quotations.'},
+                {'detail': 'You do not have permission to create or edit quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         lead = scoped_queryset(request.user).filter(pk=lead_id).first()
@@ -309,9 +309,9 @@ class QuotationView(APIView):
         return Response(QuotationSerializer(quotation).data)
 
     def delete(self, request, lead_id):
-        if not can(request.user, 'quotation.view'):
+        if not can(request.user, 'quotation.edit'):
             return Response(
-                {'detail': 'You do not have permission to manage quotations.'},
+                {'detail': 'You do not have permission to delete quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         Quotation.objects.filter(lead_id=lead_id).delete()
@@ -327,7 +327,7 @@ class LeadAssignView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if not can(request.user, 'leads.assign'):
+        if not can(request.user, 'leads.assign', 'telecall.assign'):
             return Response(
                 {'detail': 'You do not have permission to assign leads to staff.'},
                 status=status.HTTP_403_FORBIDDEN,

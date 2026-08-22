@@ -101,9 +101,6 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
 
         company_name = validated_data.pop('company').strip()
         company, _ = Company.objects.get_or_create(name=company_name)
-        from .rbac import seed_default_roles
-
-        seed_default_roles(company)  # idempotent: ensures roles exist for the company
         validated_data.pop('password2')
         validated_data['role'] = company.roles.filter(code='admin').first()
         validated_data['is_staff'] = True
@@ -112,42 +109,12 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
         return User.objects.create_user(company=company, **validated_data)
 
 
-class AdminManageSerializer(serializers.ModelSerializer):
-    """Superuser-only: create an admin for an existing or new company."""
+class AdminManageSerializer(AdminRegisterSerializer):
+    """Superuser-only: create an admin for an existing or new company.
 
-    password = serializers.CharField(write_only=True, validators=[validate_password])
-    password2 = serializers.CharField(write_only=True)
-    company = serializers.CharField(max_length=200)
-
-    class Meta:
-        model = User
-        fields = ['company', 'name', 'email', 'phone', 'password', 'password2']
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({'password2': 'Passwords do not match.'})
-        return attrs
-
-    def validate_company(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError('Company name is required.')
-        return value
-
-    def create(self, validated_data):
-        from .models import Company
-
-        company_name = validated_data.pop('company').strip()
-        company, _ = Company.objects.get_or_create(name=company_name)
-        from .rbac import seed_default_roles
-
-        seed_default_roles(company)  # idempotent: ensures roles exist for the company
-        validated_data.pop('password2')
-        validated_data['role'] = company.roles.filter(code='admin').first()
-        validated_data['is_staff'] = True
-        # Still never a superuser: platform-level access stays with the
-        # superadmin who is creating this account.
-        return User.objects.create_user(company=company, **validated_data)
+    Reuses the shared registration logic; the difference is purely the
+    permission guard on the calling view.
+    """
 
 
 class AdminUpdateSerializer(serializers.ModelSerializer):
@@ -254,6 +221,7 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         mobile = validated_data.pop('mobile', None)
         branch_name = validated_data.pop('branch', None)
         role = validated_data.pop('role', None)
+        old_name = instance.name
 
         if mobile is not None:
             validated_data['phone'] = mobile
@@ -265,6 +233,15 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
                 validated_data['role'] = role
 
         instance = super().update(instance, validated_data)
+
+        if old_name and instance.name != old_name:
+            # Leads reference staff by their display name; keep those in sync
+            # so assignments and call history don't silently detach.
+            from transactions.models import CallHistory, Lead
+
+            Lead.objects.filter(assigned_to=old_name).update(assigned_to=instance.name)
+            Lead.objects.filter(added_by=old_name).update(added_by=instance.name)
+            CallHistory.objects.filter(caller=old_name).update(caller=instance.name)
 
         profile = getattr(instance, 'staff_profile', None)
         if profile:
