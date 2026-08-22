@@ -602,14 +602,23 @@ export default function Managequotation() {
   }
 
   // Quick Action: Revert quotation back to Telecalling
-  async function handleRevertQuotation(quote, e) {
+  const [revertQuote, setRevertQuote] = useState(null)
+
+  function handleRequestRevertQuotation(quote, e) {
     e.stopPropagation()
-    if (!window.confirm('Are you sure you want to revert this quotation back to Telecalling?')) return
+    setRevertQuote(quote)
+  }
+
+  async function handleConfirmRevertQuotation() {
+    if (!revertQuote) return
+    const quote = revertQuote
     try {
       if (quote.leadId) await api.del(`/transactions/quotations/${quote.leadId}/`)
       setQuotationsList((prev) => prev.filter((item) => item.id !== quote.id))
     } catch (err) {
       window.alert(`Failed to revert quotation: ${err.message}`)
+    } finally {
+      setRevertQuote(null)
     }
   }
 
@@ -985,7 +994,7 @@ export default function Managequotation() {
                   onClick={(e) => {
                     e.stopPropagation()
                     setOpenDropdownId(null)
-                    handleRevertQuotation(activeMenuQuote, e)
+                    handleRequestRevertQuotation(activeMenuQuote, e)
                   }}
                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                 >
@@ -1488,6 +1497,17 @@ export default function Managequotation() {
           setApprovalModalOpen(false)
           resetApprovalDirty()
         }}
+      />
+
+      {/* Revert to Telecalling Confirm */}
+      <ConfirmDialog
+        open={!!revertQuote}
+        title="Revert to Telecalling?"
+        message={`"${revertQuote?.customer}" (${revertQuote?.id}) will be removed from quotations and sent back to the Telecalling pipeline. Continue?`}
+        cancelLabel="Cancel"
+        confirmLabel="Revert"
+        onCancel={() => setRevertQuote(null)}
+        onConfirm={handleConfirmRevertQuotation}
       />
     </Layout>
   )
