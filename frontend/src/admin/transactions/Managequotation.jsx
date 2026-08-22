@@ -400,7 +400,11 @@ export default function Managequotation() {
 
   // Status Metrics
   const notSentCount = useMemo(
-    () => quotationsList.filter((q) => q.status === 'Not Sent' || q.status === 'Quotation Requested').length,
+    () => quotationsList.filter((q) => q.status === 'Not Sent').length,
+    [quotationsList]
+  )
+  const quotationRequestedCount = useMemo(
+    () => quotationsList.filter((q) => q.status === 'Quotation Requested').length,
     [quotationsList]
   )
   const pendingApprovalCount = useMemo(
@@ -599,27 +603,33 @@ export default function Managequotation() {
           <div className="flex flex-wrap items-center gap-2.5">
 
             {/* Quick Metrics */}
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
+            <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
               <div className="rounded-xl border border-purple-200/80 bg-purple-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Not Sent</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 whitespace-nowrap">Requested</span>
                 <span className="text-xs font-bold text-purple-700 ml-1">
+                  {quotationRequestedCount}
+                </span>
+              </div>
+              <div className="rounded-xl border border-cyan-200/80 bg-cyan-50/60 px-2.5 py-1.5 text-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-600 whitespace-nowrap">Not Sent</span>
+                <span className="text-xs font-bold text-cyan-700 ml-1">
                   {notSentCount}
                 </span>
               </div>
               <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Approval</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 whitespace-nowrap">Approval</span>
                 <span className="text-xs font-bold text-amber-700 ml-1">
                   {pendingApprovalCount}
                 </span>
               </div>
               <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Approved</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 whitespace-nowrap">Approved</span>
                 <span className="text-xs font-bold text-emerald-700 ml-1">
                   {approvedCount}
                 </span>
               </div>
               <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Rejected</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 whitespace-nowrap">Rejected</span>
                 <span className="text-xs font-bold text-rose-700 ml-1">
                   {rejectedCount}
                 </span>
