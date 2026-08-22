@@ -315,7 +315,7 @@ export default function Managequotation() {
   const [scopeHtml, setScopeHtml] = useState('')
   const [termsHtml, setTermsHtml] = useState('')
   
-  const [totalVal, setTotalVal] = useState('1,45,000')
+  const [totalVal, setTotalVal] = useState('')
   const [discountVal, setDiscountVal] = useState('10,000')
   const [sourceVal, setSourceVal] = useState('Google Search')
   const [currencyVal, setCurrencyVal] = useState('INR (₹)')
@@ -430,13 +430,13 @@ export default function Managequotation() {
       setCompanyName(quote.company || '')
       setMobileNum(quote.mobile || '')
       setCategoryName(quote.category || 'Hospital')
-      setScopeHtml(quote.proposalScope || `<p>Enter detailed deliverables, software features and module breakdown...</p>`)
-      setTermsHtml(quote.termsConditions || `<p>1. 50% Advance with Order confirmation.<br>2. 50% on completion.<br>3. Validity: 15 Days.</p>`)
-      setTotalVal(quote.total || quote.amount?.replace('₹', '') || '1,00,000')
+      setScopeHtml(quote.proposalScope || '')
+      setTermsHtml(quote.termsConditions || '')
+      setTotalVal(quote.total || quote.amount?.replace('₹', '') || '')
       setDiscountVal(quote.discount || '0')
       setSourceVal(quote.source || 'Google Search')
       setCurrencyVal(quote.currency || 'INR (₹)')
-      setRemarksVal(quote.notes || quote.remarks || '')
+      setRemarksVal(quote.hasProposal ? (quote.notes || quote.remarks || '') : '')
     } else {
       // Clean new proposal
       setEditingProposalId(null)
@@ -446,15 +446,9 @@ export default function Managequotation() {
       setCompanyName('')
       setMobileNum('')
       setCategoryName('General')
-      setScopeHtml(`<h3>Software Solution & Module Scope</h3>
-<p>Provide scope description, user licenses, modules and installation details...</p>`)
-      setTermsHtml(`<h4>Commercial Terms & Conditions</h4>
-<ol>
-  <li>50% Advance with Order Confirmation.</li>
-  <li>40% upon Cloud / Onsite Installation.</li>
-  <li>10% upon Final Handover & Training.</li>
-</ol>`)
-      setTotalVal('1,00,000')
+      setScopeHtml('')
+      setTermsHtml('')
+      setTotalVal('')
       setDiscountVal('0')
       setSourceVal('Google Search')
       setCurrencyVal('INR (₹)')
