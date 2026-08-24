@@ -769,8 +769,6 @@ async function handleBulkImport(e) {
     })
   }, [rawDataList, selectedStaff, selectedSource, searchQuery, dateFilterType, startDate, endDate, user?.name, dateFilterValues])
 
-  const allSelected = filteredData.length > 0 && filteredData.every((item) => selectedIds.has(item.id))
-
   function toggleSelectLead(id) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -778,18 +776,6 @@ async function handleBulkImport(e) {
         next.delete(id)
       } else {
         next.add(id)
-      }
-      return next
-    })
-  }
-
-  function toggleSelectAll() {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (allSelected) {
-        filteredData.forEach((item) => next.delete(item.id))
-      } else {
-        filteredData.forEach((item) => next.add(item.id))
       }
       return next
     })
@@ -1115,18 +1101,7 @@ async function handleBulkImport(e) {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-black text-slate-800 font-bold uppercase tracking-wider text-[11px]">
-                  <th className="pb-2 font-semibold w-8 pr-2">
-                    <label className="flex cursor-pointer items-center justify-center px-3 -mx-3 py-2 -my-2">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={toggleSelectAll}
-                        disabled={filteredData.length === 0}
-                        aria-label="Select all raw data rows"
-                        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                      />
-                    </label>
-                  </th>
+                  <th className="pb-2 font-semibold w-8 pr-2" aria-hidden="true"></th>
                   <th className="pb-2 font-semibold w-64">Company Name</th>
                   <th className="pb-2 font-semibold w-44">Contact Person</th>
                   <th className="pb-2 font-semibold w-32">Mobile</th>
