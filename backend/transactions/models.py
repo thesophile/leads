@@ -41,6 +41,19 @@ class Lead(models.Model):
         (STATUS_CLIENT, 'Client'),
     ]
 
+    # Allowed tele-call outcome statuses (mirrors the frontend dropdown).
+    CALL_STATUS_VALUES = [
+        'Pending Call',
+        'Interested',
+        'Quotation Requested',
+        'Follow Up',
+        'Considering',
+        'Not Reachable',
+        'Busy',
+        'Not Interested',
+        'For Future',
+    ]
+
     id = models.CharField(max_length=20, primary_key=True)
     company = models.CharField(max_length=200)
     # Stored MySQL generated column of LOWER(company), used to enforce

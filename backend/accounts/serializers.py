@@ -154,7 +154,6 @@ class StaffCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         from .models import User as UserModel
-        from master.models import Staff as StaffModel
 
         owner = self.context['request'].user
         company = owner.company
@@ -166,32 +165,18 @@ class StaffCreateSerializer(serializers.ModelSerializer):
             company=company,
         )
 
-        branch = None
+        # The staff profile (code/name/role/email/mobile) is created and kept
+        # in sync by the accounts post_save signal; only branch is set here.
+        profile = user.staff_profile
         if branch_name:
-            branch = (
-                StaffModel._meta.get_field('branch')
-                .related_model.objects.filter(name=branch_name, company=company)
-                .first()
-            )
+            from master.models import Branch
 
-        code = self._next_staff_code()
-        StaffModel.objects.create(
-            code=code,
-            name=user.name,
-            role=user.role.name if user.role_id else '',
-            mobile=mobile,
-            email=user.email,
-            branch=branch,
-            user=user,
-        )
+            profile.branch = Branch.objects.filter(name=branch_name, company=company).first()
+        if mobile:
+            profile.mobile = mobile
+        if profile.branch is not None or mobile:
+            profile.save()
         return user
-
-    @staticmethod
-    def _next_staff_code():
-        from master.models import Staff as StaffModel
-        last = StaffModel.objects.order_by('-id').first()
-        num = (last.id if last else 0) + 1
-        return f'ST{num:03d}'
 
 
 class StaffUpdateSerializer(serializers.ModelSerializer):
@@ -221,7 +206,6 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         mobile = validated_data.pop('mobile', None)
         branch_name = validated_data.pop('branch', None)
         role = validated_data.pop('role', None)
-        old_name = instance.name
 
         if mobile is not None:
             validated_data['phone'] = mobile
@@ -234,30 +218,18 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
 
         instance = super().update(instance, validated_data)
 
-        if old_name and instance.name != old_name:
-            # Leads reference staff by their display name; keep those in sync
-            # so assignments and call history don't silently detach.
-            from transactions.models import CallHistory, Lead
-
-            Lead.objects.filter(assigned_to=old_name).update(assigned_to=instance.name)
-            Lead.objects.filter(added_by=old_name).update(added_by=instance.name)
-            CallHistory.objects.filter(caller=old_name).update(caller=instance.name)
-
-        profile = getattr(instance, 'staff_profile', None)
-        if profile:
-            if mobile is not None:
-                profile.mobile = mobile
-            if branch_name is not None:
+        # Rename propagation and profile field sync are handled by the accounts
+        # post_save signal; only the branch assignment lives here.
+        if branch_name is not None:
+            profile = getattr(instance, 'staff_profile', None)
+            if profile:
                 branch = None
                 if branch_name:
-                    branch = profile._meta.get_field('branch').related_model.objects.filter(
-                        name=branch_name, company=instance.company
-                    ).first()
+                    from master.models import Branch
+
+                    branch = Branch.objects.filter(name=branch_name, company=instance.company).first()
                 profile.branch = branch
-            profile.role = instance.role.name if instance.role_id else ''
-            profile.name = instance.name
-            profile.email = instance.email
-            profile.save()
+                profile.save()
         return instance
 
 

@@ -218,3 +218,39 @@ class StaffRenamePropagationTests(APITestCase):
         self.assertEqual(self.lead.assigned_to, 'Shanu Kumar')
         self.assertEqual(self.lead.added_by, 'Shanu Kumar')
         self.assertEqual(CallHistory.objects.get(lead=self.lead).caller, 'Shanu Kumar')
+
+    def test_creating_user_auto_creates_staff_profile(self):
+        from master.models import Staff
+
+        profile = Staff.objects.get(user=self.staff)
+        self.assertTrue(profile.code.startswith('ST'))
+        self.assertEqual(profile.name, self.staff.name)
+        self.assertEqual(profile.email, self.staff.email)
+
+
+class AdminRenamePropagationTests(APITestCase):
+    def setUp(self):
+        from transactions.models import Lead
+
+        company = make_company('Acme')
+        self.superuser = User.objects.create_superuser(
+            email='root@platform.com', password='x', name='Root',
+        )
+        self.admin = User.objects.create_user(
+            email='admin@acme.com', password='x', name='Husna',
+            role=admin_role(company), company=company,
+        )
+        self.lead = Lead.objects.create(
+            id='RL-1', company='Hospital One', assigned_to='Husna',
+            added_by='Husna', tenant=company,
+        )
+
+    def test_superuser_admin_rename_propagates_to_leads(self):
+        self.client.force_authenticate(self.superuser)
+        resp = self.client.patch(f'/api/auth/admins/{self.admin.pk}/', {
+            'name': 'Husna K',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.assigned_to, 'Husna K')
+        self.assertEqual(self.lead.added_by, 'Husna K')

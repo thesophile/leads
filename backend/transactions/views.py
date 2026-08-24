@@ -10,11 +10,24 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import can
+from master.models import Category, Source
 
 from .models import CallHistory, Lead, Quotation
 from .serializers import LeadSerializer, QuotationSerializer
 
 User = get_user_model()
+
+
+def assignment_name_set(user):
+    """Names that ``user`` may assign leads to (their company's non-superusers)."""
+    if not user.company:
+        return set()
+    return set(
+        User.objects
+        .filter(company=user.company)
+        .exclude(is_superuser=True)
+        .values_list('name', flat=True)
+    )
 
 
 def generate_lead_id():
@@ -128,32 +141,47 @@ class LeadListView(APIView):
         existing = find_duplicate_lead(request.user, company)
         if existing is not None:
             return duplicate_response(existing)
+        category = request.data.get('category', '').strip()
+        source = request.data.get('source', '').strip()
+        invalid = []
+        if category and not Category.objects.filter(name=category).exists():
+            invalid.append(f'category: Unknown category "{category}".')
+        if source and not Source.objects.filter(name=source).exists():
+            invalid.append(f'source: Unknown source "{source}".')
+        if invalid:
+            return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
         phone = request.data.get('phone', '').strip()
         lead_date = date.today()
-        try:
-            lead = Lead.objects.create(
-                id=generate_lead_id(),
-                company=company,
-                tenant=request.user.company,
-                contact=request.data.get('contact', '').strip(),
-                phone=phone,
-                email=request.data.get('email', '').strip(),
-                category=request.data.get('category', '').strip(),
-                source=request.data.get('source', '').strip(),
-                city=request.data.get('city', '').strip(),
-                date=lead_date,
-                display_date=format_display_date(lead_date),
-                added_by=request.user.name,
-                status=Lead.STATUS_RAW,
-            )
-        except IntegrityError:
-            # Concurrent duplicate insert lost the race at the DB level:
-            # return the existing record as a clean 409 instead of a 500.
-            existing = find_duplicate_lead(request.user, company)
-            if existing is not None:
-                return duplicate_response(existing)
-            raise
-        return Response(LeadSerializer(lead).data, status=status.HTTP_201_CREATED)
+        saved = None
+        last_error = None
+        for _ in range(5):
+            try:
+                saved = Lead.objects.create(
+                    id=generate_lead_id(),
+                    company=company,
+                    tenant=request.user.company,
+                    contact=request.data.get('contact', '').strip(),
+                    phone=phone,
+                    email=request.data.get('email', '').strip(),
+                    category=category,
+                    source=source,
+                    city=request.data.get('city', '').strip(),
+                    date=lead_date,
+                    display_date=format_display_date(lead_date),
+                    added_by=request.user.name,
+                    status=Lead.STATUS_RAW,
+                )
+                break
+            except IntegrityError as exc:
+                # Either a real duplicate (concurrent create) or a random id
+                # collision; retry the id-generation rather than 500.
+                last_error = exc
+                existing = find_duplicate_lead(request.user, company)
+                if existing is not None:
+                    return duplicate_response(existing)
+        if saved is None:
+            raise last_error
+        return Response(LeadSerializer(saved).data, status=status.HTTP_201_CREATED)
 
 
 class LeadDetailView(APIView):
@@ -213,6 +241,20 @@ class LeadDetailView(APIView):
                 elif isinstance(value, str):
                     value = value.strip()
                 setattr(lead, field, value)
+        invalid = []
+        submitted = set(request.data)
+        if 'category' in submitted and lead.category and not Category.objects.filter(name=lead.category).exists():
+            invalid.append(f'category: Unknown category "{lead.category}".')
+        if 'source' in submitted and lead.source and not Source.objects.filter(name=lead.source).exists():
+            invalid.append(f'source: Unknown source "{lead.source}".')
+        if 'call_status' in submitted and lead.call_status not in Lead.CALL_STATUS_VALUES:
+            invalid.append(f'call_status: "{lead.call_status}" is not a valid call status.')
+        if 'assigned_to' in submitted and lead.assigned_to:
+            valid_names = assignment_name_set(user)
+            if lead.assigned_to not in valid_names:
+                invalid.append(f'assigned_to: Unknown staff member "{lead.assigned_to}".')
+        if invalid:
+            return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
         if 'has_follow_up' in request.data:
             lead.has_follow_up = bool(request.data.get('has_follow_up'))
         if 'assigned_to' in request.data and lead.assigned_to and user.company:
@@ -342,12 +384,7 @@ class LeadAssignView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if request.user.company:
-            valid_names = set(
-                User.objects
-                .filter(company=request.user.company)
-                .exclude(is_superuser=True)
-                .values_list('name', flat=True)
-            )
+            valid_names = assignment_name_set(request.user)
             unknown = [name for name in assigned_to if name not in valid_names]
             if unknown:
                 return Response(
@@ -373,6 +410,12 @@ class LeadAssignView(APIView):
             queryset = queryset.filter(date__lte=to_date)
 
         leads = list(queryset.order_by('-created_at')[:count])
+
+        if not leads:
+            return Response(
+                {'detail': 'No matching raw leads for the given filters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         updated = []
         for index, lead in enumerate(leads):

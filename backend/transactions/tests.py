@@ -94,6 +94,14 @@ class AssignLeadsToStaffTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 5)
 
+    def test_assign_with_no_matching_leads_returns_clear_error(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': 'Shanu VR', 'category': 'Nothing Here', 'count': 5,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('No matching raw leads', resp.data['detail'])
+
     def test_assign_to_multiple_staff_distributes_round_robin(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.post('/api/transactions/leads/assign/', {
@@ -264,6 +272,22 @@ class LeadVisibilityTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(CallHistory.objects.filter(lead_id='TC-1').exists())
 
+    def test_patch_with_unknown_call_status_is_rejected(self):
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'call_status': 'Random Junk',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_reassign_to_unknown_staff_is_rejected(self):
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'assigned_to': 'Ghost User',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.lead = Lead.objects.get(id='TC-1')
+        self.assertEqual(self.lead.assigned_to, 'Shanu VR')
+
 
 class AssignableStaffListViewTests(APITestCase):
     def setUp(self):
@@ -334,3 +358,17 @@ class LeadDuplicateScopingTests(APITestCase):
             Lead.objects.filter(company__iexact='State Bank of India').count(),
             2,
         )
+
+    def test_create_rejects_unknown_category(self):
+        from master.models import Category
+
+        Category.objects.get_or_create(name='Hospital')
+        self.client.force_authenticate(self.manager)
+        bad = self.client.post('/api/transactions/leads/', {
+            'company': 'Some Co', 'category': 'Not A Category',
+        }, format='json')
+        self.assertEqual(bad.status_code, 400)
+        ok = self.client.post('/api/transactions/leads/', {
+            'company': 'Some Co', 'category': 'Hospital',
+        }, format='json')
+        self.assertEqual(ok.status_code, 201)

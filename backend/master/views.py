@@ -95,6 +95,11 @@ class BranchListView(APIView):
                 {'detail': 'name: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if Branch.objects.filter(company=company, name__iexact=name).exists():
+            return Response(
+                {'detail': f'name: A branch named "{name}" already exists in this company.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         branch = Branch.objects.create(
             company=company,
             name=name,
@@ -132,6 +137,13 @@ class BranchDetailView(APIView):
             if not name:
                 return Response(
                     {'detail': 'name: This field may not be blank.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if name.lower() != branch.name.lower() and Branch.objects.filter(
+                company=branch.company, name__iexact=name
+            ).exclude(pk=branch.pk).exists():
+                return Response(
+                    {'detail': f'name: A branch named "{name}" already exists in this company.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             branch.name = name
@@ -178,6 +190,11 @@ class CategoryListView(APIView):
                 {'detail': 'name: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if Category.objects.filter(name__iexact=name).exists():
+            return Response(
+                {'detail': f'name: A category named "{name}" already exists.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         category = Category.objects.create(
             name=name,
             code=generate_category_code(name),
@@ -209,6 +226,13 @@ class CategoryDetailView(APIView):
             if not name:
                 return Response(
                     {'detail': 'name: This field may not be blank.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if name.lower() != category.name.lower() and Category.objects.filter(
+                name__iexact=name
+            ).exclude(pk=category.pk).exists():
+                return Response(
+                    {'detail': f'name: A category named "{name}" already exists.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             category.name = name
@@ -253,6 +277,11 @@ class SourceListView(APIView):
                 {'detail': 'name: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if Source.objects.filter(name__iexact=name).exists():
+            return Response(
+                {'detail': f'name: A source named "{name}" already exists.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         source = Source.objects.create(
             name=name,
             code=generate_source_code(name),
@@ -284,6 +313,13 @@ class SourceDetailView(APIView):
             if not name:
                 return Response(
                     {'detail': 'name: This field may not be blank.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if name.lower() != source.name.lower() and Source.objects.filter(
+                name__iexact=name
+            ).exclude(pk=source.pk).exists():
+                return Response(
+                    {'detail': f'name: A source named "{name}" already exists.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             source.name = name
