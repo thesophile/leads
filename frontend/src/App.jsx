@@ -8,7 +8,7 @@ import ChangePassword from './admin/ChangePassword'
 import Dashboard from './admin/Dashboard'
 import Categories from './admin/master/Categories'
 import Sources from './admin/master/Sources'
-import Company from './admin/master/Company'
+
 import Branch from './admin/master/Branch'
 import Staff from './admin/master/Staff'
 import RawData from './admin/transactions/RawData'
@@ -43,7 +43,6 @@ function App() {
         <Route path="/dashboard" element={guard(<Dashboard />)} />
         <Route path="/categories" element={guard(<Categories />, { perm: 'category.view' })} />
         <Route path="/sources" element={guard(<Sources />, { perm: 'source.view' })} />
-        <Route path="/company" element={guard(<Company />, { perm: 'company.view' })} />
         <Route path="/branches" element={guard(<Branch />, { perm: 'branch.view' })} />
         <Route path="/staff" element={guard(<Staff />, { perm: 'staff.manage' })} />
         <Route path="/raw-leads" element={guard(<RawData />, { perm: 'leads.view' })} />

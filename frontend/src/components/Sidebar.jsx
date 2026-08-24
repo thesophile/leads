@@ -51,7 +51,6 @@ const MENU_BASE = [
     id: 'master-data',
     label: 'Master Data',
     items: [
-      { id: 'company', label: 'Company', path: '/company', perm: 'company.view' },
       { id: 'branches', label: 'Branches', path: '/branches', perm: 'branch.view' },
       { id: 'categories', label: 'Categories', path: '/categories', perm: 'category.view' },
       { id: 'sources', label: 'Sources', path: '/sources', perm: 'source.view' },
