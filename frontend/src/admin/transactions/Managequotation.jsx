@@ -1312,7 +1312,7 @@ export default function Managequotation() {
       {/* "New Proposal" Modal (Matching User's Reference Screenshot) */}
       {proposalModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget && !proposalDirty) setProposalModalOpen(false)
           }}
@@ -1371,7 +1371,11 @@ export default function Managequotation() {
                 />
               </div>
             )}
-            <form onSubmit={handleSubmitProposal} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+            <form
+              onSubmit={handleSubmitProposal}
+              className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs"
+              style={{ scrollbarGutter: 'stable' }}
+            >
               {/* Row 1: BDM | QTN BY | Client Name in a single row */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
