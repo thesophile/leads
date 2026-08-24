@@ -1,3 +1,4 @@
+import json
 import random
 from datetime import date, datetime
 
@@ -391,25 +392,46 @@ class LeadAssignView(APIView):
                     {'detail': f'assigned_to: Unknown staff member(s): {", ".join(unknown)}.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-        category = (request.data.get('category') or '').strip()
-        from_date = request.data.get('from_date') or ''
-        to_date = request.data.get('to_date') or ''
-        try:
-            count = int(request.data.get('count') or 0)
-        except (TypeError, ValueError):
-            count = 0
-        if count <= 0:
-            count = 1
+        lead_ids_raw = request.data.get('lead_ids')
+        if isinstance(lead_ids_raw, str):
+            try:
+                lead_ids_raw = json.loads(lead_ids_raw)
+            except (TypeError, ValueError):
+                lead_ids_raw = [lead_ids_raw]
+        lead_ids = [str(i).strip() for i in (lead_ids_raw or []) if str(i).strip()]
 
-        queryset = scoped_queryset(request.user, Lead.STATUS_RAW).filter(assigned_to='')
-        if category and category != 'All Categories':
-            queryset = queryset.filter(category=category)
-        if from_date:
-            queryset = queryset.filter(date__gte=from_date)
-        if to_date:
-            queryset = queryset.filter(date__lte=to_date)
+        if lead_ids:
+            base = scoped_queryset(request.user, Lead.STATUS_RAW).filter(
+                assigned_to='', pk__in=lead_ids
+            )
+            found = set(base.values_list('pk', flat=True))
+            if len(found) < len(lead_ids):
+                missing = [i for i in lead_ids if i not in found]
+                return Response(
+                    {'detail': f'Some selected lead(s) are no longer assignable: {", ".join(missing)}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            leads = list(base.order_by('-created_at'))
+        else:
+            category = (request.data.get('category') or '').strip()
+            from_date = request.data.get('from_date') or ''
+            to_date = request.data.get('to_date') or ''
+            try:
+                count = int(request.data.get('count') or 0)
+            except (TypeError, ValueError):
+                count = 0
+            if count <= 0:
+                count = 1
 
-        leads = list(queryset.order_by('-created_at')[:count])
+            queryset = scoped_queryset(request.user, Lead.STATUS_RAW).filter(assigned_to='')
+            if category and category != 'All Categories':
+                queryset = queryset.filter(category=category)
+            if from_date:
+                queryset = queryset.filter(date__gte=from_date)
+            if to_date:
+                queryset = queryset.filter(date__lte=to_date)
+
+            leads = list(queryset.order_by('-created_at')[:count])
 
         if not leads:
             return Response(
