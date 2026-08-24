@@ -289,6 +289,7 @@ export default function RawData() {
   const [discardAssignOpen, setDiscardAssignOpen] = useState(false)
   const [discardImportOpen, setDiscardImportOpen] = useState(false)
   const [discardDrawerOpen, setDiscardDrawerOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   const { dirty: assignDirty, reset: resetAssignDirty } = useDirty(
     assignModalOpen,
@@ -695,6 +696,32 @@ async function handleBulkImport(e) {
     })
   }, [rawDataList, selectedStaff, selectedSource, searchQuery, dateFilterType, startDate, endDate, user?.name, dateFilterValues])
 
+  const allSelected = filteredData.length > 0 && filteredData.every((item) => selectedIds.has(item.id))
+
+  function toggleSelectLead(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allSelected) {
+        filteredData.forEach((item) => next.delete(item.id))
+      } else {
+        filteredData.forEach((item) => next.add(item.id))
+      }
+      return next
+    })
+  }
+
   const hasActiveFilters =
     selectedStaff !== defaultStaffFilter ||
     selectedSource !== 'All Sources' ||
@@ -783,7 +810,8 @@ async function handleBulkImport(e) {
         {/* Main Leads Table Container */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           {/* Table Toolbar (Filter by Employee + Source + Date Range + Search Box) */}
-          <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
+          {selectedIds.size === 0 && (
+            <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               {/* Left Controls: Filter by Employee, Source, and Date */}
               <div className="flex flex-wrap items-center gap-2.5">
@@ -953,13 +981,45 @@ async function handleBulkImport(e) {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          )}
+
+          {/* Selection Action Bar (Appears when any row is selected) */}
+          {selectedIds.size > 0 && (
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 shadow-2xs">
+              <span className="flex items-center gap-2 text-xs font-bold text-brand-800">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-black text-white">
+                  ☑
+                </span>
+                {selectedIds.size} selected
+              </span>
+              {canAssignLeads && (
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98] cursor-pointer"
+                >
+                  <UsersIcon className="h-3.5 w-3.5" />
+                  <span>Assign Selected</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Table */}
           <div className="overflow-x-auto mt-3">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-black text-slate-800 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="pb-2 font-semibold w-8 pr-2">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      disabled={filteredData.length === 0}
+                      aria-label="Select all raw data rows"
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="pb-2 font-semibold w-64">Company Name</th>
                   <th className="pb-2 font-semibold w-44">Contact Person</th>
                   <th className="pb-2 font-semibold w-32">Mobile</th>
@@ -973,13 +1033,25 @@ async function handleBulkImport(e) {
               <tbody className="divide-y divide-black">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
                       Loading raw data...
                     </td>
                   </tr>
                 ) : filteredData.length > 0 ? (
                   filteredData.map((item) => (
                     <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
+                      {/* Select Checkbox */}
+                      <td className="py-0.5 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(item.id)}
+                          onChange={() => toggleSelectLead(item.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${item.company}`}
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
+                      </td>
+
                       {/* Company Name */}
                       <td className="py-0.5 pr-2 font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={item.company}>
                         {item.company}
@@ -1046,7 +1118,7 @@ async function handleBulkImport(e) {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
                       No raw data records found matching criteria.
                     </td>
                   </tr>
