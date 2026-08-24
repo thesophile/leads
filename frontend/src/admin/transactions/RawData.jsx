@@ -1079,12 +1079,22 @@ async function handleBulkImport(e) {
                 }`}
               >
             <div className="flex h-full items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 shadow-2xs">
-              <span className="flex items-center gap-1.5 text-xs font-bold text-brand-800">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 text-[9px] font-black text-white">
-                  ☑
+              <div className="flex items-center gap-2.5">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-brand-800">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 text-[9px] font-black text-white">
+                    ☑
+                  </span>
+                  {selectedIds.size} selected
                 </span>
-                {selectedIds.size} selected
-              </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="flex items-center gap-1 rounded-md border border-brand-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
+                >
+                  <CloseIcon className="h-3 w-3" />
+                  Clear
+                </button>
+              </div>
               {canAssignLeads && (
                 <button
                   type="button"
