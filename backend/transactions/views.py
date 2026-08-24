@@ -488,6 +488,14 @@ class ProposalTemplateListView(APIView):
                 {'detail': 'name: A template name is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        name_dup = ProposalTemplate.objects.filter(
+            owner=request.user, name__iexact=name
+        ).first()
+        if name_dup is not None:
+            return Response(
+                {'detail': 'A template with this name already exists. Please choose another name.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = ProposalTemplateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -514,6 +522,16 @@ class ProposalTemplateDetailView(APIView):
                 {'detail': 'Template not found or you do not own it.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        name = (request.data.get('name') or '').strip()
+        if name:
+            name_dup = ProposalTemplate.objects.filter(
+                owner=request.user, name__iexact=name
+            ).exclude(pk=template.pk).first()
+            if name_dup is not None:
+                return Response(
+                    {'detail': 'A template with this name already exists. Please choose another name.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         serializer = ProposalTemplateSerializer(template, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

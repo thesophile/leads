@@ -474,6 +474,33 @@ class ProposalTemplateApiTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 404)
 
+    def test_cannot_create_duplicate_name_for_owner(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'Hospital Suite', 'scopeHtml': '<p>x</p>',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        resp = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'hospital suite', 'scopeHtml': '<p>y</p>',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('already exists', resp.data['detail'])
+
+    def test_cannot_update_to_duplicate_name(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'First', 'scopeHtml': '<p>a</p>',
+        }, format='json')
+        created = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'Second', 'scopeHtml': '<p>b</p>',
+        }, format='json')
+        tpl_id = created.data['id']
+        resp = self.client.put(f'/api/transactions/proposal-templates/{tpl_id}/', {
+            'name': 'First',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('already exists', resp.data['detail'])
+
     def test_update_own_template(self):
         self.client.force_authenticate(self.manager)
         created = self.client.post('/api/transactions/proposal-templates/', {
