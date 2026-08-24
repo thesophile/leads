@@ -325,6 +325,7 @@ export default function Staff() {
       if (editingId) {
         const payload = {
           name: formData.name,
+          email: formData.email,
           phone: formData.phone,
           branch: formData.branch,
         }

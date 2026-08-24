@@ -387,12 +387,22 @@ class CompanyDetailView(APIView):
         return request.user.company
 
     def get(self, request):
+        if not can(request.user, 'company.view'):
+            return Response(
+                {'detail': 'You do not have permission to view the company profile.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         company = self.get_object(request)
         if company is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(CompanySerializer(company).data)
 
     def patch(self, request):
+        if not can(request.user, 'company.edit'):
+            return Response(
+                {'detail': 'You do not have permission to edit the company profile.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         company = self.get_object(request)
         if company is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)

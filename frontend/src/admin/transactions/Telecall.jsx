@@ -219,6 +219,8 @@ export default function Telecall() {
     setError('')
     setIsSaving(true)
     try {
+      const d = new Date()
+      const todayISO = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       await api.patch(`/transactions/leads/${activeLead.id}/`, {
         assigned_to: formData.assignedTo,
         call_status: formData.callStatus,
@@ -227,7 +229,7 @@ export default function Telecall() {
         next_follow_up_date: formData.nextFollowUpDate,
         next_follow_up_time: formData.nextFollowUpTime,
         has_follow_up: isFollowUp,
-        last_call_date: isActuallyCalled ? 'Today' : activeLead.lastCallDate,
+        last_call_date: isActuallyCalled ? todayISO : activeLead.lastCallDate,
       })
       await refreshData()
       closeDrawer()

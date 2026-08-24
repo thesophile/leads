@@ -15,6 +15,96 @@ function PlusIcon() {
   )
 }
 
+function toISODate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function shiftDays(offset) {
+  const d = new Date()
+  d.setDate(d.getDate() + offset)
+  return toISODate(d)
+}
+
+function shortDate(value) {
+  return value.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+}
+
+function parseCSV(text) {
+  const rows = []
+  let row = []
+  let field = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        field += c
+      }
+    } else if (c === '"') {
+      inQuotes = true
+    } else if (c === ',') {
+      row.push(field)
+      field = ''
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++
+      row.push(field)
+      field = ''
+      if (row.some((f) => f.trim() !== '')) rows.push(row)
+      row = []
+    } else {
+      field += c
+    }
+  }
+  row.push(field)
+  if (row.some((f) => f.trim() !== '')) rows.push(row)
+  return rows
+}
+
+function csvRowsToLeads(text) {
+  const rows = parseCSV(text)
+  if (rows.length === 0) return []
+  const normalize = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const headers = rows[0].map((h) => normalize(h))
+  const findCol = (...keys) => {
+    for (const k of keys) {
+      const idx = headers.indexOf(normalize(k))
+      if (idx !== -1) return idx
+    }
+    return -1
+  }
+  const colCompany = findCol('Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name')
+  const colContact = findCol('Contact Person', 'Contact Name', 'Contact', 'Name')
+  const colPhone = findCol('Mobile', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number')
+  const colEmail = findCol('Email', 'Email Address', 'Mail')
+  const colCategory = findCol('Category', 'Business Type', 'Segmentation')
+  const colSource = findCol('Lead Source', 'Source', 'Source Name')
+  const colCity = findCol('City', 'Location', 'City / Location', 'Region')
+
+  const leads = []
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]
+    const company = ((colCompany >= 0 && r[colCompany]) || '').trim()
+    if (!company) continue
+    leads.push({
+      company,
+      contact: ((colContact >= 0 && r[colContact]) || '').trim(),
+      phone: ((colPhone >= 0 && r[colPhone]) || '').trim(),
+      email: ((colEmail >= 0 && r[colEmail]) || '').trim(),
+      category: ((colCategory >= 0 && r[colCategory]) || '').trim(),
+      source: ((colSource >= 0 && r[colSource]) || '').trim(),
+      city: ((colCity >= 0 && r[colCity]) || '').trim(),
+    })
+  }
+  return leads
+}
+
 function UploadCloudIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -170,6 +260,7 @@ export default function RawData() {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importedFileName, setImportedFileName] = useState('')
+  const [importedFile, setImportedFile] = useState(null)
   const [importSuccessMessage, setImportSuccessMessage] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -410,53 +501,59 @@ export default function RawData() {
     }
   }
 
-  async function handleBulkImport(e) {
+async function handleBulkImport(e) {
     e.preventDefault()
     if (isImporting) return
     setError('')
-    if (!importedFileName) return
+    if (!importedFileName || !importedFile) return
 
-    // Bulk import adds realistic raw leads through the API
-    const importedSample = [
-      {
-        company: 'ROYAL DENTAL HEALTHCARE',
-        contact: 'Dr. John Mathew',
-        phone: '9847002233',
-        email: 'john@royaldental.in',
-        category: 'Hospital',
-        source: 'Google Search',
-        city: 'Kochi',
-      },
-      {
-        company: 'AURORA BOUTIQUE & APPARELS',
-        contact: 'Sunitha Nair',
-        phone: '9744119988',
-        email: 'aurora.sales@gmail.com',
-        category: 'Fancy Shops',
-        source: 'Instagram Campaign',
-        city: 'Calicut',
-      },
-    ]
+    if (/\.xlsx?$/i.test(importedFileName)) {
+      setError('Excel files are not supported yet. Please export your sheet as CSV and import that.')
+      return
+    }
 
     setIsImporting(true)
     try {
-      await Promise.all(
-        importedSample.map((record) => api.post('/transactions/leads/', record))
-      )
-      setImportSuccessMessage(`Successfully imported 2 leads from ${importedFileName}!`)
-      await refreshData()
-    } catch (err) {
-      if (err.status === 409 && err.data?.existing) {
-        setDuplicateRecord(err.data.existing)
-      } else {
-        setError(err.message)
+      const text = await importedFile.text()
+      const leads = csvRowsToLeads(text)
+      if (leads.length === 0) {
+        setError('No importable rows found. Make sure the first row has headers such as Company Name, Contact, Phone, Email, Category, Source, City.')
+        setIsImporting(false)
+        return
       }
+
+      let imported = 0
+      let duplicates = 0
+      let failed = 0
+      for (const record of leads) {
+        try {
+          await api.post('/transactions/leads/', record)
+          imported += 1
+        } catch (err) {
+          if (err.status === 409) duplicates += 1
+          else failed += 1
+        }
+      }
+
+      if (imported === 0 && failed > 0) {
+        setError('None of the rows could be imported. Check the file headers and that categories/sources exist.')
+      } else {
+        setImportSuccessMessage(
+          `Successfully imported ${imported} lead(s) from ${importedFileName}!` +
+            (duplicates ? ` ${duplicates} duplicate(s) skipped.` : '') +
+            (failed ? ` ${failed} row(s) failed validation.` : '')
+        )
+        await refreshData()
+      }
+} catch (err) {
+      setError(err.message || 'Failed to read the file.')
     } finally {
       setIsImporting(false)
       resetImportDirty()
       setTimeout(() => {
         setImportModalOpen(false)
         setImportedFileName('')
+        setImportedFile(null)
         setImportSuccessMessage('')
       }, 1200)
     }
@@ -541,6 +638,22 @@ export default function RawData() {
   const assignCountToUse = Math.min(assignCount, totalUnassignedCount)
 
   // Filtered Leads based on search, staff, source, and date range
+  const dateFilterValues = (() => {
+    const now = new Date()
+    const yesterday = new Date()
+    yesterday.setDate(now.getDate() - 1)
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    return {
+      todayISO: toISODate(now),
+      yesterdayISO: toISODate(yesterday),
+      last7ISO: shiftDays(-6),
+      monthStart,
+      todayLabel: shortDate(now),
+      yesterdayLabel: shortDate(yesterday),
+      monthLabel: now.toLocaleDateString('en-IN', { month: 'long' }),
+    }
+  })()
+
   const filteredData = useMemo(() => {
     return rawDataList.filter((l) => {
       // 1. Staff Filter
@@ -566,13 +679,13 @@ export default function RawData() {
       // 4. Date Filter
       let matchesDate = true
       if (dateFilterType === 'Today') {
-        matchesDate = l.date === '2026-08-12'
+        matchesDate = l.date === dateFilterValues.todayISO
       } else if (dateFilterType === 'Yesterday') {
-        matchesDate = l.date === '2026-08-11'
+        matchesDate = l.date === dateFilterValues.yesterdayISO
       } else if (dateFilterType === 'Last 7 Days') {
-        matchesDate = l.date >= '2026-08-05'
+        matchesDate = l.date >= dateFilterValues.last7ISO
       } else if (dateFilterType === 'This Month') {
-        matchesDate = l.date.startsWith('2026-08')
+        matchesDate = l.date.startsWith(dateFilterValues.monthStart.slice(0, 7))
       } else if (dateFilterType === 'Custom') {
         if (startDate && l.date < startDate) matchesDate = false
         if (endDate && l.date > endDate) matchesDate = false
@@ -580,7 +693,7 @@ export default function RawData() {
 
       return matchesStaff && matchesSource && matchesSearch && matchesDate
     })
-  }, [rawDataList, selectedStaff, selectedSource, searchQuery, dateFilterType, startDate, endDate, user?.name])
+  }, [rawDataList, selectedStaff, selectedSource, searchQuery, dateFilterType, startDate, endDate, user?.name, dateFilterValues])
 
   const hasActiveFilters =
     selectedStaff !== defaultStaffFilter ||
@@ -765,10 +878,10 @@ export default function RawData() {
                     className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                   >
                     <option value="All Time">All Time</option>
-                    <option value="Today">Today (12 Aug)</option>
-                    <option value="Yesterday">Yesterday (11 Aug)</option>
+                    <option value="Today">Today ({dateFilterValues.todayLabel})</option>
+                    <option value="Yesterday">Yesterday ({dateFilterValues.yesterdayLabel})</option>
                     <option value="Last 7 Days">Last 7 Days</option>
-                    <option value="This Month">This Month (August)</option>
+                    <option value="This Month">This Month ({dateFilterValues.monthLabel})</option>
                     <option value="Custom">Custom Range...</option>
                   </select>
                 </div>
@@ -1269,6 +1382,7 @@ export default function RawData() {
                   accept=".csv,.xlsx,.xls"
                   onChange={(e) => {
                     if (e.target.files[0]) {
+                      setImportedFile(e.target.files[0])
                       setImportedFileName(e.target.files[0].name)
                     }
                   }}

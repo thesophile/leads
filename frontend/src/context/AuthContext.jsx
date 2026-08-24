@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     const { refresh } = getStoredTokens()
     try {
-      if (refresh) await api.post('/auth/logout/', { refresh }, { auth: false })
+      if (refresh) await api.post('/auth/logout/', { refresh })
     } catch {
       // token may already be invalid — clear locally regardless
     }

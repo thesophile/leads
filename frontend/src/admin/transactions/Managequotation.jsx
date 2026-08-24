@@ -32,6 +32,22 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
+function parseMoney(value) {
+  const s = String(value == null ? '' : value).replace(/[, ]/g, '').trim()
+  if (!s) return 0
+  const n = Number(s)
+  return Number.isFinite(n) ? n : 0
+}
+
+function fmtMoney(n) {
+  const rounded = Math.round(n * 100) / 100
+  return rounded.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+}
+
+function netFrom(total, discount) {
+  return fmtMoney(parseMoney(total) - parseMoney(discount))
+}
+
 function mapLeadToQuotation(lead) {
   const q = lead.quotation
   return {
@@ -516,7 +532,7 @@ export default function Managequotation() {
         mobile: mobileNum || existing.mobile,
         total: totalVal,
         discount: discountVal,
-        netAmount: totalVal,
+        netAmount: netFrom(totalVal, discountVal),
         currency: currencyVal,
         source: sourceVal,
         proposalScope: currentScope,
@@ -548,7 +564,7 @@ export default function Managequotation() {
         status: 'Not Sent',
         total: totalVal,
         discount: discountVal,
-        netAmount: totalVal,
+        netAmount: netFrom(totalVal, discountVal),
         currency: currencyVal,
         source: sourceVal,
         proposalScope: currentScope,

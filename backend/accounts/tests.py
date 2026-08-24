@@ -38,17 +38,20 @@ class RegistrationTests(TestCase):
         self.assertFalse(user.is_superuser)
         self.assertEqual(user.company.name, 'Acme Corp')
 
-    def test_same_company_name_reuses_one_company(self):
+    def test_same_company_name_registration_is_rejected(self):
+        # Public self-registration must NOT let a stranger join an existing
+        # company as its admin; only the first registrant can claim the name.
         data = {
             'name': 'Jane Doe', 'phone': '123',
             'password': 'Str0ngPass!', 'password2': 'Str0ngPass!',
+            'company': 'Acme',
         }
-        s1 = AdminRegisterSerializer(data={**data, 'email': 'jane@acme.com', 'company': 'Acme'})
-        s2 = AdminRegisterSerializer(data={**data, 'email': 'john@acme.com', 'company': 'Acme'})
+        s1 = AdminRegisterSerializer(data={**data, 'email': 'jane@acme.com'})
         self.assertTrue(s1.is_valid(), s1.errors)
-        self.assertTrue(s2.is_valid(), s2.errors)
         s1.save()
-        s2.save()
+        s2 = AdminRegisterSerializer(data={**data, 'email': 'john@acme.com'})
+        self.assertFalse(s2.is_valid())
+        self.assertIn('company', s2.errors)
         self.assertEqual(Company.objects.filter(name='Acme').count(), 1)
 
 

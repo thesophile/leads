@@ -94,6 +94,13 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
         value = value.strip()
         if not value:
             raise serializers.ValidationError('Company name is required.')
+        from .models import Company
+
+        if Company.objects.filter(name__iexact=value).exists():
+            raise serializers.ValidationError(
+                'A company with this name is already registered. '
+                'Ask your company admin or the platform administrator to create your account instead.'
+            )
         return value
 
     def create(self, validated_data):
@@ -113,8 +120,15 @@ class AdminManageSerializer(AdminRegisterSerializer):
     """Superuser-only: create an admin for an existing or new company.
 
     Reuses the shared registration logic; the difference is purely the
-    permission guard on the calling view.
+    permission guard on the calling view. Unlike self-registration, an
+    existing company may be reused (verified by the superuser).
     """
+
+    def validate_company(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Company name is required.')
+        return value
 
 
 class AdminUpdateSerializer(serializers.ModelSerializer):
@@ -187,7 +201,7 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['name', 'phone', 'mobile', 'branch', 'role', 'is_active']
+        fields = ['name', 'email', 'phone', 'mobile', 'branch', 'role', 'is_active']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

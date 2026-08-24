@@ -2,7 +2,11 @@ import { useState } from 'react'
 
 function isSame(a, b) {
   if (a === b) return true
-  return Object.keys(a).every((key) => a[key] === b[key])
+  if (!a || !b) return false
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  if (aKeys.length !== bKeys.length) return false
+  return aKeys.every((key) => a[key] === b[key])
 }
 
 export default function useDirty(open, values) {

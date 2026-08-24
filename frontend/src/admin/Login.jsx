@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/auth-context'
 
 function BrandMark({ size = 40 }) {
@@ -149,6 +149,7 @@ function StatCard({ value, label, live = false }) {
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login, isAuthenticated } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -174,7 +175,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login({ email, password, remember })
-      navigate('/dashboard')
+      navigate(location.state?.from || '/dashboard', { replace: true })
     } catch (err) {
       setError(err.message || 'Unable to sign in. Please try again.')
       setLoading(false)

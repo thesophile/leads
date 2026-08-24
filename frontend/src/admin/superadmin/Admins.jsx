@@ -195,7 +195,7 @@ function FloatingField({ label, id, value, onChange, type = 'text', icon }) {
   )
 }
 
-const emptyForm = { name: '', email: '', phone: '', company: '', password: '' }
+const emptyForm = { name: '', email: '', phone: '', company: '', password: '', password2: '' }
 
 export default function Admins() {
   const { user } = useAuth()
@@ -271,6 +271,10 @@ export default function Admins() {
       setError('Initial password must be at least 8 characters.')
       return
     }
+    if (!editingId && formData.password !== formData.password2) {
+      setError('Passwords do not match.')
+      return
+    }
 
     try {
       if (editingId) {
@@ -287,6 +291,7 @@ export default function Admins() {
           phone: formData.phone,
           company: formData.company,
           password: formData.password,
+          password2: formData.password2,
         })
         setShowCredentials({ email: created.email, password: formData.password })
         showToast('Admin added.')
@@ -428,6 +433,7 @@ export default function Admins() {
               {!isEditing && (
                 <>
                   <FloatingField label="Password" id="adm_pw" type="password" value={formData.password} onChange={(v) => setFormData({ ...formData, password: v })} icon={<LockIcon />} />
+                  <FloatingField label="Confirm Password" id="adm_pw2" type="password" value={formData.password2} onChange={(v) => setFormData({ ...formData, password2: v })} icon={<LockIcon />} />
                   <p className="text-[10px] text-slate-400">
                     This is the password the admin uses to sign in.
                   </p>

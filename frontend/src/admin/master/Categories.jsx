@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 
 function PlusCircleIcon() {
   return (
@@ -87,6 +89,8 @@ function SpinnerIcon() {
 }
 
 export default function Categories() {
+  const { user } = useAuth()
+  const canManage = !!user && can(user, 'category.manage')
   const [categories, setCategories] = useState([])
   const [categoryName, setCategoryName] = useState('')
   const [editingId, setEditingId] = useState(null)
@@ -138,7 +142,7 @@ export default function Categories() {
 
   async function handleSave(e) {
     e.preventDefault()
-    if (isLoading) return
+    if (isLoading || !canManage) return
     setError('')
     if (!categoryName.trim()) return
 
@@ -264,11 +268,12 @@ export default function Categories() {
                   placeholder="Category Name"
                   value={categoryName}
                   onChange={(e) => setCategoryName(e.target.value)}
+                  disabled={!canManage}
                   className={`peer relative z-0 w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder-transparent transition-all focus:outline-none focus:ring-4 ${
                     isEditing
                       ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/10'
                       : 'border-slate-200 focus:border-brand-500 focus:ring-brand-500/10'
-                  }`}
+                  } ${!canManage ? 'cursor-not-allowed opacity-60 bg-slate-50' : ''}`}
                 />
                 <label
                   htmlFor="category_name_input"
@@ -285,28 +290,34 @@ export default function Categories() {
               </div>
 
               {/* Form Buttons */}
-              <div className={`flex items-center gap-2 pt-1 ${isEditing ? '' : 'justify-end'}`}>
-                {isEditing && (
+              {canManage ? (
+                <div className={`flex items-center gap-2 pt-1 ${isEditing ? '' : 'justify-end'}`}>
+                  {isEditing && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  )}
                   <button
-                    type="button"
-                    onClick={handleCancelEdit}
-                    className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 cursor-pointer"
+                    type="submit"
+                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98] cursor-pointer ${
+                      isEditing
+                        ? 'flex-1 bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
+                        : 'w-full bg-brand-600 hover:bg-brand-700 shadow-brand-600/10'
+                    }`}
                   >
-                    Cancel
+                    {isEditing ? <RefreshIcon className="h-3.5 w-3.5 text-white" /> : <SaveIcon />}
+                    <span>{isEditing ? 'Update' : 'Save'}</span>
                   </button>
-                )}
-                <button
-                  type="submit"
-                  className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98] cursor-pointer ${
-                    isEditing
-                      ? 'flex-1 bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
-                      : 'w-full bg-brand-600 hover:bg-brand-700 shadow-brand-600/10'
-                  }`}
-                >
-                  {isEditing ? <RefreshIcon className="h-3.5 w-3.5 text-white" /> : <SaveIcon />}
-                  <span>{isEditing ? 'Update' : 'Save'}</span>
-                </button>
-              </div>
+                </div>
+              ) : (
+                <p className="pt-1 text-[11px] text-slate-400">
+                  View only — you need the &ldquo;category.manage&rdquo; permission to add or edit categories.
+                </p>
+              )}
             </form>
           </div>
 
@@ -353,7 +364,7 @@ export default function Categories() {
                   <tr className="border-b border-black text-slate-800 font-bold uppercase tracking-wider text-[11px]">
                     <th className="pb-2 font-semibold w-28">Code</th>
                     <th className="pb-2 font-semibold w-72">Category Name</th>
-                    <th className="pb-2 font-semibold text-left">Actions</th>
+                    {canManage && <th className="pb-2 font-semibold text-left">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
@@ -361,8 +372,8 @@ export default function Categories() {
                     paginatedCategories.map((cat) => (
                       <tr
                         key={cat.id}
-                        onClick={() => handleEditClick(cat)}
-                        className={`text-slate-600 transition-colors cursor-pointer ${
+                        onClick={() => { if (canManage) handleEditClick(cat) }}
+                        className={`text-slate-600 transition-colors ${canManage ? 'cursor-pointer' : ''} ${
                           editingId === cat.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'
                         }`}
                       >
@@ -374,34 +385,36 @@ export default function Categories() {
                         <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs truncate max-w-[280px]" title={cat.name}>
                           {cat.name}
                         </td>
-                        <td className="py-0.5 pr-2 text-left">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleEditClick(cat)}
-                              title="Edit Category"
-                              className="rounded-lg p-1 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors cursor-pointer"
-                            >
-                              <EditIcon />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setDeleteModalId(cat.id)
-                              }}
-                              title="Delete Category"
-                              className="rounded-lg p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
-                        </td>
+                        {canManage && (
+                          <td className="py-0.5 pr-2 text-left">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleEditClick(cat) }}
+                                title="Edit Category"
+                                className="rounded-lg p-1 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors cursor-pointer"
+                              >
+                                <EditIcon />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeleteModalId(cat.id)
+                                }}
+                                title="Delete Category"
+                                className="rounded-lg p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              >
+                                <TrashIcon />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={3} className="py-6 text-center text-xs text-slate-400">
+                      <td colSpan={canManage ? 3 : 2} className="py-6 text-center text-xs text-slate-400">
                         {isLoading
                           ? 'Loading categories...'
                           : searchQuery
