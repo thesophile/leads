@@ -349,6 +349,7 @@ export default function Managequotation() {
   }
 
   const [submitMessage, setSubmitMessage] = useState('')
+  const [toastMessage, setToastMessage] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [discardProposalOpen, setDiscardProposalOpen] = useState(false)
   const [discardApprovalOpen, setDiscardApprovalOpen] = useState(false)
@@ -409,6 +410,11 @@ export default function Managequotation() {
     approvalModalOpen,
     useMemo(() => ({ selectedAdmin }), [selectedAdmin])
   )
+
+  useEffect(() => {
+    if (proposalModalOpen) resetProposalDirty()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposalModalOpen])
 
   function requestCloseProposal() {
     if (proposalDirty) setDiscardProposalOpen(true)
@@ -571,13 +577,13 @@ export default function Managequotation() {
       setCurrencyVal('INR (₹)')
       setRemarksVal('')
     }
-    setProposalModalOpen(true)
     try {
       const draft = await api.get(`/transactions/proposal-drafts/?proposal_id=${encodeURIComponent(nextDraftKey)}`)
       if (draft && Object.keys(draft).length) applyDraftToForm(draft)
     } catch (err) {
       console.error('Failed to load proposal draft', err)
     }
+    setProposalModalOpen(true)
   }
 
   function validateProposalForm() {
@@ -712,6 +718,11 @@ export default function Managequotation() {
     }, 900)
   }
 
+  function showToast(msg) {
+    setToastMessage(msg)
+    setTimeout(() => setToastMessage(''), 2500)
+  }
+
   async function saveDraft() {
     const payload = {
       proposalId: draftKey,
@@ -731,7 +742,7 @@ export default function Managequotation() {
     }
     try {
       await api.put('/transactions/proposal-drafts/', payload)
-      setSubmitMessage('✓ Draft saved. You can keep editing.')
+      showToast('✓ Draft saved.')
       return true
     } catch (err) {
       setSubmitMessage(`Failed to save draft: ${err.message}`)
@@ -739,8 +750,9 @@ export default function Managequotation() {
     }
   }
 
-  function handleSaveDraft() {
-    saveDraft()
+  async function handleSaveDraft() {
+    const ok = await saveDraft()
+    if (ok) resetProposalDirty()
   }
 
   async function handleSaveDraftAndClose() {
@@ -806,6 +818,17 @@ export default function Managequotation() {
   return (
     <Layout>
       <div className="space-y-4">
+        {toastMessage && (
+          <div className="fixed top-4 right-4 z-[90] flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+            <span className="text-xs font-semibold text-slate-800">{toastMessage}</span>
+          </div>
+        )}
+
         {/* Top Header Card */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div>
