@@ -420,6 +420,13 @@ export default function Managequotation() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalModalOpen])
 
+  useEffect(() => {
+    document.body.style.overflow = proposalModalOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [proposalModalOpen])
+
   function requestCloseProposal() {
     if (proposalDirty) setDiscardProposalOpen(true)
     else setProposalModalOpen(false)
@@ -1332,7 +1339,7 @@ export default function Managequotation() {
                     onChange={(e) => handleSelectTemplate(e.target.value)}
                     className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
                   >
-                    <option value="">Choose template ▾</option>
+                    <option value="">Choose template</option>
                     {savedTemplates.length > 0 && (
                       <optgroup label="My Templates">
                         {savedTemplates.map((tpl) => (
