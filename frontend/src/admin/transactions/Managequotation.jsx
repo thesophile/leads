@@ -48,6 +48,20 @@ function netFrom(total, discount) {
   return fmtMoney(parseMoney(total) - parseMoney(discount))
 }
 
+function normalizeRichText(html) {
+  return String(html || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function mapLeadToQuotation(lead) {
   const q = lead.quotation
   return {
@@ -394,8 +408,8 @@ export default function Managequotation() {
         companyName,
         mobileNum,
         categoryName,
-        scopeHtml,
-        termsHtml,
+        scopeHtml: normalizeRichText(scopeHtml),
+        termsHtml: normalizeRichText(termsHtml),
         totalVal,
         discountVal,
         sourceVal,
@@ -416,9 +430,24 @@ export default function Managequotation() {
 
   useEffect(() => {
     proposalModalOpenRef.current = proposalModalOpen
-    if (proposalModalOpen) resetProposalDirty()
+    if (!proposalModalOpen) return
+    resetProposalDirty()
+    const settle = setTimeout(() => {
+      resetProposalDirty()
+    }, 150)
+    return () => clearTimeout(settle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalModalOpen])
+
+  useEffect(() => {
+    if (proposalModalOpen && !proposalLoading) {
+      const settle = setTimeout(() => {
+        resetProposalDirty()
+      }, 50)
+      return () => clearTimeout(settle)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposalModalOpen, proposalLoading])
 
   useEffect(() => {
     document.body.style.overflow = proposalModalOpen ? 'hidden' : ''
