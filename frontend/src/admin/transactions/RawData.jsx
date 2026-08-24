@@ -29,6 +29,13 @@ function shortDate(value) {
   return value.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
 
+function dmyDate(value) {
+  if (!value) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value))
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  return String(value)
+}
+
 function parseCSV(text) {
   const rows = []
   let row = []
@@ -808,7 +815,7 @@ async function handleBulkImport(e) {
         </div>
 
         {/* Main Leads Table Container */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-1 shadow-xs">
           {/* Toolbar ↔ Selection Bar (the bar slides over the filter row, which stays in place) */}
           <div className="border-b border-slate-100">
             <div className="grid">
@@ -1032,14 +1039,16 @@ async function handleBulkImport(e) {
               <thead>
                 <tr className="border-b border-black text-slate-800 font-bold uppercase tracking-wider text-[11px]">
                   <th className="pb-2 font-semibold w-8 pr-2">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleSelectAll}
-                      disabled={filteredData.length === 0}
-                      aria-label="Select all raw data rows"
-                      className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                    />
+                    <label className="flex cursor-pointer items-center justify-center px-3 -mx-3 py-2 -my-2">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        disabled={filteredData.length === 0}
+                        aria-label="Select all raw data rows"
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                      />
+                    </label>
                   </th>
                   <th className="pb-2 font-semibold w-64">Company Name</th>
                   <th className="pb-2 font-semibold w-44">Contact Person</th>
@@ -1063,14 +1072,19 @@ async function handleBulkImport(e) {
                     <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
                       {/* Select Checkbox */}
                       <td className="py-0.5 pr-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(item.id)}
-                          onChange={() => toggleSelectLead(item.id)}
+                        <label
                           onClick={(e) => e.stopPropagation()}
-                          aria-label={`Select ${item.company}`}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                        />
+                          className="flex cursor-pointer items-center justify-center px-3 -mx-3 py-2 -my-2"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(item.id)}
+                            onChange={() => toggleSelectLead(item.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Select ${item.company}`}
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                          />
+                        </label>
                       </td>
 
                       {/* Company Name */}
@@ -1105,7 +1119,7 @@ async function handleBulkImport(e) {
 
                       {/* Date */}
                       <td className="py-0.5 pr-2 text-slate-400 text-[11px]">
-                        {item.displayDate}
+                        {dmyDate(item.date || item.displayDate)}
                       </td>
 
                       {/* Actions */}
