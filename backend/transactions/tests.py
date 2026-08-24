@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
-from transactions.models import CallHistory, Lead
+from transactions.models import CallHistory, Lead, ProposalDraft, ProposalTemplate
 
 User = get_user_model()
 
@@ -372,3 +372,220 @@ class LeadDuplicateScopingTests(APITestCase):
             'company': 'Some Co', 'category': 'Hospital',
         }, format='json')
         self.assertEqual(ok.status_code, 201)
+
+
+class ProposalTemplateApiTests(APITestCase):
+    def setUp(self):
+        self.company = make_company('Template Co')
+        self.manager = User.objects.create_user(
+            email='mgr@tpl.com', password='x', name='Manager T',
+            role=self.company.roles.get(code='manager'), company=self.company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@tpl.com', password='x', name='Staff T',
+            role=self.company.roles.get(code='staff'), company=self.company,
+        )
+        # A global (unowned) template shared with everyone.
+        self.global_tpl = ProposalTemplate.objects.create(
+            name='Global Website', category='Static Website',
+            default_total='25000', default_discount='2000',
+            scope_html='<h3>Global</h3>', detail_html='<p>Global detail</p>',
+        )
+
+    def test_create_requires_authenticated_user(self):
+        resp = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'My Tpl',
+        }, format='json')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_staff_cannot_create_template(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'My Tpl', 'scopeHtml': '<p>x</p>',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_create_template_and_list_owned_only(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'Hospital Suite',
+            'category': 'Hospital',
+            'defaultTotal': '80000',
+            'defaultDiscount': '5000',
+            'currency': 'INR (₹)',
+            'scopeHtml': '<h3>Hospital</h3>',
+            'detailHtml': '<p>Hospital detail</p>',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        tpl_id = resp.data['id']
+        self.assertEqual(resp.data['owner'], self.manager.id)
+
+        self.client.force_authenticate(self.manager)
+        listing = self.client.get('/api/transactions/proposal-templates/')
+        self.assertEqual(listing.status_code, 200)
+        returned = listing.data
+        names = {t['name'] for t in returned}
+        self.assertIn('Hospital Suite', names)   # owned
+        self.assertIn('Global Website', names)   # shared global
+        # Global template has no owner
+        global_entry = next(t for t in returned if t['name'] == 'Global Website')
+        self.assertIsNone(global_entry['owner'])
+
+    def test_user_templates_not_visible_to_others(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'Private Tpl', 'scopeHtml': '<p>p</p>',
+        }, format='json')
+        # Another manager in a different company sees neither company-agnostic
+        # private templates nor anyone else's templates.
+        other_company = make_company('Other Co')
+        other = User.objects.create_user(
+            email='mgr2@tpl.com', password='x', name='Manager O',
+            role=other_company.roles.get(code='manager'), company=other_company,
+        )
+        self.client.force_authenticate(other)
+        listing = self.client.get('/api/transactions/proposal-templates/')
+        returned = listing.data
+        self.assertNotIn('Private Tpl', {t['name'] for t in returned})
+        self.assertIn('Global Website', {t['name'] for t in returned})
+
+    def test_create_requires_name(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/proposal-templates/', {
+            'name': '   ',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_cannot_update_other_users_template(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'Private Tpl', 'scopeHtml': '<p>p</p>',
+        }, format='json')
+        tpl_id = resp.data['id']
+
+        other_company = make_company('Other Co')
+        other = User.objects.create_user(
+            email='mgr3@tpl.com', password='x', name='Manager O3',
+            role=other_company.roles.get(code='manager'), company=other_company,
+        )
+        self.client.force_authenticate(other)
+        resp = self.client.put(f'/api/transactions/proposal-templates/{tpl_id}/', {
+            'name': 'Hijacked',
+        }, format='json')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_update_own_template(self):
+        self.client.force_authenticate(self.manager)
+        created = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'Original', 'scopeHtml': '<p>a</p>', 'detailHtml': '<p>b</p>',
+        }, format='json')
+        tpl_id = created.data['id']
+        updated = self.client.put(f'/api/transactions/proposal-templates/{tpl_id}/', {
+            'name': 'Renamed', 'scopeHtml': '<p>a2</p>',
+        }, format='json')
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.data['name'], 'Renamed')
+        self.assertEqual(updated.data['scopeHtml'], '<p>a2</p>')
+        self.assertEqual(updated.data['detailHtml'], '<p>b</p>')
+
+    def test_delete_own_template(self):
+        self.client.force_authenticate(self.manager)
+        created = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'Doomed', 'scopeHtml': '<p>x</p>',
+        }, format='json')
+        tpl_id = created.data['id']
+        resp = self.client.delete(f'/api/transactions/proposal-templates/{tpl_id}/')
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(ProposalTemplate.objects.filter(pk=tpl_id).exists())
+
+    def test_cannot_delete_other_users_template(self):
+        self.client.force_authenticate(self.manager)
+        created = self.client.post('/api/transactions/proposal-templates/', {
+            'name': 'Doomed', 'scopeHtml': '<p>x</p>',
+        }, format='json')
+        tpl_id = created.data['id']
+        other_company = make_company('Other Co')
+        other = User.objects.create_user(
+            email='mgr4@tpl.com', password='x', name='Manager O4',
+            role=other_company.roles.get(code='manager'), company=other_company,
+        )
+        self.client.force_authenticate(other)
+        resp = self.client.delete(f'/api/transactions/proposal-templates/{tpl_id}/')
+        self.assertEqual(resp.status_code, 404)
+
+
+class ProposalDraftApiTests(APITestCase):
+    def setUp(self):
+        self.company = make_company('Draft Co')
+        self.manager = User.objects.create_user(
+            email='mgr@draft.com', password='x', name='Manager D',
+            role=self.company.roles.get(code='manager'), company=self.company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@draft.com', password='x', name='Staff D',
+            role=self.company.roles.get(code='staff'), company=self.company,
+        )
+
+    def test_save_and_retrieve_draft(self):
+        self.client.force_authenticate(self.manager)
+        save = self.client.put('/api/transactions/proposal-drafts/', {
+            'proposalId': 'QTN-1',
+            'customerPerson': 'John Doe',
+            'companyName': 'Acme',
+            'scopeHtml': '<p>scope</p>',
+            'termsHtml': '<p>terms</p>',
+            'total': '50000',
+            'discount': '1000',
+            'currency': 'INR (₹)',
+        }, format='json')
+        self.assertEqual(save.status_code, 200)
+        fetch = self.client.get('/api/transactions/proposal-drafts/?proposal_id=QTN-1')
+        self.assertEqual(fetch.status_code, 200)
+        self.assertEqual(fetch.data['customerPerson'], 'John Doe')
+        self.assertEqual(fetch.data['proposalId'], 'QTN-1')
+        self.assertTrue(ProposalDraft.objects.filter(user=self.manager, proposal_id='QTN-1').exists())
+
+    def test_retrieve_unknown_draft_returns_empty(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/proposal-drafts/?proposal_id=nope')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {})
+
+    def test_put_upserts_same_draft(self):
+        self.client.force_authenticate(self.manager)
+        self.client.put('/api/transactions/proposal-drafts/', {
+            'proposalId': 'QTN-2', 'customerPerson': 'First',
+        }, format='json')
+        self.client.put('/api/transactions/proposal-drafts/', {
+            'proposalId': 'QTN-2', 'customerPerson': 'Second', 'total': '999',
+        }, format='json')
+        self.assertEqual(
+            ProposalDraft.objects.filter(user=self.manager, proposal_id='QTN-2').count(),
+            1,
+        )
+        fetch = self.client.get('/api/transactions/proposal-drafts/?proposal_id=QTN-2')
+        self.assertEqual(fetch.data['customerPerson'], 'Second')
+        self.assertEqual(fetch.data['total'], '999')
+
+    def test_drafts_are_scoped_per_user(self):
+        self.client.force_authenticate(self.manager)
+        self.client.put('/api/transactions/proposal-drafts/', {
+            'proposalId': 'QTN-3', 'customerPerson': 'Manager draft',
+        }, format='json')
+        self.client.force_authenticate(self.staff)
+        fetch = self.client.get('/api/transactions/proposal-drafts/?proposal_id=QTN-3')
+        self.assertEqual(fetch.data, {})
+        fetch_other = self.client.get(
+            '/api/transactions/proposal-drafts/?proposal_id=QTN-3',
+        )
+        self.assertNotEqual(fetch_other.data.get('customerPerson'), 'Manager draft')
+
+    def test_delete_draft(self):
+        self.client.force_authenticate(self.manager)
+        self.client.put('/api/transactions/proposal-drafts/', {
+            'proposalId': 'QTN-4', 'customerPerson': 'To delete',
+        }, format='json')
+        self.assertTrue(ProposalDraft.objects.filter(user=self.manager, proposal_id='QTN-4').exists())
+        resp = self.client.delete('/api/transactions/proposal-drafts/?proposal_id=QTN-4')
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(ProposalDraft.objects.filter(user=self.manager, proposal_id='QTN-4').exists())

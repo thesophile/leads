@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import CallHistory, Lead, Quotation
+from .models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation
 
 
 class CallHistorySerializer(serializers.ModelSerializer):
@@ -10,6 +10,57 @@ class CallHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = CallHistory
         fields = ['id', 'dateTime', 'caller', 'report', 'followUp', 'status']
+
+
+class ProposalTemplateSerializer(serializers.ModelSerializer):
+    defaultTotal = serializers.CharField(source='default_total', required=False, allow_blank=True)
+    defaultDiscount = serializers.CharField(source='default_discount', required=False, allow_blank=True)
+    scopeHtml = serializers.CharField(source='scope_html', required=False, allow_blank=True)
+    detailHtml = serializers.CharField(source='detail_html', required=False, allow_blank=True)
+
+    class Meta:
+        model = ProposalTemplate
+        fields = [
+            'id',
+            'name',
+            'category',
+            'defaultTotal',
+            'defaultDiscount',
+            'currency',
+            'scopeHtml',
+            'detailHtml',
+            'owner',
+        ]
+        read_only_fields = ['id', 'owner']
+
+
+class ProposalDraftSerializer(serializers.ModelSerializer):
+    proposalId = serializers.CharField(source='proposal_id', required=False, allow_blank=True)
+    qtnBy = serializers.CharField(source='qtn_by', required=False, allow_blank=True)
+    customerPerson = serializers.CharField(source='customer_person', required=False, allow_blank=True)
+    companyName = serializers.CharField(source='company_name', required=False, allow_blank=True)
+    scopeHtml = serializers.CharField(source='scope_html', required=False, allow_blank=True)
+    termsHtml = serializers.CharField(source='terms_html', required=False, allow_blank=True)
+
+    class Meta:
+        model = ProposalDraft
+        fields = [
+            'proposalId',
+            'bdm',
+            'qtnBy',
+            'customerPerson',
+            'companyName',
+            'mobile',
+            'category',
+            'scopeHtml',
+            'termsHtml',
+            'total',
+            'discount',
+            'source',
+            'currency',
+            'remarks',
+        ]
+        read_only_fields = ['user']
 
 
 class QuotationSerializer(serializers.ModelSerializer):

@@ -10,6 +10,13 @@ class ProposalTemplate(models.Model):
     currency = models.CharField(max_length=30, default='INR (₹)')
     scope_html = models.TextField(blank=True)
     detail_html = models.TextField(blank=True)
+    owner = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='proposal_templates',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -18,6 +25,43 @@ class ProposalTemplate(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ProposalDraft(models.Model):
+    """Per-user saved draft of the proposal form content."""
+
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='proposal_drafts',
+    )
+    proposal_id = models.CharField(max_length=60, blank=True)
+    bdm = models.CharField(max_length=120, blank=True)
+    qtn_by = models.CharField(max_length=120, blank=True)
+    customer_person = models.CharField(max_length=200, blank=True)
+    company_name = models.CharField(max_length=200, blank=True)
+    mobile = models.CharField(max_length=30, blank=True)
+    category = models.CharField(max_length=100, blank=True)
+    scope_html = models.TextField(blank=True)
+    terms_html = models.TextField(blank=True)
+    total = models.CharField(max_length=30, blank=True)
+    discount = models.CharField(max_length=30, blank=True)
+    source = models.CharField(max_length=100, blank=True)
+    currency = models.CharField(max_length=30, blank=True)
+    remarks = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'proposal_id'],
+                name='uniq_proposal_draft_user_proposal',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} / {self.proposal_id}'
 
 
 class Lead(models.Model):

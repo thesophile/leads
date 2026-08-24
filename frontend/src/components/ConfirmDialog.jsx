@@ -4,6 +4,8 @@ export default function ConfirmDialog({
   message = 'You have unsaved changes. Are you sure you want to close without saving?',
   cancelLabel = 'Keep Editing',
   confirmLabel = 'Discard',
+  extraLabel,
+  onExtra,
   onCancel,
   onConfirm,
 }) {
@@ -28,7 +30,16 @@ export default function ConfirmDialog({
           </div>
           <p className="mt-2.5 text-xs text-slate-600 leading-relaxed">{message}</p>
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+        <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+          {extraLabel && (
+            <button
+              type="button"
+              onClick={onExtra}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition cursor-pointer shadow-xs mr-auto"
+            >
+              {extraLabel}
+            </button>
+          )}
           <button
             type="button"
             onClick={onCancel}

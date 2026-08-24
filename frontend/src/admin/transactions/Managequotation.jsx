@@ -216,6 +216,7 @@ export default function Managequotation() {
   const [menuOffset, setMenuOffset] = useState(null)
   const [activeMenuQuote, setActiveMenuQuote] = useState(null)
   const menuRef = useRef(null)
+  const newProposalCounter = useRef(1)
   const cardRef = useRef(null)
 
   useEffect(() => {
@@ -352,6 +353,33 @@ export default function Managequotation() {
   const [discardProposalOpen, setDiscardProposalOpen] = useState(false)
   const [discardApprovalOpen, setDiscardApprovalOpen] = useState(false)
 
+  const [savedTemplates, setSavedTemplates] = useState([])
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [saveTemplateError, setSaveTemplateError] = useState('')
+  const [templateOverrideOpen, setTemplateOverrideOpen] = useState(false)
+  const [pendingTemplateId, setPendingTemplateId] = useState(null)
+  const [draftKey, setDraftKey] = useState('')
+
+  // Load user's saved templates once on mount
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get('/transactions/proposal-templates/')
+        if (!cancelled) {
+          const myTemplates = (data || []).filter((t) => t.owner)
+          setSavedTemplates(myTemplates)
+        }
+      } catch (err) {
+        console.error('Failed to load proposal templates', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const { dirty: proposalDirty, reset: resetProposalDirty } = useDirty(
     proposalModalOpen,
     useMemo(
@@ -392,17 +420,57 @@ export default function Managequotation() {
     else setApprovalModalOpen(false)
   }
 
-  function handleSelectTemplate(templateId) {
+  function resolveTemplate(templateId) {
+    if (!templateId) return null
+    if (String(templateId).startsWith('saved-')) {
+      const key = templateId.replace('saved-', '')
+      return savedTemplates.find((t) => String(t.id) === key) || null
+    }
+    return PROPOSAL_TEMPLATES.find((t) => t.id === templateId) || null
+  }
+
+  function hasFormContent() {
+    return Boolean(
+      (scopeHtml && scopeHtml.replace(/<[^>]*>/g, '').trim()) ||
+        (termsHtml && termsHtml.replace(/<[^>]*>/g, '').trim()) ||
+        customerPerson.trim() ||
+        companyName.trim() ||
+        mobileNum.trim() ||
+        totalVal.trim()
+    )
+  }
+
+  function applyTemplate(templateId) {
     setSelectedTemplateId(templateId)
-    const tpl = PROPOSAL_TEMPLATES.find((t) => t.id === templateId)
+    const tpl = resolveTemplate(templateId)
     if (tpl) {
-      setScopeHtml(tpl.scopeHtml)
-      setTermsHtml(tpl.detailHtml)
-      setCategoryName(tpl.category)
-      setTotalVal(tpl.defaultTotal)
-      setDiscountVal(tpl.defaultDiscount)
+      setScopeHtml(tpl.scopeHtml || tpl.scope_html || '')
+      setTermsHtml(tpl.detailHtml || tpl.detail_html || '')
+      setCategoryName(tpl.category || 'General')
+      setTotalVal(tpl.defaultTotal || tpl.default_total || '')
+      setDiscountVal(tpl.defaultDiscount || tpl.default_discount || '')
       setCurrencyVal(tpl.currency || 'INR (₹)')
     }
+  }
+
+  function handleSelectTemplate(templateId) {
+    if (templateId && hasFormContent()) {
+      setPendingTemplateId(templateId)
+      setTemplateOverrideOpen(true)
+      return
+    }
+    applyTemplate(templateId)
+  }
+
+  function confirmTemplateOverride() {
+    setTemplateOverrideOpen(false)
+    if (pendingTemplateId) applyTemplate(pendingTemplateId)
+    setPendingTemplateId(null)
+  }
+
+  function cancelTemplateOverride() {
+    setTemplateOverrideOpen(false)
+    setPendingTemplateId(null)
   }
 
   // Filtered dataset
@@ -448,8 +516,29 @@ export default function Managequotation() {
   )
 
   // Open "New Proposal" Modal
-  function handleOpenNewProposalModal(quote = null) {
+  function applyDraftToForm(draft) {
+    if (!draft || typeof draft !== 'object') return
+    if (draft.bdm) setBdm(draft.bdm)
+    if (draft.qtnBy) setQtnBy(draft.qtnBy)
+    if (draft.customerPerson !== undefined) setCustomerPerson(draft.customerPerson)
+    if (draft.companyName !== undefined) setCompanyName(draft.companyName)
+    if (draft.mobile !== undefined) setMobileNum(draft.mobile)
+    if (draft.category) setCategoryName(draft.category)
+    if (draft.scopeHtml !== undefined) setScopeHtml(draft.scopeHtml)
+    if (draft.termsHtml !== undefined) setTermsHtml(draft.termsHtml)
+    if (draft.total !== undefined) setTotalVal(draft.total)
+    if (draft.discount !== undefined) setDiscountVal(draft.discount)
+    if (draft.source) setSourceVal(draft.source)
+    if (draft.currency) setCurrencyVal(draft.currency)
+    if (draft.remarks !== undefined) setRemarksVal(draft.remarks)
+  }
+
+  async function handleOpenNewProposalModal(quote = null) {
     setValidationErrors({})
+    setSelectedTemplateId('')
+    const nextDraftKey = quote ? String(quote.id) : `new-${newProposalCounter.current}`
+    newProposalCounter.current += 1
+    setDraftKey(nextDraftKey)
     if (quote) {
       setEditingProposalId(quote.id)
       setBdm(quote.bdm || quote.staff || 'Alex Joseph')
@@ -483,6 +572,12 @@ export default function Managequotation() {
       setRemarksVal('')
     }
     setProposalModalOpen(true)
+    try {
+      const draft = await api.get(`/transactions/proposal-drafts/?proposal_id=${encodeURIComponent(nextDraftKey)}`)
+      if (draft && Object.keys(draft).length) applyDraftToForm(draft)
+    } catch (err) {
+      console.error('Failed to load proposal draft', err)
+    }
   }
 
   function validateProposalForm() {
@@ -615,6 +710,76 @@ export default function Managequotation() {
       setApprovalSent('')
       setApprovalModalOpen(true)
     }, 900)
+  }
+
+  async function saveDraft() {
+    const payload = {
+      proposalId: draftKey,
+      bdm,
+      qtnBy,
+      customerPerson,
+      companyName,
+      mobile: mobileNum,
+      category: categoryName,
+      scopeHtml,
+      termsHtml,
+      total: totalVal,
+      discount: discountVal,
+      source: sourceVal,
+      currency: currencyVal,
+      remarks: remarksVal,
+    }
+    try {
+      await api.put('/transactions/proposal-drafts/', payload)
+      setSubmitMessage('✓ Draft saved. You can keep editing.')
+      return true
+    } catch (err) {
+      setSubmitMessage(`Failed to save draft: ${err.message}`)
+      return false
+    }
+  }
+
+  function handleSaveDraft() {
+    saveDraft()
+  }
+
+  async function handleSaveDraftAndClose() {
+    const ok = await saveDraft()
+    if (!ok) return
+    setDiscardProposalOpen(false)
+    setProposalModalOpen(false)
+    resetProposalDirty()
+  }
+
+  function openSaveTemplateDialog() {
+    setTemplateName('')
+    setSaveTemplateError('')
+    setSaveTemplateOpen(true)
+  }
+
+  async function handleSaveTemplate() {
+    const name = templateName.trim()
+    if (!name) {
+      setSaveTemplateError('Please enter a name for the template.')
+      return
+    }
+    try {
+      const data = await api.post('/transactions/proposal-templates/', {
+        name,
+        category: categoryName,
+        defaultTotal: totalVal,
+        defaultDiscount: discountVal,
+        currency: currencyVal,
+        scopeHtml,
+        detailHtml: termsHtml,
+      })
+      setSavedTemplates((prev) => [...prev, data])
+      setSaveTemplateOpen(false)
+      setTemplateName('')
+      setSubmitMessage('✓ Template saved. It is now available in the Choose template dropdown.')
+    } catch (err) {
+      setSaveTemplateError(err.message)
+    }
   }
 
   // Quick Action: Revert quotation back to Telecalling
@@ -1129,20 +1294,28 @@ export default function Managequotation() {
 
                 {/* Quick Template Selector */}
                 <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Template:
-                  </span>
                   <select
                     value={selectedTemplateId}
                     onChange={(e) => handleSelectTemplate(e.target.value)}
                     className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
                   >
-                    <option value="">Choose Pre-built Template ▾</option>
-                    {PROPOSAL_TEMPLATES.map((tpl) => (
-                      <option key={tpl.id} value={tpl.id}>
-                        {tpl.name}
-                      </option>
-                    ))}
+                    <option value="">Choose template ▾</option>
+                    {savedTemplates.length > 0 && (
+                      <optgroup label="My Templates">
+                        {savedTemplates.map((tpl) => (
+                          <option key={`saved-${tpl.id}`} value={`saved-${tpl.id}`}>
+                            {tpl.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Pre-built Templates">
+                      {PROPOSAL_TEMPLATES.map((tpl) => (
+                        <option key={tpl.id} value={tpl.id}>
+                          {tpl.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
               </div>
@@ -1352,21 +1525,39 @@ export default function Managequotation() {
                 </div>
               )}
 
-              {/* Modal Footer Actions (Matching Screenshot: [ Close ] and Red [ Submit ]) */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={requestCloseProposal}
-                  className="rounded-md bg-slate-600 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 transition cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-md bg-rose-600 px-5 py-2 text-xs font-medium text-white hover:bg-rose-700 transition cursor-pointer shadow-xs active:scale-[0.98]"
-                >
-                  Submit
-                </button>
+              {/* Modal Footer Actions: left Save Draft + Save Template, right Close + Submit */}
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveDraft}
+                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Save Draft
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openSaveTemplateDialog}
+                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Save Template
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={requestCloseProposal}
+                    className="rounded-md bg-slate-600 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 transition cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-md bg-rose-600 px-5 py-2 text-xs font-medium text-white hover:bg-rose-700 transition cursor-pointer shadow-xs active:scale-[0.98]"
+                  >
+                    Submit
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1498,6 +1689,12 @@ export default function Managequotation() {
       {/* Discard Changes Confirms */}
       <ConfirmDialog
         open={discardProposalOpen}
+        title="Save draft before closing?"
+        message="You have unsaved changes. You can save a draft to keep your work, or discard it before closing."
+        cancelLabel="Keep Editing"
+        confirmLabel="Discard"
+        extraLabel="Save Draft"
+        onExtra={handleSaveDraftAndClose}
         onCancel={() => setDiscardProposalOpen(false)}
         onConfirm={() => {
           setDiscardProposalOpen(false)
@@ -1525,6 +1722,76 @@ export default function Managequotation() {
         onCancel={() => setRevertQuote(null)}
         onConfirm={handleConfirmRevertQuotation}
       />
+
+      {/* Warn before replacing existing form content with a template */}
+      <ConfirmDialog
+        open={templateOverrideOpen}
+        title="Replace current content?"
+        message="You already have content in this proposal. Applying a template will replace the current fields. Do you want to continue?"
+        cancelLabel="Cancel"
+        confirmLabel="Replace"
+        onCancel={cancelTemplateOverride}
+        onConfirm={confirmTemplateOverride}
+      />
+
+      {/* Save Template name dialog */}
+      {saveTemplateOpen && (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSaveTemplateOpen(false)
+          }}
+        >
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5">
+              <h3 className="text-sm font-bold text-slate-900">Save Template</h3>
+              <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">
+                Save the current proposal content as a template so you can reuse it later in the
+                "Choose template" dropdown.
+              </p>
+              <label className="mt-4 block text-[11px] font-bold text-slate-700 mb-1">
+                Template Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                autoFocus
+                placeholder="e.g. Hospital Management System"
+                value={templateName}
+                onChange={(e) => {
+                  setTemplateName(e.target.value)
+                  setSaveTemplateError('')
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSaveTemplate()
+                  }
+                }}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              {saveTemplateError && (
+                <p className="mt-1.5 text-[10px] font-semibold text-rose-600">{saveTemplateError}</p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+              <button
+                type="button"
+                onClick={() => setSaveTemplateOpen(false)}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveTemplate}
+                className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition cursor-pointer shadow-xs"
+              >
+                Save Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

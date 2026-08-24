@@ -13,8 +13,13 @@ from rest_framework.views import APIView
 from accounts.permissions import can
 from master.models import Category, Source
 
-from .models import CallHistory, Lead, Quotation
-from .serializers import LeadSerializer, QuotationSerializer
+from .models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation
+from .serializers import (
+    LeadSerializer,
+    ProposalDraftSerializer,
+    ProposalTemplateSerializer,
+    QuotationSerializer,
+)
 
 User = get_user_model()
 
@@ -460,3 +465,103 @@ class LeadAssignView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class ProposalTemplateListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        templates = ProposalTemplate.objects.filter(
+            Q(owner=request.user) | Q(owner__isnull=True)
+        )
+        return Response(ProposalTemplateSerializer(templates, many=True).data)
+
+    def post(self, request):
+        if not can(request.user, 'quotation.create', 'quotation.edit'):
+            return Response(
+                {'detail': 'You do not have permission to create proposal templates.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response(
+                {'detail': 'name: A template name is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = ProposalTemplateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        template = serializer.save(owner=request.user)
+        return Response(
+            ProposalTemplateSerializer(template).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ProposalTemplateDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, pk):
+        return ProposalTemplate.objects.filter(
+            Q(owner=request.user) | Q(owner__isnull=True),
+            pk=pk,
+        ).first()
+
+    def put(self, request, pk):
+        template = self.get_object(request, pk)
+        if template is None or template.owner_id != request.user.id:
+            return Response(
+                {'detail': 'Template not found or you do not own it.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        serializer = ProposalTemplateSerializer(template, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        template = serializer.save()
+        return Response(ProposalTemplateSerializer(template).data)
+
+    def delete(self, request, pk):
+        template = self.get_object(request, pk)
+        if template is None or template.owner_id != request.user.id:
+            return Response(
+                {'detail': 'Template not found or you do not own it.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        template.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProposalDraftView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        proposal_id = request.query_params.get('proposal_id') or ''
+        draft = ProposalDraft.objects.filter(
+            user=request.user,
+            proposal_id=proposal_id,
+        ).first()
+        if draft is None:
+            return Response({}, status=status.HTTP_200_OK)
+        return Response(ProposalDraftSerializer(draft).data)
+
+    def put(self, request):
+        proposal_id = str(request.data.get('proposalId') or request.data.get('proposal_id') or '').strip()
+        draft, _ = ProposalDraft.objects.get_or_create(
+            user=request.user,
+            proposal_id=proposal_id,
+        )
+        data = dict(request.data)
+        data['proposalId'] = proposal_id
+        serializer = ProposalDraftSerializer(draft, data=data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        draft = serializer.save()
+        return Response(ProposalDraftSerializer(draft).data)
+
+    def delete(self, request):
+        proposal_id = request.query_params.get('proposal_id') or ''
+        ProposalDraft.objects.filter(
+            user=request.user,
+            proposal_id=proposal_id,
+        ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
