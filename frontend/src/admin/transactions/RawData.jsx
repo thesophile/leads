@@ -809,9 +809,20 @@ async function handleBulkImport(e) {
 
         {/* Main Leads Table Container */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-          {/* Table Toolbar (Filter by Employee + Source + Date Range + Search Box) */}
-          {selectedIds.size === 0 && (
-            <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4">
+          {/* Toolbar ↔ Selection Bar (the bar slides over the filter row, which stays in place) */}
+          <div className="border-b border-slate-100">
+            <div className="grid">
+              {/* Filter Toolbar */}
+              <div
+                inert={selectedIds.size > 0}
+                aria-hidden={selectedIds.size > 0}
+                className={`col-start-1 row-start-1 transition-all duration-300 ease-in-out motion-reduce:transition-none ${
+                  selectedIds.size > 0
+                    ? 'pointer-events-none'
+                    : 'translate-y-0 opacity-100'
+                }`}
+              >
+            <div className="flex flex-col gap-3.5 pb-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               {/* Left Controls: Filter by Employee, Source, and Date */}
               <div className="flex flex-wrap items-center gap-2.5">
@@ -982,13 +993,21 @@ async function handleBulkImport(e) {
               </div>
             )}
             </div>
-          )}
+            </div>
 
-          {/* Selection Action Bar (Appears when any row is selected) */}
-          {selectedIds.size > 0 && (
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 shadow-2xs">
-              <span className="flex items-center gap-2 text-xs font-bold text-brand-800">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-black text-white">
+              {/* Selection Bar (slides down from the top, over the static filter row) */}
+              <div
+                inert={selectedIds.size === 0}
+                aria-hidden={selectedIds.size === 0}
+                className={`col-start-1 row-start-1 transition-all duration-300 ease-in-out motion-reduce:transition-none ${
+                  selectedIds.size > 0
+                    ? 'translate-y-0 opacity-100'
+                    : '-translate-y-full opacity-0 pointer-events-none'
+                }`}
+              >
+            <div className="flex h-full items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 shadow-2xs">
+              <span className="flex items-center gap-1.5 text-xs font-bold text-brand-800">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 text-[9px] font-black text-white">
                   ☑
                 </span>
                 {selectedIds.size} selected
@@ -996,14 +1015,16 @@ async function handleBulkImport(e) {
               {canAssignLeads && (
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98] cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98] cursor-pointer"
                 >
                   <UsersIcon className="h-3.5 w-3.5" />
                   <span>Assign Selected</span>
                 </button>
               )}
             </div>
-          )}
+              </div>
+            </div>
+          </div>
 
           {/* Table */}
           <div className="overflow-x-auto mt-3">
