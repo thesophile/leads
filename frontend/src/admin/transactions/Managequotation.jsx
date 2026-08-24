@@ -217,6 +217,8 @@ export default function Managequotation() {
   const [activeMenuQuote, setActiveMenuQuote] = useState(null)
   const menuRef = useRef(null)
   const newProposalCounter = useRef(1)
+  const draftKeyRef = useRef('')
+  const proposalModalOpenRef = useRef(false)
   const cardRef = useRef(null)
 
   useEffect(() => {
@@ -361,6 +363,7 @@ export default function Managequotation() {
   const [templateOverrideOpen, setTemplateOverrideOpen] = useState(false)
   const [pendingTemplateId, setPendingTemplateId] = useState(null)
   const [draftKey, setDraftKey] = useState('')
+  const [proposalLoading, setProposalLoading] = useState(false)
 
   // Load user's saved templates once on mount
   useEffect(() => {
@@ -412,6 +415,7 @@ export default function Managequotation() {
   )
 
   useEffect(() => {
+    proposalModalOpenRef.current = proposalModalOpen
     if (proposalModalOpen) resetProposalDirty()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalModalOpen])
@@ -545,6 +549,7 @@ export default function Managequotation() {
     const nextDraftKey = quote ? String(quote.id) : `new-${newProposalCounter.current}`
     newProposalCounter.current += 1
     setDraftKey(nextDraftKey)
+    draftKeyRef.current = nextDraftKey
     if (quote) {
       setEditingProposalId(quote.id)
       setBdm(quote.bdm || quote.staff || 'Alex Joseph')
@@ -577,13 +582,18 @@ export default function Managequotation() {
       setCurrencyVal('INR (₹)')
       setRemarksVal('')
     }
+    setProposalModalOpen(true)
+    setProposalLoading(true)
     try {
       const draft = await api.get(`/transactions/proposal-drafts/?proposal_id=${encodeURIComponent(nextDraftKey)}`)
-      if (draft && Object.keys(draft).length) applyDraftToForm(draft)
+      if (draft && Object.keys(draft).length && draftKeyRef.current === nextDraftKey && proposalModalOpenRef.current) {
+        applyDraftToForm(draft)
+      }
     } catch (err) {
       console.error('Failed to load proposal draft', err)
+    } finally {
+      if (draftKeyRef.current === nextDraftKey) setProposalLoading(false)
     }
-    setProposalModalOpen(true)
   }
 
   function validateProposalForm() {
@@ -1307,7 +1317,7 @@ export default function Managequotation() {
             if (e.target === e.currentTarget && !proposalDirty) setProposalModalOpen(false)
           }}
         >
-          <div className="w-full max-w-3xl my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+          <div className="relative w-full max-w-3xl my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
             {/* Modal Header with Quick Template Selector */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-slate-200 bg-white">
               <div className="flex flex-wrap items-center gap-3">
@@ -1353,6 +1363,14 @@ export default function Managequotation() {
             </div>
 
             {/* Scrollable Form Body */}
+            {proposalLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">
+                <div
+                  className="h-8 w-8 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin"
+                  aria-label="Loading draft"
+                />
+              </div>
+            )}
             <form onSubmit={handleSubmitProposal} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
               {/* Row 1: BDM | QTN BY | Client Name in a single row */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
