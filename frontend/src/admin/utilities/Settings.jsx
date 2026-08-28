@@ -288,10 +288,9 @@ export default function Settings() {
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoWarning, setLogoWarning] = useState(null)
   const [termsHtml, setTermsHtml] = useState('')
-  const [gstNo, setGstNo] = useState('32AAAAA1111A1Z1')
+  const [gstNo, setGstNo] = useState('')
   const [currency, setCurrency] = useState('INR (₹)')
-  const [defaultBank, setDefaultBank] = useState('ICICI BANK')
-  const [bankBranch, setBankBranch] = useState('OPP BISHOP PALACE, EAST FORT, TRICHUR - 680005')
+  const [defaultBank, setDefaultBank] = useState('')
 
   const [selectedStaffName, setSelectedStaffName] = useState('Karthika')
   const [rawLeadsTarget, setRawLeadsTarget] = useState(300)
@@ -715,6 +714,7 @@ export default function Settings() {
                       value={gstNo}
                       onChange={(e) => setGstNo(e.target.value)}
                       className={`${inputClass} font-mono`}
+                      placeholder="e.g. 32AAAAA1111A1Z1"
                     />
                   </Field>
                 </div>
@@ -739,15 +739,7 @@ export default function Settings() {
                       value={defaultBank}
                       onChange={(e) => setDefaultBank(e.target.value)}
                       className={inputClass}
-                    />
-                  </Field>
-                  <Field label="Branch & Address">
-                    <input
-                      type="text"
-                      required
-                      value={bankBranch}
-                      onChange={(e) => setBankBranch(e.target.value)}
-                      className={inputClass}
+                      placeholder="eg. ICIC bank"
                     />
                   </Field>
                 </div>
