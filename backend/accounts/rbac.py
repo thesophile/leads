@@ -39,6 +39,7 @@ PERMISSION_GROUPS = [
             ('quotation.create', 'Create quotations'),
             ('quotation.edit', 'Edit quotations'),
             ('quotation.send', 'Send quotations'),
+            ('quotation.approve', 'Approve / reject quotations'),
         ],
     },
     {
@@ -101,7 +102,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'leads.view', 'leads.view_all', 'leads.create',
         'leads.edit_own', 'leads.edit_all', 'leads.delete', 'leads.assign',
         'telecall.view', 'telecall.create', 'telecall.edit', 'telecall.assign',
-        'quotation.view', 'quotation.create', 'quotation.edit', 'quotation.send',
+        'quotation.view', 'quotation.create', 'quotation.edit', 'quotation.send', 'quotation.approve',
         'order.view', 'order.create', 'order.edit', 'order.delete',
         'client.view', 'client.create', 'client.edit',
         'branch.view', 'category.view', 'source.view', 'company.view',
@@ -111,7 +112,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     'staff': [
         'leads.view', 'leads.view_raw_all', 'leads.create', 'leads.edit_own', 'leads.delete',
         'telecall.view',
-        'quotation.view',
+        'quotation.view', 'quotation.create', 'quotation.edit',
         'client.view',
         'branch.view', 'category.view', 'source.view', 'company.view',
         'reports.view',

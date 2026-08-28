@@ -70,6 +70,16 @@ class QuotationSerializer(serializers.ModelSerializer):
     proposalScope = serializers.CharField(source='proposal_scope', required=False, allow_blank=True)
     termsConditions = serializers.CharField(source='terms_conditions', required=False, allow_blank=True)
     revisionNo = serializers.CharField(source='revision_no', required=False, allow_blank=True)
+    submittedBy = serializers.IntegerField(source='submitted_by_id', required=False, allow_null=True)
+    approver = serializers.IntegerField(source='approver_id', required=False, allow_null=True)
+    approverName = serializers.CharField(source='approver_name', required=False, allow_blank=True)
+    signedBy = serializers.CharField(source='signed_by', required=False, allow_blank=True)
+    signatureRef = serializers.CharField(source='signature_ref', required=False, allow_blank=True)
+    approvalRequestedAt = serializers.SerializerMethodField()
+    approvedAt = serializers.SerializerMethodField()
+    rejectedAt = serializers.SerializerMethodField()
+    rejectionReason = serializers.CharField(source='rejection_reason', required=False, allow_blank=True)
+    approvalNote = serializers.CharField(source='approval_note', required=False, allow_blank=True)
     companyTerms = serializers.SerializerMethodField()
 
     class Meta:
@@ -98,7 +108,34 @@ class QuotationSerializer(serializers.ModelSerializer):
             'termsConditions',
             'companyTerms',
             'remarks',
+            'submittedBy',
+            'approver',
+            'approverName',
+            'signedBy',
+            'signatureRef',
+            'approvalRequestedAt',
+            'approvedAt',
+            'rejectedAt',
+            'rejectionReason',
+            'approvalNote',
         ]
+
+    def _iso(self, value):
+        if value is None:
+            return None
+        try:
+            return value.isoformat()
+        except AttributeError:
+            return str(value)
+
+    def get_approvalRequestedAt(self, obj):
+        return self._iso(obj.approval_requested_at)
+
+    def get_approvedAt(self, obj):
+        return self._iso(obj.approved_at)
+
+    def get_rejectedAt(self, obj):
+        return self._iso(obj.rejected_at)
 
     def get_companyTerms(self, obj):
         tenant = getattr(obj, 'tenant', None)

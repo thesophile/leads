@@ -127,6 +127,14 @@ function mapLeadToQuotation(lead) {
     termsConditions: q?.termsConditions || '',
     companyTerms: q?.companyTerms || '',
     hasProposal: !!q,
+    approverName: q?.approverName || '',
+    submittedBy: q?.submittedBy || null,
+    submittedByName: q?.submittedByName || '',
+    signedBy: q?.signedBy || '',
+    signatureRef: q?.signatureRef || '',
+    approvedAt: q?.approvedAt || '',
+    rejectedAt: q?.rejectedAt || '',
+    rejectionReason: q?.rejectionReason || '',
     remarks: q?.remarks || lead.remarks || '',
   }
 }
@@ -148,12 +156,6 @@ const STATUS_LIST = [
   'Approved',
   'Rejected',
   'Sent to Client',
-]
-
-const ADMIN_LIST = [
-  'Super Admin',
-  'Managing Director',
-  'Operations Admin',
 ]
 
 const SOURCES = [
@@ -338,6 +340,24 @@ export default function Managequotation() {
     }
   }, [canFilterByStaff])
 
+  // Real approving users for the "Send for Approval" picker.
+  const [approverOptions, setApproverOptions] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get('/transactions/quotations/approvers/')
+        if (!cancelled && Array.isArray(data)) setApproverOptions(data)
+      } catch {
+        // Leave the approver picker empty if the endpoint is unavailable.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   function handleToggleMenu(e, id, row) {
     const cardRect = cardRef.current ? cardRef.current.getBoundingClientRect() : { left: 0, top: 0 }
     setMenuOffset({ x: e.clientX - cardRect.left, y: e.clientY - cardRect.top })
@@ -387,25 +407,28 @@ export default function Managequotation() {
   async function handleConfirmSendForApproval() {
     if (!selectedAdmin) return
     const quote = quotationsList.find((item) => item.id === approvalQuoteId)
+    const approver = approverOptions.find((a) => String(a.id) === String(selectedAdmin))
+    const approverName = approver?.name || selectedAdmin
     setQuotationsList((prev) =>
       prev.map((item) =>
         item.id === approvalQuoteId
           ? {
               ...item,
               status: 'Pending Approval',
-              approvedBy: selectedAdmin,
-              remarks: `Sent to ${selectedAdmin} for approval`,
+              approverName,
+              remarks: `Sent to ${approverName} for approval`,
             }
           : item
       )
     )
-    setApprovalSent(`✓ Proposal sent to ${selectedAdmin} for approval`)
+    setApprovalSent(`✓ Proposal sent to ${approverName} for approval`)
     resetApprovalDirty()
     if (quote?.leadId) {
       try {
         await api.put(`/transactions/quotations/${quote.leadId}/`, {
           status: 'Pending Approval',
-          remarks: `Sent to ${selectedAdmin} for approval`,
+          approver: Number(selectedAdmin),
+          remarks: `Sent to ${approverName} for approval`,
         })
       } catch (err) {
         console.error('Failed to persist approval status', err)
@@ -2019,9 +2042,11 @@ export default function Managequotation() {
                     }`}
                   >
                     <option value="">— Choose an admin —</option>
-                    {ADMIN_LIST.map((admin) => (
-                      <option key={admin} value={admin}>
-                        {admin}
+                    {approverOptions.map((admin) => (
+                      <option key={admin.id} value={admin.id}>
+                        {admin.name}
+                        {admin.role ? ` (${admin.role})` : ''}
+                        {admin.is_superuser ? ' (Super Admin)' : ''}
                       </option>
                     ))}
                   </select>

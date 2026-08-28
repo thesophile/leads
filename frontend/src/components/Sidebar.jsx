@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/auth-context'
 import { can } from '../utils/permissions'
 import ConfirmDialog from './ConfirmDialog'
+import NotificationBell from './NotificationBell'
 
 // Grid icon matching the screenshot (3x3 rounded squares)
 function LeadsGridIcon() {
@@ -312,10 +313,11 @@ export default function Sidebar({
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[11px] font-bold text-white">
                 {user.initials || 'U'}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-bold text-slate-800">{user.name}</p>
                 <p className="truncate text-[10px] capitalize text-slate-400">{user.role?.name || 'Super Admin'}</p>
               </div>
+              <NotificationBell />
             </div>
           )}
           <button

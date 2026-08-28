@@ -1,64 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
+import { api } from '../../api/client'
 
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: 'Approval',
-    title: 'Proposal awaiting your approval',
-    message: 'QT-2026-006 - Ayurveda Wellness Sanctuary, submitted by NIMISHA DAVIS.',
-    time: '10 minutes ago',
-    read: false,
-  },
-  {
-    id: 2,
-    type: 'Follow-up',
-    title: 'Follow-up scheduled',
-    message: 'Call reminder for TC-110 (Ayurveda Wellness Sanctuary) - Shanu VR.',
-    time: '1 hour ago',
-    read: false,
-  },
-  {
-    id: 3,
-    type: 'Reminder',
-    title: 'Follow-up reminder',
-    message: 'Call ORD-2026-004 (SHADES.IN LUXURY EYEWEAR) to collect remaining client details.',
-    time: '3 hours ago',
-    read: true,
-  },
-  {
-    id: 5,
-    type: 'Approval',
-    title: 'Proposal approved',
-    message: 'QT-2026-002 approved by Managing Director. Order execution to begin.',
-    time: '5 hours ago',
-    read: true,
-  },
-  {
-    id: 6,
-    type: 'System',
-    title: 'Unassigned raw leads',
-    message: '2 raw leads are awaiting telecaller assignment in Raw Data.',
-    time: 'Yesterday',
-    read: true,
-  },
-  {
-    id: 7,
-    type: 'Order',
-    title: 'Client details pending',
-    message: 'ORD-2026-002 (MANZOOR SUPER SPECIALITY HOSPITAL) accepted — SRS and business card not yet collected.',
-    time: '2 days ago',
-    read: true,
-  },
-  {
-    id: 8,
-    type: 'Order',
-    title: 'New order created',
-    message: 'ORD-2026-008 created by Husna for GREEN VALLEY RESORTS & SPA, Munnar.',
-    time: '3 days ago',
-    read: true,
-  },
-]
+const EMPTY = []
 
 function BellIcon({ className = 'h-5 w-5' }) {
   return (
@@ -153,9 +98,44 @@ const TYPE_BADGE = {
 
 const TABS = ['All', 'Unread']
 
+function relativeTime(iso) {
+  if (!iso) return ''
+  const then = new Date(iso).getTime()
+  if (!Number.isFinite(then)) return ''
+  const diff = Date.now() - then
+  const sec = Math.round(diff / 1000)
+  if (sec < 60) return 'Just now'
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min} minute${min > 1 ? 's' : ''} ago`
+  const hr = Math.round(min / 60)
+  if (hr < 24) return `${hr} hour${hr > 1 ? 's' : ''} ago`
+  const day = Math.round(hr / 24)
+  if (day < 7) return `${day} day${day > 1 ? 's' : ''} ago`
+  return new Date(iso).toLocaleDateString()
+}
+
 export default function Notifications() {
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS)
+  const navigate = useNavigate()
+  const [notifications, setNotifications] = useState(EMPTY)
   const [activeTab, setActiveTab] = useState('All')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get('/notifications/')
+        if (!cancelled) setNotifications(Array.isArray(data) ? data : [])
+      } catch {
+        if (!cancelled) setNotifications([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications])
 
@@ -164,12 +144,31 @@ export default function Notifications() {
     [notifications, activeTab]
   )
 
-  function toggleRead(id) {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n)))
+  async function toggleRead(item) {
+    if (item.url) {
+      navigate(item.url)
+      if (!item.read) markRead(item.id, true)
+      return
+    }
+    markRead(item.id, !item.read)
   }
 
-  function markAllRead() {
+  async function markRead(id, read) {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read } : n)))
+    try {
+      await api.patch(`/notifications/${id}/`, { read })
+    } catch {
+      // ignore network hiccups
+    }
+  }
+
+  async function markAllRead() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    try {
+      await api.post('/notifications/read-all/', {})
+    } catch {
+      // ignore
+    }
   }
 
   return (
@@ -215,7 +214,14 @@ export default function Notifications() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-          {visible.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <BellIcon className="h-6 w-6" />
+              </span>
+              <p className="text-xs font-semibold text-slate-500">Loading notifications…</p>
+            </div>
+          ) : visible.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                 <BellIcon className="h-6 w-6" />
@@ -230,11 +236,12 @@ export default function Notifications() {
               {visible.map((n) => {
                 const meta = TYPE_META[n.type] || TYPE_META.System
                 const Icon = meta.icon
+                const when = n.created ? relativeTime(n.created) : n.time
                 return (
                   <li key={n.id}>
                     <button
                       type="button"
-                      onClick={() => toggleRead(n.id)}
+                      onClick={() => toggleRead(n)}
                       className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors cursor-pointer ${
                         n.read ? 'bg-white hover:bg-slate-50/70' : 'bg-brand-50/40 hover:bg-brand-50/70'
                       }`}
@@ -259,7 +266,7 @@ export default function Notifications() {
                           <span className={`inline-flex rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TYPE_BADGE[n.type] || TYPE_BADGE.System}`}>
                             {n.type}
                           </span>
-                          <span className="text-[10px] text-slate-400">{n.time}</span>
+                          <span className="text-[10px] text-slate-400">{when}</span>
                         </div>
                       </div>
                     </button>

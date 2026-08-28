@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
-from transactions.models import CallHistory, Lead, ProposalDraft, ProposalTemplate
+from transactions.models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation
+from utilities.models import Notification
 
 User = get_user_model()
 
@@ -398,12 +399,13 @@ class ProposalTemplateApiTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 401)
 
-    def test_staff_cannot_create_template(self):
+    def test_staff_can_create_own_template(self):
         self.client.force_authenticate(self.staff)
         resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'My Tpl', 'scopeHtml': '<p>x</p>',
         }, format='json')
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['owner'], self.staff.id)
 
     def test_create_template_and_list_owned_only(self):
         self.client.force_authenticate(self.manager)
@@ -616,3 +618,126 @@ class ProposalDraftApiTests(APITestCase):
         resp = self.client.delete('/api/transactions/proposal-drafts/?proposal_id=QTN-4')
         self.assertEqual(resp.status_code, 204)
         self.assertFalse(ProposalDraft.objects.filter(user=self.manager, proposal_id='QTN-4').exists())
+
+
+import re
+from unittest.mock import patch
+
+
+class QuotationApprovalFlowTests(APITestCase):
+    def setUp(self):
+        company = make_company('ApproveCo')
+        self.approver = User.objects.create_user(
+            email='mgr@appr.com', password='x', name='Manager One',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@appr.com', password='x', name='Staff One',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.lead = make_raw_lead(company, 'Approve Ltd', assigned_to='Staff One')
+        self.lead.status = Lead.STATUS_QUOTATION
+        self.lead.save(update_fields=['status', 'updated_at'])
+        self.q = Quotation.objects.create(
+            id=self.lead.id, lead_id=self.lead.id, company=self.lead.company,
+            tenant=company, staff='Staff One', status='Not Sent',
+        )
+
+    def test_approvers_list_excludes_staff(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.get('/api/transactions/quotations/approvers/')
+        self.assertEqual(resp.status_code, 200)
+        names = [a['name'] for a in resp.data]
+        self.assertIn('Manager One', names)
+        self.assertNotIn('Staff One', names)
+
+    def test_send_for_approval_notifies_approver(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Pending Approval', 'approver': self.approver.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'Pending Approval')
+        self.assertEqual(resp.data['submittedBy'], self.staff.id)
+        self.assertEqual(resp.data['approver'], self.approver.id)
+        notif = Notification.objects.filter(user=self.approver).first()
+        self.assertIsNotNone(notif)
+        self.assertEqual(notif.type, 'Approval')
+        self.assertEqual(notif.entity_id, self.lead.id)
+
+    def test_staff_cannot_request_otp(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post(
+            f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_approve_with_otp_records_signature(self):
+        self.client.force_authenticate(self.staff)
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Pending Approval', 'approver': self.approver.id,
+        }, format='json')
+        self.client.force_authenticate(self.approver)
+        mailbox = {}
+
+        def fake_send(subject, message, from_email=None, recipient_list=None, fail_silently=False, **kw):
+            mailbox['message'] = message
+            return 1
+
+        with patch('transactions.views.send_mail', side_effect=fake_send):
+            otp_resp = self.client.post(
+                f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
+            )
+        self.assertEqual(otp_resp.status_code, 200)
+        code = re.search(r'approval code is:\n\n\s*(\d{6})', mailbox['message']).group(1)
+        resp = self.client.post(
+            f'/api/transactions/quotations/{self.lead.id}/approve/',
+            {'otp': code}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'Approved')
+        self.assertEqual(resp.data['signedBy'], 'Manager One')
+        self.assertTrue(resp.data['signatureRef'].startswith('OTP-'))
+        self.assertTrue(
+            Notification.objects.filter(user=self.staff, type='Approval', title='Proposal approved').exists()
+        )
+
+    def test_approve_with_wrong_otp_fails(self):
+        self.client.force_authenticate(self.staff)
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Pending Approval', 'approver': self.approver.id,
+        }, format='json')
+        self.client.force_authenticate(self.approver)
+        with patch('transactions.views.send_mail', return_value=1):
+            self.client.post(
+                f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
+            )
+        resp = self.client.post(
+            f'/api/transactions/quotations/{self.lead.id}/approve/',
+            {'otp': '000000'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_reject_no_otp_needed(self):
+        self.client.force_authenticate(self.staff)
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Pending Approval', 'approver': self.approver.id,
+        }, format='json')
+        self.client.force_authenticate(self.approver)
+        resp = self.client.post(
+            f'/api/transactions/quotations/{self.lead.id}/reject/',
+            {'reason': 'Budget too low'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'Rejected')
+        self.assertEqual(resp.data['rejectionReason'], 'Budget too low')
+        self.assertTrue(
+            Notification.objects.filter(user=self.staff, type='Approval', title='Proposal rejected').exists()
+        )
+
+    def test_status_cannot_be_set_directly(self):
+        self.client.force_authenticate(self.approver)
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Approved',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)

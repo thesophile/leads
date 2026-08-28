@@ -1,10 +1,14 @@
+import hashlib
 import json
 import random
-from datetime import date, datetime
+import secrets
+from datetime import date, datetime, timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,6 +16,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can
 from master.models import Category, Source
+from utilities.models import Notification
 
 from .models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation
 from .serializers import (
@@ -22,6 +27,34 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def hash_otp(code, salt):
+    return hashlib.sha256(f'{salt}:{code}'.encode('utf-8')).hexdigest()
+
+
+def generate_otp():
+    return f'{secrets.randbelow(1000000):06d}'
+
+
+def notify(user, notif_type, title, message, url='', entity_type='', entity_id=''):
+    """Create an in-app notification for a user (no-op if ``user`` is missing)."""
+    if user is None or not getattr(user, 'pk', None):
+        return
+    Notification.objects.create(
+        user=user,
+        type=notif_type,
+        title=title,
+        message=message,
+        time='Just now',
+        url=url,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+
+
+def proposal_url(lead_id):
+    return f'/quotations/preview/{lead_id}' if lead_id else ''
 
 
 def assignment_name_set(user):
@@ -335,6 +368,17 @@ class QuotationView(APIView):
         'remarks': 'remarks',
     }
 
+    def get(self, request, lead_id):
+        if not can(request.user, 'quotation.view'):
+            return Response(
+                {'detail': 'You do not have permission to view quotations.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        if quotation is None:
+            return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(QuotationSerializer(quotation).data)
+
     def put(self, request, lead_id):
         if not can(request.user, 'quotation.create', 'quotation.edit'):
             return Response(
@@ -350,11 +394,56 @@ class QuotationView(APIView):
         quotation = Quotation.objects.filter(lead_id=lead_id).first()
         if quotation is None:
             quotation = Quotation(id=lead_id, lead_id=lead_id, tenant=request.user.company, company=lead.company)
+        was_pending = quotation.status == 'Pending Approval'
+        new_status = request.data.get('status')
+        if new_status in ('Approved', 'Rejected'):
+            return Response(
+                {'detail': 'The proposal status cannot be set directly. Use the approve / reject action.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         for camel, field in self.QUOTATION_FIELDS.items():
             if camel in request.data:
                 value = request.data.get(camel)
                 setattr(quotation, field, value if value is not None else '')
+        # Resolve the approver selected by the submitter.
+        if 'approver' in request.data:
+            approver_id = request.data.get('approver')
+            approver = None
+            if approver_id:
+                try:
+                    approver = User.objects.get(pk=int(approver_id))
+                except (TypeError, ValueError, User.DoesNotExist):
+                    approver = None
+            quotation.approver = approver
+            if approver is not None:
+                quotation.approver_name = approver.name
+            elif request.data.get('approverName'):
+                quotation.approver_name = request.data.get('approverName', '')
+        # "Send for Approval": record who submitted and when, then notify the approver.
+        if new_status == 'Pending Approval':
+            quotation.submitted_by = request.user
+            quotation.approval_requested_at = timezone.now()
+            quotation.approved_at = None
+            quotation.rejected_at = None
+            quotation.rejection_reason = ''
+            quotation.approval_note = ''
+            quotation.signed_by = ''
+            quotation.signature_ref = ''
+            quotation.signature_hash = ''
+            quotation.otp_hash = ''
+            quotation.otp_sent_at = None
+            quotation.otp_expires_at = None
         quotation.save()
+        if new_status == 'Pending Approval' and not was_pending and quotation.approver_id:
+            notify(
+                quotation.approver,
+                'Approval',
+                'Proposal awaiting your approval',
+                f'{quotation.id} - {quotation.company}, submitted by {request.user.name}.',
+                url=proposal_url(quotation.lead_id),
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
         return Response(QuotationSerializer(quotation).data)
 
     def delete(self, request, lead_id):
@@ -370,6 +459,192 @@ class QuotationView(APIView):
             lead.call_status = 'Pending Call'
             lead.save(update_fields=['status', 'call_status', 'updated_at'])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class QuotationApproverListView(APIView):
+    """List the company users who can approve a quotation (the picker in
+    "Send for Approval"). Users with ``quotation.approve`` or superusers."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'quotation.view'):
+            return Response(
+                {'detail': 'You do not have permission to view quotations.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not request.user.company:
+            return Response([])
+        users = User.objects.filter(company=request.user.company)
+        result = [
+            {
+                'id': user.id,
+                'name': user.name,
+                'role': (user.role.name if user.role_id else ''),
+                'is_superuser': user.is_superuser,
+            }
+            for user in users
+            if user.is_superuser or user.has_permission('quotation.approve')
+        ]
+        result.sort(key=lambda x: x['name'].lower())
+        return Response(result)
+
+
+class QuotationApprovalBaseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_quotation(self, request, lead_id):
+        if not can(request.user, 'quotation.approve'):
+            return None, Response(
+                {'detail': 'You do not have permission to approve quotations.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        if quotation is None:
+            return None, Response(
+                {'detail': 'Quotation not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return quotation, None
+
+
+class QuotationOtpView(QuotationApprovalBaseView):
+    """Send a one-time approval code to the logged-in approver by email."""
+
+    OTP_MINUTES = 5
+
+    def post(self, request, lead_id):
+        quotation, error = self.get_quotation(request, lead_id)
+        if error is not None:
+            return error
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        code = generate_otp()
+        quotation.otp_hash = hash_otp(code, quotation.id)
+        quotation.otp_sent_at = timezone.now()
+        quotation.otp_expires_at = timezone.now() + timedelta(minutes=self.OTP_MINUTES)
+        quotation.save(update_fields=['otp_hash', 'otp_sent_at', 'otp_expires_at', 'updated_at'])
+        try:
+            send_mail(
+                subject='LEADS — Quotation approval code',
+                message=(
+                    f'Hi {request.user.name},\n\n'
+                    f'You requested to approve quotation {quotation.id} for '
+                    f'{quotation.company}.\n\n'
+                    f'Your one-time approval code is:\n\n    {code}\n\n'
+                    f'It expires in {self.OTP_MINUTES} minutes and can only be used once.\n\n'
+                    f'If you did not request this, you can safely ignore this email.\n\n'
+                    f'— LEADS'
+                ),
+                from_email=None,
+                recipient_list=[request.user.email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+        return Response({'sent': True, 'expires_in': self.OTP_MINUTES * 60})
+
+
+class QuotationApproveView(QuotationApprovalBaseView):
+    """Verify the OTP and record the digital signature / approval."""
+
+    def post(self, request, lead_id):
+        quotation, error = self.get_quotation(request, lead_id)
+        if error is not None:
+            return error
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        code = str(request.data.get('otp', '')).strip()
+        note = str(request.data.get('note', '') or '').strip()
+        if not code:
+            return Response(
+                {'detail': 'Please enter the approval code.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not quotation.otp_hash or not quotation.otp_expires_at:
+            return Response(
+                {'detail': 'No approval code was requested. Please request a code first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if timezone.now() > quotation.otp_expires_at:
+            return Response(
+                {'detail': 'The approval code has expired. Please request a new one.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if hash_otp(code, quotation.id) != quotation.otp_hash:
+            return Response(
+                {'detail': 'The approval code is invalid. Please try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        quotation.status = 'Approved'
+        quotation.approver = request.user
+        quotation.approver_name = request.user.name
+        quotation.signed_by = request.user.name
+        quotation.approved_at = timezone.now()
+        quotation.signature_ref = f'OTP-{random.randint(10000000, 99999999)}'
+        quotation.signature_hash = quotation.otp_hash
+        quotation.approval_note = note
+        quotation.otp_hash = ''
+        quotation.otp_expires_at = None
+        quotation.otp_sent_at = None
+        quotation.save()
+        if quotation.submitted_by_id and quotation.submitted_by_id != request.user.id:
+            notify(
+                quotation.submitted_by,
+                'Approval',
+                'Proposal approved',
+                f'{quotation.id} - {quotation.company} approved by {request.user.name}. Order execution can begin.',
+                url=proposal_url(quotation.lead_id),
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
+        return Response(QuotationSerializer(quotation).data)
+
+
+class QuotationRejectView(QuotationApprovalBaseView):
+    """Reject a pending proposal with a reason (no OTP required)."""
+
+    def post(self, request, lead_id):
+        quotation, error = self.get_quotation(request, lead_id)
+        if error is not None:
+            return error
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reason = str(request.data.get('reason', '') or '').strip()
+        if not reason:
+            return Response(
+                {'detail': 'Please provide a reason for rejecting the proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        quotation.status = 'Rejected'
+        quotation.approver = request.user
+        quotation.approver_name = request.user.name
+        quotation.rejected_at = timezone.now()
+        quotation.rejection_reason = reason
+        quotation.otp_hash = ''
+        quotation.otp_expires_at = None
+        quotation.otp_sent_at = None
+        quotation.save()
+        if quotation.submitted_by_id and quotation.submitted_by_id != request.user.id:
+            notify(
+                quotation.submitted_by,
+                'Approval',
+                'Proposal rejected',
+                f'{quotation.id} - {quotation.company} was rejected by {request.user.name}. Reason: {reason}',
+                url=proposal_url(quotation.lead_id),
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
+        return Response(QuotationSerializer(quotation).data)
 
 
 class LeadAssignView(APIView):

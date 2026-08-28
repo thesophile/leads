@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import NotificationBell from '../components/NotificationBell'
 import { useAuth } from '../context/auth-context'
 
 export default function Layout({ children }) {
@@ -44,6 +45,7 @@ export default function Layout({ children }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <NotificationBell asButtonClassName="p-1.5" />
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
               {user?.initials || 'U'}
             </div>

@@ -1,9 +1,11 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 
 // Initial Proposal Model matching exact PDF document
 const DEFAULT_PROPOSAL = {
@@ -199,6 +201,15 @@ function SignatureStamp({ bdm = 'Husna M S' }) {
   )
 }
 
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  )
+}
+
 // Reusable document primitives
 function InfoBlock({ label, value }) {
   return (
@@ -352,8 +363,30 @@ const PAGE_CLASS =
 export default function ProposalPreview() {
   const navigate = useNavigate()
   const location = useLocation()
+  const params = useParams()
+  const { user } = useAuth()
+
+  const canApprove = !!user && (can(user, 'quotation.approve') || user.is_superuser)
 
   const [company, setCompany] = useState({})
+  const [proposal, setProposal] = useState(() => location.state?.proposal || null)
+  const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.proposal)
+
+  // Send-for-approval
+  const [approvers, setApprovers] = useState([])
+  const [sendOpen, setSendOpen] = useState(false)
+  const [sendApprover, setSendApprover] = useState('')
+  const [sending, setSending] = useState(false)
+  // Approve / reject
+  const [approveOpen, setApproveOpen] = useState(false)
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
+  const [otp, setOtp] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actionNote, setActionNote] = useState('')
+  const [approveNotice, setApproveNotice] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -370,9 +403,45 @@ export default function ProposalPreview() {
     }
   }, [])
 
+  // Fetch approvers once for the send-for-approval picker.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get('/transactions/quotations/approvers/')
+        if (!cancelled && Array.isArray(data)) setApprovers(data)
+      } catch {
+        // ignore
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // If we arrived without navigation state (e.g. from a notification link),
+  // fetch the quotation by id.
+  useEffect(() => {
+    if (proposal || !params.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
+        if (!cancelled) setProposal(data || null)
+      } catch (err) {
+        if (!cancelled) setActionError(err.message)
+      } finally {
+        if (!cancelled) setLoadingQuote(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [params.id, proposal])
+
   const proposalData = useMemo(() => {
-    if (location.state?.proposal) {
-      const p = location.state.proposal
+    if (proposal) {
+      const p = proposal
       return {
         ...DEFAULT_PROPOSAL,
         id: p.id || DEFAULT_PROPOSAL.id,
@@ -385,6 +454,7 @@ export default function ProposalPreview() {
         quotationBy: p.qtnBy || p.staff || DEFAULT_PROPOSAL.quotationBy,
         revisionNo: p.revisionNo || '',
         category: p.category || DEFAULT_PROPOSAL.category,
+        customerType: p.customerType || '',
         sources: p.source || DEFAULT_PROPOSAL.sources,
         total: p.total || DEFAULT_PROPOSAL.total,
         discount: p.discount || DEFAULT_PROPOSAL.discount,
@@ -395,12 +465,20 @@ export default function ProposalPreview() {
           p.termsConditions ||
           DEFAULT_PROPOSAL.proposalInDetailsHtml + DEFAULT_PROPOSAL.proposalDetailsContinuedHtml,
         status: p.status || DEFAULT_PROPOSAL.status,
+        leadId: p.leadId || p.id,
+        approverName: p.approverName || '',
+        signedBy: p.signedBy || '',
+        signatureRef: p.signatureRef || '',
+        approvedAt: p.approvedAt || '',
+        rejectedAt: p.rejectedAt || '',
+        rejectionReason: p.rejectionReason || '',
+        hasProposal: true,
       }
     }
     return DEFAULT_PROPOSAL
-  }, [location.state])
+  }, [proposal])
 
-  const [isSent, setIsSent] = useState(proposalData.status === 'Pending Approval')
+  const isSent = proposalData.status === 'Pending Approval'
 
   const summaryRef = useRef(null)
   const summaryPageRef = useRef(null)
@@ -425,9 +503,109 @@ export default function ProposalPreview() {
     window.print()
   }
 
-  function handleSendForApproval() {
-    setIsSent(true)
-    alert('Proposal has been successfully submitted for Management Approval!')
+  function openSend() {
+    setActionError('')
+    setApproveNotice('')
+    setSendApprover('')
+    setSendOpen(true)
+  }
+
+  function openApprove() {
+    setActionError('')
+    setApproveNotice('')
+    setOtp('')
+    setOtpSent(false)
+    setActionNote('')
+    setApproveOpen(true)
+  }
+
+  function openReject() {
+    setActionError('')
+    setRejectReason('')
+    setRejectOpen(true)
+  }
+
+  async function handleSend() {
+    if (!sendApprover) return
+    setSending(true)
+    setActionError('')
+    try {
+      const updated = await api.put(
+        `/transactions/quotations/${encodeURIComponent(proposalData.leadId || proposalData.id)}/`,
+        { status: 'Pending Approval', approver: Number(sendApprover) }
+      )
+      setProposal(updated)
+      setSendOpen(false)
+      setApproveNotice('✓ Proposal sent for approval.')
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleRequestOtp() {
+    setActionLoading(true)
+    setActionError('')
+    setOtpSent(false)
+    try {
+      await api.post(
+        `/transactions/quotations/${encodeURIComponent(proposalData.leadId || proposalData.id)}/approval-otp/`,
+        {}
+      )
+      setOtpSent(true)
+      setApproveNotice('A one-time approval code has been sent to your email.')
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleApprove() {
+    setActionLoading(true)
+    setActionError('')
+    try {
+      const updated = await api.post(
+        `/transactions/quotations/${encodeURIComponent(proposalData.leadId || proposalData.id)}/approve/`,
+        { otp, note: actionNote }
+      )
+      setProposal(updated)
+      setApproveOpen(false)
+      setApproveNotice('✓ Proposal approved. Digital signature recorded.')
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleReject() {
+    setActionLoading(true)
+    setActionError('')
+    try {
+      const updated = await api.post(
+        `/transactions/quotations/${encodeURIComponent(proposalData.leadId || proposalData.id)}/reject/`,
+        { reason: rejectReason }
+      )
+      setProposal(updated)
+      setRejectOpen(false)
+      setApproveNotice('✗ Proposal rejected.')
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  if (loadingQuote && !proposal) {
+    return (
+      <Layout>
+        <div className="flex h-64 items-center justify-center">
+          <span className="text-xs text-slate-500">Loading proposal…</span>
+        </div>
+      </Layout>
+    )
   }
 
   return (
@@ -452,6 +630,11 @@ export default function ProposalPreview() {
           </div>
 
           <div className="flex items-center gap-2">
+            {approveNotice && (
+              <span className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-700">
+                {approveNotice}
+              </span>
+            )}
             <button
               type="button"
               onClick={handlePrint}
@@ -459,18 +642,42 @@ export default function ProposalPreview() {
             >
               Print All Pages
             </button>
-            <button
-              type="button"
-              onClick={handleSendForApproval}
-              disabled={isSent}
-              className={`flex items-center gap-1.5 rounded-xl px-5 py-2 text-xs font-bold text-white shadow-md transition cursor-pointer ${
-                isSent
-                  ? 'cursor-not-allowed bg-emerald-600 opacity-90'
-                  : 'bg-emerald-600 hover:bg-emerald-700'
-              }`}
-            >
-              {isSent ? '✓ Sent for Approval' : 'Send for Approval'}
-            </button>
+            {canApprove && proposalData.status === 'Pending Approval' && (
+              <>
+                <button
+                  type="button"
+                  onClick={openReject}
+                  className="flex items-center gap-1.5 rounded-xl border border-rose-300 bg-white px-5 py-2 text-xs font-bold text-rose-600 shadow-md transition hover:bg-rose-50 cursor-pointer"
+                >
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  onClick={openApprove}
+                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 cursor-pointer"
+                >
+                  ✓ Approve
+                </button>
+              </>
+            )}
+            {proposalData.status !== 'Approved' && proposalData.status !== 'Rejected' && !isSent && (
+              <button
+                type="button"
+                onClick={openSend}
+                className={`flex items-center gap-1.5 rounded-xl px-5 py-2 text-xs font-bold text-white shadow-md transition cursor-pointer ${
+                  isSent
+                    ? 'cursor-not-allowed bg-emerald-600 opacity-90'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {isSent ? '✓ Sent for Approval' : 'Send for Approval'}
+              </button>
+            )}
+            {isSent && proposalData.status === 'Pending Approval' && (
+              <span className="rounded-xl bg-emerald-100 px-4 py-2 text-xs font-bold text-emerald-700">
+                ⏳ Awaiting Approval
+              </span>
+            )}
           </div>
         </div>
 
@@ -553,21 +760,47 @@ export default function ProposalPreview() {
                 </SectionBox>
 
                 <SectionBox title="Approved By">
-                  <div className="flex items-center justify-between gap-2 py-0.5">
-                    <div className="space-y-0.5 text-left min-w-0 flex-1">
-                      <p className="text-[12px] font-bold text-slate-900 flex items-center gap-1">
-                        <span className="text-emerald-700 font-extrabold">✓</span> Signature valid
-                      </p>
-                      <p className="text-[11px] text-slate-700 leading-tight">
-                        Digitally signed by <span className="font-bold text-black">{proposalData.bdm}</span>
-                      </p>
-                      <p className="font-mono text-[10px] text-slate-500 leading-none">
-                        Date: 2026.04.17 16:31:09 +00:00
-                      </p>
-                      <p className="text-[10px] text-slate-500 leading-none">Location: Thrissur</p>
+                  {proposalData.status === 'Approved' && proposalData.signedBy ? (
+                    <div className="flex items-center justify-between gap-2 py-0.5">
+                      <div className="space-y-0.5 text-left min-w-0 flex-1">
+                        <p className="text-[12px] font-bold text-slate-900 flex items-center gap-1">
+                          <span className="text-emerald-700 font-extrabold">✓</span> Signature valid (OTP verified)
+                        </p>
+                        <p className="text-[11px] text-slate-700 leading-tight">
+                          Digitally signed by <span className="font-bold text-black">{proposalData.signedBy}</span>
+                        </p>
+                        <p className="font-mono text-[10px] text-slate-500 leading-none">
+                          Date: {proposalData.approvedAt ? new Date(proposalData.approvedAt).toLocaleString() : ''}
+                        </p>
+                        {proposalData.signatureRef && (
+                          <p className="text-[10px] text-slate-500 leading-none">Ref: {proposalData.signatureRef}</p>
+                        )}
+                      </div>
+                      <SignatureStamp bdm={proposalData.signedBy} />
                     </div>
-                    <SignatureStamp bdm={proposalData.bdm} />
-                  </div>
+                  ) : proposalData.status === 'Rejected' ? (
+                    <div className="space-y-1 py-0.5">
+                      <p className="text-[12px] font-bold text-rose-600 flex items-center gap-1">✗ Rejected</p>
+                      <p className="text-[11px] text-slate-600">
+                        {proposalData.rejectionReason ? `Reason: ${proposalData.rejectionReason}` : 'No reason recorded.'}
+                      </p>
+                    </div>
+                  ) : proposalData.status === 'Pending Approval' ? (
+                    <div className="space-y-1 py-0.5">
+                      <p className="text-[12px] font-bold text-amber-600 flex items-center gap-1">⏳ Awaiting approval</p>
+                      <p className="text-[11px] text-slate-600">
+                        Submitted for approval{proposalData.approverName ? ` to ${proposalData.approverName}` : ''}.
+                      </p>
+                      {canApprove && (
+                        <p className="text-[11px] text-slate-500">Use Approve / Reject above to act on this proposal.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1 py-0.5">
+                      <p className="text-[12px] font-bold text-slate-500">Not yet approved</p>
+                      <p className="text-[11px] text-slate-400">No digital signature recorded.</p>
+                    </div>
+                  )}
                 </SectionBox>
               </div>
 
@@ -622,6 +855,237 @@ export default function ProposalPreview() {
           </div>
         </div>
       </div>
+
+      {actionError && (
+        <div className="fixed top-4 left-1/2 z-[95] -translate-x-1/2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700 shadow-lg">
+          {actionError}
+        </div>
+      )}
+
+      {/* Send for Approval */}
+      {sendOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !sending) setSendOpen(false)
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                  ✈
+                </span>
+                <h3 className="text-sm font-bold text-slate-900">Send for Approval</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSendOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-[11px] text-slate-500">
+                Send <span className="font-bold text-slate-700">{proposalData.id}</span> for {proposalData.customerCompany} to an approver.
+              </p>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  Select Approving Admin <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={sendApprover}
+                  onChange={(e) => setSendApprover(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-medium text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                >
+                  <option value="">— Choose an admin —</option>
+                  {approvers.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                      {a.role ? ` (${a.role})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+              <button
+                type="button"
+                onClick={() => setSendOpen(false)}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!sendApprover || sending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sending ? 'Sending…' : 'Send for Approval'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve (OTP) */}
+      {approveOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !actionLoading) setApproveOpen(false)
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">✓</span>
+                <h3 className="text-sm font-bold text-slate-900">Approve Proposal</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !actionLoading && setApproveOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+                <p className="font-mono text-[10px] font-bold text-brand-600 uppercase tracking-wider">{proposalData.id}</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-900 truncate">{proposalData.customerCompany}</p>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  {proposalData.customerPerson} • Net {proposalData.net}
+                </p>
+              </div>
+
+              {otpSent && approveNotice && (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
+                  {approveNotice}
+                </div>
+              )}
+
+              {!otpSent ? (
+                <button
+                  type="button"
+                  onClick={handleRequestOtp}
+                  disabled={actionLoading}
+                  className="w-full rounded-lg bg-slate-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-900 transition cursor-pointer disabled:opacity-60"
+                >
+                  {actionLoading ? 'Sending code…' : 'Send one-time code'}
+                </button>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                      Approval Code <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoFocus
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Enter the 6-digit code"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-center text-lg tracking-[0.4em] font-mono text-slate-900 placeholder:text-slate-300 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    />
+                    <p className="mt-1.5 text-[10px] text-slate-400">The code expires in 5 minutes and can be used once.</p>
+                  </div>
+                  <textarea
+                    value={actionNote}
+                    onChange={(e) => setActionNote(e.target.value)}
+                    placeholder="Approval note (optional)"
+                    rows={2}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+              <button
+                type="button"
+                onClick={() => setApproveOpen(false)}
+                disabled={actionLoading}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={!otpSent || otp.length !== 6 || actionLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionLoading ? 'Verifying…' : '✓ Approve'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject */}
+      {rejectOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !actionLoading) setRejectOpen(false)
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-600">✗</span>
+                <h3 className="text-sm font-bold text-slate-900">Reject Proposal</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !actionLoading && setRejectOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-[11px] text-slate-500">
+                This will reject <span className="font-bold text-slate-700">{proposalData.id}</span> for {proposalData.customerCompany}.
+              </p>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  Reason <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  autoFocus
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  rows={4}
+                  placeholder="Explain why this proposal is rejected..."
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+              <button
+                type="button"
+                onClick={() => setRejectOpen(false)}
+                disabled={actionLoading}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleReject}
+                disabled={!rejectReason.trim() || actionLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionLoading ? 'Rejecting…' : '✗ Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

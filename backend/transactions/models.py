@@ -198,6 +198,34 @@ class Quotation(models.Model):
     proposal_scope = models.TextField(blank=True)
     terms_conditions = models.TextField(blank=True)
     remarks = models.TextField(blank=True)
+    # Approval workflow
+    submitted_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='submitted_quotations',
+    )
+    approver = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_quotations',
+    )
+    approver_name = models.CharField(max_length=120, blank=True)
+    signed_by = models.CharField(max_length=120, blank=True)
+    signature_ref = models.CharField(max_length=120, blank=True)
+    signature_hash = models.CharField(max_length=160, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    approval_note = models.TextField(blank=True)
+    approval_requested_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    # One-time approval code (signature verification)
+    otp_hash = models.CharField(max_length=160, blank=True)
+    otp_sent_at = models.DateTimeField(null=True, blank=True)
+    otp_expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
