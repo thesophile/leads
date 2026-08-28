@@ -4,6 +4,41 @@ import { api } from '../../api/client'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 
+const LOGO_TARGET_WIDTH = 400
+const LOGO_TARGET_HEIGHT = 160
+const LOGO_MAX_MB = 1
+
+function LogoIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
+  )
+}
+
+function UploadIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  )
+}
+
+function TrashIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  )
+}
+
 const QUILL_MODULES = {
   toolbar: [
     ['bold', 'italic', 'underline', 'strike'],
@@ -245,6 +280,13 @@ export default function Settings() {
 
   const [companyName, setCompanyName] = useState('')
   const [companyEmail, setCompanyEmail] = useState('')
+  const [companyPhone, setCompanyPhone] = useState('')
+  const [companyWebsite, setCompanyWebsite] = useState('')
+  const [companyAddress, setCompanyAddress] = useState('')
+  const [companyLogo, setCompanyLogo] = useState('')
+  const [logoFile, setLogoFile] = useState(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoWarning, setLogoWarning] = useState(null)
   const [termsHtml, setTermsHtml] = useState('')
   const [gstNo, setGstNo] = useState('32AAAAA1111A1Z1')
   const [currency, setCurrency] = useState('INR (₹)')
@@ -264,10 +306,14 @@ export default function Settings() {
     let cancelled = false
     ;(async () => {
       try {
-        const company = await api.get('/accounts/company/')
+        const company = await api.get('/auth/company/')
         if (!cancelled && company) {
           if (company.name) setCompanyName(company.name)
           if (company.email) setCompanyEmail(company.email)
+          if (company.phone) setCompanyPhone(company.phone)
+          if (company.website) setCompanyWebsite(company.website)
+          if (company.address) setCompanyAddress(company.address)
+          setCompanyLogo(company.logo || '')
           if (company.termsHtml) setTermsHtml(company.termsHtml)
         }
       } catch (err) {
@@ -292,14 +338,78 @@ export default function Settings() {
   async function handleSaveGeneral(e) {
     e.preventDefault()
     try {
-      await api.patch('/accounts/company/', {
+      await api.patch('/auth/company/', {
         name: companyName,
         email: companyEmail,
+        phone: companyPhone,
+        website: companyWebsite,
+        address: companyAddress,
         termsHtml,
       })
       showToast('General settings saved successfully.')
     } catch (err) {
       showToast(`Failed to save settings: ${err.message}`)
+    }
+  }
+
+  function handleLogoFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoWarning(null)
+    setLogoFile(file)
+  }
+
+  async function uploadLogo(confirm = false) {
+    if (!logoFile) return
+    setLogoUploading(true)
+    setLogoWarning(null)
+    try {
+      const fd = new FormData()
+      fd.append('logo', logoFile)
+      if (confirm) fd.append('confirm', '1')
+      const res = await fetch('/api/auth/company/logo/', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('leads_access') || sessionStorage.getItem('leads_access')}` },
+        body: fd,
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.detail || `Upload failed (${res.status})`)
+      }
+      if (data?.status === 'warning') {
+        setLogoWarning(data)
+        return
+      }
+      if (data?.logo) setCompanyLogo(data.logo)
+      setLogoFile(null)
+      showToast('Company logo updated successfully.')
+    } catch (err) {
+      showToast(`Failed to upload logo: ${err.message}`)
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
+  async function handleConfirmResizeLogo() {
+    await uploadLogo(true)
+  }
+
+  function handleCancelLogoWarning() {
+    setLogoWarning(null)
+    setLogoFile(null)
+  }
+
+  async function handleRemoveLogo() {
+    if (window.confirm('Remove the current company logo?')) {
+      try {
+        await api.del('/auth/company/logo/')
+        setCompanyLogo('')
+        setLogoFile(null)
+        setLogoWarning(null)
+        showToast('Company logo removed.')
+      } catch (err) {
+        showToast(`Failed to remove logo: ${err.message}`)
+      }
     }
   }
 
@@ -572,6 +682,32 @@ export default function Settings() {
                       className={inputClass}
                     />
                   </Field>
+                  <Field label="Phone">
+                    <input
+                      type="tel"
+                      value={companyPhone}
+                      onChange={(e) => setCompanyPhone(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. +91 9447151442"
+                    />
+                  </Field>
+                  <Field label="Website">
+                    <input
+                      type="url"
+                      value={companyWebsite}
+                      onChange={(e) => setCompanyWebsite(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. www.company.com"
+                    />
+                  </Field>
+                  <Field label="Address">
+                    <textarea
+                      value={companyAddress}
+                      onChange={(e) => setCompanyAddress(e.target.value)}
+                      className={`${inputClass} min-h-20 resize-y`}
+                      placeholder="Registered office / head office address"
+                    />
+                  </Field>
                   <Field label="GSTIN">
                     <input
                       type="text"
@@ -615,6 +751,84 @@ export default function Settings() {
                     />
                   </Field>
                 </div>
+              </div>
+
+              <div className="border-t border-slate-100 px-6 py-6 md:px-8 md:py-7">
+                <SectionTitle>Company Logo</SectionTitle>
+                <p className="mt-1.5 text-[11px] text-slate-400">
+                  Shown on the header of every proposal. Recommended size: {LOGO_TARGET_WIDTH}×{LOGO_TARGET_HEIGHT} 
+                  px, maximum file size {LOGO_MAX_MB}MB (PNG, JPG, or WEBP).
+                </p>
+
+                <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-24 w-56 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                      {companyLogo ? (
+                        <img src={companyLogo} alt="Company logo" className="h-full w-full object-contain p-2" />
+                      ) : logoFile ? (
+                        <img src={URL.createObjectURL(logoFile)} alt="Selected logo preview" className="h-full w-full object-contain p-2" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 px-3 text-center">
+                          <LogoIcon className="h-6 w-6 text-slate-300" />
+                          <span className="text-[10px] text-slate-400">No logo uploaded</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2 text-[11px] text-slate-500">
+                      {!companyLogo && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+                          <LogoIcon className="h-3.5 w-3.5" />
+                          Uses company name on documents
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50">
+                      <UploadIcon className="h-3.5 w-3.5" />
+                      {companyLogo ? 'Update Logo' : 'Upload Logo'}
+                      <input
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={handleLogoFileChange}
+                      />
+                    </label>
+                    {logoFile && !logoUploading && (
+                      <button
+                        type="button"
+                        onClick={() => uploadLogo(false)}
+                        className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer"
+                      >
+                        Save Logo
+                      </button>
+                    )}
+                    {logoUploading && (
+                      <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
+                        Uploading…
+                      </span>
+                    )}
+                    {companyLogo && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-100 cursor-pointer"
+                      >
+                        <TrashIcon className="h-3.5 w-3.5" />
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {logoFile && (
+                  <p className="mt-3 text-[11px] text-slate-400">
+                    Selected: <span className="font-semibold text-slate-600">{logoFile.name}</span> ({(logoFile.size / 1024).toFixed(0)} KB). Click{" "}
+                    <span className="font-semibold text-slate-600">Save Logo</span> to upload. If its dimensions are not {LOGO_TARGET_WIDTH}×{LOGO_TARGET_HEIGHT}px,
+                    you will be asked before it is auto-resized.
+                  </p>
+                )}
               </div>
 
               <div className="px-6 py-6 md:px-8 md:py-7">
@@ -714,6 +928,40 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {logoWarning && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={handleCancelLogoWarning} />
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <LogoIcon className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Logo dimensions mismatch</h2>
+                <p className="text-[11px] text-slate-500">The uploaded logo is not the required size.</p>
+              </div>
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-slate-600">{logoWarning.detail}</p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={handleCancelLogoWarning}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResizeLogo}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer"
+              >
+                Auto-Resize to {logoWarning.required_width}×{logoWarning.required_height}px
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {targetDrawerVisible && (
         <div className="fixed inset-0 z-50">

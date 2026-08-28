@@ -1,18 +1,22 @@
+import io
 import logging
 import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.db.models import Q
+from django.core.files.images import get_image_dimensions
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from PIL import Image
 
 from .permissions import IsSuperuser, can, require_permission
-from .models import Role
+from .models import Company, Role
 from .rbac import FLAT_PERMISSIONS, PERMISSION_GROUPS
 from .serializers import (
     AdminManageSerializer,
@@ -410,6 +414,169 @@ class CompanyDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+LOGO_TARGET = (400, 160)  # wide banner for the proposal header
+LOGO_FORMATS = {'png', 'jpg', 'jpeg', 'webp'}
+LOGO_MAX_BYTES = 1024 * 1024  # 1MB
+LOGO_MIME = {
+    'image/png': 'PNG',
+    'image/jpeg': 'JPEG',
+    'image/jpg': 'JPEG',
+    'image/webp': 'WEBP',
+}
+
+
+class CompanyLogoUploadView(APIView):
+    """Upload / update / remove the tenant company logo.
+
+    Accepts `multipart/form-data` with a `logo` file. Optional `confirm`
+    field ("1") approves auto-resizing to the required 400x160 banner.
+
+    - File type must be PNG/JPG/JPEG/WEBP.
+    - File size must be <= 1MB. (If larger, respond with an error.)
+    - If dimensions are not 400x160 and `confirm` is not set, respond with a
+      warning so the client can ask the user before resizing.
+    - If dimensions are not 400x160 and `confirm` is set, resize/letterbox to
+      400x160. On failure, respond with an error asking to upload within spec.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_company(self, request):
+        company = getattr(request.user, 'company', None)
+        if company is None:
+            return None
+        if not can(request.user, 'company.edit'):
+            return None
+        return company
+
+    def post(self, request):
+        company = self._get_company(request)
+        if company is None:
+            return Response(
+                {'detail': 'You do not have permission to update the company logo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        logo = request.FILES.get('logo')
+        if logo is None:
+            return Response({'detail': 'Please provide a logo image.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = (logo.content_type or '').lower()
+        content_type = 'image/jpeg' if content_type == 'image/jpg' else content_type
+        if content_type not in LOGO_MIME:
+            return Response(
+                {'detail': 'Unsupported image type. Please upload a PNG, JPG, JPEG, or WEBP image.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ext = 'png' if content_type == 'image/png' else 'jpg'
+        if content_type == 'image/webp':
+            ext = 'webp'
+
+        if logo.size > LOGO_MAX_BYTES:
+            return Response(
+                {'detail': 'Logo file is larger than 1MB. Please upload an image within 1MB.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            img = Image.open(logo)
+            img.load()
+        except Exception:
+            return Response(
+                {'detail': 'Unable to read the uploaded file as an image. Please upload a valid image.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        width, height = img.size
+        confirm = request.data.get('confirm') in ('1', 'true', 'True', 'on')
+
+        if (width, height) != LOGO_TARGET:
+            if not confirm:
+                return Response({
+                    'status': 'warning',
+                    'detail': (
+                        f'The logo is {width}x{height}px. The required size is '
+                        f'{LOGO_TARGET[0]}x{LOGO_TARGET[1]}px. '
+                        'You can auto-resize it to the required size, or cancel and '
+                        'upload an image with the correct dimensions.'
+                    ),
+                    'width': width,
+                    'height': height,
+                    'required_width': LOGO_TARGET[0],
+                    'required_height': LOGO_TARGET[1],
+                })
+            try:
+                resized = resize_letterbox(img, LOGO_TARGET)
+                if ext == 'jpg':
+                    resized = resized.convert('RGB')
+                buffer = io.BytesIO()
+                resized.save(buffer, format=LOGO_MIME[content_type])
+                img = Image.open(io.BytesIO(buffer.getvalue()))
+            except Exception:
+                return Response(
+                    {'detail': (
+                        f'Could not auto-resize the logo to {LOGO_TARGET[0]}x{LOGO_TARGET[1]}px. '
+                        f'Please upload an image with the exact size {LOGO_TARGET[0]}x{LOGO_TARGET[1]}px '
+                        'and within 1MB file size.'
+                    )},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        filename = f'company_{company.pk}.{ext}'
+        save_buffer = io.BytesIO()
+        save_format = 'PNG' if ext == 'png' else ('WEBP' if ext == 'webp' else 'JPEG')
+        save_img = img if isinstance(img, Image.Image) else img
+        if save_format == 'JPEG':
+            save_img = save_img.convert('RGB')
+        save_img.save(save_buffer, format=save_format)
+        company.logo.save(filename, ContentFile(save_buffer.getvalue()), save=True)
+
+        data = CompanySerializer(company).data
+        data['status'] = 'saved'
+        data['resized'] = (width, height) != LOGO_TARGET
+        return Response(data)
+
+    def delete(self, request):
+        company = self._get_company(request)
+        if company is None:
+            return Response(
+                {'detail': 'You do not have permission to update the company logo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if company.logo:
+            company.logo.delete(save=False)
+            company.logo = None
+            company.save(update_fields=['logo'])
+        return Response({'detail': 'Company logo removed.', 'logo': ''})
+
+
+def resize_letterbox(img, target):
+    """Resize an image to fit within `target`, letterboxing with white to the
+    exact target dimensions while preserving aspect ratio."""
+    target_w, target_h = target
+    orig_w, orig_h = img.size
+    if img.mode in ('RGBA', 'LA', 'P'):
+        img = img.convert('RGBA')
+    else:
+        img = img.convert('RGB')
+
+    aspect = orig_w / orig_h
+    target_aspect = target_w / target_h
+    if aspect > target_aspect:
+        new_w = target_w
+        new_h = max(1, round(target_w / aspect))
+    else:
+        new_h = target_h
+        new_w = max(1, round(target_h * aspect))
+
+    resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    canvas = Image.new('RGBA', (target_w, target_h), (255, 255, 255, 255))
+    offset = ((target_w - new_w) // 2, (target_h - new_h) // 2)
+    canvas.paste(resized, offset, resized if resized.mode == 'RGBA' else None)
+    return canvas.convert('RGBA')
 
 
 class ChangePasswordView(APIView):

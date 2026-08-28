@@ -11,10 +11,19 @@ User = get_user_model()
 
 class CompanySerializer(serializers.ModelSerializer):
     termsHtml = serializers.CharField(source='terms_html', required=False, allow_blank=True)
+    logo = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
-        fields = ['id', 'name', 'email', 'phone', 'address', 'website', 'termsHtml']
+        fields = ['id', 'name', 'email', 'phone', 'address', 'website', 'logo', 'termsHtml']
+
+    def get_logo(self, obj):
+        if not obj.logo:
+            return ''
+        try:
+            return obj.logo.url
+        except Exception:
+            return ''
 
 
 class RoleSerializer(serializers.ModelSerializer):

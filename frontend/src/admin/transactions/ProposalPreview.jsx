@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import Layout from '../../Layout/Layout'
+import { api } from '../../api/client'
 
 // Initial Proposal Model matching exact PDF document
 const DEFAULT_PROPOSAL = {
@@ -133,15 +134,21 @@ function QRCodeVisual({ value = `https://leads.programersapps.com/quotation/prop
   )
 }
 
-// Programers Official Logo Component
-function ProgramersLogo() {
+// Company Logo Component (tenant-driven)
+function ProgramersLogo({ logo, companyName }) {
   return (
     <div className="flex flex-col items-end">
-      <img
-        src="/programers-logo-BLACCK.png"
-        alt="PROGRAMERS INTERNATIONAL"
-        className="h-10 w-auto object-contain"
-      />
+      {logo ? (
+        <img
+          src={logo}
+          alt={companyName || 'Company logo'}
+          className="h-10 w-auto max-w-[200px] object-contain"
+        />
+      ) : (
+        <span className="text-right text-[12px] font-black uppercase tracking-wider text-slate-800">
+          {companyName || 'Company'}
+        </span>
+      )}
     </div>
   )
 }
@@ -213,7 +220,7 @@ function SectionBox({ title, children, className = '' }) {
   )
 }
 
-function PageHeader({ proposal, annexLabel }) {
+function PageHeader({ proposal, annexLabel, company }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-4">
       <div className="flex items-center gap-3">
@@ -232,7 +239,7 @@ function PageHeader({ proposal, annexLabel }) {
           Proposal Form
         </h2>
         <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-          Programers International
+          {company?.name || 'Company'}
         </p>
         <div className="mt-1.5 flex justify-center">
           <GeMBadge />
@@ -240,7 +247,7 @@ function PageHeader({ proposal, annexLabel }) {
       </div>
 
       <div className="flex flex-col items-end space-y-2 text-right">
-        <ProgramersLogo />
+        <ProgramersLogo logo={company?.logo} companyName={company?.name} />
         <BarcodeVisual code={proposal.id} />
         <p className="font-mono text-[9.5px] text-slate-600">
           {proposal.id} | {proposal.orderDate} | {proposal.quotationBy}
@@ -250,11 +257,16 @@ function PageHeader({ proposal, annexLabel }) {
   )
 }
 
-function PageFooter() {
+function PageFooter({ company }) {
+  const parts = []
+  if (company?.address) parts.push(company.address)
+  if (company?.email) parts.push(company.email)
+  if (company?.website) parts.push(company.website)
+  if (company?.phone) parts.push(`Ph: ${company.phone}`)
+  const text = parts.join(' | ')
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-[11px] leading-relaxed text-slate-600">
-      4th Floor, Park House, Round North, Thrissur, Kerala, India - 680 001 | info@programers.in,
-      www.programers.in | Ph: 9447151442, 9495951442, 9446451442
+      {text || (company?.name ? `${company.name} — set your address &amp; contact details in Settings` : '')}
     </div>
   )
 }
@@ -338,6 +350,23 @@ const PAGE_CLASS =
 export default function ProposalPreview() {
   const navigate = useNavigate()
   const location = useLocation()
+
+  const [company, setCompany] = useState({})
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get('/auth/company/')
+        if (!cancelled) setCompany(data || {})
+      } catch (err) {
+        console.error('Failed to load company profile', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const proposalData = useMemo(() => {
     if (location.state?.proposal) {
@@ -429,7 +458,7 @@ export default function ProposalPreview() {
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
           <div className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">
-            <PageHeader proposal={proposalData} />
+            <PageHeader proposal={proposalData} company={company} />
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <SectionBox title="Customer Details">
@@ -537,7 +566,7 @@ export default function ProposalPreview() {
             </div>
 
             <div className="mt-auto pt-4">
-              <PageFooter />
+              <PageFooter company={company} />
             </div>
             </div>
           </div>
@@ -545,7 +574,7 @@ export default function ProposalPreview() {
           {/* -------------------- PAGE 2 (ANNEXURE A - 1/1) -------------------- */}
           <div className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">
-            <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (1/1)" />
+            <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (1/1)" company={company} />
 
             <div className="mt-4 flex flex-1 flex-col">
               <SectionBox title="Proposal in Details &amp; Specifications" className="flex-1">
@@ -563,7 +592,7 @@ export default function ProposalPreview() {
             </div>
 
             <div className="mt-auto pt-4">
-              <PageFooter />
+              <PageFooter company={company} />
             </div>
             </div>
           </div>
