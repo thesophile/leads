@@ -393,7 +393,6 @@ export default function Managequotation() {
   const [savedTemplates, setSavedTemplates] = useState([])
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [templateName, setTemplateName] = useState('')
-  const [saveTemplateError, setSaveTemplateError] = useState('')
   const [templateOverrideOpen, setTemplateOverrideOpen] = useState(false)
   const [pendingTemplateId, setPendingTemplateId] = useState(null)
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false)
@@ -508,6 +507,31 @@ export default function Managequotation() {
     return PROPOSAL_TEMPLATES.find((t) => t.id === templateId) || null
   }
 
+  const activeTemplate = resolveTemplate(selectedTemplateId)
+  const editingSavedTemplate = Boolean(
+    selectedTemplateId && String(selectedTemplateId).startsWith('saved-')
+  )
+  const usingPrebuiltTemplate = Boolean(selectedTemplateId && !editingSavedTemplate)
+
+  function templateNameTaken(name) {
+    const n = name.trim().toLowerCase()
+    return (
+      PROPOSAL_TEMPLATES.some((t) => t.name.toLowerCase() === n) ||
+      savedTemplates.some((t) => t.name.toLowerCase() === n)
+    )
+  }
+
+  function suggestTemplateName(baseName) {
+    if (!baseName) return ''
+    let candidate = `${baseName} - Copy`
+    let i = 2
+    while (templateNameTaken(candidate)) {
+      candidate = `${baseName} - Copy ${i}`
+      i += 1
+    }
+    return candidate
+  }
+
   function hasFormContent() {
     return Boolean(
       (scopeHtml && scopeHtml.replace(/<[^>]*>/g, '').trim()) ||
@@ -559,9 +583,9 @@ export default function Managequotation() {
       await api.del(`/transactions/proposal-templates/${tpl.id}/`)
       setSavedTemplates((prev) => prev.filter((t) => String(t.id) !== String(tpl.id)))
       if (selectedTemplateId === `saved-${tpl.id}`) setSelectedTemplateId('')
-      setSubmitMessage(`✓ Template "${tpl.name}" deleted.`)
+      showToast(`✓ Template "${tpl.name}" deleted.`)
     } catch (err) {
-      window.alert(`Failed to delete template: ${err.message}`)
+      showToast(`Failed to delete template: ${err.message}`)
     } finally {
       setTemplateToDelete(null)
     }
@@ -858,33 +882,58 @@ export default function Managequotation() {
   }
 
   function openSaveTemplateDialog() {
-    setTemplateName('')
-    setSaveTemplateError('')
+    setTemplateName(usingPrebuiltTemplate ? suggestTemplateName(activeTemplate?.name || '') : '')
     setSaveTemplateOpen(true)
+  }
+
+  async function handleUpdateTemplate() {
+    const tpl = activeTemplate
+    if (!editingSavedTemplate || !tpl) return
+    const id = String(selectedTemplateId).replace('saved-', '')
+    const payload = {
+      category: categoryName,
+      defaultTotal: totalVal,
+      defaultDiscount: discountVal,
+      currency: currencyVal,
+      scopeHtml,
+      detailHtml: termsHtml,
+    }
+    try {
+      const data = await api.put(`/transactions/proposal-templates/${id}/`, payload)
+      setSavedTemplates((prev) => prev.map((t) => (String(t.id) === id ? data : t)))
+      showToast(`✓ Template "${data.name || tpl.name}" updated.`)
+    } catch (err) {
+      showToast(`Failed to update template: ${err.message}`)
+    }
   }
 
   async function handleSaveTemplate() {
     const name = templateName.trim()
     if (!name) {
-      setSaveTemplateError('Please enter a name for the template.')
+      showToast('Please enter a name for the template.')
       return
     }
+    if (templateNameTaken(name)) {
+      showToast('A template with this name already exists. Please choose another name.')
+      return
+    }
+    const payload = {
+      name,
+      category: categoryName,
+      defaultTotal: totalVal,
+      defaultDiscount: discountVal,
+      currency: currencyVal,
+      scopeHtml,
+      detailHtml: termsHtml,
+    }
     try {
-      const data = await api.post('/transactions/proposal-templates/', {
-        name,
-        category: categoryName,
-        defaultTotal: totalVal,
-        defaultDiscount: discountVal,
-        currency: currencyVal,
-        scopeHtml,
-        detailHtml: termsHtml,
-      })
+      const data = await api.post('/transactions/proposal-templates/', payload)
       setSavedTemplates((prev) => [...prev, data])
       setSaveTemplateOpen(false)
       setTemplateName('')
-      setSubmitMessage('✓ Template saved. It is now available in the Choose template dropdown.')
+      showToast('✓ Template saved. It is now available in the Choose template dropdown.')
     } catch (err) {
-      setSaveTemplateError(err.message)
+      showToast(`Failed to save template: ${err.message}`)
     }
   }
 
@@ -1711,10 +1760,10 @@ export default function Managequotation() {
                   </button>
                   <button
                     type="button"
-                    onClick={openSaveTemplateDialog}
+                    onClick={editingSavedTemplate ? handleUpdateTemplate : openSaveTemplateDialog}
                     className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                   >
-                    Save Template
+                    {editingSavedTemplate ? 'Update Template' : usingPrebuiltTemplate ? 'Save As' : 'Save Template'}
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1929,7 +1978,9 @@ export default function Managequotation() {
         >
           <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="p-5">
-              <h3 className="text-sm font-bold text-slate-900">Save Template</h3>
+              <h3 className="text-sm font-bold text-slate-900">
+                {usingPrebuiltTemplate ? 'Save As' : 'Save Template'}
+              </h3>
               <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">
                 Save the current proposal content as a template so you can reuse it later in the
                 "Choose template" dropdown.
@@ -1942,10 +1993,7 @@ export default function Managequotation() {
                 autoFocus
                 placeholder="e.g. Hospital Management System"
                 value={templateName}
-                onChange={(e) => {
-                  setTemplateName(e.target.value)
-                  setSaveTemplateError('')
-                }}
+                onChange={(e) => setTemplateName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
@@ -1954,9 +2002,6 @@ export default function Managequotation() {
                 }}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
-              {saveTemplateError && (
-                <p className="mt-1.5 text-[10px] font-semibold text-rose-600">{saveTemplateError}</p>
-              )}
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
               <button
@@ -1971,7 +2016,7 @@ export default function Managequotation() {
                 onClick={handleSaveTemplate}
                 className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition cursor-pointer shadow-xs"
               >
-                Save Template
+                {usingPrebuiltTemplate ? 'Save As' : 'Save Template'}
               </button>
             </div>
           </div>
