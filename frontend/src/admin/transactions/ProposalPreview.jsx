@@ -118,7 +118,7 @@ const CLIENT_ACCEPTANCE_HTML = `
 `
 
 // NPM Generated Crisp QR Code Component
-function QRCodeVisual({ value = 'https://leads.programersapps.com/quotation/proposalform/QTN403206072026A' }) {
+function QRCodeVisual({ value = `https://leads.programersapps.com/quotation/proposalform/${DEFAULT_PROPOSAL.id}` }) {
   return (
     <div className="flex h-full w-full items-center justify-center bg-white p-0.5">
       <QRCodeSVG
@@ -160,7 +160,7 @@ function GeMBadge() {
 }
 
 // NPM Generated Barcode Component
-function BarcodeVisual({ code = '4879297904' }) {
+function BarcodeVisual({ code = DEFAULT_PROPOSAL.id }) {
   return (
     <div className="flex flex-col items-end overflow-hidden">
       <Barcode
@@ -218,7 +218,7 @@ function PageHeader({ proposal, annexLabel }) {
     <div className="flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-4">
       <div className="flex items-center gap-3">
         <div className="h-16 w-16 shrink-0 rounded-lg border border-slate-300 bg-white p-1">
-          <QRCodeVisual />
+          <QRCodeVisual value={`https://leads.programersapps.com/quotation/proposalform/${proposal.id}`} />
         </div>
         <div className="space-y-2.5">
           <InfoBlock label="Quotation #" value={proposal.id} />
@@ -241,7 +241,7 @@ function PageHeader({ proposal, annexLabel }) {
 
       <div className="flex flex-col items-end space-y-2 text-right">
         <ProgramersLogo />
-        <BarcodeVisual />
+        <BarcodeVisual code={proposal.id} />
         <p className="font-mono text-[9.5px] text-slate-600">
           {proposal.id} | {proposal.orderDate} | {proposal.quotationBy}
         </p>
