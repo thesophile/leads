@@ -284,6 +284,7 @@ export default function Managequotation() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
+  const [staffOptions, setStaffOptions] = useState(STAFF_LIST)
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState(null)
@@ -316,6 +317,26 @@ export default function Managequotation() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchStaffOptions() {
+      try {
+        const data = await api.get('/auth/assignable-staff/')
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          setStaffOptions(['All Staff', ...data.map((s) => s.name)])
+        }
+      } catch {
+        // Fall back to the static STAFF_LIST if the endpoint is unavailable.
+      }
+    }
+
+    if (canFilterByStaff) fetchStaffOptions()
+    return () => {
+      cancelled = true
+    }
+  }, [canFilterByStaff])
 
   function handleToggleMenu(e, id, row) {
     const cardRect = cardRef.current ? cardRef.current.getBoundingClientRect() : { left: 0, top: 0 }
@@ -1135,7 +1156,7 @@ export default function Managequotation() {
                       onChange={(e) => setSelectedStaff(e.target.value)}
                       className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                     >
-                      {STAFF_LIST.map((s) => (
+                      {staffOptions.map((s) => (
                         <option key={s} value={s}>
                           {s}
                         </option>
