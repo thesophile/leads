@@ -236,6 +236,58 @@ class Quotation(models.Model):
         return f'{self.id} - {self.company}'
 
 
+class QuotationApproval(models.Model):
+    """One approval request per (quotation, approver).
+
+    A proposal is only marked ``Approved`` once every selected approver's
+    approval is ``Approved``; a single ``Rejected`` approval rejects the whole
+    proposal. Each approver receives their own one-time code and signature.
+    """
+
+    STATUS_PENDING = 'Pending'
+    STATUS_APPROVED = 'Approved'
+    STATUS_REJECTED = 'Rejected'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_REJECTED, 'Rejected'),
+    ]
+
+    quotation = models.ForeignKey(
+        Quotation,
+        on_delete=models.CASCADE,
+        related_name='approvals',
+    )
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='quotation_approvals',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    signed_by = models.CharField(max_length=120, blank=True)
+    signed_at = models.DateTimeField(null=True, blank=True)
+    signature_ref = models.CharField(max_length=120, blank=True)
+    signature_hash = models.CharField(max_length=160, blank=True)
+    otp_hash = models.CharField(max_length=160, blank=True)
+    otp_sent_at = models.DateTimeField(null=True, blank=True)
+    otp_expires_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['quotation', 'user'],
+                name='uniq_quotation_approval_user',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.quotation_id} / {self.user_id} / {self.status}'
+
+
 class Order(models.Model):
     id = models.CharField(max_length=30, primary_key=True)
     lead_id = models.CharField(max_length=30, blank=True)

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation
+from .models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
 
 
 class CallHistorySerializer(serializers.ModelSerializer):
@@ -63,6 +63,33 @@ class ProposalDraftSerializer(serializers.ModelSerializer):
         read_only_fields = ['user']
 
 
+class QuotationApprovalSerializer(serializers.ModelSerializer):
+    user = serializers.IntegerField(source='user_id', read_only=True)
+    userName = serializers.CharField(source='user.name', read_only=True)
+    signedBy = serializers.CharField(source='signed_by', read_only=True)
+    signatureRef = serializers.CharField(source='signature_ref', read_only=True)
+    signedAt = serializers.SerializerMethodField()
+    rejectionReason = serializers.CharField(source='rejection_reason', read_only=True)
+
+    class Meta:
+        model = QuotationApproval
+        fields = [
+            'id',
+            'user',
+            'userName',
+            'status',
+            'signedBy',
+            'signedAt',
+            'signatureRef',
+            'rejectionReason',
+        ]
+
+    def get_signedAt(self, obj):
+        if obj.signed_at is None:
+            return None
+        return obj.signed_at.isoformat()
+
+
 class QuotationSerializer(serializers.ModelSerializer):
     leadId = serializers.CharField(source='lead_id', required=False, allow_blank=True)
     qtnBy = serializers.CharField(source='qtn_by', required=False, allow_blank=True)
@@ -81,6 +108,9 @@ class QuotationSerializer(serializers.ModelSerializer):
     rejectionReason = serializers.CharField(source='rejection_reason', required=False, allow_blank=True)
     approvalNote = serializers.CharField(source='approval_note', required=False, allow_blank=True)
     companyTerms = serializers.SerializerMethodField()
+    approvals = serializers.SerializerMethodField()
+    approvalsTotal = serializers.SerializerMethodField()
+    approvalsApproved = serializers.SerializerMethodField()
 
     class Meta:
         model = Quotation
@@ -118,6 +148,9 @@ class QuotationSerializer(serializers.ModelSerializer):
             'rejectedAt',
             'rejectionReason',
             'approvalNote',
+            'approvals',
+            'approvalsTotal',
+            'approvalsApproved',
         ]
 
     def _iso(self, value):
@@ -136,6 +169,18 @@ class QuotationSerializer(serializers.ModelSerializer):
 
     def get_rejectedAt(self, obj):
         return self._iso(obj.rejected_at)
+
+    def get_approvals(self, obj):
+        approvals = getattr(obj, 'approvals', None)
+        if approvals is None:
+            approvals = obj.approvals.all()
+        return QuotationApprovalSerializer(approvals, many=True).data
+
+    def get_approvalsTotal(self, obj):
+        return obj.approvals.count()
+
+    def get_approvalsApproved(self, obj):
+        return obj.approvals.filter(status=QuotationApproval.STATUS_APPROVED).count()
 
     def get_companyTerms(self, obj):
         tenant = getattr(obj, 'tenant', None)

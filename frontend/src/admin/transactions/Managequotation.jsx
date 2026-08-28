@@ -135,6 +135,9 @@ function mapLeadToQuotation(lead) {
     approvedAt: q?.approvedAt || '',
     rejectedAt: q?.rejectedAt || '',
     rejectionReason: q?.rejectionReason || '',
+    approvals: q?.approvals || [],
+    approvalsTotal: q?.approvalsTotal || 0,
+    approvalsApproved: q?.approvalsApproved || 0,
     remarks: q?.remarks || lead.remarks || '',
   }
 }
@@ -388,8 +391,14 @@ export default function Managequotation() {
   // "Send for Approval" Modal State
   const [approvalModalOpen, setApprovalModalOpen] = useState(false)
   const [approvalQuoteId, setApprovalQuoteId] = useState(null)
-  const [selectedAdmin, setSelectedAdmin] = useState('')
+  const [selectedApprovers, setSelectedApprovers] = useState([])
   const [approvalSent, setApprovalSent] = useState('')
+
+  function toggleApprover(id) {
+    setSelectedApprovers((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
 
   function handleViewProposal(quote) {
     navigate(`/quotations/preview/${quote.id}`, { state: { proposal: quote } })
@@ -398,40 +407,56 @@ export default function Managequotation() {
   function handleOpenApprovalModal(quoteId, e) {
     e.stopPropagation()
     setApprovalQuoteId(quoteId)
-    setSelectedAdmin('')
+    setSelectedApprovers([])
     setApprovalSent('')
     setOpenDropdownId(null)
     setApprovalModalOpen(true)
   }
 
   async function handleConfirmSendForApproval() {
-    if (!selectedAdmin) return
+    if (selectedApprovers.length === 0) return
     const quote = quotationsList.find((item) => item.id === approvalQuoteId)
-    const approver = approverOptions.find((a) => String(a.id) === String(selectedAdmin))
-    const approverName = approver?.name || selectedAdmin
+    const chosen = approverOptions.filter((a) => selectedApprovers.includes(a.id))
+    const approverNames = chosen.map((a) => a.name).join(', ')
     setQuotationsList((prev) =>
       prev.map((item) =>
         item.id === approvalQuoteId
           ? {
               ...item,
               status: 'Pending Approval',
-              approverName,
-              remarks: `Sent to ${approverName} for approval`,
+              approverName: approverNames,
+              approvalsTotal: selectedApprovers.length,
+              remarks: `Sent to ${approverNames} for approval`,
             }
           : item
       )
     )
-    setApprovalSent(`✓ Proposal sent to ${approverName} for approval`)
+    setApprovalSent(`✓ Proposal sent to ${approverNames} for approval`)
     resetApprovalDirty()
     if (quote?.leadId) {
+      let updated = null
       try {
-        await api.put(`/transactions/quotations/${quote.leadId}/`, {
+        updated = await api.put(`/transactions/quotations/${quote.leadId}/`, {
           status: 'Pending Approval',
-          approver: Number(selectedAdmin),
-          remarks: `Sent to ${approverName} for approval`,
+          approvers: selectedApprovers,
+          remarks: `Sent to ${approverNames} for approval`,
         })
       } catch (err) {
         console.error('Failed to persist approval status', err)
+      }
+      if (updated) {
+        setQuotationsList((prev) =>
+          prev.map((item) =>
+            item.id === approvalQuoteId
+              ? {
+                  ...item,
+                  approvals: updated.approvals || [],
+                  approvalsTotal: updated.approvalsTotal ?? item.approvalsTotal,
+                  approvalsApproved: updated.approvalsApproved ?? 0,
+                }
+              : item
+          )
+        )
       }
     }
     setTimeout(() => {
@@ -546,7 +571,7 @@ export default function Managequotation() {
 
   const { dirty: approvalDirty, reset: resetApprovalDirty } = useDirty(
     approvalModalOpen,
-    useMemo(() => ({ selectedAdmin }), [selectedAdmin])
+    useMemo(() => ({ selectedApprovers }), [selectedApprovers])
   )
 
   useEffect(() => {
@@ -942,7 +967,7 @@ export default function Managequotation() {
       setSubmitMessage('')
       setProposalModalOpen(false)
       setApprovalQuoteId(nextApprovalId)
-      setSelectedAdmin('')
+      setSelectedApprovers([])
       setApprovalSent('')
       setApprovalModalOpen(true)
     }, 900)
@@ -2026,37 +2051,46 @@ export default function Managequotation() {
                 )
               })()}
 
-              {/* Admin Selection */}
+              {/* Approver Selection */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admin <span className="text-rose-500">*</span>
+                  Select Approving Admins <span className="text-rose-500">*</span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={selectedAdmin}
-                    onChange={(e) => setSelectedAdmin(e.target.value)}
-                    className={`w-full appearance-none rounded-lg border bg-white px-3 py-2.5 pr-9 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 cursor-pointer ${
-                      selectedAdmin
-                        ? 'border-brand-400 focus:border-brand-500 focus:ring-brand-500/20'
-                        : 'border-slate-300 focus:border-brand-500 focus:ring-brand-500'
-                    }`}
-                  >
-                    <option value="">— Choose an admin —</option>
-                    {approverOptions.map((admin) => (
-                      <option key={admin.id} value={admin.id}>
-                        {admin.name}
-                        {admin.role ? ` (${admin.role})` : ''}
-                        {admin.is_superuser ? ' (Super Admin)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">
-                    ▾
-                  </span>
+                <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-52 overflow-y-auto">
+                  {approverOptions.length === 0 && (
+                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No approvers available.</p>
+                  )}
+                  {approverOptions.map((admin) => {
+                    const checked = selectedApprovers.includes(admin.id)
+                    return (
+                      <label
+                        key={admin.id}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50 transition"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleApprover(admin.id)}
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
+                        <span className="flex-1 min-w-0">
+                          <span className="block font-semibold text-slate-800 truncate">
+                            {admin.name}
+                          </span>
+                          <span className="block text-[10px] text-slate-400">
+                            {admin.role ? admin.role : 'Approver'}
+                            {admin.is_superuser ? ' · Super Admin' : ''}
+                          </span>
+                        </span>
+                        {checked && (
+                          <span className="text-[10px] font-bold text-emerald-600">✓ Selected</span>
+                        )}
+                      </label>
+                    )
+                  })}
                 </div>
                 <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  The selected admin will review and approve this proposal before it is sent to the
-                  client.
+                  Every selected admin must approve this proposal before it can be sent to the client.
                 </p>
               </div>
 
@@ -2080,7 +2114,7 @@ export default function Managequotation() {
               <button
                 type="button"
                 onClick={handleConfirmSendForApproval}
-                disabled={!selectedAdmin}
+                disabled={selectedApprovers.length === 0}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <SendIcon className="h-3.5 w-3.5" />
