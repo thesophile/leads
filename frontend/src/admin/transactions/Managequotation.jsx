@@ -553,11 +553,18 @@ export default function Managequotation() {
       setTotalVal(tpl.defaultTotal || tpl.default_total || '')
       setDiscountVal(tpl.defaultDiscount || tpl.default_discount || '')
       setCurrencyVal(tpl.currency || 'INR (₹)')
+    } else {
+      setScopeHtml('')
+      setTermsHtml('')
+      setCategoryName('General')
+      setTotalVal('')
+      setDiscountVal('0')
+      setCurrencyVal('INR (₹)')
     }
   }
 
   function handleSelectTemplate(templateId) {
-    if (templateId && hasFormContent()) {
+    if (hasFormContent()) {
       setPendingTemplateId(templateId)
       setTemplateOverrideOpen(true)
       return
@@ -567,7 +574,7 @@ export default function Managequotation() {
 
   function confirmTemplateOverride() {
     setTemplateOverrideOpen(false)
-    if (pendingTemplateId) applyTemplate(pendingTemplateId)
+    applyTemplate(pendingTemplateId)
     setPendingTemplateId(null)
   }
 
@@ -1476,6 +1483,16 @@ export default function Managequotation() {
 
                   {templateDropdownOpen && (
                     <div className="absolute left-0 top-full z-30 mt-1.5 max-h-72 w-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
+                      <div
+                        className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100"
+                        onClick={() => {
+                          setTemplateDropdownOpen(false)
+                          handleSelectTemplate('')
+                        }}
+                      >
+                        <CloseIcon className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-xs font-medium text-slate-800">No Template (Blank Form)</span>
+                      </div>
                       {savedTemplates.length > 0 && (
                         <>
                           <div className="sticky top-0 bg-white px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
@@ -1949,10 +1966,14 @@ export default function Managequotation() {
       {/* Warn before replacing existing form content with a template */}
       <ConfirmDialog
         open={templateOverrideOpen}
-        title="Replace current content?"
-        message="You already have content in this proposal. Applying a template will replace the current fields. Do you want to continue?"
+        title={pendingTemplateId ? 'Replace current content?' : 'Clear current content?'}
+        message={
+          pendingTemplateId
+            ? 'You already have content in this proposal. Applying a template will replace the current fields. Do you want to continue?'
+            : 'You already have content in this proposal. Choosing no template will clear the template-related fields. Do you want to continue?'
+        }
         cancelLabel="Cancel"
-        confirmLabel="Replace"
+        confirmLabel={pendingTemplateId ? 'Replace' : 'Clear'}
         onCancel={cancelTemplateOverride}
         onConfirm={confirmTemplateOverride}
       />
