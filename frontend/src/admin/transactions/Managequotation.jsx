@@ -32,6 +32,45 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
+const SCOPE_MAX_CHARS = 1000
+
+const stripHtmlText = (html) =>
+  String(html || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+const clampRichHtml = (html, limit) => {
+  const div = document.createElement('div')
+  div.innerHTML = html || ''
+  const walker = document.createTreeWalker(div, NodeFilter.SHOW_ALL)
+  const nodes = []
+  let node
+  while ((node = walker.nextNode())) nodes.push(node)
+  let count = 0
+  let cutIdx = -1
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i]
+    if (n.nodeType === 3) {
+      const len = n.textContent.length
+      if (count + len > limit) {
+        n.textContent = n.textContent.slice(0, Math.max(0, limit - count))
+        cutIdx = i
+        break
+      }
+      count += len
+    }
+  }
+  if (cutIdx >= 0) {
+    for (let i = cutIdx + 1; i < nodes.length; i++) {
+      const n = nodes[i]
+      if (n.parentNode) n.parentNode.removeChild(n)
+    }
+  }
+  return div.innerHTML
+}
+
 function parseMoney(value) {
   const s = String(value == null ? '' : value).replace(/[, ]/g, '').trim()
   if (!s) return 0
@@ -252,6 +291,7 @@ export default function Managequotation() {
   const [activeMenuQuote, setActiveMenuQuote] = useState(null)
   const menuRef = useRef(null)
   const newProposalCounter = useRef(1)
+  const leadIdSeqRef = useRef(0)
   const draftKeyRef = useRef('')
   const proposalModalOpenRef = useRef(false)
   const cardRef = useRef(null)
@@ -389,6 +429,7 @@ export default function Managequotation() {
 
   const [submitMessage, setSubmitMessage] = useState('')
   const [toastMessage, setToastMessage] = useState('')
+  const [toastType, setToastType] = useState('success')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [discardProposalOpen, setDiscardProposalOpen] = useState(false)
   const [discardApprovalOpen, setDiscardApprovalOpen] = useState(false)
@@ -730,6 +771,9 @@ export default function Managequotation() {
     rules.forEach(({ key, label, value }) => {
       if (!value) errors[key] = `${label} is required`
     })
+    if (stripHtmlText(scopeHtml).length > SCOPE_MAX_CHARS) {
+      errors.scopeHtml = `Scope & Deliverables must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer`
+    }
     return errors
   }
 
@@ -739,6 +783,13 @@ export default function Managequotation() {
 
     const errors = validateProposalForm()
     setValidationErrors(errors)
+    if (stripHtmlText(scopeHtml).length > SCOPE_MAX_CHARS) {
+      showToast(
+        `Character limit exceeded — Scope & Deliverables must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer.`,
+        'error',
+      )
+      return
+    }
     if (Object.keys(errors).length > 0) {
       setSubmitMessage('Please fill in the required fields highlighted below.')
       return
@@ -784,7 +835,7 @@ export default function Managequotation() {
       nextApprovalId = `QT-2026-${String(quotationsList.length + 1).padStart(3, '0')}`
       const newProposal = {
         id: nextApprovalId,
-        leadId: `LEAD-${Date.now().toString().slice(-4)}`,
+        leadId: `LEAD-${String(leadIdSeqRef.current++).padStart(4, '0')}`,
         customer: customerPerson,
         company: companyName,
         mobile: mobileNum,
@@ -853,7 +904,8 @@ export default function Managequotation() {
     }, 900)
   }
 
-  function showToast(msg) {
+  function showToast(msg, type = 'success') {
+    setToastType(type)
     setToastMessage(msg)
     setTimeout(() => setToastMessage(''), 2500)
   }
@@ -980,13 +1032,38 @@ export default function Managequotation() {
     <Layout>
       <div className="space-y-4">
         {toastMessage && (
-          <div className="fixed top-4 right-4 z-[90] flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+          <div
+            className={`fixed top-4 right-4 z-[90] flex items-center gap-2.5 rounded-xl border px-4 py-3 shadow-lg ${
+              toastType === 'error'
+                ? 'border-rose-200 bg-rose-50'
+                : 'border-slate-200 bg-white'
+            }`}
+          >
+            <span
+              className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                toastType === 'error'
+                  ? 'bg-rose-100 text-rose-600'
+                  : 'bg-emerald-100 text-emerald-600'
+              }`}
+            >
+              {toastType === 'error' ? (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
             </span>
-            <span className="text-xs font-semibold text-slate-800">{toastMessage}</span>
+            <span
+              className={`text-xs font-semibold ${
+                toastType === 'error' ? 'text-rose-700' : 'text-slate-800'
+              }`}
+            >
+              {toastMessage}
+            </span>
           </div>
         )}
 
@@ -1656,7 +1733,11 @@ export default function Managequotation() {
                     className="quill-tall"
                     value={scopeHtml}
                     onChange={(value) => {
-                      setScopeHtml(value)
+                      setScopeHtml(
+                        stripHtmlText(value).length > SCOPE_MAX_CHARS
+                          ? clampRichHtml(value, SCOPE_MAX_CHARS)
+                          : value,
+                      )
                       clearError('scopeHtml')
                     }}
                     modules={QUILL_MODULES}
@@ -1664,11 +1745,25 @@ export default function Managequotation() {
                     placeholder="Enter detailed deliverables, software features, and module breakdown..."
                   />
                 </div>
-                {validationErrors.scopeHtml && (
-                  <p className="mt-1 text-[10px] font-semibold text-rose-600">
-                    {validationErrors.scopeHtml}
+                <div className="mt-1 flex items-center justify-between">
+                  <p className="text-[10px] font-semibold text-slate-400">
+                    {validationErrors.scopeHtml ? (
+                      <span className="text-rose-600">{validationErrors.scopeHtml}</span>
+                    ) : (
+                      `Maximum ${SCOPE_MAX_CHARS.toLocaleString()} characters`
+                    )}
                   </p>
-                )}
+                  <p
+                    className={`font-mono text-[10px] ${
+                      stripHtmlText(scopeHtml).length >= SCOPE_MAX_CHARS
+                        ? 'font-bold text-rose-600'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    {stripHtmlText(scopeHtml).length.toLocaleString()} /{' '}
+                    {SCOPE_MAX_CHARS.toLocaleString()}
+                  </p>
+                </div>
               </div>
 
               {/* Rich Text Editor 2 - Proposal in Detail */}

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
@@ -209,9 +209,11 @@ function InfoBlock({ label, value }) {
   )
 }
 
-function SectionBox({ title, children, className = '' }) {
+function SectionBox({ title, children, className = '', overflowVisible = false }) {
   return (
-    <div className={`overflow-hidden rounded-xl border border-slate-300 ${className}`}>
+    <div
+      className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-slate-300 ${className}`}
+    >
       <div className="flex items-center justify-between bg-black px-3 py-2">
         <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
       </div>
@@ -400,6 +402,25 @@ export default function ProposalPreview() {
 
   const [isSent, setIsSent] = useState(proposalData.status === 'Pending Approval')
 
+  const summaryRef = useRef(null)
+  const summaryPageRef = useRef(null)
+  const [summaryOverflow, setSummaryOverflow] = useState(false)
+
+  useLayoutEffect(() => {
+    function check() {
+      const el = summaryRef.current
+      const page = summaryPageRef.current
+      if (!el || !page) return
+      const pageTop = page.getBoundingClientRect().top
+      const summaryBottom = el.getBoundingClientRect().bottom
+      setSummaryOverflow(summaryBottom - pageTop > 1000)
+    }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [proposalData])
+
+
   function handlePrint() {
     window.print()
   }
@@ -456,7 +477,7 @@ export default function ProposalPreview() {
         {/* All pages, continuous vertical scroll */}
         <div className="space-y-8 print:space-y-0">
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
-          <div className={PAGE_CLASS}>
+          <div ref={summaryPageRef} className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">
             <PageHeader proposal={proposalData} company={company} />
 
@@ -512,9 +533,9 @@ export default function ProposalPreview() {
               intent to proceed with the implementation as per the agreed terms and conditions.
             </p>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12">
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start">
               <div className="flex flex-col gap-3 lg:col-span-4">
-                <SectionBox title="Terms & Conditions" className="flex-1">
+                <SectionBox title="Terms & Conditions">
                   {proposalData.termsHtml ? (
                     <div
                       className="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
@@ -551,14 +572,17 @@ export default function ProposalPreview() {
               </div>
 
               <div className="flex flex-col gap-3 lg:col-span-8">
-                <SectionBox title="Proposal Summary" className="flex-1">
+                <SectionBox title="Proposal Summary">
                   <div
-                    className="space-y-1.5 text-[13.5px] leading-relaxed text-slate-800"
+                    ref={summaryRef}
+                    className="space-y-1.5 break-words text-[13.5px] leading-relaxed text-slate-800"
                     dangerouslySetInnerHTML={{ __html: proposalData.proposalSummaryHtml }}
                   />
-                  <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
-                    Continued…
-                  </p>
+                  {summaryOverflow && (
+                    <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
+                      Continued…
+                    </p>
+                  )}
                 </SectionBox>
 
                 <FinancialBanner proposal={proposalData} />
