@@ -129,6 +129,10 @@
   font-style: normal;
   font-size: 12px;
 }
+.quill-tall .ql-editor.ql-blank::before {
+  font-weight: 300;
+  color: #cbd5e1;
+}
 
 /* Dedicated Print Styles for Order & Proposal Forms */
 @media print {
