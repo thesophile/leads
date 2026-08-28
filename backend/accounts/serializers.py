@@ -10,9 +10,11 @@ User = get_user_model()
 
 
 class CompanySerializer(serializers.ModelSerializer):
+    termsHtml = serializers.CharField(source='terms_html', required=False, allow_blank=True)
+
     class Meta:
         model = Company
-        fields = ['id', 'name', 'email', 'phone', 'address', 'website']
+        fields = ['id', 'name', 'email', 'phone', 'address', 'website', 'termsHtml']
 
 
 class RoleSerializer(serializers.ModelSerializer):

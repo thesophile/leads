@@ -323,6 +323,7 @@ class QuotationView(APIView):
         'qtnBy': 'qtn_by',
         'staff': 'staff',
         'date': 'date',
+        'revisionNo': 'revision_no',
         'status': 'status',
         'total': 'total',
         'discount': 'discount',

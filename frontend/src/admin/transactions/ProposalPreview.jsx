@@ -90,23 +90,6 @@ const DEFAULT_PROPOSAL = {
       <p style="margin-top:6px;"><strong>C. Intellectual Property & Data Ownership</strong></p>
       <p style="color:#334155;">Upon completion of final milestone payments, the client retains 100% exclusive ownership of all organizational data and operational rights under standard non-disclosure terms.</p>
     </div>
-
-    <div style="border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; padding:12px; margin-top:16px;">
-      <p style="font-weight:bold; font-size:11px; color:#0f172a; text-transform:uppercase;">Client Acceptance & Project Commissioning</p>
-      <p style="font-size:10.5px; color:#475569; margin-top:4px;">By signing or issuing an official Purchase Order referencing this Proposal, the client confirms acceptance of the scope of work, financial terms, and service conditions outlined herein.</p>
-      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:24px; padding-top:12px; border-top:1px solid #cbd5e1;">
-        <div>
-          <div style="width:140px; border-bottom:1px solid #475569; height:20px;"></div>
-          <p style="font-size:10px; font-weight:bold; color:#0f172a; margin-top:4px;">Authorized Client Signature</p>
-          <p style="font-size:9px; color:#64748b;">(Name, Designation & Seal)</p>
-        </div>
-        <div style="text-align:right;">
-          <div style="width:140px; border-bottom:1px solid #475569; height:20px; margin-left:auto;"></div>
-          <p style="font-size:10px; font-weight:bold; color:#0f172a; margin-top:4px;">For Programers International</p>
-          <p style="font-size:9px; color:#64748b;">Authorized Signatory</p>
-        </div>
-      </div>
-    </div>
   `,
   total: '26,000/-',
   discount: '1,000.00/-',
@@ -114,6 +97,25 @@ const DEFAULT_PROPOSAL = {
   amountWords: 'Twenty-five Thousand Only',
   status: 'Quotation Requested',
 }
+
+const CLIENT_ACCEPTANCE_HTML = `
+  <div style="border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; padding:12px; margin-top:16px;">
+    <p style="font-weight:bold; font-size:11px; color:#0f172a; text-transform:uppercase;">Client Acceptance & Project Commissioning</p>
+    <p style="font-size:10.5px; color:#475569; margin-top:4px;">By signing or issuing an official Purchase Order referencing this Proposal, the client confirms acceptance of the scope of work, financial terms, and service conditions outlined herein.</p>
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:24px; padding-top:12px; border-top:1px solid #cbd5e1;">
+      <div>
+        <div style="width:140px; border-bottom:1px solid #475569; height:20px;"></div>
+        <p style="font-size:10px; font-weight:bold; color:#0f172a; margin-top:4px;">Authorized Client Signature</p>
+        <p style="font-size:9px; color:#64748b;">(Name, Designation & Seal)</p>
+      </div>
+      <div style="text-align:right;">
+        <div style="width:140px; border-bottom:1px solid #475569; height:20px; margin-left:auto;"></div>
+        <p style="font-size:10px; font-weight:bold; color:#0f172a; margin-top:4px;">For Programers International</p>
+        <p style="font-size:9px; color:#64748b;">Authorized Signatory</p>
+      </div>
+    </div>
+  </div>
+`
 
 // NPM Generated Crisp QR Code Component
 function QRCodeVisual({ value = 'https://leads.programersapps.com/quotation/proposalform/QTN403206072026A' }) {
@@ -257,7 +259,61 @@ function PageFooter() {
   )
 }
 
+const ONES = ['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen']
+const TENS = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety']
+const BIG = [
+  { value: 10000000, word: 'Crore' },
+  { value: 100000, word: 'Lakh' },
+  { value: 1000, word: 'Thousand' },
+  { value: 100, word: 'Hundred' },
+]
+
+function twoDigitWords(n) {
+  if (n < 20) return ONES[n]
+  const ten = Math.floor(n / 10)
+  const one = n % 10
+  return TENS[ten] + (one ? ` ${ONES[one]}` : '')
+}
+
+function threeDigitWords(n) {
+  const hundred = Math.floor(n / 100)
+  const rest = n % 100
+  let out = ''
+  if (hundred) out += `${ONES[hundred]} Hundred`
+  if (rest) out += (out ? ' ' : '') + twoDigitWords(rest)
+  return out
+}
+
+function numToIndianWords(num) {
+  if (!Number.isFinite(num) || num < 0) return ''
+  let integer = Math.floor(num)
+  if (integer === 0) return 'Zero'
+  let chunks = []
+  for (const { value, word } of BIG) {
+    if (value === 100) break
+    if (integer >= value) {
+      chunks.push(`${twoDigitWords(Math.floor(integer / value))} ${word}`)
+      integer %= value
+    }
+  }
+  if (integer > 0) chunks.push(threeDigitWords(integer))
+  return chunks.join(' ')
+}
+
+function amountWords(raw) {
+  const cleaned = String(raw == null ? '' : raw).replace(/[^0-9.]/g, '')
+  if (!cleaned) return ''
+  const [intPart, decPart = ''] = cleaned.split('.')
+  const integer = Number(intPart || 0)
+  const paise = Number(decPart.padEnd(2, '0').slice(0, 2) || 0)
+  let out = numToIndianWords(integer)
+  if (integer === 0 && paise) out = 'Zero'
+  if (paise) out += ` and ${twoDigitWords(paise)} Paise`
+  return out ? `${out} Only` : ''
+}
+
 function FinancialBanner({ proposal }) {
+  const words = amountWords(proposal.net) || proposal.amountWords
   return (
     <div className="overflow-hidden rounded-xl border border-slate-300">
       <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-center text-[11.5px] font-bold uppercase tracking-wider text-slate-700">
@@ -269,7 +325,7 @@ function FinancialBanner({ proposal }) {
         <span className="text-[16px] font-black text-black">Net: {proposal.net}</span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-200 bg-slate-100 px-3 py-2 text-[11.5px] font-bold text-slate-700">
-        <span>{proposal.amountWords}</span>
+        <span>{words}</span>
         <span>Annexure - A(0)</span>
       </div>
     </div>
@@ -296,14 +352,17 @@ export default function ProposalPreview() {
         customerLocation: p.city || DEFAULT_PROPOSAL.customerLocation,
         bdm: p.bdm || p.staff || DEFAULT_PROPOSAL.bdm,
         quotationBy: p.qtnBy || p.staff || DEFAULT_PROPOSAL.quotationBy,
+        revisionNo: p.revisionNo || '',
         category: p.category || DEFAULT_PROPOSAL.category,
         sources: p.source || DEFAULT_PROPOSAL.sources,
         total: p.total || DEFAULT_PROPOSAL.total,
         discount: p.discount || DEFAULT_PROPOSAL.discount,
         net: p.netAmount || DEFAULT_PROPOSAL.net,
+        termsHtml: p.companyTerms || '',
         proposalSummaryHtml: p.proposalScope || DEFAULT_PROPOSAL.proposalSummaryHtml,
-        proposalInDetailsHtml: p.proposalInDetailsHtml || DEFAULT_PROPOSAL.proposalInDetailsHtml,
-        proposalDetailsContinuedHtml: p.proposalDetailsContinuedHtml || DEFAULT_PROPOSAL.proposalDetailsContinuedHtml,
+        proposalInDetailsHtml:
+          p.termsConditions ||
+          DEFAULT_PROPOSAL.proposalInDetailsHtml + DEFAULT_PROPOSAL.proposalDetailsContinuedHtml,
         status: p.status || DEFAULT_PROPOSAL.status,
       }
     }
@@ -393,7 +452,7 @@ export default function ProposalPreview() {
                   </p>
                   <p>
                     <span className="font-bold text-slate-900">Revision:</span>{' '}
-                    {proposalData.revisionNo}
+                    {proposalData.revisionNo || '—'}
                   </p>
                   <p>
                     <span className="font-bold text-slate-900">Quotation By:</span>{' '}
@@ -427,13 +486,20 @@ export default function ProposalPreview() {
             <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12">
               <div className="flex flex-col gap-3 lg:col-span-4">
                 <SectionBox title="Terms & Conditions" className="flex-1">
-                  <div className="space-y-3 text-[12.5px] leading-relaxed text-slate-700">
-                    {proposalData.termsConditions.map((t, idx) => (
-                      <div key={idx}>
-                        <span className="font-bold text-slate-900">{t.title}</span> {t.content}
-                      </div>
-                    ))}
-                  </div>
+                  {proposalData.termsHtml ? (
+                    <div
+                      className="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
+                      dangerouslySetInnerHTML={{ __html: proposalData.termsHtml }}
+                    />
+                  ) : (
+                    <div className="space-y-3 text-[12.5px] leading-relaxed text-slate-700">
+                      {proposalData.termsConditions.map((t, idx) => (
+                        <div key={idx}>
+                          <span className="font-bold text-slate-900">{t.title}</span> {t.content}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </SectionBox>
 
                 <SectionBox title="Approved By">
@@ -483,55 +549,12 @@ export default function ProposalPreview() {
 
             <div className="mt-4 flex flex-1 flex-col">
               <SectionBox title="Proposal in Details &amp; Specifications" className="flex-1">
-                <div className="flex h-full flex-1 flex-col justify-between space-y-4">
+                <div className="flex h-full flex-1 flex-col justify-between">
                   <div
                     className="space-y-3 text-[13px] leading-relaxed text-slate-800"
-                    dangerouslySetInnerHTML={{
-                      __html: `
-                        <h4 style="font-weight:bold; font-size:14px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px;">
-                          1. TECHNICAL ARCHITECTURE & MODULE BREAKDOWN
-                        </h4>
-                        <div style="line-height:1.6; margin-bottom:10px;">
-                          <p><strong>A. Custom Frontend User Experience (UI/UX):</strong> Ultra-fast Single-Page Application (SPA) architecture, mobile-first responsive design, and SEO-optimized workflows.</p>
-                          <p style="margin-top:4px;"><strong>B. Operational Command Center & CRM:</strong> Role-based access control, real-time inquiry management, automated notification webhooks, and analytics reporting.</p>
-                          <p style="margin-top:4px;"><strong>C. Cloud Infrastructure & Security:</strong> 256-bit SSL encryption, automated daily offsite snapshots, and 99.9% uptime SLA.</p>
-                        </div>
-
-                        <h4 style="font-weight:bold; font-size:14px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px; margin-top:12px;">
-                          2. IMPLEMENTATION PHASES & DELIVERY ROADMAP
-                        </h4>
-                        <div style="line-height:1.6; margin-bottom:10px;">
-                          <p><strong>• Phase 1 — Discovery & UI Wireframing (Week 1):</strong> Requirement sign-off and prototype approval.<br/>
-                             <strong>• Phase 2 — Core Development & Integrations (Weeks 2–3):</strong> Database modeling, API integrations, and billing logic.<br/>
-                             <strong>• Phase 3 — QA Testing & Go-Live (Week 4):</strong> End-to-end UAT testing, cloud migration, and staff onboarding.</p>
-                        </div>
-
-                        <h4 style="font-weight:bold; font-size:14px; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:3px; margin-top:12px;">
-                          3. SLA & 12-MONTH TECHNICAL WARRANTY
-                        </h4>
-                        <div style="line-height:1.6;">
-                          <p>Includes complete bug resolution coverage, security patches, multi-channel support desk (Mon–Sat 9:30 AM – 6:00 PM IST), and 100% client data ownership upon project completion.</p>
-                        </div>
-
-                        <div style="border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; padding:12px; margin-top:16px;">
-                          <p style="font-weight:bold; font-size:12px; color:#0f172a; text-transform:uppercase;">Client Acceptance & Project Commissioning</p>
-                          <p style="font-size:11.5px; color:#475569; margin-top:4px;">By signing or issuing an official Purchase Order referencing this Proposal, the client confirms acceptance of the scope of work, financial terms, and service conditions outlined herein.</p>
-                          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:24px; padding-top:12px; border-top:1px solid #cbd5e1;">
-                            <div>
-                              <div style="width:150px; border-bottom:1px solid #475569; height:22px;"></div>
-                              <p style="font-size:11px; font-weight:bold; color:#0f172a; margin-top:4px;">Authorized Client Signature</p>
-                              <p style="font-size:10px; color:#64748b;">(Name, Designation & Seal)</p>
-                            </div>
-                            <div style="text-align:right;">
-                              <div style="width:150px; border-bottom:1px solid #475569; height:22px; margin-left:auto;"></div>
-                              <p style="font-size:11px; font-weight:bold; color:#0f172a; margin-top:4px;">For Programers International</p>
-                              <p style="font-size:10px; color:#64748b;">Authorized Signatory</p>
-                            </div>
-                          </div>
-                        </div>
-                      `,
-                    }}
+                    dangerouslySetInnerHTML={{ __html: proposalData.proposalInDetailsHtml }}
                   />
+                  <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
                   <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
                     --- End of proposal ---
                   </p>

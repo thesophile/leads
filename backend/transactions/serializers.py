@@ -69,6 +69,8 @@ class QuotationSerializer(serializers.ModelSerializer):
     netAmount = serializers.CharField(source='net_amount', required=False, allow_blank=True)
     proposalScope = serializers.CharField(source='proposal_scope', required=False, allow_blank=True)
     termsConditions = serializers.CharField(source='terms_conditions', required=False, allow_blank=True)
+    revisionNo = serializers.CharField(source='revision_no', required=False, allow_blank=True)
+    companyTerms = serializers.SerializerMethodField()
 
     class Meta:
         model = Quotation
@@ -85,6 +87,7 @@ class QuotationSerializer(serializers.ModelSerializer):
             'qtnBy',
             'staff',
             'date',
+            'revisionNo',
             'status',
             'total',
             'discount',
@@ -93,8 +96,15 @@ class QuotationSerializer(serializers.ModelSerializer):
             'source',
             'proposalScope',
             'termsConditions',
+            'companyTerms',
             'remarks',
         ]
+
+    def get_companyTerms(self, obj):
+        tenant = getattr(obj, 'tenant', None)
+        if tenant is None:
+            return ''
+        return tenant.terms_html or ''
 
 
 class LeadSerializer(serializers.ModelSerializer):

@@ -77,6 +77,7 @@ function mapLeadToQuotation(lead) {
     qtnBy: q?.qtnBy || lead.addedBy || '',
     staff: q?.staff || lead.assignedTo || lead.addedBy || '',
     date: q?.date || lead.displayDate || lead.date || '',
+    revisionNo: q?.revisionNo || '',
     status: q ? q.status || 'Not Sent' : 'Quotation Requested',
     total: q?.total || '',
     discount: q?.discount || '',
@@ -85,6 +86,7 @@ function mapLeadToQuotation(lead) {
     source: q?.source || lead.source || '',
     proposalScope: q?.proposalScope || '',
     termsConditions: q?.termsConditions || '',
+    companyTerms: q?.companyTerms || '',
     hasProposal: !!q,
     remarks: q?.remarks || lead.remarks || '',
   }
@@ -360,6 +362,7 @@ export default function Managequotation() {
   
   const [bdm, setBdm] = useState('Alex Joseph')
   const [qtnBy, setQtnBy] = useState('Priya Sharma')
+  const [revisionNo, setRevisionNo] = useState('')
   const [customerPerson, setCustomerPerson] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [mobileNum, setMobileNum] = useState('')
@@ -436,6 +439,7 @@ export default function Managequotation() {
       () => ({
         bdm,
         qtnBy,
+        revisionNo,
         customerPerson,
         companyName,
         mobileNum,
@@ -449,7 +453,7 @@ export default function Managequotation() {
         remarksVal,
       }),
       [
-        bdm, qtnBy, customerPerson, companyName, mobileNum, categoryName,
+        bdm, qtnBy, revisionNo, customerPerson, companyName, mobileNum, categoryName,
         scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal,
       ]
     )
@@ -645,6 +649,7 @@ export default function Managequotation() {
     if (!draft || typeof draft !== 'object') return
     if (draft.bdm) setBdm(draft.bdm)
     if (draft.qtnBy) setQtnBy(draft.qtnBy)
+    if (draft.revisionNo !== undefined) setRevisionNo(draft.revisionNo)
     if (draft.customerPerson !== undefined) setCustomerPerson(draft.customerPerson)
     if (draft.companyName !== undefined) setCompanyName(draft.companyName)
     if (draft.mobile !== undefined) setMobileNum(draft.mobile)
@@ -669,6 +674,7 @@ export default function Managequotation() {
       setEditingProposalId(quote.id)
       setBdm(quote.bdm || quote.staff || 'Alex Joseph')
       setQtnBy(quote.qtnBy || quote.staff || 'Priya Sharma')
+      setRevisionNo(quote.revisionNo || `${quote.id} (Rev 1)`)
       setCustomerPerson(quote.customer || '')
       setCompanyName(quote.company || '')
       setMobileNum(quote.mobile || '')
@@ -685,6 +691,7 @@ export default function Managequotation() {
       setEditingProposalId(null)
       setBdm('Alex Joseph')
       setQtnBy('Priya Sharma')
+      setRevisionNo(`QT-2026-${String(quotationsList.length + 1).padStart(3, '0')} (Rev 1)`)
       setCustomerPerson('')
       setCompanyName('')
       setMobileNum('')
@@ -753,6 +760,7 @@ export default function Managequotation() {
         ...existing,
         bdm,
         qtnBy,
+        revisionNo,
         customer: customerPerson || existing.customer,
         company: companyName || existing.company,
         mobile: mobileNum || existing.mobile,
@@ -787,6 +795,7 @@ export default function Managequotation() {
         qtnBy,
         staff: qtnBy,
         date: 'Today',
+        revisionNo,
         status: 'Not Sent',
         total: totalVal,
         discount: discountVal,
@@ -816,6 +825,7 @@ export default function Managequotation() {
           qtnBy: targetQuote.qtnBy,
           staff: targetQuote.staff,
           date: targetQuote.date,
+          revisionNo: targetQuote.revisionNo,
           status: targetQuote.status,
           total: targetQuote.total,
           discount: targetQuote.discount,
@@ -853,6 +863,7 @@ export default function Managequotation() {
       proposalId: draftKey,
       bdm,
       qtnBy,
+      revisionNo,
       customerPerson,
       companyName,
       mobile: mobileNum,
@@ -1595,6 +1606,19 @@ export default function Managequotation() {
                     placeholder="Quotation By"
                     value={qtnBy}
                     onChange={(e) => setQtnBy(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Revision #
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. QTN403206072026A (Rev 2)"
+                    value={revisionNo}
+                    onChange={(e) => setRevisionNo(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>

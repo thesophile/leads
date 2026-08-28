@@ -188,6 +188,7 @@ class Quotation(models.Model):
     qtn_by = models.CharField(max_length=120, blank=True)
     staff = models.CharField(max_length=120, blank=True)
     date = models.CharField(max_length=50, blank=True)
+    revision_no = models.CharField(max_length=60, blank=True)
     status = models.CharField(max_length=50, default='Not Sent')
     total = models.CharField(max_length=30, blank=True)
     discount = models.CharField(max_length=30, blank=True)

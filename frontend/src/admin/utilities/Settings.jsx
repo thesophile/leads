@@ -1,5 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Layout from '../../Layout/Layout'
+import { api } from '../../api/client'
+import ReactQuill from 'react-quill-new'
+import 'react-quill-new/dist/quill.snow.css'
+
+const QUILL_MODULES = {
+  toolbar: [
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    [{ header: [2, 3, 4, false] }],
+    ['link', 'blockquote'],
+    ['clean'],
+  ],
+}
+
+const QUILL_FORMATS = [
+  'header',
+  'bold',
+  'italic',
+  'underline',
+  'strike',
+  'list',
+  'bullet',
+  'link',
+  'blockquote',
+]
 
 const INITIAL_STAFF_TARGETS = [
   { id: 1, name: 'Karthika', role: 'Telecaller', rawLeadsTarget: 300, callsTarget: 800, quotationTarget: 10, salesTarget: 50000, rawLeadsDone: 245, callsDone: 680, quotationDone: 8, salesDone: 35000 },
@@ -218,8 +243,9 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('targets')
   const [staffTargets, setStaffTargets] = useState(INITIAL_STAFF_TARGETS)
 
-  const [companyName, setCompanyName] = useState('LEADS PROCRM Pvt Ltd')
-  const [companyEmail, setCompanyEmail] = useState('admin@leadsprocrm.com')
+  const [companyName, setCompanyName] = useState('')
+  const [companyEmail, setCompanyEmail] = useState('')
+  const [termsHtml, setTermsHtml] = useState('')
   const [gstNo, setGstNo] = useState('32AAAAA1111A1Z1')
   const [currency, setCurrency] = useState('INR (₹)')
   const [defaultBank, setDefaultBank] = useState('ICICI BANK')
@@ -234,6 +260,25 @@ export default function Settings() {
 
   const [toastMessage, setToastMessage] = useState('')
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const company = await api.get('/accounts/company/')
+        if (!cancelled && company) {
+          if (company.name) setCompanyName(company.name)
+          if (company.email) setCompanyEmail(company.email)
+          if (company.termsHtml) setTermsHtml(company.termsHtml)
+        }
+      } catch (err) {
+        console.error('Failed to load company settings', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   function openTargetDrawer() {
     setTargetDrawerVisible(true)
     requestAnimationFrame(() => setTargetDrawerOpen(true))
@@ -244,9 +289,18 @@ export default function Settings() {
     setTimeout(() => setTargetDrawerVisible(false), 300)
   }
 
-  function handleSaveGeneral(e) {
+  async function handleSaveGeneral(e) {
     e.preventDefault()
-    showToast('General settings saved successfully.')
+    try {
+      await api.patch('/accounts/company/', {
+        name: companyName,
+        email: companyEmail,
+        termsHtml,
+      })
+      showToast('General settings saved successfully.')
+    } catch (err) {
+      showToast(`Failed to save settings: ${err.message}`)
+    }
   }
 
   function handleUpdateTarget(e) {
@@ -560,6 +614,25 @@ export default function Settings() {
                       className={inputClass}
                     />
                   </Field>
+                </div>
+              </div>
+
+              <div className="px-6 py-6 md:px-8 md:py-7">
+                <SectionTitle>Standard Terms &amp; Conditions</SectionTitle>
+                <p className="mt-1.5 text-[11px] text-slate-400">
+                  Shown on the "Terms &amp; Conditions" box of every proposal. Leave empty to fall back
+                  to the built-in default terms.
+                </p>
+                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <ReactQuill
+                    theme="snow"
+                    className="quill-tall"
+                    value={termsHtml}
+                    onChange={setTermsHtml}
+                    modules={QUILL_MODULES}
+                    formats={QUILL_FORMATS}
+                    placeholder="e.g. 1. Payment Terms: 50% non-refundable advance... "
+                  />
                 </div>
               </div>
 
