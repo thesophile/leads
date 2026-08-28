@@ -197,6 +197,25 @@ function PencilIcon({ className = 'h-3.5 w-3.5' }) {
   )
 }
 
+function TrashIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  )
+}
+
+function ChevronDownIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  )
+}
+
 function MoreVerticalIcon({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
@@ -234,6 +253,7 @@ export default function Managequotation() {
   const draftKeyRef = useRef('')
   const proposalModalOpenRef = useRef(false)
   const cardRef = useRef(null)
+  const templateDropdownRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -376,8 +396,21 @@ export default function Managequotation() {
   const [saveTemplateError, setSaveTemplateError] = useState('')
   const [templateOverrideOpen, setTemplateOverrideOpen] = useState(false)
   const [pendingTemplateId, setPendingTemplateId] = useState(null)
+  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false)
+  const [templateToDelete, setTemplateToDelete] = useState(null)
   const [draftKey, setDraftKey] = useState('')
   const [proposalLoading, setProposalLoading] = useState(false)
+
+  useEffect(() => {
+    if (!templateDropdownOpen) return
+    function handleOutsideClick(e) {
+      if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target)) {
+        setTemplateDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [templateDropdownOpen])
 
   // Load user's saved templates once on mount
   useEffect(() => {
@@ -517,6 +550,21 @@ export default function Managequotation() {
   function cancelTemplateOverride() {
     setTemplateOverrideOpen(false)
     setPendingTemplateId(null)
+  }
+
+  async function handleDeleteTemplate() {
+    const tpl = templateToDelete
+    if (!tpl) return
+    try {
+      await api.del(`/transactions/proposal-templates/${tpl.id}/`)
+      setSavedTemplates((prev) => prev.filter((t) => String(t.id) !== String(tpl.id)))
+      if (selectedTemplateId === `saved-${tpl.id}`) setSelectedTemplateId('')
+      setSubmitMessage(`✓ Template "${tpl.name}" deleted.`)
+    } catch (err) {
+      window.alert(`Failed to delete template: ${err.message}`)
+    } finally {
+      setTemplateToDelete(null)
+    }
   }
 
   // Filtered dataset
@@ -1362,30 +1410,75 @@ export default function Managequotation() {
                 </h3>
 
                 {/* Quick Template Selector */}
-                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
-                  <select
-                    value={selectedTemplateId}
-                    onChange={(e) => handleSelectTemplate(e.target.value)}
-                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+                <div className="relative flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1" ref={templateDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateDropdownOpen((v) => !v)}
+                    className="flex items-center gap-1 text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
                   >
-                    <option value="">Choose template</option>
-                    {savedTemplates.length > 0 && (
-                      <optgroup label="My Templates">
-                        {savedTemplates.map((tpl) => (
-                          <option key={`saved-${tpl.id}`} value={`saved-${tpl.id}`}>
-                            {tpl.name}
-                          </option>
+                    <span className="max-w-40 truncate">
+                      {(() => {
+                        const tpl = resolveTemplate(selectedTemplateId)
+                        return tpl ? tpl.name : 'Choose template'
+                      })()}
+                    </span>
+                    <ChevronDownIcon className={`h-3.5 w-3.5 text-slate-500 transition-transform ${templateDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {templateDropdownOpen && (
+                    <div className="absolute left-0 top-full z-30 mt-1.5 max-h-72 w-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
+                      {savedTemplates.length > 0 && (
+                        <>
+                          <div className="sticky top-0 bg-white px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                            My Templates
+                          </div>
+                          <div className="py-0.5">
+                            {savedTemplates.map((tpl) => (
+                              <div
+                                key={`saved-${tpl.id}`}
+                                className="flex items-center gap-1 px-2 py-1.5 hover:bg-slate-50 cursor-pointer group"
+                                onClick={() => {
+                                  setTemplateDropdownOpen(false)
+                                  handleSelectTemplate(`saved-${tpl.id}`)
+                                }}
+                              >
+                                <span className="flex-1 truncate text-xs font-medium text-slate-800">{tpl.name}</span>
+                                <button
+                                  type="button"
+                                  title={`Delete "${tpl.name}"`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setTemplateDropdownOpen(false)
+                                    setTemplateToDelete(tpl)
+                                  }}
+                                  className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
+                                >
+                                  <TrashIcon className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      <div className="sticky top-0 bg-white px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                        Pre-built Templates
+                      </div>
+                      <div className="py-0.5">
+                        {PROPOSAL_TEMPLATES.map((tpl) => (
+                          <div
+                            key={tpl.id}
+                            className="px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
+                            onClick={() => {
+                              setTemplateDropdownOpen(false)
+                              handleSelectTemplate(tpl.id)
+                            }}
+                          >
+                            <span className="text-xs font-medium text-slate-800">{tpl.name}</span>
+                          </div>
                         ))}
-                      </optgroup>
-                    )}
-                    <optgroup label="Pre-built Templates">
-                      {PROPOSAL_TEMPLATES.map((tpl) => (
-                        <option key={tpl.id} value={tpl.id}>
-                          {tpl.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1813,6 +1906,17 @@ export default function Managequotation() {
         confirmLabel="Replace"
         onCancel={cancelTemplateOverride}
         onConfirm={confirmTemplateOverride}
+      />
+
+      {/* Confirm deleting a saved template */}
+      <ConfirmDialog
+        open={!!templateToDelete}
+        title="Delete template?"
+        message={`"${templateToDelete?.name}" will be permanently removed from your templates. This cannot be undone. Continue?`}
+        cancelLabel="Cancel"
+        confirmLabel="Delete"
+        onCancel={() => setTemplateToDelete(null)}
+        onConfirm={handleDeleteTemplate}
       />
 
       {/* Save Template name dialog */}
