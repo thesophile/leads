@@ -139,6 +139,8 @@ function mapLeadToQuotation(lead) {
     approvalsTotal: q?.approvalsTotal || 0,
     approvalsApproved: q?.approvalsApproved || 0,
     remarks: q?.remarks || lead.remarks || '',
+    clientStatus: q?.clientStatus || 'Pending',
+    clientMessage: q?.clientMessage || '',
   }
 }
 
@@ -159,6 +161,8 @@ const STATUS_LIST = [
   'Approved',
   'Rejected',
   'Sent to Client',
+  'Accepted',
+  'Declined',
 ]
 
 const SOURCES = [
@@ -285,6 +289,7 @@ export default function Managequotation() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const canFilterByStaff = !!user && (can(user, 'leads.view_all') || user.is_superuser)
+  const canSendToClient = !!user && (can(user, 'quotation.send') || user.is_superuser)
   const [quotationsList, setQuotationsList] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -398,6 +403,90 @@ export default function Managequotation() {
     setSelectedApprovers((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     )
+  }
+
+  // "Send to Client" Modal State
+  const [sendClientOpen, setSendClientOpen] = useState(false)
+  const [sendClientQuoteId, setSendClientQuoteId] = useState(null)
+  const [sendClientChannels, setSendClientChannels] = useState(['email'])
+  const [sendClientMessage, setSendClientMessage] = useState('')
+  const [sendingClient, setSendingClient] = useState(false)
+  const [copyingClient, setCopyingClient] = useState(false)
+
+  function handleOpenSendClient(quote, e) {
+    e.stopPropagation()
+    setOpenDropdownId(null)
+    setSendClientQuoteId(quote.id)
+    setSendClientChannels(quote.email ? ['email'] : [])
+    setSendClientMessage(
+      `Dear ${quote.customer}, please find our commercial proposal for ${quote.company}.`
+    )
+    setSendClientOpen(true)
+  }
+
+  function toggleSendClientChannel(channel) {
+    setSendClientChannels((prev) =>
+      prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]
+    )
+  }
+
+  async function handleConfirmSendToClient() {
+    const quote = quotationsList.find((item) => item.id === sendClientQuoteId)
+    if (!quote || sendClientChannels.length === 0) return
+    setSendingClient(true)
+    try {
+      const data = await api.post(
+        `/transactions/quotations/${quote.leadId || quote.id}/send-to-client/`,
+        {
+          channels: sendClientChannels,
+          origin: window.location.origin,
+          message: sendClientMessage,
+        }
+      )
+      const link = data.link
+      if (sendClientChannels.includes('whatsapp') && data.mobile) {
+        const digits = String(data.mobile).replace(/[^0-9]/g, '')
+        const text = encodeURIComponent(`${sendClientMessage || 'Your quotation is ready.'}\n\n${link}`)
+        window.open(`https://wa.me/${digits}?text=${text}`, '_blank')
+      }
+      setQuotationsList((prev) =>
+        prev.map((item) =>
+          item.id === sendClientQuoteId ? { ...item, status: 'Sent to Client' } : item
+        )
+      )
+      setSendClientOpen(false)
+      showToast(
+        sendClientChannels.includes('email')
+          ? '✓ Quotation sent to the client.'
+          : '✓ Quotation link ready to share.'
+      )
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setSendingClient(false)
+    }
+  }
+
+  async function handleCopyClientLink() {
+    const quote = quotationsList.find((item) => item.id === sendClientQuoteId)
+    if (!quote) return
+    setCopyingClient(true)
+    try {
+      const data = await api.post(
+        `/transactions/quotations/${quote.leadId || quote.id}/send-to-client/`,
+        { channels: ['copy'], origin: window.location.origin }
+      )
+      try {
+        await navigator.clipboard.writeText(data.link)
+        showToast('✓ Quotation link copied to clipboard.')
+      } catch {
+        showToast(`Could not copy automatically. Link: ${data.link}`, 'error')
+      }
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setCopyingClient(false)
+    }
   }
 
   function handleViewProposal(quote) {
@@ -1348,7 +1437,13 @@ export default function Managequotation() {
                               ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                               : quote.status === 'Rejected'
                               ? 'border-rose-200 bg-rose-50 text-rose-700'
-                              : 'border-blue-200 bg-blue-50 text-blue-700'
+                              : quote.status === 'Accepted'
+                              ? 'border-teal-200 bg-teal-50 text-teal-700'
+                              : quote.status === 'Declined'
+                              ? 'border-orange-200 bg-orange-50 text-orange-700'
+                              : quote.status === 'Sent to Client'
+                              ? 'border-blue-200 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-600'
                           }`}
                         >
                           <span
@@ -1363,7 +1458,13 @@ export default function Managequotation() {
                                 ? 'bg-emerald-500'
                                 : quote.status === 'Rejected'
                                 ? 'bg-rose-500'
-                                : 'bg-blue-500'
+                                : quote.status === 'Accepted'
+                                ? 'bg-teal-500'
+                                : quote.status === 'Declined'
+                                ? 'bg-orange-500'
+                                : quote.status === 'Sent to Client'
+                                ? 'bg-blue-500'
+                                : 'bg-slate-400'
                             }`}
                           />
                           <span>{quote.status}</span>
@@ -1485,6 +1586,17 @@ export default function Managequotation() {
                           <span>Send for Approval</span>
                         </button>
                       )}
+
+                    {activeMenuQuote.status === 'Approved' && canSendToClient && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenSendClient(activeMenuQuote, e)}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                      >
+                        <SendIcon className="h-3.5 w-3.5 text-blue-600" />
+                        <span>Send to Client</span>
+                      </button>
+                    )}
                   </>
                 ) : (
                   <button
@@ -1567,7 +1679,13 @@ export default function Managequotation() {
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : item.status === 'Rejected'
                             ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                            : item.status === 'Accepted'
+                            ? 'bg-teal-50 text-teal-700 border-teal-200'
+                            : item.status === 'Declined'
+                            ? 'bg-orange-50 text-orange-700 border-orange-200'
+                            : item.status === 'Sent to Client'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}
                       >
                         {item.status}
@@ -2127,6 +2245,162 @@ export default function Managequotation() {
           </div>
         </div>
       )}
+
+      {/* "Send to Client" Modal (Email / WhatsApp / Copy link) */}
+      {sendClientOpen &&
+        (() => {
+          const sendClientQuote = quotationsList.find((q) => q.id === sendClientQuoteId)
+          return (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !sendingClient) setSendClientOpen(false)
+          }}
+        >
+          <div className="w-full max-w-md my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <SendIcon className="h-3.5 w-3.5" />
+                </span>
+                <h3 className="text-sm font-bold text-slate-900">Send to Client</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !sendingClient && setSendClientOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {sendClientQuote ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-[10px] font-bold text-brand-600 uppercase tracking-wider">
+                        {sendClientQuote.id}
+                      </p>
+                      <p className="mt-0.5 text-sm font-bold text-slate-900 truncate">
+                        {sendClientQuote.company}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-600">
+                        {sendClientQuote.customer} • ₹{sendClientQuote.netAmount}
+                      </p>
+                    </div>
+                    <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold whitespace-nowrap text-emerald-700">
+                      Approved
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-xs text-slate-400 py-2">Quotation not found.</p>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  Send via
+                </label>
+                <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100">
+                  <label
+                    className={`flex items-center gap-2.5 px-3 py-2.5 text-xs cursor-pointer ${
+                      sendClientQuote?.email ? 'hover:bg-slate-50' : 'opacity-45 pointer-events-none'
+                    } transition`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sendClientChannels.includes('email')}
+                      onChange={() => toggleSendClientChannel('email')}
+                      disabled={!sendClientQuote?.email}
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-semibold text-slate-800">Email</span>
+                      <span className="block text-[10px] text-slate-400 truncate">
+                        {sendClientQuote?.email || 'No email address on this quotation'}
+                      </span>
+                    </span>
+                  </label>
+                  <label
+                    className={`flex items-center gap-2.5 px-3 py-2.5 text-xs cursor-pointer ${
+                      sendClientQuote?.mobile ? 'hover:bg-slate-50' : 'opacity-45 pointer-events-none'
+                    } transition`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sendClientChannels.includes('whatsapp')}
+                      onChange={() => toggleSendClientChannel('whatsapp')}
+                      disabled={!sendClientQuote?.mobile}
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-semibold text-slate-800">WhatsApp</span>
+                      <span className="block text-[10px] text-slate-400 truncate">
+                        {sendClientQuote?.mobile ? `+${sendClientQuote.mobile}` : 'No mobile number on this quotation'}
+                      </span>
+                    </span>
+                  </label>
+                  <div className="px-3 py-2.5">
+                    <button
+                      type="button"
+                      onClick={handleCopyClientLink}
+                      disabled={copyingClient}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                      <span>{copyingClient ? 'Generating…' : 'Copy link'}</span>
+                    </button>
+                    <p className="mt-1.5 text-[10px] text-slate-400 text-center">
+                      Copies the client decision page link without sending anything.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  Message <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  value={sendClientMessage}
+                  onChange={(e) => setSendClientMessage(e.target.value)}
+                  rows={3}
+                  placeholder="Personal note to include with the quotation..."
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+                <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
+                  Shown in the email and WhatsApp text. The client can still add their own comments
+                  when responding.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+              <button
+                type="button"
+                onClick={() => !sendingClient && setSendClientOpen(false)}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSendToClient}
+                disabled={sendClientChannels.length === 0 || sendingClient}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <SendIcon className="h-3.5 w-3.5" />
+                {sendingClient ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+          )
+        })()}
 
       {/* Discard Changes Confirms */}
       <ConfirmDialog

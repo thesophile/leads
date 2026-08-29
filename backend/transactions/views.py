@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import random
 import secrets
 from datetime import date, datetime, timedelta
@@ -10,7 +11,7 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -26,8 +27,10 @@ from .serializers import (
     QuotationApprovalSerializer,
     QuotationSerializer,
 )
+from .services import build_client_email
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def hash_otp(code, salt):
@@ -730,6 +733,232 @@ class QuotationRejectView(QuotationApprovalBaseView):
                 entity_id=quotation.lead_id,
             )
         return Response(QuotationSerializer(quotation).data)
+
+
+class QuotationSendToClientView(APIView):
+    """Send an approved quotation to the client via email / WhatsApp / link.
+
+    Generates (or reuses) a one-time signed client token, marks the quotation
+    ``Sent to Client``, and emails the proposal (with PDF) when requested.
+    The signed page link is returned so the frontend can open WhatsApp or copy
+    it. The link is single-use: once the client responds they cannot decide
+    again.
+    """
+
+    permission_classes = [IsAuthenticated]
+    CLIENT_TOKEN_DAYS = 30
+    ALLOWED_CHANNELS = ('email', 'whatsapp', 'copy')
+
+    def post(self, request, lead_id):
+        if not can(request.user, 'quotation.send'):
+            return Response(
+                {'detail': 'You do not have permission to send quotations to clients.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        if quotation is None:
+            return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not request.user.is_superuser:
+            lead_in_scope = scoped_queryset(request.user).filter(pk=lead_id).first() is not None
+            same_company = quotation.tenant is not None and quotation.tenant == request.user.company
+            if not lead_in_scope and not same_company:
+                return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if quotation.status not in ('Approved', 'Sent to Client'):
+            return Response(
+                {'detail': 'Only approved quotations can be sent to the client.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_channels = request.data.get('channels') or []
+        if isinstance(raw_channels, str):
+            try:
+                raw_channels = json.loads(raw_channels)
+            except (TypeError, ValueError):
+                raw_channels = [raw_channels]
+        channels = [c for c in raw_channels if c in self.ALLOWED_CHANNELS]
+        channels = list(dict.fromkeys(channels))
+        if not channels:
+            return Response(
+                {'detail': 'Please select at least one way to send the quotation.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if 'email' in channels and not quotation.email:
+            return Response(
+                {'detail': 'This quotation has no client email address to send to.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if 'whatsapp' in channels and not quotation.mobile:
+            return Response(
+                {'detail': 'This quotation has no client mobile number to send to.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+        needs_token = not quotation.client_token or (
+            quotation.client_token_expires_at
+            and quotation.client_token_expires_at < now
+        )
+        if needs_token:
+            quotation.client_token = secrets.token_urlsafe(32)
+            quotation.client_token_expires_at = now + timedelta(days=self.CLIENT_TOKEN_DAYS)
+        # Only an actual send (email / WhatsApp) marks the quotation as sent;
+        # copying the link just generates it without changing status.
+        is_actual_send = 'email' in channels or 'whatsapp' in channels
+        if is_actual_send:
+            if quotation.status != 'Sent to Client':
+                quotation.status = 'Sent to Client'
+            quotation.sent_to_client_at = now
+        quotation.client_status = quotation.client_status or Quotation.CLIENT_PENDING
+        quotation.save()
+
+        origin = (request.data.get('origin') or '').strip().rstrip('/')
+        path = f'/quotation/{quotation.client_token}'
+        link = f'{origin}{path}' if origin else path
+
+        email_sent = False
+        if 'email' in channels and quotation.email:
+            try:
+                email = build_client_email(
+                    quotation,
+                    link,
+                    message=(request.data.get('message') or '').strip(),
+                )
+                email.send(fail_silently=True)
+                email_sent = True
+            except Exception as exc:  # pragma: no cover - email never blocks the action
+                logger.warning('Failed to email quotation %s: %s', quotation.id, exc)
+
+        return Response(
+            {
+                'link': link,
+                'mobile': quotation.mobile,
+                'email': quotation.email,
+                'channels': channels,
+                'email_sent': email_sent,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+def public_quotation_payload(quotation):
+    """Safe summary of a quotation for the public client page."""
+    tenant = quotation.tenant
+    logo_url = ''
+    if tenant and tenant.logo and tenant.logo.name:
+        try:
+            logo_url = tenant.logo.url
+        except Exception:
+            logo_url = ''
+    return {
+        'id': quotation.id,
+        'company': quotation.company,
+        'customer': quotation.customer,
+        'category': quotation.category,
+        'city': quotation.city,
+        'date': quotation.date,
+        'revisionNo': quotation.revision_no,
+        'total': quotation.total,
+        'discount': quotation.discount,
+        'netAmount': quotation.net_amount,
+        'currency': quotation.currency,
+        'proposalScope': quotation.proposal_scope,
+        'termsConditions': quotation.terms_conditions,
+        'companyTerms': tenant.terms_html if tenant else '',
+        'companyName': tenant.name if tenant else '',
+        'companyLogo': logo_url,
+        'companyAddress': tenant.address if tenant else '',
+        'companyEmail': tenant.email if tenant else '',
+        'companyPhone': tenant.phone if tenant else '',
+        'companyWebsite': tenant.website if tenant else '',
+        'status': quotation.status,
+        'clientStatus': quotation.client_status,
+        'clientMessage': quotation.client_message,
+        'clientRespondedAt': quotation.client_responded_at.isoformat()
+        if quotation.client_responded_at
+        else None,
+    }
+
+
+def _get_by_client_token(token):
+    return Quotation.objects.filter(client_token=str(token or '')).first()
+
+
+class ClientQuotationDetailView(APIView):
+    """Public, unauthenticated read of an approved quotation by signed token."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        quotation = _get_by_client_token(token)
+        if quotation is None:
+            return Response(
+                {'detail': 'This quotation link is not valid.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if quotation.client_token_expires_at and quotation.client_token_expires_at < timezone.now():
+            return Response(
+                {'detail': 'This quotation link has expired. Please request a fresh one.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(public_quotation_payload(quotation))
+
+
+class ClientQuotationResponseView(APIView):
+    """Public, unauthenticated single-use accept/decline with comments."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        quotation = _get_by_client_token(token)
+        if quotation is None:
+            return Response(
+                {'detail': 'This quotation link is not valid.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if quotation.client_token_expires_at and quotation.client_token_expires_at < timezone.now():
+            return Response(
+                {'detail': 'This quotation link has expired. Please request a fresh one.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if quotation.client_status != Quotation.CLIENT_PENDING:
+            return Response(
+                {'detail': 'You have already responded to this quotation.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        decision = str(request.data.get('decision') or '').strip().lower()
+        accepted = decision in ('accepted', 'accept', 'yes')
+        declined = decision in ('declined', 'decline', 'reject', 'no')
+        if not accepted and not declined:
+            return Response(
+                {'detail': 'Please choose to accept or decline the quotation.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        message = str(request.data.get('message') or '').strip()
+        verb = 'accepted' if accepted else 'declined'
+        quotation.client_status = Quotation.CLIENT_ACCEPTED if accepted else Quotation.CLIENT_DECLINED
+        quotation.status = 'Accepted' if accepted else 'Declined'
+        quotation.client_message = message
+        quotation.client_responded_at = timezone.now()
+        # Single-use: revoke the token once a decision is recorded.
+        quotation.client_token = ''
+        quotation.client_token_expires_at = None
+        quotation.save()
+        if quotation.submitted_by_id:
+            notify(
+                quotation.submitted_by,
+                'Client',
+                f'Client {verb} the quotation',
+                (
+                    f'{quotation.id} - {quotation.company} was {verb} by the client'
+                    + (f'. Comment: {message}' if message else '.')
+                ),
+                url=proposal_url(quotation.lead_id),
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
+        return Response(public_quotation_payload(quotation))
 
 
 class LeadAssignView(APIView):

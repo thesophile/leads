@@ -15,6 +15,7 @@ import RawData from './admin/transactions/RawData'
 import Telecall from './admin/transactions/Telecall'
 import Managequotation from './admin/transactions/Managequotation'
 import ProposalPreview from './admin/transactions/ProposalPreview'
+import ClientQuotation from './admin/transactions/ClientQuotation'
 import ManageOrder from './admin/transactions/ManageOrder'
 import OrderPreview from './admin/transactions/OrderPreview'
 import ClientDetails from './admin/transactions/ClientDetails'
@@ -37,6 +38,9 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+
+        {/* Public client-facing pages (no authentication) */}
+        <Route path="/quotation/:token" element={<ClientQuotation />} />
 
         {/* Protected app routes */}
         <Route path="/change-password" element={guard(<ChangePassword />)} />

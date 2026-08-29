@@ -111,6 +111,10 @@ class QuotationSerializer(serializers.ModelSerializer):
     approvals = serializers.SerializerMethodField()
     approvalsTotal = serializers.SerializerMethodField()
     approvalsApproved = serializers.SerializerMethodField()
+    clientStatus = serializers.CharField(source='client_status', read_only=True)
+    clientMessage = serializers.CharField(source='client_message', read_only=True)
+    clientRespondedAt = serializers.SerializerMethodField()
+    sentToClientAt = serializers.SerializerMethodField()
 
     class Meta:
         model = Quotation
@@ -151,6 +155,10 @@ class QuotationSerializer(serializers.ModelSerializer):
             'approvals',
             'approvalsTotal',
             'approvalsApproved',
+            'clientStatus',
+            'clientMessage',
+            'clientRespondedAt',
+            'sentToClientAt',
         ]
 
     def _iso(self, value):
@@ -181,6 +189,12 @@ class QuotationSerializer(serializers.ModelSerializer):
 
     def get_approvalsApproved(self, obj):
         return obj.approvals.filter(status=QuotationApproval.STATUS_APPROVED).count()
+
+    def get_clientRespondedAt(self, obj):
+        return self._iso(obj.client_responded_at)
+
+    def get_sentToClientAt(self, obj):
+        return self._iso(obj.sent_to_client_at)
 
     def get_companyTerms(self, obj):
         tenant = getattr(obj, 'tenant', None)

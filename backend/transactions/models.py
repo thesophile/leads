@@ -226,6 +226,25 @@ class Quotation(models.Model):
     otp_hash = models.CharField(max_length=160, blank=True)
     otp_sent_at = models.DateTimeField(null=True, blank=True)
     otp_expires_at = models.DateTimeField(null=True, blank=True)
+    # Client-facing signed link (sent to the client to accept/decline)
+    CLIENT_PENDING = 'Pending'
+    CLIENT_ACCEPTED = 'Accepted'
+    CLIENT_DECLINED = 'Declined'
+    CLIENT_STATUS_CHOICES = [
+        (CLIENT_PENDING, 'Pending'),
+        (CLIENT_ACCEPTED, 'Accepted'),
+        (CLIENT_DECLINED, 'Declined'),
+    ]
+    client_token = models.CharField(max_length=64, blank=True)
+    client_token_expires_at = models.DateTimeField(null=True, blank=True)
+    sent_to_client_at = models.DateTimeField(null=True, blank=True)
+    client_status = models.CharField(
+        max_length=20,
+        choices=CLIENT_STATUS_CHOICES,
+        default=CLIENT_PENDING,
+    )
+    client_message = models.TextField(blank=True)
+    client_responded_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
