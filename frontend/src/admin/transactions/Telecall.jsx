@@ -117,6 +117,45 @@ export default function Telecall() {
     }
   }, [])
 
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [sourceOptions, setSourceOptions] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchCategoryOptions() {
+      try {
+        const data = await api.get('/master/categories/')
+        if (!cancelled) setCategoryOptions(data)
+      } catch {
+        // Fall back to empty options; the drawer still allows the current value.
+      }
+    }
+
+    fetchCategoryOptions()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchSourceOptions() {
+      try {
+        const data = await api.get('/master/sources/')
+        if (!cancelled) setSourceOptions(data)
+      } catch {
+        // Fall back to empty options.
+      }
+    }
+
+    fetchSourceOptions()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   async function refreshData() {
     setIsLoading(true)
     setError('')
@@ -149,6 +188,13 @@ export default function Telecall() {
     remarks: '',
     nextFollowUpDate: '',
     nextFollowUpTime: '10:00 AM',
+    company: '',
+    contact: '',
+    phone: '',
+    email: '',
+    category: '',
+    city: '',
+    source: '',
   })
   const [isSaving, setIsSaving] = useState(false)
 
@@ -199,6 +245,13 @@ export default function Telecall() {
       remarks: lead.remarks || '',
       nextFollowUpDate: lead.nextFollowUpDate || '',
       nextFollowUpTime: lead.nextFollowUpTime || '10:00 AM',
+      company: lead.company || '',
+      contact: lead.contact || '',
+      phone: lead.phone || '',
+      email: lead.email || '',
+      category: lead.category || '',
+      city: lead.city || '',
+      source: lead.source || '',
     })
     openDrawer()
   }
@@ -230,6 +283,13 @@ export default function Telecall() {
         next_follow_up_time: formData.nextFollowUpTime,
         has_follow_up: isFollowUp,
         last_call_date: isActuallyCalled ? todayISO : activeLead.lastCallDate,
+        company: formData.company || activeLead.company,
+        contact: formData.contact || '',
+        phone: formData.phone || activeLead.phone,
+        email: formData.email || '',
+        category: formData.category || '',
+        city: formData.city || '',
+        source: formData.source || '',
       })
       await refreshData()
       closeDrawer()
@@ -805,14 +865,14 @@ export default function Telecall() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-bold leading-snug text-slate-900">
-                        {activeLead.company}
+                        {formData.company || activeLead.company}
                       </h3>
                       <p className="mt-0.5 truncate text-[11px] text-slate-500">
-                        {activeLead.contact} • {activeLead.category}
-                        {activeLead.city ? ` • ${activeLead.city}` : ''}
+                        {formData.contact || activeLead.contact} • {formData.category || activeLead.category}
+                        {(formData.city || activeLead.city) ? ` • ${formData.city || activeLead.city}` : ''}
                       </p>
                       <p className="mt-1 font-mono text-xs font-semibold text-slate-800">
-                        {activeLead.phone}
+                        {formData.phone || activeLead.phone}
                       </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
@@ -828,7 +888,7 @@ export default function Telecall() {
                     </div>
                   </div>
                   <a
-                    href={`tel:${activeLead.phone}`}
+                    href={`tel:${formData.phone || activeLead.phone}`}
                     className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                   >
                     <PhoneCallIcon className="h-3.5 w-3.5" />
@@ -838,6 +898,113 @@ export default function Telecall() {
 
                 {/* Drawer Form */}
                 <form id="telecall-form" onSubmit={handleSaveCall} className="mt-5 space-y-4 text-xs">
+                  {/* Company Details (editable at every stage) */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        Company Details
+                      </h4>
+                      <span className="text-[10px] text-slate-400">
+                        Changes sync to the lead &amp; quotation
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                          Company Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.company}
+                          onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                          Contact Person
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.contact}
+                          onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                          Mobile Number
+                        </label>
+                        <input
+                          type="tel"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                          Category
+                        </label>
+                        <select
+                          value={formData.category}
+                          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        >
+                          <option value="" disabled hidden>
+                            Select Category
+                          </option>
+                          {categoryOptions.map((cat) => (
+                            <option key={cat.id} value={cat.name}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                          City / Location
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.city}
+                          onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                          Lead Source
+                        </label>
+                        <select
+                          value={formData.source}
+                          onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        >
+                          <option value="" disabled hidden>
+                            Select Source
+                          </option>
+                          {sourceOptions.map((src) => (
+                            <option key={src.id} value={src.name}>
+                              {src.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Call Details */}
                   <div className="space-y-3">
                     <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -990,6 +1157,34 @@ export default function Telecall() {
                       className="w-full resize-none rounded-lg border border-slate-300 bg-white p-3 text-xs text-slate-800 placeholder:text-slate-400 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                   </div>
+
+                  {/* Contact change history (audit trail of company detail edits) */}
+                  {activeLead.contactHistory && activeLead.contactHistory.length > 0 && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                        Contact change history
+                      </p>
+                      <ul className="space-y-1.5">
+                        {activeLead.contactHistory.map((h) => (
+                          <li
+                            key={h.id}
+                            className="flex flex-wrap items-start gap-x-2 gap-y-0.5 text-[11px] text-slate-600"
+                          >
+                            <span className="font-bold text-slate-700">{h.field}:</span>
+                            <span className="text-slate-400 line-through">{h.fromValue || '(empty)'}</span>
+                            <span className="text-slate-400">→</span>
+                            <span className="font-semibold text-slate-800">{h.toValue || '(empty)'}</span>
+                            <span className="ml-auto text-[10px] text-slate-400">
+                              {h.changedBy || 'Unknown'}
+                              {h.changedAt
+                                ? ` · ${new Date(h.changedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                                : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </form>
               </div>
 
