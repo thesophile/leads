@@ -314,6 +314,9 @@ export default function Settings() {
           if (company.address) setCompanyAddress(company.address)
           setCompanyLogo(company.logo || '')
           if (company.termsHtml) setTermsHtml(company.termsHtml)
+          if (company.currency) setCurrency(company.currency)
+          if (company.gstNo !== undefined) setGstNo(company.gstNo || '')
+          if (company.defaultBank !== undefined) setDefaultBank(company.defaultBank || '')
         }
       } catch (err) {
         console.error('Failed to load company settings', err)
@@ -344,6 +347,9 @@ export default function Settings() {
         website: companyWebsite,
         address: companyAddress,
         termsHtml,
+        currency,
+        gstNo,
+        defaultBank,
       })
       showToast('General settings saved successfully.')
     } catch (err) {

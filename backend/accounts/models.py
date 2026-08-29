@@ -44,6 +44,9 @@ class Company(models.Model):
     website = models.URLField(blank=True)
     logo = models.ImageField(upload_to='company_logos/', blank=True, null=True)
     terms_html = models.TextField(blank=True)
+    gstin = models.CharField(max_length=50, blank=True)
+    default_bank = models.CharField(max_length=150, blank=True)
+    base_currency = models.CharField(max_length=30, blank=True, default='INR (₹)')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

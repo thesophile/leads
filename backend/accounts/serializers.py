@@ -11,11 +11,26 @@ User = get_user_model()
 
 class CompanySerializer(serializers.ModelSerializer):
     termsHtml = serializers.CharField(source='terms_html', required=False, allow_blank=True)
+    currency = serializers.CharField(source='base_currency', required=False, allow_blank=True)
+    gstNo = serializers.CharField(source='gstin', required=False, allow_blank=True)
+    defaultBank = serializers.CharField(source='default_bank', required=False, allow_blank=True)
     logo = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
-        fields = ['id', 'name', 'email', 'phone', 'address', 'website', 'logo', 'termsHtml']
+        fields = [
+            'id',
+            'name',
+            'email',
+            'phone',
+            'address',
+            'website',
+            'logo',
+            'termsHtml',
+            'currency',
+            'gstNo',
+            'defaultBank',
+        ]
 
     def get_logo(self, obj):
         if not obj.logo:

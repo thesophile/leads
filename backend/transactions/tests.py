@@ -787,3 +787,79 @@ class QuotationApprovalFlowTests(APITestCase):
             'status': 'Approved',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
+
+    def test_edit_pending_quote_without_resend_keeps_approvals(self):
+        # A generic edit of an already-pending proposal (no approvers payload)
+        # must save normally without resetting the approvals or expecting a
+        # new approval round.
+        self._send()
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Pending Approval',
+            'remarks': 'Typo fixed',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'Pending Approval')
+        self.assertEqual(resp.data['remarks'], 'Typo fixed')
+        self.assertEqual(QuotationApproval.objects.filter(quotation=self.q).count(), 2)
+
+    def test_resend_pending_quote_is_blocked(self):
+        self._send()
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Pending Approval', 'approvers': self.approver_ids,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        # Prior approvals are preserved, not wiped.
+        self.assertEqual(QuotationApproval.objects.filter(quotation=self.q).count(), 2)
+
+    def test_resend_approved_quote_is_blocked(self):
+        self._send()
+        self._approve(self.approver, self.lead.id)
+        self._approve(self.approver2, self.lead.id)
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Pending Approval', 'approvers': self.approver_ids,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        quotation = Quotation.objects.get(lead_id=self.lead.id)
+        self.assertEqual(quotation.status, 'Approved')
+        self.assertEqual(QuotationApproval.objects.filter(quotation=quotation).count(), 2)
+
+    def test_edit_approved_quote_preserves_status(self):
+        self._send()
+        self._approve(self.approver, self.lead.id)
+        self._approve(self.approver2, self.lead.id)
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Approved',
+            'remarks': 'Updated after approval',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'Approved')
+        self.assertEqual(resp.data['remarks'], 'Updated after approval')
+
+    def test_get_quotation_is_scoped_to_company(self):
+        other = make_company('OtherCo')
+        other_manager = User.objects.create_user(
+            email='other@mgr.com', password='x', name='Other Manager',
+            role=other.roles.get(code='manager'), company=other,
+        )
+        self.client.force_authenticate(other_manager)
+        resp = self.client.get(f'/api/transactions/quotations/{self.lead.id}/')
+        self.assertEqual(resp.status_code, 404)
+        # Legitimate same-company read still works.
+        self.client.force_authenticate(self.staff)
+        resp = self.client.get(f'/api/transactions/quotations/{self.lead.id}/')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_delete_quotation_is_scoped_to_company(self):
+        other = make_company('OtherCo2')
+        other_manager = User.objects.create_user(
+            email='other2@mgr.com', password='x', name='Other Manager 2',
+            role=other.roles.get(code='manager'), company=other,
+        )
+        self.client.force_authenticate(other_manager)
+        resp = self.client.delete(f'/api/transactions/quotations/{self.lead.id}/')
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(Quotation.objects.filter(lead_id=self.lead.id).exists())

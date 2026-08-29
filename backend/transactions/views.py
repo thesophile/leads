@@ -419,6 +419,11 @@ class QuotationView(APIView):
         quotation = Quotation.objects.filter(lead_id=lead_id).first()
         if quotation is None:
             return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not request.user.is_superuser:
+            lead_in_scope = scoped_queryset(request.user).filter(pk=lead_id).first() is not None
+            same_company = quotation.tenant is not None and quotation.tenant == request.user.company
+            if not lead_in_scope and not same_company:
+                return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(QuotationSerializer(quotation).data)
 
     def put(self, request, lead_id):
@@ -436,9 +441,14 @@ class QuotationView(APIView):
         quotation = Quotation.objects.filter(lead_id=lead_id).first()
         if quotation is None:
             quotation = Quotation(id=lead_id, lead_id=lead_id, tenant=request.user.company, company=lead.company)
-        was_pending = quotation.status == 'Pending Approval'
+        current_status = quotation.status
+        was_pending = current_status == 'Pending Approval'
         new_status = request.data.get('status')
-        if new_status in ('Approved', 'Rejected'):
+        is_send_action = 'approvers' in request.data
+        # A generic edit must not force a terminal/approval status; use the
+        # dedicated approve/reject actions. Editing a proposal that merely
+        # keeps its existing status is allowed.
+        if new_status in ('Approved', 'Rejected') and new_status != current_status:
             return Response(
                 {'detail': 'The proposal status cannot be set directly. Use the approve / reject action.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -447,14 +457,23 @@ class QuotationView(APIView):
             if camel in request.data:
                 value = request.data.get(camel)
                 setattr(quotation, field, value if value is not None else '')
-        if new_status == 'Pending Approval':
+        if new_status == 'Pending Approval' and is_send_action:
+            if was_pending:
+                return Response(
+                    {'detail': 'This proposal is already awaiting approval. Approve or reject it before resending.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if current_status == 'Approved':
+                return Response(
+                    {'detail': 'This proposal is already approved and cannot be resent.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             approvers = resolve_approvers(request.user, request.data.get('approvers', []))
             if not approvers:
                 return Response(
                     {'detail': 'Please select at least one approver.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            existing_ids = set(quotation.approvals.values_list('user_id', flat=True))
             quotation.approvals.all().delete()
             quotation.submitted_by = request.user
             quotation.approval_requested_at = timezone.now()
@@ -473,16 +492,15 @@ class QuotationView(APIView):
             quotation.save()
             for approver in approvers:
                 quotation.approvals.create(user=approver)
-                if not was_pending or approver.pk not in existing_ids:
-                    notify(
-                        approver,
-                        'Approval',
-                        'Proposal awaiting your approval',
-                        f'{quotation.id} - {quotation.company}, submitted by {request.user.name}.',
-                        url=proposal_url(quotation.lead_id),
-                        entity_type='quotation',
-                        entity_id=quotation.lead_id,
-                    )
+                notify(
+                    approver,
+                    'Approval',
+                    'Proposal awaiting your approval',
+                    f'{quotation.id} - {quotation.company}, submitted by {request.user.name}.',
+                    url=proposal_url(quotation.lead_id),
+                    entity_type='quotation',
+                    entity_id=quotation.lead_id,
+                )
             return Response(QuotationSerializer(quotation).data)
         quotation.save()
         return Response(QuotationSerializer(quotation).data)
@@ -493,12 +511,13 @@ class QuotationView(APIView):
                 {'detail': 'You do not have permission to delete quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        Quotation.objects.filter(lead_id=lead_id).delete()
         lead = scoped_queryset(request.user).filter(pk=lead_id).first()
-        if lead is not None:
-            lead.status = Lead.STATUS_ASSIGNED
-            lead.call_status = 'Pending Call'
-            lead.save(update_fields=['status', 'call_status', 'updated_at'])
+        if lead is None:
+            return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        Quotation.objects.filter(lead_id=lead_id).delete()
+        lead.status = Lead.STATUS_ASSIGNED
+        lead.call_status = 'Pending Call'
+        lead.save(update_fields=['status', 'call_status', 'updated_at'])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
