@@ -151,6 +151,34 @@ class Lead(models.Model):
         return f'{self.id} - {self.company}'
 
 
+class LeadContactHistory(models.Model):
+    """Audit trail of company/contact detail changes on a lead.
+
+    ``Lead`` is the single source of truth for a company's details; wherever
+    those details change (lead or quotation screens), a row is recorded so
+    corrections stay traceable after the lead leaves raw data.
+    """
+
+    lead = models.ForeignKey(
+        Lead,
+        on_delete=models.CASCADE,
+        related_name='contact_history',
+    )
+    field = models.CharField(max_length=50)
+    from_value = models.CharField(max_length=255, blank=True)
+    to_value = models.CharField(max_length=255, blank=True)
+    changed_by = models.CharField(max_length=120, blank=True)
+    stage = models.CharField(max_length=20, blank=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-changed_at']
+        verbose_name_plural = 'lead contact histories'
+
+    def __str__(self):
+        return f'{self.lead_id} / {self.field}'
+
+
 class CallHistory(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='history')
     date_time = models.CharField(max_length=50, blank=True)

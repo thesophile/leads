@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+from .models import CallHistory, Lead, LeadContactHistory, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
 
 
 class CallHistorySerializer(serializers.ModelSerializer):
@@ -61,6 +61,20 @@ class ProposalDraftSerializer(serializers.ModelSerializer):
             'remarks',
         ]
         read_only_fields = ['user']
+
+
+class LeadContactHistorySerializer(serializers.ModelSerializer):
+    fromValue = serializers.CharField(source='from_value', read_only=True)
+    toValue = serializers.CharField(source='to_value', read_only=True)
+    changedBy = serializers.CharField(source='changed_by', read_only=True)
+    changedAt = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LeadContactHistory
+        fields = ['id', 'field', 'fromValue', 'toValue', 'changedBy', 'changedAt', 'stage']
+
+    def get_changedAt(self, obj):
+        return obj.changed_at.isoformat() if obj.changed_at else ''
 
 
 class QuotationApprovalSerializer(serializers.ModelSerializer):
@@ -205,6 +219,7 @@ class QuotationSerializer(serializers.ModelSerializer):
 
 class LeadSerializer(serializers.ModelSerializer):
     history = CallHistorySerializer(many=True, read_only=True)
+    contactHistory = LeadContactHistorySerializer(many=True, read_only=True, source='contact_history')
     quotation = serializers.SerializerMethodField()
     displayDate = serializers.CharField(source='display_date', required=False, allow_blank=True)
     addedBy = serializers.CharField(source='added_by', required=False, allow_blank=True)
@@ -239,6 +254,7 @@ class LeadSerializer(serializers.ModelSerializer):
             'nextFollowUpTime',
             'hasFollowUp',
             'history',
+            'contactHistory',
             'quotation',
         ]
 

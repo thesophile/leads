@@ -19,7 +19,15 @@ from accounts.permissions import can
 from master.models import Category, Source
 from utilities.models import Notification
 
-from .models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+from .models import (
+    CallHistory,
+    Lead,
+    LeadContactHistory,
+    ProposalDraft,
+    ProposalTemplate,
+    Quotation,
+    QuotationApproval,
+)
 from .serializers import (
     LeadSerializer,
     ProposalDraftSerializer,
@@ -55,6 +63,100 @@ def notify(user, notif_type, title, message, url='', entity_type='', entity_id='
         entity_type=entity_type,
         entity_id=entity_id,
     )
+
+
+# Lead field -> Quotation field for the company/contact details kept in sync
+# between the two records (the Lead is the single source of truth).
+CONTACT_FIELD_MAP = {
+    'company': 'company',
+    'contact': 'customer',
+    'phone': 'mobile',
+    'email': 'email',
+    'category': 'category',
+    'city': 'city',
+    'source': 'source',
+}
+
+# Quotation field -> Lead field (inverse of CONTACT_FIELD_MAP).
+CONTACT_Q_TO_LEAD = {value: key for key, value in CONTACT_FIELD_MAP.items()}
+
+# Quotation statuses that mean a proposal has not been generated/sent yet.
+NOT_GENERATED_STATUSES = {'', 'Not Sent', 'Quotation Requested'}
+
+CONTACT_EDITABLE_CAMEL = ('customer', 'company', 'mobile', 'email', 'category', 'city', 'source')
+
+
+def log_contact_change(user, lead, field, old_value, new_value):
+    """Write one audit row when a company/contact detail actually changed."""
+    old_value = '' if old_value is None else str(old_value)
+    new_value = '' if new_value is None else str(new_value)
+    if old_value == new_value:
+        return
+    LeadContactHistory.objects.create(
+        lead=lead,
+        field=field,
+        from_value=old_value[:255],
+        to_value=new_value[:255],
+        changed_by=user.name,
+        stage=lead.status,
+    )
+
+
+def quotation_was_generated(quotation):
+    """True when a proposal already exists past being merely drafted/sent."""
+    return quotation is not None and quotation.status not in NOT_GENERATED_STATUSES
+
+
+def sync_contact_from_quotation(user, lead, quotation, old_contact):
+    """Audit quotation contact edits and mirror them onto the lead.
+
+    ``old_contact`` maps lead field name -> value before the edit. Returns the
+    list of lead fields that actually changed (or [] when nothing changed or the
+    mirror could not be applied).
+    """
+    pending = []
+    for lead_field, old_value in old_contact.items():
+        q_field = CONTACT_FIELD_MAP.get(lead_field, lead_field)
+        new_value = getattr(quotation, q_field)
+        if new_value is None:
+            new_value = ''
+        if (old_value or '') != new_value:
+            pending.append((lead_field, old_value, new_value))
+    if not pending:
+        return []
+    changed_fields = [entry[0] for entry in pending]
+    for lead_field, _, new_value in pending:
+        setattr(lead, lead_field, new_value)
+    try:
+        lead.save(update_fields=changed_fields + ['updated_at'])
+    except IntegrityError:
+        # e.g. the proposal company name collides with another lead — keep the
+        # quotation's value but leave the lead (source of truth) untouched.
+        logger.warning('Could not mirror contact change to lead %s.', lead.id)
+        return []
+    for lead_field, old_value, new_value in pending:
+        log_contact_change(user, lead, lead_field, old_value, new_value)
+    return changed_fields
+
+
+def sync_lead_contact_to_quotation(lead, old_contact):
+    """Push changed lead contact details into the existing quotation (if any)."""
+    quotation = Quotation.objects.filter(lead_id=lead.id).first()
+    if quotation is None:
+        return
+    changed = False
+    for lead_field in old_contact:
+        q_field = CONTACT_FIELD_MAP.get(lead_field)
+        if q_field is None:
+            continue
+        value = getattr(lead, lead_field)
+        if value is None:
+            value = ''
+        if getattr(quotation, q_field) != value:
+            setattr(quotation, q_field, value)
+            changed = True
+    if changed:
+        quotation.save()
 
 
 def proposal_url(lead_id):
@@ -199,7 +301,7 @@ class LeadListView(APIView):
             )
         status_filter = request.query_params.get('status') or 'raw'
         leads = scoped_queryset(request.user, status_filter).order_by('-created_at')
-        leads = leads.prefetch_related('history')
+        leads = leads.prefetch_related('history', 'contact_history')
         quotations = {
             quotation.lead_id: quotation
             for quotation in Quotation.objects.filter(
@@ -294,6 +396,8 @@ class LeadDetailView(APIView):
                 {'detail': 'You do not have permission to edit this lead.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        edited_contact_fields = [f for f in CONTACT_FIELD_MAP if f in request.data]
+        old_contact = {f: getattr(lead, f) for f in edited_contact_fields}
         if 'company' in request.data:
             company = request.data.get('company', '').strip()
             if not company:
@@ -370,7 +474,25 @@ class LeadDetailView(APIView):
                 follow_up=follow_up,
                 status=lead.call_status,
             )
-        return Response(LeadSerializer(lead).data)
+        quotation = Quotation.objects.filter(lead_id=lead.id).first()
+        was_generated = quotation_was_generated(quotation)
+        contact_changed = False
+        if old_contact:
+            changed_fields = []
+            for field in old_contact:
+                new_value = getattr(lead, field)
+                if new_value is None:
+                    new_value = ''
+                if (old_contact[field] or '') != new_value:
+                    log_contact_change(user, lead, field, old_contact[field], new_value)
+                    changed_fields.append(field)
+            if changed_fields:
+                contact_changed = True
+                sync_lead_contact_to_quotation(lead, changed_fields)
+        data = LeadSerializer(lead).data
+        data['contactChanged'] = contact_changed
+        data['wasGenerated'] = was_generated
+        return Response(data)
 
     def delete(self, request, pk):
         lead = self.get_object(pk)
@@ -442,6 +564,15 @@ class QuotationView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        old_was_generated = quotation_was_generated(quotation)
+        old_contact = {}
+        if quotation is not None:
+            old_contact = {
+                CONTACT_Q_TO_LEAD.get(self.QUOTATION_FIELDS[camel], self.QUOTATION_FIELDS[camel]):
+                getattr(quotation, self.QUOTATION_FIELDS[camel])
+                for camel in CONTACT_EDITABLE_CAMEL
+                if camel in request.data
+            }
         if quotation is None:
             quotation = Quotation(id=lead_id, lead_id=lead_id, tenant=request.user.company, company=lead.company)
         current_status = quotation.status
@@ -460,6 +591,13 @@ class QuotationView(APIView):
             if camel in request.data:
                 value = request.data.get(camel)
                 setattr(quotation, field, value if value is not None else '')
+
+        # Audit any company/contact change made here and mirror it to the lead.
+        contact_changed = bool(old_contact) and bool(
+            sync_contact_from_quotation(request.user, lead, quotation, old_contact)
+        )
+        response_flags = {'contactChanged': contact_changed, 'wasGenerated': old_was_generated}
+
         if new_status == 'Pending Approval' and is_send_action:
             if was_pending:
                 return Response(
@@ -504,9 +642,13 @@ class QuotationView(APIView):
                     entity_type='quotation',
                     entity_id=quotation.lead_id,
                 )
-            return Response(QuotationSerializer(quotation).data)
+            data = QuotationSerializer(quotation).data
+            data.update(response_flags)
+            return Response(data)
         quotation.save()
-        return Response(QuotationSerializer(quotation).data)
+        data = QuotationSerializer(quotation).data
+        data.update(response_flags)
+        return Response(data)
 
     def delete(self, request, lead_id):
         if not can(request.user, 'quotation.edit'):

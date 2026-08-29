@@ -141,6 +141,7 @@ function mapLeadToQuotation(lead) {
     remarks: q?.remarks || lead.remarks || '',
     clientStatus: q?.clientStatus || 'Pending',
     clientMessage: q?.clientMessage || '',
+    contactHistory: lead.contactHistory || [],
   }
 }
 
@@ -182,6 +183,16 @@ const CURRENCIES = [
   'EUR (€)',
   'SAR (﷼)',
 ]
+
+const CONTACT_FIELD_LABELS = {
+  company: 'Company Name',
+  contact: 'Contact Person',
+  phone: 'Phone',
+  email: 'Email',
+  category: 'Category',
+  city: 'City',
+  source: 'Source',
+}
 
 function SearchIcon() {
   return (
@@ -564,7 +575,9 @@ export default function Managequotation() {
   const [customerPerson, setCustomerPerson] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [mobileNum, setMobileNum] = useState('')
+  const [email, setEmail] = useState('')
   const [categoryName, setCategoryName] = useState('Hospital')
+  const [cityVal, setCityVal] = useState('')
   
   const [scopeHtml, setScopeHtml] = useState('')
   const [termsHtml, setTermsHtml] = useState('')
@@ -642,7 +655,9 @@ export default function Managequotation() {
         customerPerson,
         companyName,
         mobileNum,
+        email,
         categoryName,
+        cityVal,
         scopeHtml: normalizeRichText(scopeHtml),
         termsHtml: normalizeRichText(termsHtml),
         totalVal,
@@ -652,7 +667,7 @@ export default function Managequotation() {
         remarksVal,
       }),
       [
-        bdm, qtnBy, revisionNo, customerPerson, companyName, mobileNum, categoryName,
+        bdm, qtnBy, revisionNo, customerPerson, companyName, mobileNum, email, categoryName, cityVal,
         scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal,
       ]
     )
@@ -742,6 +757,7 @@ export default function Managequotation() {
         customerPerson.trim() ||
         companyName.trim() ||
         mobileNum.trim() ||
+        email.trim() ||
         totalVal.trim()
     )
   }
@@ -877,7 +893,9 @@ export default function Managequotation() {
       setCustomerPerson(quote.customer || '')
       setCompanyName(quote.company || '')
       setMobileNum(quote.mobile || '')
+      setEmail(quote.email || '')
       setCategoryName(quote.category || 'Hospital')
+      setCityVal(quote.city || '')
       setScopeHtml(quote.proposalScope || '')
       setTermsHtml(quote.termsConditions || '')
       setTotalVal(quote.total || quote.amount?.replace('₹', '') || '')
@@ -894,7 +912,9 @@ export default function Managequotation() {
       setCustomerPerson('')
       setCompanyName('')
       setMobileNum('')
+      setEmail('')
       setCategoryName('General')
+      setCityVal('')
       setScopeHtml('')
       setTermsHtml('')
       setTotalVal('')
@@ -973,6 +993,9 @@ export default function Managequotation() {
         customer: customerPerson || existing.customer,
         company: companyName || existing.company,
         mobile: mobileNum || existing.mobile,
+        email: email || existing.email,
+        category: categoryName || existing.category,
+        city: cityVal || existing.city,
         total: totalVal,
         discount: discountVal,
         netAmount: netFrom(totalVal, discountVal),
@@ -997,9 +1020,9 @@ export default function Managequotation() {
         customer: customerPerson,
         company: companyName,
         mobile: mobileNum,
-        email: '',
+        email: email,
         category: categoryName,
-        city: 'Kerala',
+        city: cityVal,
         bdm,
         qtnBy,
         staff: qtnBy,
@@ -1023,7 +1046,7 @@ export default function Managequotation() {
 
     if (persistLeadId) {
       try {
-        await api.put(`/transactions/quotations/${persistLeadId}/`, {
+        const saved = await api.put(`/transactions/quotations/${persistLeadId}/`, {
           customer: targetQuote.customer,
           company: targetQuote.company,
           mobile: targetQuote.mobile,
@@ -1045,6 +1068,12 @@ export default function Managequotation() {
           termsConditions: targetQuote.termsConditions,
           remarks: targetQuote.remarks,
         })
+        if (saved && saved.contactChanged && saved.wasGenerated) {
+          showToast(
+            'Heads-up: this proposal was already sent/approved with the old contact details. Please inform the client or resend.',
+            'error',
+          )
+        }
       } catch (err) {
         setSubmitMessage(`Failed to save proposal: ${err.message}`)
         return
@@ -1912,6 +1941,70 @@ export default function Managequotation() {
                 </div>
               </div>
 
+              {/* Company / Contact Details (editable at every stage) */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Company Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Company Name"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Mobile Number
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="Mobile Number"
+                    value={mobileNum}
+                    onChange={(e) => setMobileNum(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Category
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Business Category"
+                    value={categoryName}
+                    onChange={(e) => setCategoryName(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    City / Location
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="City or Location"
+                    value={cityVal}
+                    onChange={(e) => setCityVal(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
               {/* Rich Text Editor 1 - Proposal Scope & Deliverables */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -2073,6 +2166,36 @@ export default function Managequotation() {
                   {submitMessage}
                 </div>
               )}
+
+              {/* Contact change history (audit trail of company detail edits) */}
+              {(() => {
+                const quote = quotationsList.find((q) => q.id === editingProposalId)
+                const history = quote?.contactHistory || []
+                if (history.length === 0) return null
+                return (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Contact change history
+                    </p>
+                    <ul className="space-y-1.5">
+                      {history.map((h) => (
+                        <li key={h.id} className="flex flex-wrap items-start gap-x-2 gap-y-0.5 text-[11px] text-slate-600">
+                          <span className="font-bold text-slate-700">
+                            {CONTACT_FIELD_LABELS[h.field] || h.field}:
+                          </span>
+                          <span className="text-slate-400 line-through">{h.fromValue || '(empty)'}</span>
+                          <span className="text-slate-400">→</span>
+                          <span className="font-semibold text-slate-800">{h.toValue || '(empty)'}</span>
+                          <span className="ml-auto text-[10px] text-slate-400">
+                            {h.changedBy || 'Unknown'}
+                            {h.changedAt ? ` · ${new Date(h.changedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
 
               {/* Modal Footer Actions: left Save Draft + Save Template, right Close + Submit */}
               <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">

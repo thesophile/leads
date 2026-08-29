@@ -270,6 +270,7 @@ export default function RawData() {
   const [importedFile, setImportedFile] = useState(null)
   const [importSuccessMessage, setImportSuccessMessage] = useState('')
   const [editingId, setEditingId] = useState(null)
+  const [drawerHistory, setDrawerHistory] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteModalId, setDeleteModalId] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -471,6 +472,7 @@ export default function RawData() {
 
   function handleOpenAdd() {
     setEditingId(null)
+    setDrawerHistory([])
     setFormData({
       company: '',
       contact: '',
@@ -485,6 +487,7 @@ export default function RawData() {
 
   function handleEditClick(item) {
     setEditingId(item.id)
+    setDrawerHistory(item.contactHistory || [])
     setFormData({
       company: item.company || '',
       contact: item.contact || '',
@@ -506,7 +509,14 @@ export default function RawData() {
     setIsSaving(true)
     try {
       if (editingId) {
-        await api.patch(`/transactions/leads/${editingId}/`, formData)
+        const updated = await api.patch(`/transactions/leads/${editingId}/`, formData)
+        if (updated && updated.contactChanged && updated.wasGenerated) {
+          setError(
+            'Warning: this lead already has a sent/approved quotation. The contact details were updated and synced automatically — please inform the client if needed.',
+          )
+        } else {
+          setError('')
+        }
         showToast('Raw data updated.')
       } else {
         await api.post('/transactions/leads/', formData)
@@ -1973,6 +1983,36 @@ async function handleBulkImport(e) {
                     City / Location
                   </label>
                 </div>
+
+                {/* Contact change history (audit trail of company detail edits) */}
+                {drawerHistory.length > 0 && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Contact change history
+                    </p>
+                    <ul className="space-y-1.5">
+                      {drawerHistory.map((h) => (
+                        <li
+                          key={h.id}
+                          className="flex flex-wrap items-start gap-x-2 gap-y-0.5 text-[11px] text-slate-600"
+                        >
+                          <span className="font-bold text-slate-700">
+                            {h.field}: 
+                          </span>
+                          <span className="text-slate-400 line-through">{h.fromValue || '(empty)'}</span>
+                          <span className="text-slate-400">→</span>
+                          <span className="font-semibold text-slate-800">{h.toValue || '(empty)'}</span>
+                          <span className="ml-auto text-[10px] text-slate-400">
+                            {h.changedBy || 'Unknown'}
+                            {h.changedAt
+                              ? ` · ${new Date(h.changedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                              : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </form>
 
               {/* Drawer Footer Buttons */}

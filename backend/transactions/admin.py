@@ -7,6 +7,7 @@ from .models import (
     CallHistory,
     ClientDetail,
     Lead,
+    LeadContactHistory,
     Order,
     ProposalTemplate,
     Quotation,
@@ -16,6 +17,13 @@ from .models import (
 class CallHistoryInline(admin.TabularInline):
     model = CallHistory
     extra = 0
+
+
+class LeadContactHistoryInline(admin.TabularInline):
+    model = LeadContactHistory
+    extra = 0
+    readonly_fields = ('field', 'from_value', 'to_value', 'changed_by', 'stage', 'changed_at')
+    can_delete = False
 
 
 @admin.register(ProposalTemplate)
@@ -29,7 +37,7 @@ class LeadAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
     list_display = ('id', 'company', 'phone', 'category', 'source', 'status', 'assigned_to', 'call_status')
     list_filter = ('status', 'category', 'source', 'added_by', 'assigned_to', 'call_status')
     search_fields = ('company', 'contact', 'phone', 'id')
-    inlines = [CallHistoryInline]
+    inlines = [CallHistoryInline, LeadContactHistoryInline]
 
 
 @admin.register(Quotation)

@@ -1,7 +1,15 @@
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
-from transactions.models import CallHistory, Lead, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+from transactions.models import (
+    CallHistory,
+    Lead,
+    LeadContactHistory,
+    ProposalDraft,
+    ProposalTemplate,
+    Quotation,
+    QuotationApproval,
+)
 from utilities.models import Notification
 
 User = get_user_model()
@@ -863,3 +871,138 @@ class QuotationApprovalFlowTests(APITestCase):
         resp = self.client.delete(f'/api/transactions/quotations/{self.lead.id}/')
         self.assertEqual(resp.status_code, 404)
         self.assertTrue(Quotation.objects.filter(lead_id=self.lead.id).exists())
+
+
+class ContactEditSyncTests(APITestCase):
+    """Company/contact details stay in sync and audited from any screen."""
+
+    def setUp(self):
+        company = make_company('Acme')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@acme.com', password='x', name='Manager A',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@acme.com', password='x', name='Staff A',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        Lead.objects.filter(tenant__isnull=True).delete()
+        self.lead = Lead.objects.create(
+            id='RL-SYNC', company='Sync Co', contact='Old Person',
+            phone='111', email='old@sync.co', category='Hospital',
+            city='Kochi', source='Google Search', added_by='Manager A',
+            tenant=company, status='raw',
+        )
+
+    def test_lead_edit_syncs_to_existing_quotation(self):
+        quotation = Quotation.objects.create(
+            id='QT-SYNC-1', lead_id='RL-SYNC', company='Sync Co',
+            tenant=self.company, mobile='111', email='old@sync.co',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch('/api/transactions/leads/RL-SYNC/', {
+            'phone': '9999999999', 'email': 'new@sync.co',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        quotation.refresh_from_db()
+        self.assertEqual(quotation.mobile, '9999999999')
+        self.assertEqual(quotation.email, 'new@sync.co')
+
+    def test_lead_change_records_history_and_flags(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch('/api/transactions/leads/RL-SYNC/', {
+            'phone': '222', 'city': 'Trivandrum',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['contactChanged'])
+        self.assertFalse(resp.data['wasGenerated'])
+        rows = {h['field']: h for h in resp.data['contactHistory']}
+        self.assertEqual(rows['phone']['fromValue'], '111')
+        self.assertEqual(rows['phone']['toValue'], '222')
+        self.assertEqual(rows['phone']['changedBy'], 'Manager A')
+        self.assertEqual(rows['city']['fromValue'], 'Kochi')
+        self.assertEqual(LeadContactHistory.objects.count(), 2)
+
+    def test_lead_edit_without_contact_change_no_history(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch('/api/transactions/leads/RL-SYNC/', {
+            'remarks': 'Just a note',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['contactChanged'])
+        self.assertEqual(LeadContactHistory.objects.count(), 0)
+
+    def test_quotation_edit_syncs_and_audits_back_to_lead(self):
+        self.client.force_authenticate(self.manager)
+        # First save creates the proposal (baseline — nothing to mirror).
+        self.client.put('/api/transactions/quotations/RL-SYNC/', {
+            'company': 'Sync Co', 'customer': 'Old Person', 'mobile': '111',
+            'email': 'old@sync.co', 'category': 'Hospital', 'city': 'Kochi',
+            'source': 'Google Search', 'total': '1000',
+        }, format='json')
+        # Second save corrects the contact person / mobile / email.
+        resp = self.client.put('/api/transactions/quotations/RL-SYNC/', {
+            'company': 'Sync Co', 'customer': 'New Person', 'mobile': '333',
+            'email': 'mail@sync.co', 'category': 'Hospital', 'city': 'Kochi',
+            'source': 'Google Search', 'total': '1000',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['contactChanged'])
+        self.assertFalse(resp.data['wasGenerated'])
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.phone, '333')
+        self.assertEqual(self.lead.email, 'mail@sync.co')
+        self.assertEqual(self.lead.contact, 'New Person')
+        rows = {}
+        for field, from_value, to_value in (
+            LeadContactHistory.objects.filter(lead=self.lead)
+            .values_list('field', 'from_value', 'to_value')
+        ):
+            rows[field] = (from_value, to_value)
+        self.assertEqual(rows['phone'], ('111', '333'))
+        self.assertEqual(rows['contact'], ('Old Person', 'New Person'))
+
+    def test_quotation_edit_on_generated_quote_flags_warning(self):
+        self.client.force_authenticate(self.manager)
+        self.client.put('/api/transactions/quotations/RL-SYNC/', {
+            'company': 'Sync Co', 'customer': 'Person', 'mobile': '111',
+            'email': 'a@sync.co', 'category': 'Hospital', 'city': 'Kochi',
+            'source': 'Google Search', 'total': '1000',
+        }, format='json')
+        quotation = Quotation.objects.get(lead_id='RL-SYNC')
+        quotation.status = 'Approved'
+        quotation.save()
+        resp = self.client.put('/api/transactions/quotations/RL-SYNC/', {
+            'email': 'changed@sync.co',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['contactChanged'])
+        self.assertTrue(resp.data['wasGenerated'])
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.email, 'changed@sync.co')
+        self.assertTrue(LeadContactHistory.objects.filter(
+            lead=self.lead, field='email', from_value='a@sync.co', to_value='changed@sync.co'
+        ).exists())
+
+    def test_quotation_create_does_not_log_spurious_history(self):
+        # First-time proposal save with the same values as the lead records
+        # nothing in the audit trail.
+        self.client.force_authenticate(self.manager)
+        self.client.put('/api/transactions/quotations/RL-SYNC/', {
+            'company': 'Sync Co', 'customer': 'Old Person', 'mobile': '111',
+            'email': 'old@sync.co', 'category': 'Hospital', 'city': 'Kochi',
+            'source': 'Google Search', 'total': '1000',
+        }, format='json')
+        self.assertEqual(LeadContactHistory.objects.count(), 0)
+
+    def test_contact_history_rides_on_lead_list(self):
+        self.client.force_authenticate(self.manager)
+        self.client.patch('/api/transactions/leads/RL-SYNC/', {
+            'phone': '444',
+        }, format='json')
+        resp = self.client.get('/api/transactions/leads/?status=raw')
+        self.assertEqual(resp.status_code, 200)
+        row = next(l for l in resp.data if l['id'] == 'RL-SYNC')
+        self.assertEqual(row['contactHistory'][0]['field'], 'phone')
+        self.assertEqual(row['contactHistory'][0]['toValue'], '444')
