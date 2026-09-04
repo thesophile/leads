@@ -575,7 +575,7 @@ export default function ProposalPreview() {
     setActionError('')
     try {
       const updated = await api.put(
-        `/transactions/quotations/${encodeURIComponent(proposalData.leadId || proposalData.id)}/`,
+        `/transactions/quotations/${encodeURIComponent(proposalData.id)}/`,
         { status: 'Pending Approval', approvers: sendApprovers }
       )
       setProposal(updated)
@@ -594,7 +594,7 @@ export default function ProposalPreview() {
     setOtpSent(false)
     try {
       await api.post(
-        `/transactions/quotations/${encodeURIComponent(proposalData.leadId || proposalData.id)}/approval-otp/`,
+        `/transactions/quotations/${encodeURIComponent(proposalData.id)}/approval-otp/`,
         {}
       )
       setOtpSent(true)
@@ -611,7 +611,7 @@ export default function ProposalPreview() {
     setActionError('')
     try {
       const updated = await api.post(
-        `/transactions/quotations/${encodeURIComponent(proposalData.leadId || proposalData.id)}/approve/`,
+        `/transactions/quotations/${encodeURIComponent(proposalData.id)}/approve/`,
         { otp, note: actionNote }
       )
       setProposal(updated)
@@ -629,7 +629,7 @@ export default function ProposalPreview() {
     setActionError('')
     try {
       const updated = await api.post(
-        `/transactions/quotations/${encodeURIComponent(proposalData.leadId || proposalData.id)}/reject/`,
+        `/transactions/quotations/${encodeURIComponent(proposalData.id)}/reject/`,
         { reason: rejectReason }
       )
       setProposal(updated)

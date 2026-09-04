@@ -111,6 +111,7 @@ class QuotationSerializer(serializers.ModelSerializer):
     proposalScope = serializers.CharField(source='proposal_scope', required=False, allow_blank=True)
     termsConditions = serializers.CharField(source='terms_conditions', required=False, allow_blank=True)
     revisionNo = serializers.CharField(source='revision_no', required=False, allow_blank=True)
+    versionNo = serializers.IntegerField(source='version_no', read_only=True)
     submittedBy = serializers.IntegerField(source='submitted_by_id', required=False, allow_null=True)
     approver = serializers.IntegerField(source='approver_id', required=False, allow_null=True)
     approverName = serializers.CharField(source='approver_name', required=False, allow_blank=True)
@@ -146,6 +147,7 @@ class QuotationSerializer(serializers.ModelSerializer):
             'staff',
             'date',
             'revisionNo',
+            'versionNo',
             'status',
             'total',
             'discount',
@@ -221,6 +223,7 @@ class LeadSerializer(serializers.ModelSerializer):
     history = CallHistorySerializer(many=True, read_only=True)
     contactHistory = LeadContactHistorySerializer(many=True, read_only=True, source='contact_history')
     quotation = serializers.SerializerMethodField()
+    quotations = serializers.SerializerMethodField()
     displayDate = serializers.CharField(source='display_date', required=False, allow_blank=True)
     addedBy = serializers.CharField(source='added_by', required=False, allow_blank=True)
     assignedTo = serializers.CharField(source='assigned_to', required=False, allow_blank=True)
@@ -255,17 +258,27 @@ class LeadSerializer(serializers.ModelSerializer):
             'hasFollowUp',
             'history',
             'contactHistory',
+            'quotations',
             'quotation',
         ]
 
     def get_quotation(self, obj):
         quotations = self.context.get('quotations')
         if quotations is not None:
-            quotation = quotations.get(obj.id)
+            versions = quotations.get(obj.id)
+            quotation = versions[-1] if versions else None
             if quotation is None:
                 return None
             return QuotationSerializer(quotation).data
-        quotation = Quotation.objects.filter(lead_id=obj.id).first()
+        quotation = Quotation.objects.filter(lead_id=obj.id).order_by('-version_no').first()
         if quotation is None:
             return None
         return QuotationSerializer(quotation).data
+
+    def get_quotations(self, obj):
+        quotations = self.context.get('quotations')
+        if quotations is not None:
+            versions = quotations.get(obj.id) or []
+        else:
+            versions = list(Quotation.objects.filter(lead_id=obj.id).order_by('-version_no'))
+        return QuotationSerializer(versions, many=True).data

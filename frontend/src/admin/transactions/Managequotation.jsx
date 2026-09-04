@@ -101,46 +101,47 @@ function normalizeRichText(html) {
     .trim()
 }
 
-function mapLeadToQuotation(lead) {
-  const q = lead.quotation
+function mapLeadToQuotation(lead, q) {
+  const quotation = q || lead.quotation
   return {
-    id: lead.id,
+    id: quotation?.id || lead.id,
     leadId: lead.id,
-    customer: q?.customer || lead.contact || '',
-    company: q?.company || lead.company || '',
-    mobile: q?.mobile || lead.phone || '',
-    email: q?.email || lead.email || '',
-    category: q?.category || lead.category || '',
-    city: q?.city || lead.city || '',
-    bdm: q?.bdm || lead.assignedTo || '',
-    qtnBy: q?.qtnBy || lead.addedBy || '',
-    staff: q?.staff || lead.assignedTo || lead.addedBy || '',
-    date: q?.date || lead.displayDate || lead.date || '',
-    revisionNo: q?.revisionNo || '',
-    status: q ? q.status || 'Not Sent' : 'Quotation Requested',
-    total: q?.total || '',
-    discount: q?.discount || '',
-    netAmount: q?.netAmount || '',
-    currency: q?.currency || 'INR (₹)',
-    source: q?.source || lead.source || '',
-    proposalScope: q?.proposalScope || '',
-    termsConditions: q?.termsConditions || '',
-    companyTerms: q?.companyTerms || '',
-    hasProposal: !!q,
-    approverName: q?.approverName || '',
-    submittedBy: q?.submittedBy || null,
-    submittedByName: q?.submittedByName || '',
-    signedBy: q?.signedBy || '',
-    signatureRef: q?.signatureRef || '',
-    approvedAt: q?.approvedAt || '',
-    rejectedAt: q?.rejectedAt || '',
-    rejectionReason: q?.rejectionReason || '',
-    approvals: q?.approvals || [],
-    approvalsTotal: q?.approvalsTotal || 0,
-    approvalsApproved: q?.approvalsApproved || 0,
-    remarks: q?.remarks || lead.remarks || '',
-    clientStatus: q?.clientStatus || 'Pending',
-    clientMessage: q?.clientMessage || '',
+    versionNo: quotation?.versionNo || 1,
+    customer: quotation?.customer || lead.contact || '',
+    company: quotation?.company || lead.company || '',
+    mobile: quotation?.mobile || lead.phone || '',
+    email: quotation?.email || lead.email || '',
+    category: quotation?.category || lead.category || '',
+    city: quotation?.city || lead.city || '',
+    bdm: quotation?.bdm || lead.assignedTo || '',
+    qtnBy: quotation?.qtnBy || lead.addedBy || '',
+    staff: quotation?.staff || lead.assignedTo || lead.addedBy || '',
+    date: quotation?.date || lead.displayDate || lead.date || '',
+    revisionNo: quotation?.revisionNo || '',
+    status: quotation ? quotation.status || 'Not Sent' : 'Quotation Requested',
+    total: quotation?.total || '',
+    discount: quotation?.discount || '',
+    netAmount: quotation?.netAmount || '',
+    currency: quotation?.currency || 'INR (₹)',
+    source: quotation?.source || lead.source || '',
+    proposalScope: quotation?.proposalScope || '',
+    termsConditions: quotation?.termsConditions || '',
+    companyTerms: quotation?.companyTerms || '',
+    hasProposal: !!quotation,
+    approverName: quotation?.approverName || '',
+    submittedBy: quotation?.submittedBy || null,
+    submittedByName: quotation?.submittedByName || '',
+    signedBy: quotation?.signedBy || '',
+    signatureRef: quotation?.signatureRef || '',
+    approvedAt: quotation?.approvedAt || '',
+    rejectedAt: quotation?.rejectedAt || '',
+    rejectionReason: quotation?.rejectionReason || '',
+    approvals: quotation?.approvals || [],
+    approvalsTotal: quotation?.approvalsTotal || 0,
+    approvalsApproved: quotation?.approvalsApproved || 0,
+    remarks: quotation?.remarks || lead.remarks || '',
+    clientStatus: quotation?.clientStatus || 'Pending',
+    clientMessage: quotation?.clientMessage || '',
     contactHistory: lead.contactHistory || [],
   }
 }
@@ -165,6 +166,10 @@ const STATUS_LIST = [
   'Accepted',
   'Declined',
 ]
+
+// Proposals already approved / sent / decided by the client cannot be edited
+// in place; they can only be re-created as a new version.
+const LOCKED_STATUSES = ['Approved', 'Sent to Client', 'Accepted', 'Declined']
 
 const SOURCES = [
   'Google Search',
@@ -325,7 +330,16 @@ export default function Managequotation() {
     async function fetchData() {
       try {
         const data = await api.get('/transactions/leads/?status=quotation')
-        if (!cancelled) setQuotationsList(data.map(mapLeadToQuotation))
+        if (!cancelled) {
+          setQuotationsList(
+            data.flatMap((lead) => {
+              const versions = Array.isArray(lead.quotations) && lead.quotations.length
+                ? lead.quotations
+                : [null]
+              return versions.map((q) => mapLeadToQuotation(lead, q))
+            })
+          )
+        }
       } catch (err) {
         if (!cancelled) setError(err.message)
       } finally {
@@ -447,7 +461,7 @@ export default function Managequotation() {
     setSendingClient(true)
     try {
       const data = await api.post(
-        `/transactions/quotations/${quote.leadId || quote.id}/send-to-client/`,
+        `/transactions/quotations/${quote.id}/send-to-client/`,
         {
           channels: sendClientChannels,
           origin: window.location.origin,
@@ -484,7 +498,7 @@ export default function Managequotation() {
     setCopyingClient(true)
     try {
       const data = await api.post(
-        `/transactions/quotations/${quote.leadId || quote.id}/send-to-client/`,
+        `/transactions/quotations/${quote.id}/send-to-client/`,
         { channels: ['copy'], origin: window.location.origin }
       )
       try {
@@ -533,10 +547,10 @@ export default function Managequotation() {
     )
     setApprovalSent(`✓ Proposal sent to ${approverNames} for approval`)
     resetApprovalDirty()
-    if (quote?.leadId) {
+    if (quote?.id) {
       let updated = null
       try {
-        updated = await api.put(`/transactions/quotations/${quote.leadId}/`, {
+        updated = await api.put(`/transactions/quotations/${quote.id}/`, {
           status: 'Pending Approval',
           approvers: selectedApprovers,
           remarks: `Sent to ${approverNames} for approval`,
@@ -568,6 +582,7 @@ export default function Managequotation() {
   // "New Proposal" Modal State (matching user's reference screenshot)
   const [proposalModalOpen, setProposalModalOpen] = useState(false)
   const [editingProposalId, setEditingProposalId] = useState(null)
+  const [editAsNewVersion, setEditAsNewVersion] = useState(false)
   
   const [bdm, setBdm] = useState('Alex Joseph')
   const [qtnBy, setQtnBy] = useState('Priya Sharma')
@@ -878,10 +893,11 @@ export default function Managequotation() {
     if (draft.remarks !== undefined) setRemarksVal(draft.remarks)
   }
 
-  async function handleOpenNewProposalModal(quote = null) {
+  async function handleOpenNewProposalModal(quote = null, asNewVersion = false) {
     setValidationErrors({})
     setSelectedTemplateId('')
-    const nextDraftKey = quote ? String(quote.id) : `new-${newProposalCounter.current}`
+    setEditAsNewVersion(!!asNewVersion)
+    const nextDraftKey = quote ? `edit-${quote.id}` : `new-${newProposalCounter.current}`
     newProposalCounter.current += 1
     setDraftKey(nextDraftKey)
     draftKeyRef.current = nextDraftKey
@@ -889,7 +905,11 @@ export default function Managequotation() {
       setEditingProposalId(quote.id)
       setBdm(quote.bdm || quote.staff || 'Alex Joseph')
       setQtnBy(quote.qtnBy || quote.staff || 'Priya Sharma')
-      setRevisionNo(quote.revisionNo || `${quote.id} (Rev 1)`)
+      setRevisionNo(
+        asNewVersion
+          ? `${quote.id} (Rev ${(quote.versionNo || 1) + 1})`
+          : quote.revisionNo || `${quote.id} (Rev 1)`
+      )
       setCustomerPerson(quote.customer || '')
       setCompanyName(quote.company || '')
       setMobileNum(quote.mobile || '')
@@ -906,6 +926,7 @@ export default function Managequotation() {
     } else {
       // Clean new proposal
       setEditingProposalId(null)
+      setEditAsNewVersion(false)
       setBdm('Alex Joseph')
       setQtnBy('Priya Sharma')
       setRevisionNo(`QT-2026-${String(quotationsList.length + 1).padStart(3, '0')} (Rev 1)`)
@@ -980,11 +1001,13 @@ export default function Managequotation() {
     let persistLeadId = null
 
     if (editingProposalId) {
-      // Update existing
+      // Update existing, or spawn a fresh version when editing a locked
+      // (already approved/sent) proposal via "Edit as New Version".
       nextApprovalId = editingProposalId
       persistLeadId = editingProposalId
       const existing =
         quotationsList.find((item) => item.id === editingProposalId) || {}
+      const isNewVersion = editAsNewVersion
       targetQuote = {
         ...existing,
         bdm,
@@ -1004,13 +1027,21 @@ export default function Managequotation() {
         proposalScope: currentScope,
         termsConditions: currentTerms,
         hasProposal: true,
-        status: existing.status === 'Quotation Requested' ? 'Not Sent' : existing.status,
+        status: isNewVersion ? 'Not Sent' : (existing.status === 'Quotation Requested' ? 'Not Sent' : existing.status),
         remarks: remarksVal,
       }
-      setQuotationsList((prev) =>
-        prev.map((item) => (item.id === editingProposalId ? targetQuote : item))
+      if (isNewVersion) {
+        // Do not touch the locked version; a new copy is added on save.
+      } else {
+        setQuotationsList((prev) =>
+          prev.map((item) => (item.id === editingProposalId ? targetQuote : item))
+        )
+      }
+      setSubmitMessage(
+        isNewVersion
+          ? '✓ New version created. Now choose an admin to send it for approval.'
+          : '✓ Proposal details saved. Now choose an admin to send for approval.'
       )
-      setSubmitMessage('✓ Proposal details saved. Now choose an admin to send for approval.')
     } else {
       // Create new
       nextApprovalId = `QT-2026-${String(quotationsList.length + 1).padStart(3, '0')}`
@@ -1046,7 +1077,7 @@ export default function Managequotation() {
 
     if (persistLeadId) {
       try {
-        const saved = await api.put(`/transactions/quotations/${persistLeadId}/`, {
+        const payload = {
           customer: targetQuote.customer,
           company: targetQuote.company,
           mobile: targetQuote.mobile,
@@ -1067,7 +1098,29 @@ export default function Managequotation() {
           proposalScope: targetQuote.proposalScope,
           termsConditions: targetQuote.termsConditions,
           remarks: targetQuote.remarks,
-        })
+        }
+        if (editAsNewVersion) payload.newVersion = true
+        const saved = await api.put(`/transactions/quotations/${persistLeadId}/`, payload)
+        if (saved && saved.newVersion) {
+          // The backend returned the fresh copy; add it to the list.
+          const leadLike = quotationsList.find((item) => item.leadId === (saved.leadId || persistLeadId))
+          nextApprovalId = saved.id
+          const newRow = {
+            ...targetQuote,
+            id: saved.id,
+            leadId: saved.leadId || (leadLike && leadLike.leadId) || persistLeadId,
+            versionNo: saved.versionNo || 2,
+            status: saved.status || 'Not Sent',
+            approverName: saved.approverName || '',
+            signedBy: saved.signedBy || '',
+            signatureRef: saved.signatureRef || '',
+            approvals: saved.approvals || [],
+            approvalsTotal: saved.approvalsTotal || 0,
+            approvalsApproved: saved.approvalsApproved || 0,
+            clientStatus: saved.clientStatus || 'Pending',
+          }
+          setQuotationsList((prev) => [newRow, ...prev])
+        }
         if (saved && saved.contactChanged && saved.wasGenerated) {
           showToast(
             'Heads-up: this proposal was already sent/approved with the old contact details. Please inform the client or resend.',
@@ -1206,8 +1259,8 @@ export default function Managequotation() {
     if (!revertQuote) return
     const quote = revertQuote
     try {
-      if (quote.leadId) await api.del(`/transactions/quotations/${quote.leadId}/`)
-      setQuotationsList((prev) => prev.filter((item) => item.id !== quote.id))
+      if (quote?.id) await api.del(`/transactions/quotations/${quote.id}/`)
+      setQuotationsList((prev) => prev.filter((item) => item.leadId !== quote.leadId))
     } catch (err) {
       window.alert(`Failed to revert quotation: ${err.message}`)
     } finally {
@@ -1406,9 +1459,16 @@ export default function Managequotation() {
                     >
                       {/* Customer */}
                       <td className="py-0.5 pr-3 min-w-0">
-                        <p className="font-semibold text-slate-900 text-xs truncate max-w-[160px]" title={quote.customer}>
-                          {quote.customer}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-slate-900 text-xs truncate max-w-[150px]" title={quote.customer}>
+                            {quote.customer}
+                          </p>
+                          {quote.hasProposal && quote.versionNo > 1 && (
+                            <span className="shrink-0 rounded bg-slate-100 border border-slate-200 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                              V{quote.versionNo}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           {quote.category}
                         </p>
@@ -1591,18 +1651,33 @@ export default function Managequotation() {
                       <span>View Proposal</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setOpenDropdownId(null)
-                        handleOpenNewProposalModal(activeMenuQuote)
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
-                    >
-                      <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
-                      <span>Edit Proposal</span>
-                    </button>
+                    {LOCKED_STATUSES.includes(activeMenuQuote.status) ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenDropdownId(null)
+                          handleOpenNewProposalModal(activeMenuQuote, true)
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700 transition cursor-pointer"
+                      >
+                        <PencilIcon className="h-3.5 w-3.5 text-orange-600" />
+                        <span>Edit as New Version</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenDropdownId(null)
+                          handleOpenNewProposalModal(activeMenuQuote)
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer"
+                      >
+                        <PencilIcon className="h-3.5 w-3.5 text-purple-600" />
+                        <span>Edit Proposal</span>
+                      </button>
+                    )}
 
                     {activeMenuQuote.status !== 'Pending Approval' &&
                       activeMenuQuote.status !== 'Approved' && (

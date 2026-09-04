@@ -834,7 +834,7 @@ class QuotationApprovalFlowTests(APITestCase):
         self.assertEqual(quotation.status, 'Approved')
         self.assertEqual(QuotationApproval.objects.filter(quotation=quotation).count(), 2)
 
-    def test_edit_approved_quote_preserves_status(self):
+    def test_edit_approved_quote_is_blocked(self):
         self._send()
         self._approve(self.approver, self.lead.id)
         self._approve(self.approver2, self.lead.id)
@@ -843,9 +843,89 @@ class QuotationApprovalFlowTests(APITestCase):
             'status': 'Approved',
             'remarks': 'Updated after approval',
         }, format='json')
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['status'], 'Approved')
-        self.assertEqual(resp.data['remarks'], 'Updated after approval')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_edit_as_new_version_creates_a_fresh_copy(self):
+        # An approved proposal cannot be changed in place; "Edit as New
+        # Version" spawns a new version that must be approved again before it
+        # can be sent to the client. The old version stays untouched.
+        self._send()
+        self._approve(self.approver, self.lead.id)
+        self._approve(self.approver2, self.lead.id)
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'newVersion': True,
+            'remarks': 'Revised offer',
+            'total': '999',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['status'], 'Not Sent')
+        self.assertEqual(resp.data['versionNo'], 2)
+        self.assertEqual(resp.data['remarks'], 'Revised offer')
+        self.assertTrue(resp.data['newVersion'])
+        # The new version starts completely fresh.
+        new_quote = Quotation.objects.get(id=resp.data['id'])
+        self.assertEqual(new_quote.lead_id, self.lead.id)
+        self.assertEqual(new_quote.version_no, 2)
+        self.assertEqual(QuotationApproval.objects.filter(quotation=new_quote).count(), 0)
+        self.assertEqual(new_quote.client_token, '')
+        # The old version is untouched.
+        old_quote = Quotation.objects.get(id=self.lead.id)
+        self.assertEqual(old_quote.status, 'Approved')
+        self.assertEqual(old_quote.remarks, '')
+        self.assertEqual(QuotationApproval.objects.filter(quotation=old_quote).count(), 2)
+
+        # The new version must be approved again before it can go to the client.
+        self.client.force_authenticate(self.staff)
+        send_resp = self.client.put(
+            f'/api/transactions/quotations/{new_quote.id}/', {
+                'status': 'Pending Approval', 'approvers': self.approver_ids,
+            }, format='json',
+        )
+        self.assertEqual(send_resp.status_code, 200)
+        self._approve(self.approver, new_quote.id)
+        self._approve(self.approver2, new_quote.id)
+        self.assertEqual(Quotation.objects.get(id=new_quote.id).status, 'Approved')
+        self.assertEqual(Quotation.objects.get(id=self.lead.id).status, 'Approved')
+
+    def test_sent_to_client_versions_keep_separate_links(self):
+        # Two coexist versions each keep their own client link after approval.
+        self._send()
+        self._approve(self.approver, self.lead.id)
+        self._approve(self.approver2, self.lead.id)
+        self.client.force_authenticate(self.staff)
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'newVersion': True, 'total': '888',
+        }, format='json')
+        new_quote = Quotation.objects.get(lead_id=self.lead.id, version_no=2)
+        self.client.force_authenticate(self.staff)
+        self.client.put(
+            f'/api/transactions/quotations/{new_quote.id}/', {
+                'status': 'Pending Approval', 'approvers': self.approver_ids,
+            }, format='json',
+        )
+        self._approve(self.approver, new_quote.id)
+        self._approve(self.approver2, new_quote.id)
+        self.client.force_authenticate(self.approver)
+        first = self.client.post(
+            f'/api/transactions/quotations/{self.lead.id}/send-to-client/',
+            {'channels': ['copy'], 'origin': 'https://app.test'}, format='json',
+        )
+        second = self.client.post(
+            f'/api/transactions/quotations/{new_quote.id}/send-to-client/',
+            {'channels': ['copy'], 'origin': 'https://app.test'}, format='json',
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertNotEqual(first.data['link'], second.data['link'])
+        tokens = [Quotation.objects.get(id=q.id).client_token for q in (self.q, new_quote)]
+        self.assertEqual(len(set(tokens)), 2)
+
+        # The client page for the first version lists the sibling via payload.
+        detail = self.client.get(f"/api/transactions/public/quotations/{tokens[0]}/")
+        self.assertEqual(detail.status_code, 200)
+        version_ids = [v['id'] for v in detail.data['versions']]
+        self.assertIn(new_quote.id, version_ids)
 
     def test_get_quotation_is_scoped_to_company(self):
         other = make_company('OtherCo')
@@ -973,17 +1053,28 @@ class ContactEditSyncTests(APITestCase):
         quotation = Quotation.objects.get(lead_id='RL-SYNC')
         quotation.status = 'Approved'
         quotation.save()
-        resp = self.client.put('/api/transactions/quotations/RL-SYNC/', {
+        # Editing an approved proposal must go through "Edit as New Version";
+        # a plain edit is refused.
+        blocked = self.client.put('/api/transactions/quotations/RL-SYNC/', {
             'email': 'changed@sync.co',
         }, format='json')
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(blocked.status_code, 400)
+        # The new version still syncs the contact change and flags the warning.
+        resp = self.client.put('/api/transactions/quotations/RL-SYNC/', {
+            'newVersion': True,
+            'email': 'changed@sync.co',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
         self.assertTrue(resp.data['contactChanged'])
         self.assertTrue(resp.data['wasGenerated'])
+        self.assertEqual(resp.data['status'], 'Not Sent')
         self.lead.refresh_from_db()
         self.assertEqual(self.lead.email, 'changed@sync.co')
         self.assertTrue(LeadContactHistory.objects.filter(
             lead=self.lead, field='email', from_value='a@sync.co', to_value='changed@sync.co'
         ).exists())
+        # The original approved version is untouched.
+        self.assertEqual(Quotation.objects.get(lead_id='RL-SYNC', version_no=1).status, 'Approved')
 
     def test_quotation_create_does_not_log_spurious_history(self):
         # First-time proposal save with the same values as the lead records

@@ -217,6 +217,7 @@ class Quotation(models.Model):
     staff = models.CharField(max_length=120, blank=True)
     date = models.CharField(max_length=50, blank=True)
     revision_no = models.CharField(max_length=60, blank=True)
+    version_no = models.PositiveSmallIntegerField(default=1)
     status = models.CharField(max_length=50, default='Not Sent')
     total = models.CharField(max_length=30, blank=True)
     discount = models.CharField(max_length=30, blank=True)
@@ -277,7 +278,7 @@ class Quotation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['-version_no', '-created_at']
 
     def __str__(self):
         return f'{self.id} - {self.company}'

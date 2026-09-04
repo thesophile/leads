@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db import IntegrityError
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -82,6 +82,11 @@ CONTACT_Q_TO_LEAD = {value: key for key, value in CONTACT_FIELD_MAP.items()}
 
 # Quotation statuses that mean a proposal has not been generated/sent yet.
 NOT_GENERATED_STATUSES = {'', 'Not Sent', 'Quotation Requested'}
+
+# Statuses that represent a proposal already approved / sent / decided. These
+# proposals are locked: they cannot be edited in place, only re-created as a
+# new version via "Edit as New Version".
+LOCKED_STATUSES = {'Approved', 'Sent to Client', 'Accepted', 'Declined'}
 
 CONTACT_EDITABLE_CAMEL = ('customer', 'company', 'mobile', 'email', 'category', 'city', 'source')
 
@@ -159,8 +164,65 @@ def sync_lead_contact_to_quotation(lead, old_contact):
         quotation.save()
 
 
-def proposal_url(lead_id):
-    return f'/quotations/preview/{lead_id}' if lead_id else ''
+def proposal_url(quotation):
+    """Preview URL for a specific proposal (version-aware)."""
+    if quotation is None:
+        return ''
+    return f"/quotations/preview/{quotation.id}"
+
+
+def find_quotation(param):
+    """Resolve a quotation by its own id, else by lead id (latest version)."""
+    if not param:
+        return None
+    quotation = Quotation.objects.filter(id=param).first()
+    if quotation is not None:
+        return quotation
+    return Quotation.objects.filter(lead_id=param).order_by('-version_no').first()
+
+
+def latest_version_no(lead_id):
+    """The next version number to assign for a lead's proposal."""
+    return (Quotation.objects.filter(lead_id=lead_id)
+            .aggregate(max=Max('version_no'))['max'] or 0) + 1
+
+
+def duplicate_quotation(source, payload):
+    """Create a new version row of ``source`` from an edit payload.
+
+    The old proposal is left untouched; the new copy starts from scratch
+    (``Not Sent``, no approvals, signatures, or client token) so it must be
+    approved again before it can be sent to the client.
+    """
+    version_no = latest_version_no(source.lead_id)
+    quotation = Quotation(
+        id=f'{source.lead_id}-V{version_no}',
+        lead_id=source.lead_id,
+        tenant=source.tenant,
+        company=payload.get('company') or source.company,
+        customer=payload.get('customer') or source.customer,
+        mobile=payload.get('mobile') or source.mobile,
+        email=payload.get('email') or source.email,
+        category=payload.get('category') or source.category,
+        city=payload.get('city') or source.city,
+        source=payload.get('source') or source.source,
+        bdm=payload.get('bdm') or source.bdm,
+        qtn_by=payload.get('qtnBy') or source.qtn_by,
+        staff=payload.get('staff') or source.staff,
+        date=payload.get('date') or source.date,
+        revision_no=payload.get('revisionNo') or source.revision_no,
+        version_no=version_no,
+        status='Not Sent',
+        total=payload.get('total') or source.total,
+        discount=payload.get('discount') or source.discount,
+        net_amount=payload.get('netAmount') or source.net_amount,
+        currency=payload.get('currency') or source.currency,
+        proposal_scope=payload.get('proposalScope') or source.proposal_scope,
+        terms_conditions=payload.get('termsConditions') or source.terms_conditions,
+        remarks=payload.get('remarks') or source.remarks,
+    )
+    quotation.save()
+    return quotation
 
 
 def resolve_approvers(user, raw_ids):
@@ -302,12 +364,10 @@ class LeadListView(APIView):
         status_filter = request.query_params.get('status') or 'raw'
         leads = scoped_queryset(request.user, status_filter).order_by('-created_at')
         leads = leads.prefetch_related('history', 'contact_history')
-        quotations = {
-            quotation.lead_id: quotation
-            for quotation in Quotation.objects.filter(
-                lead_id__in=leads.values_list('id', flat=True)
-            )
-        }
+        quotations = {}
+        lead_ids = leads.values_list('id', flat=True)
+        for quotation in Quotation.objects.filter(lead_id__in=lead_ids).order_by('version_no'):
+            quotations.setdefault(quotation.lead_id, []).append(quotation)
         return Response(
             LeadSerializer(leads, many=True, context={'quotations': quotations}).data
         )
@@ -541,11 +601,11 @@ class QuotationView(APIView):
                 {'detail': 'You do not have permission to view quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        quotation = find_quotation(lead_id)
         if quotation is None:
             return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
         if not request.user.is_superuser:
-            lead_in_scope = scoped_queryset(request.user).filter(pk=lead_id).first() is not None
+            lead_in_scope = scoped_queryset(request.user).filter(pk=quotation.lead_id).first() is not None
             same_company = quotation.tenant is not None and quotation.tenant == request.user.company
             if not lead_in_scope and not same_company:
                 return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -557,31 +617,66 @@ class QuotationView(APIView):
                 {'detail': 'You do not have permission to create or edit quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        lead = scoped_queryset(request.user).filter(pk=lead_id).first()
-        if lead is None:
-            return Response(
-                {'detail': 'Lead not found.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        is_new_version = bool(request.data.get('newVersion'))
+        quotation = find_quotation(lead_id)
+        if quotation is None:
+            lead = scoped_queryset(request.user).filter(pk=lead_id).first()
+            if lead is None:
+                return Response(
+                    {'detail': 'Lead not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            quotation = Quotation(id=lead_id, lead_id=lead_id, version_no=1, tenant=request.user.company, company=lead.company)
+            new_row = True
+        else:
+            new_row = False
+            if not request.user.is_superuser:
+                lead_in_scope = scoped_queryset(request.user).filter(pk=quotation.lead_id).first() is not None
+                same_company = quotation.tenant is not None and quotation.tenant == request.user.company
+                if not lead_in_scope and not same_company:
+                    return Response({'detail': 'Lead not found.'}, status=status.HTTP_404_NOT_FOUND)
+            lead = scoped_queryset(request.user).filter(pk=quotation.lead_id).first()
+            if lead is None:
+                return Response({'detail': 'Lead not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        source_quotation = quotation
         old_was_generated = quotation_was_generated(quotation)
         old_contact = {}
-        if quotation is not None:
+        if not new_row:
             old_contact = {
                 CONTACT_Q_TO_LEAD.get(self.QUOTATION_FIELDS[camel], self.QUOTATION_FIELDS[camel]):
                 getattr(quotation, self.QUOTATION_FIELDS[camel])
                 for camel in CONTACT_EDITABLE_CAMEL
                 if camel in request.data
             }
-        if quotation is None:
-            quotation = Quotation(id=lead_id, lead_id=lead_id, tenant=request.user.company, company=lead.company)
         current_status = quotation.status
         was_pending = current_status == 'Pending Approval'
         new_status = request.data.get('status')
         is_send_action = 'approvers' in request.data
+
+        # A locked (approved/sent/decided) proposal cannot be edited in place.
+        # The edit must spawn a fresh version via the "Edit as New Version"
+        # flow (newVersion flag); it will only be sendable after re-approval.
+        if is_new_version and not new_row:
+            quotation = duplicate_quotation(source_quotation, request.data)
+            contact_changed = bool(old_contact) and bool(
+                sync_contact_from_quotation(request.user, lead, quotation, old_contact)
+            )
+            data = QuotationSerializer(quotation).data
+            data.update({
+                'contactChanged': contact_changed,
+                'wasGenerated': old_was_generated,
+                'newVersion': True,
+            })
+            return Response(data, status=status.HTTP_201_CREATED)
+
+        if current_status in LOCKED_STATUSES:
+            return Response(
+                {'detail': 'This proposal is already approved or sent to the client and cannot be edited. Use "Edit as New Version" to create an updated copy.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # A generic edit must not force a terminal/approval status; use the
-        # dedicated approve/reject actions. Editing a proposal that merely
-        # keeps its existing status is allowed.
+        # dedicated approve/reject actions.
         if new_status in ('Approved', 'Rejected') and new_status != current_status:
             return Response(
                 {'detail': 'The proposal status cannot be set directly. Use the approve / reject action.'},
@@ -604,7 +699,7 @@ class QuotationView(APIView):
                     {'detail': 'This proposal is already awaiting approval. Approve or reject it before resending.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if current_status == 'Approved':
+            if current_status in LOCKED_STATUSES:
                 return Response(
                     {'detail': 'This proposal is already approved and cannot be resent.'},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -638,7 +733,7 @@ class QuotationView(APIView):
                     'Approval',
                     'Proposal awaiting your approval',
                     f'{quotation.id} - {quotation.company}, submitted by {request.user.name}.',
-                    url=proposal_url(quotation.lead_id),
+                    url=proposal_url(quotation),
                     entity_type='quotation',
                     entity_id=quotation.lead_id,
                 )
@@ -656,10 +751,13 @@ class QuotationView(APIView):
                 {'detail': 'You do not have permission to delete quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        lead = scoped_queryset(request.user).filter(pk=lead_id).first()
+        quotation = find_quotation(lead_id)
+        if quotation is None:
+            return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        lead = scoped_queryset(request.user).filter(pk=quotation.lead_id).first()
         if lead is None:
             return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
-        Quotation.objects.filter(lead_id=lead_id).delete()
+        Quotation.objects.filter(lead_id=quotation.lead_id).delete()
         lead.status = Lead.STATUS_ASSIGNED
         lead.call_status = 'Pending Call'
         lead.save(update_fields=['status', 'call_status', 'updated_at'])
@@ -705,7 +803,7 @@ class QuotationApprovalBaseView(APIView):
                 {'detail': 'You do not have permission to approve quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        quotation = find_quotation(lead_id)
         if quotation is None:
             return None, None, Response(
                 {'detail': 'Quotation not found.'},
@@ -825,7 +923,7 @@ class QuotationApproveView(QuotationApprovalBaseView):
                     'Approval',
                     'Proposal approved',
                     f'{quotation.id} - {quotation.company} approved by {request.user.name}. Order execution can begin.',
-                    url=proposal_url(quotation.lead_id),
+                    url=proposal_url(quotation),
                     entity_type='quotation',
                     entity_id=quotation.lead_id,
                 )
@@ -870,7 +968,7 @@ class QuotationRejectView(QuotationApprovalBaseView):
                 'Approval',
                 'Proposal rejected',
                 f'{quotation.id} - {quotation.company} was rejected by {request.user.name}. Reason: {reason}',
-                url=proposal_url(quotation.lead_id),
+                url=proposal_url(quotation),
                 entity_type='quotation',
                 entity_id=quotation.lead_id,
             )
@@ -897,11 +995,11 @@ class QuotationSendToClientView(APIView):
                 {'detail': 'You do not have permission to send quotations to clients.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        quotation = Quotation.objects.filter(lead_id=lead_id).first()
+        quotation = find_quotation(lead_id)
         if quotation is None:
             return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
         if not request.user.is_superuser:
-            lead_in_scope = scoped_queryset(request.user).filter(pk=lead_id).first() is not None
+            lead_in_scope = scoped_queryset(request.user).filter(pk=quotation.lead_id).first() is not None
             same_company = quotation.tenant is not None and quotation.tenant == request.user.company
             if not lead_in_scope and not same_company:
                 return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -993,6 +1091,7 @@ def public_quotation_payload(quotation):
             logo_url = ''
     return {
         'id': quotation.id,
+        'versionNo': quotation.version_no,
         'company': quotation.company,
         'customer': quotation.customer,
         'category': quotation.category,
@@ -1018,7 +1117,40 @@ def public_quotation_payload(quotation):
         'clientRespondedAt': quotation.client_responded_at.isoformat()
         if quotation.client_responded_at
         else None,
+        'versions': _public_sibling_versions(quotation),
     }
+
+
+def _public_sibling_versions(quotation):
+    """Other proposal versions for the same lead, for the client switcher.
+
+    Only versions that carry a live client link are included so the client can
+    compare the proposals they were actually sent. ``client_token`` fields are
+    excluded to avoid handing out unsigned links in bulk.
+    """
+    if not quotation.lead_id:
+        return []
+    versions = [
+        q for q in Quotation.objects
+        .filter(lead_id=quotation.lead_id)
+        .order_by('version_no')
+    ]
+    siblings = []
+    for q in versions:
+        if q.client_token and q.client_token_expires_at and q.client_token_expires_at >= timezone.now():
+            siblings.append({
+                'id': q.id,
+                'versionNo': q.version_no,
+                'revisionNo': q.revision_no,
+                'date': q.date,
+                'total': q.total,
+                'netAmount': q.net_amount,
+                'currency': q.currency,
+                'status': q.status,
+                'clientStatus': q.client_status,
+                'clientToken': q.client_token,
+            })
+    return siblings
 
 
 def _get_by_client_token(token):
@@ -1096,7 +1228,7 @@ class ClientQuotationResponseView(APIView):
                     f'{quotation.id} - {quotation.company} was {verb} by the client'
                     + (f'. Comment: {message}' if message else '.')
                 ),
-                url=proposal_url(quotation.lead_id),
+                url=proposal_url(quotation),
                 entity_type='quotation',
                 entity_id=quotation.lead_id,
             )

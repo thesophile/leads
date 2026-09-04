@@ -211,6 +211,34 @@ export default function ClientQuotation() {
                 </span>
               )}
             </div>
+
+            {Array.isArray(d.versions) && d.versions.length > 1 && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+                  Version
+                </span>
+                {d.versions.map((v) => {
+                  const active = v.id === d.id
+                  const isCurrent = v.clientToken === token
+                  return (
+                    <a
+                      key={v.id}
+                      href={`/quotation/${v.clientToken}`}
+                      className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition ${
+                        isCurrent
+                          ? 'border-brand-600 bg-brand-600 text-white'
+                          : active
+                          ? 'border-brand-300 bg-brand-50 text-brand-700'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {v.versionNo}
+                      {v.total ? <span className="font-medium">· {v.total}</span> : null}
+                    </a>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           <div className="rounded-b-2xl border border-t-0 border-slate-200 bg-slate-50/70 shadow-sm">
