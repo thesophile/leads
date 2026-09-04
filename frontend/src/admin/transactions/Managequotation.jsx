@@ -301,6 +301,18 @@ function SendIcon({ className = 'h-3.5 w-3.5' }) {
   )
 }
 
+function ShareIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  )
+}
+
 export default function Managequotation() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -1701,6 +1713,17 @@ export default function Managequotation() {
                         <span>Send to Client</span>
                       </button>
                     )}
+
+                    {activeMenuQuote.status === 'Sent to Client' && canSendToClient && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenSendClient(activeMenuQuote, e)}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                      >
+                        <ShareIcon className="h-3.5 w-3.5 text-blue-600" />
+                        <span>Share</span>
+                      </button>
+                    )}
                   </>
                 ) : (
                   <button
@@ -2487,8 +2510,14 @@ export default function Managequotation() {
                         {sendClientQuote.customer} • ₹{sendClientQuote.netAmount}
                       </p>
                     </div>
-                    <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold whitespace-nowrap text-emerald-700">
-                      Approved
+                    <span
+                      className={`rounded-md border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${
+                        sendClientQuote.status === 'Approved'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-blue-200 bg-blue-50 text-blue-700'
+                      }`}
+                    >
+                      {sendClientQuote.status === 'Approved' ? 'Approved' : 'Sent to Client'}
                     </span>
                   </div>
                 </div>
