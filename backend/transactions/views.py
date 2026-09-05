@@ -23,6 +23,7 @@ from .models import (
     CallHistory,
     Lead,
     LeadContactHistory,
+    Order,
     ProposalDraft,
     ProposalTemplate,
     Quotation,
@@ -30,6 +31,7 @@ from .models import (
 )
 from .serializers import (
     LeadSerializer,
+    OrderSerializer,
     ProposalDraftSerializer,
     ProposalTemplateSerializer,
     QuotationApprovalSerializer,
@@ -1157,6 +1159,42 @@ def _get_by_client_token(token):
     return Quotation.objects.filter(client_token=str(token or '')).first()
 
 
+def create_order_from_quotation(quotation):
+    """Create an Order record from an accepted quotation.
+
+    Returns the created order, or the existing order if one already exists for
+    the same proposal (idempotent for repeated calls).
+    """
+    existing = Order.objects.filter(id=quotation.id).first()
+    if existing is not None:
+        return existing
+    return Order.objects.create(
+        id=quotation.id,
+        lead_id=quotation.lead_id,
+        proposal_no=quotation.id,
+        proposal_date=quotation.date,
+        customer=quotation.customer,
+        company=quotation.company,
+        tenant=quotation.tenant,
+        mobile=quotation.mobile,
+        email=quotation.email,
+        city=quotation.city,
+        bdm=quotation.bdm,
+        proposal_by=quotation.qtn_by,
+        staff=quotation.staff,
+        date=quotation.date,
+        status='Pending',
+        total=quotation.total,
+        discount=quotation.discount,
+        net_amount=quotation.net_amount,
+        currency=quotation.currency or 'INR (₹)',
+        category=quotation.category,
+        remarks=quotation.remarks,
+        scope=quotation.proposal_scope,
+        details=quotation.terms_conditions,
+    )
+
+
 class ClientQuotationDetailView(APIView):
     """Public, unauthenticated read of an approved quotation by signed token."""
 
@@ -1219,6 +1257,13 @@ class ClientQuotationResponseView(APIView):
         quotation.client_token = ''
         quotation.client_token_expires_at = None
         quotation.save()
+        if accepted:
+            # Auto-create the Order form and move the lead to the Order stage.
+            order = create_order_from_quotation(quotation)
+            lead = Lead.objects.filter(id=quotation.lead_id).first()
+            if lead is not None and lead.status != Lead.STATUS_ORDER:
+                lead.status = Lead.STATUS_ORDER
+                lead.save(update_fields=['status', 'updated_at'])
         if quotation.submitted_by_id:
             notify(
                 quotation.submitted_by,
@@ -1446,4 +1491,101 @@ class ProposalDraftView(APIView):
             user=request.user,
             proposal_id=proposal_id,
         ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def scoped_orders(user):
+    """Return the Order queryset visible to ``user`` (superusers see all)."""
+    qs = Order.objects.all()
+    if not user.is_superuser:
+        qs = qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+    return qs
+
+
+class OrderListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'order.view'):
+            return Response(
+                {'detail': 'You do not have permission to view orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        orders = scoped_orders(request.user).order_by('-created_at')
+        return Response(OrderSerializer(orders, many=True).data)
+
+    def post(self, request):
+        if not can(request.user, 'order.create'):
+            return Response(
+                {'detail': 'You do not have permission to create orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        data = dict(request.data)
+        order_id = str(data.get('id') or '').strip()
+        if not order_id:
+            return Response(
+                {'detail': 'id: An order number is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        existing = Order.objects.filter(id=order_id).first()
+        if existing is not None:
+            return Response(
+                {'detail': f'An order with the number {order_id} already exists.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = OrderSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        order = serializer.save(tenant=request.user.company)
+        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+
+class OrderDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_scoped_order(self, request, pk):
+        order = scoped_orders(request.user).filter(pk=pk).first()
+        if order is None and not request.user.is_superuser:
+            order = Order.objects.filter(
+                pk=pk,
+                tenant=request.user.company,
+            ).first()
+        return order
+
+    def get(self, request, pk):
+        if not can(request.user, 'order.view'):
+            return Response(
+                {'detail': 'You do not have permission to view orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        order = self._get_scoped_order(request, pk)
+        if order is None:
+            return Response({'detail': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(OrderSerializer(order).data)
+
+    def put(self, request, pk):
+        if not can(request.user, 'order.create', 'order.edit'):
+            return Response(
+                {'detail': 'You do not have permission to create or edit orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        order = self._get_scoped_order(request, pk)
+        if order is None:
+            return Response({'detail': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = OrderSerializer(order, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        order = serializer.save()
+        return Response(OrderSerializer(order).data)
+
+    def delete(self, request, pk):
+        if not can(request.user, 'order.delete'):
+            return Response(
+                {'detail': 'You do not have permission to delete orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        order = self._get_scoped_order(request, pk)
+        if order is None:
+            return Response({'detail': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+        order.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

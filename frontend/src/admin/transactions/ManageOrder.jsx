@@ -1,150 +1,14 @@
-import { useState, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Layout from '../../Layout/Layout'
+import { api } from '../../api/client'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
 
 // Initial dataset of approved orders ready for execution
-const INITIAL_ORDERS_DATA = [
-  {
-    id: 'P2025-0004',
-    leadId: 'TC-108',
-    proposalNo: 'P2026-0004',
-    proposalDate: '25-06-2026',
-    customer: 'Karthika Nambeesan',
-    company: 'NAMBEESANS LAKSHMI LODGE',
-    mobile: '9447151442',
-    email: 'bookings@nambeesanslodge.com',
-    city: 'Thriprayar, Thrissur, Kerala',
-    bdm: 'Husna',
-    proposalBy: 'Bincy',
-    staff: 'Bincy',
-    date: '12-12-2024',
-    status: 'Accepted',
-    total: '50000/-',
-    discount: '5000/-',
-    netAmount: '45,000.00/-',
-    currency: 'INR (₹)',
-    category: 'Static & Dynamic Web',
-    remarks: 'Order accepted by client. Client details collected for handover.',
-    scope: `<p>To,</p>
-<p><strong>The Managing Director</strong><br/>
-Nambeesans Lakshmi Lodge, Thriprayar, Thrissur</p>
-<p><strong>Sub: - Website Redesign Quotation Nambeesans Lakshmi Lodge</strong></p>
-<br/>
-<p><strong>Domain + Server + SSL Cost</strong></p>
-<p>Domian And Server Registration for one year Cost: Already registered<br/>
-SSL Certificate Cost INR 3500: NA</p>
-<br/>
-<p><strong>Website Development – Static</strong></p>
-<p>We propose to design and develop a professional, mobile-friendly website for Nambeesans Lakshmi Lodge.</p>
-<br/>
-<p><strong>Features Included:</strong></p>
-<p>* Home Page<br/>
-* About Us<br/>
-* Facilities</p>`,
-    details: `<p>* Gallery<br/>
-* Tariff<br/>
-* Restaurants<br/>
-* Contact Page</p>
-<p>Restaurant page/section will be developed as a Dynamic page for easy image updates.</p>
-<br/>
-<p><strong>Pricing:</strong></p>
-<p>Website Development: ₹20,000<br/>
-Discount: ₹2,000<br/>
-Final Amount: <strong>₹18,000</strong></p>
-<br/>
-<p><strong>Google Business Profile Management:</strong></p>
-<p>Management of 2 Google Business Profiles including:</p>
-<p>* Profile Updates<br/>
-* Photo Uploads<br/>
-* Review Monitoring<br/>
-* Performance Optimization</p>
-<p><strong>Monthly Charge: ₹5,000</strong></p>`,
-  },
-  {
-    id: 'ORD-2026-002',
-    leadId: 'TC-103',
-    proposalNo: 'QT-2026-001',
-    proposalDate: '12-08-2026',
-    customer: 'Dr. Manzoor Ali',
-    company: 'MANZOOR SUPER SPECIALITY HOSPITAL',
-    mobile: '9447118234',
-    email: 'director@manzoorhospital.org',
-    city: 'Trivandrum, Kerala',
-    bdm: 'Alex Joseph',
-    proposalBy: 'Priya Sharma',
-    staff: 'Priya Sharma',
-    date: '12-08-2026',
-    status: 'Pending',
-    total: '1,45,000/-',
-    discount: '10,000/-',
-    netAmount: '1,35,000.00/-',
-    currency: 'INR (₹)',
-    category: 'Dynamic Web & OPD Suite',
-    remarks: 'Approved by Super Admin. Order Form generated and ready to dispatch to hospital director.',
-    scope: `<h3>Hospital Clinical Management & Web Portal</h3>
-<p>End-to-end OPD patient registration, doctor desk EHR, and cloud hosting.</p>`,
-    details: `<h4>1. Modules</h4>
-<p>Doctor consultation desk, pharmacy billing POS, and WhatsApp appointment reminders.</p>`,
-  },
-  {
-    id: 'ORD-2026-003',
-    leadId: 'TC-105',
-    proposalNo: 'QT-2026-004',
-    proposalDate: '10-08-2026',
-    customer: 'Kabeer Khan',
-    company: 'ROYAL PALACE CONVENTION CENTRE',
-    mobile: '9567112004',
-    email: 'events@royalpalacekerala.com',
-    city: 'Thrissur, Kerala',
-    bdm: 'Shanu VR',
-    proposalBy: 'Ananya Nair',
-    staff: 'Ananya Nair',
-    date: '11-08-2026',
-    status: 'Sent to Client',
-    total: '95,000/-',
-    discount: '5,000/-',
-    netAmount: '90,000.00/-',
-    currency: 'INR (₹)',
-    category: 'Dynamic Web Portal',
-    remarks: 'Order Form sent to client. Awaiting acceptance.',
-    scope: `<h3>Smart Venue Booking & Catering Reservation Portal</h3>
-<p>Banquet hall scheduling and catering management system.</p>`,
-    details: `<h4>1. Deliverables</h4>
-<p>Multi-hall availability calendar with advance payment gateway integration.</p>`,
-  },
-  {
-    id: 'ORD-2026-004',
-    leadId: 'TC-102',
-    proposalNo: 'QT-2026-005',
-    proposalDate: '08-08-2026',
-    customer: 'Rahul Menon',
-    company: 'SHADES.IN LUXURY EYEWEAR',
-    mobile: '9845123991',
-    email: 'management@shades.in',
-    city: 'Kochi, Kerala',
-    bdm: 'Alex Joseph',
-    proposalBy: 'Alex Joseph',
-    staff: 'Alex Joseph',
-    date: '10-08-2026',
-    status: 'Accepted',
-    total: '55,000/-',
-    discount: '8,000/-',
-    netAmount: '47,000.00/-',
-    currency: 'INR (₹)',
-    category: 'Social Media Ads & Meta',
-    remarks: 'Order accepted by client. Client details collected for handover.',
-    scope: `<h3>Omnichannel Meta Ads & Brand Awareness</h3>
-<p>Full-funnel direct-response Instagram & Facebook marketing campaign.</p>`,
-    details: `<h4>1. Deliverables</h4>
-<p>Ad creative design, Pixel CAPI server tracking, and weekly ROAS optimization.</p>`,
-  },
-]
-
 const STAFF_LIST = [
   'All Staff',
   'Husna',
@@ -242,7 +106,9 @@ function CloseIcon() {
 
 export default function ManageOrder() {
   const navigate = useNavigate()
-  const [ordersList, setOrdersList] = useState(INITIAL_ORDERS_DATA)
+  const [ordersList, setOrdersList] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
@@ -338,6 +204,26 @@ export default function ManageOrder() {
     menuRef.current.style.top = `${top}px`
   }, [openDropdownId, menuOffset])
 
+  useEffect(() => {
+    let active = true
+    api
+      .get('/transactions/orders/')
+      .then((data) => {
+        if (!active) return
+        setOrdersList(Array.isArray(data) ? data : [])
+      })
+      .catch((err) => {
+        if (!active) return
+        setLoadError(err.message || 'Could not load orders.')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
   function handleViewOrder(order) {
     navigate(`/orders/preview/${order.id}`, { state: { order } })
   }
@@ -395,94 +281,108 @@ export default function ManageOrder() {
     setOrderModalOpen(true)
   }
 
-  function handleSubmitOrder(e) {
+  async function handleSubmitOrder(e) {
     e.preventDefault()
 
-    if (editingOrderId) {
-      // Update existing
-      setOrdersList((prev) =>
-        prev.map((item) =>
-          item.id === editingOrderId
-            ? {
-                ...item,
-                customer: customerPerson || item.customer,
-                company: companyName || item.company,
-                mobile: mobileNum || item.mobile,
-                bdm,
-                proposalBy,
-                staff: proposalBy,
-                total: totalVal,
-                discount: discountVal,
-                netAmount: netVal,
-                remarks: remarksVal,
-                scope: orderSummaryHtml,
-                details: orderInDetailsHtml,
-              }
-            : item
+    try {
+      if (editingOrderId) {
+        // Update existing
+        const updated = await api.put(
+          `/transactions/orders/${encodeURIComponent(editingOrderId)}/`,
+          {
+            customer: customerPerson,
+            company: companyName,
+            mobile: mobileNum,
+            category: categoryName,
+            bdm,
+            proposalBy,
+            staff: proposalBy,
+            proposalDate,
+            total: totalVal,
+            discount: discountVal,
+            netAmount: netVal,
+            remarks: remarksVal,
+            scope: orderSummaryHtml,
+            details: orderInDetailsHtml,
+          }
         )
-      )
-      setSubmitMessage('✓ Order Form updated successfully!')
-    } else {
-      // Create new
-      const newOrder = {
-        id: `P2026-${String(ordersList.length + 1).padStart(4, '0')}`,
-        leadId: `TC-${Date.now().toString().slice(-3)}`,
-        proposalNo,
-        proposalDate,
-        customer: customerPerson || 'New Client',
-        company: companyName || 'Enterprise Client',
-        mobile: mobileNum || '9800000000',
-        email: 'info@client.com',
-        city: 'Kerala',
-        bdm,
-        proposalBy,
-        staff: proposalBy,
-        date: orderDate,
-        status: 'Pending',
-        total: totalVal,
-        discount: discountVal,
-        netAmount: netVal,
-        currency: 'INR (₹)',
-        category: categoryName,
-        remarks: remarksVal,
-        scope: orderSummaryHtml,
-        details: orderInDetailsHtml,
+        setOrdersList((prev) =>
+          prev.map((item) => (item.id === editingOrderId ? { ...item, ...updated } : item))
+        )
+        setSubmitMessage('✓ Order Form updated successfully!')
+      } else {
+        // Create new
+        const newOrder = {
+          id: `P${new Date().getFullYear()}-${String(ordersList.length + 1).padStart(4, '0')}`,
+          leadId: `TC-${Date.now().toString().slice(-3)}`,
+          proposalNo,
+          proposalDate,
+          customer: customerPerson || 'New Client',
+          company: companyName || 'Enterprise Client',
+          mobile: mobileNum || '9800000000',
+          email: 'info@client.com',
+          city: 'Kerala',
+          bdm,
+          proposalBy,
+          staff: proposalBy,
+          date: orderDate,
+          status: 'Pending',
+          total: totalVal,
+          discount: discountVal,
+          netAmount: netVal,
+          currency: 'INR (₹)',
+          category: categoryName,
+          remarks: remarksVal,
+          scope: orderSummaryHtml,
+          details: orderInDetailsHtml,
+        }
+        const created = await api.post('/transactions/orders/', newOrder)
+        setOrdersList((prev) => [created, ...prev])
+        setSubmitMessage('✓ New Order Form generated!')
       }
-      setOrdersList([newOrder, ...ordersList])
-      setSubmitMessage('✓ New Order Form generated!')
+
+      setTimeout(() => {
+        setSubmitMessage('')
+        setOrderModalOpen(false)
+      }, 1000)
+      reset()
+    } catch (err) {
+      setSubmitMessage(`✗ ${err.message || 'Could not save the order.'}`)
     }
-
-    setTimeout(() => {
-      setSubmitMessage('')
-      setOrderModalOpen(false)
-    }, 1000)
-    reset()
   }
 
-  function handleUpdateOrderStatus(orderId, nextStatus, e) {
+  async function handleUpdateOrderStatus(orderId, nextStatus, e) {
     e.stopPropagation()
-    setOrdersList((prev) =>
-      prev.map((item) =>
-        item.id === orderId
-          ? {
-              ...item,
-              status: nextStatus,
-            }
-          : item
-      )
-    )
     setOpenDropdownId(null)
-    const label = nextStatus === 'Pending' ? 'Pending (Not Sent)' : nextStatus
-    showToast(`Order ${orderId} marked as ${label}.`)
+    try {
+      const updated = await api.put(
+        `/transactions/orders/${encodeURIComponent(orderId)}/`,
+        { status: nextStatus }
+      )
+      setOrdersList((prev) =>
+        prev.map((item) => (item.id === orderId ? { ...item, ...updated } : item))
+      )
+      const label = nextStatus === 'Pending' ? 'Pending (Not Sent)' : nextStatus
+      showToast(`Order ${orderId} marked as ${label}.`)
+    } catch (err) {
+      showToast(err.message || 'Could not update order status.')
+    }
   }
 
-  function handleMarkAccepted(order) {
-    setOrdersList((prev) =>
-      prev.map((item) =>
-        item.id === order.id ? { ...item, status: 'Accepted' } : item
+  async function handleMarkAccepted(order) {
+    setOpenDropdownId(null)
+    try {
+      const updated = await api.put(
+        `/transactions/orders/${encodeURIComponent(order.id)}/`,
+        { status: 'Accepted' }
       )
-    )
-    navigate('/client-details', { state: { order } })
+      setOrdersList((prev) =>
+        prev.map((item) => (item.id === order.id ? { ...item, ...updated } : item))
+      )
+      navigate('/client-details', { state: { order: { ...order, ...updated } } })
+    } catch (err) {
+      showToast(err.message || 'Could not mark order as accepted.')
+    }
   }
 
   function showToast(msg) {
@@ -662,7 +562,19 @@ export default function ManageOrder() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredOrders.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
+                      Loading orders...
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-xs text-rose-500">
+                      {loadError}
+                    </td>
+                  </tr>
+                ) : filteredOrders.length > 0 ? (
                   filteredOrders.map((order) => {
                     return (
                       <tr key={order.id} onClick={(e) => handleToggleMenu(e, order.id, order)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">

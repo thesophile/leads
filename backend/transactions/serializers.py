@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import CallHistory, Lead, LeadContactHistory, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+from .models import CallHistory, Lead, LeadContactHistory, Order, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
 
 
 class CallHistorySerializer(serializers.ModelSerializer):
@@ -217,6 +217,41 @@ class QuotationSerializer(serializers.ModelSerializer):
         if tenant is None:
             return ''
         return tenant.terms_html or ''
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    leadId = serializers.CharField(source='lead_id', required=False, allow_blank=True)
+    proposalNo = serializers.CharField(source='proposal_no', required=False, allow_blank=True)
+    proposalDate = serializers.CharField(source='proposal_date', required=False, allow_blank=True)
+    proposalBy = serializers.CharField(source='proposal_by', required=False, allow_blank=True)
+    netAmount = serializers.CharField(source='net_amount', required=False, allow_blank=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id',
+            'leadId',
+            'proposalNo',
+            'proposalDate',
+            'customer',
+            'company',
+            'mobile',
+            'email',
+            'city',
+            'bdm',
+            'proposalBy',
+            'staff',
+            'date',
+            'status',
+            'total',
+            'discount',
+            'netAmount',
+            'currency',
+            'category',
+            'remarks',
+            'scope',
+            'details',
+        ]
 
 
 class LeadSerializer(serializers.ModelSerializer):
