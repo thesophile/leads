@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
@@ -6,6 +6,8 @@ import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
+import usePagedContent from '../../utils/usePagedContent'
+import PagedSection from '../../utils/PagedSection'
 
 function wrappableHtml(html) {
   return String(html || '').replace(/&nbsp;/gi, ' ')
@@ -362,7 +364,7 @@ function FinancialBanner({ proposal }) {
 }
 
 const PAGE_CLASS =
-  'print-page mx-auto flex w-full max-w-[210mm] flex-col min-h-[297mm] bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm'
+  'print-page mx-auto flex w-full max-w-[210mm] flex-col h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm'
 
 function approvalCountBy(approvals, status) {
   return (approvals || []).filter((a) => a.status === status).length
@@ -527,24 +529,17 @@ export default function ProposalPreview() {
   const approvals = proposalData.approvals || []
   const approvalsApproved = approvalCountBy(approvals, 'Approved')
 
-  const summaryRef = useRef(null)
-  const summaryPageRef = useRef(null)
+const approvedByRef = useRef(null)
+  const financialRef = useRef(null)
+  const page1FooterRef = useRef(null)
+  const page2FooterRef = useRef(null)
+  const termsContentRef = useRef(null)
+  const summaryContentRef = useRef(null)
+  const detailsContentRef = useRef(null)
   const approvalRefetchedRef = useRef(false)
-  const [summaryOverflow, setSummaryOverflow] = useState(false)
-
-  useLayoutEffect(() => {
-    function check() {
-      const el = summaryRef.current
-      const page = summaryPageRef.current
-      if (!el || !page) return
-      const pageTop = page.getBoundingClientRect().top
-      const summaryBottom = el.getBoundingClientRect().bottom
-      setSummaryOverflow(summaryBottom - pageTop > 1000)
-    }
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [proposalData])
+  const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 48)
+  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 44)
+  const detailsPaged = usePagedContent(detailsContentRef, page2FooterRef, [], 64)
 
 
   function handlePrint() {
@@ -732,7 +727,7 @@ export default function ProposalPreview() {
         {/* All pages, continuous vertical scroll */}
         <div className="space-y-8 print:space-y-0">
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
-          <div ref={summaryPageRef} className={PAGE_CLASS}>
+          <div className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">
             <PageHeader proposal={proposalData} company={company} />
 
@@ -790,10 +785,12 @@ export default function ProposalPreview() {
 
             <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start">
               <div className="flex flex-col gap-3 lg:col-span-4">
-                <SectionBox title="Terms & Conditions">
+                <SectionBox title="Terms &amp; Conditions">
                   {proposalData.termsHtml ? (
                     <div
+                      ref={termsContentRef}
                       className="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
+                      style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                       dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.termsHtml) }}
                     />
                   ) : (
@@ -805,9 +802,15 @@ export default function ProposalPreview() {
                       ))}
                     </div>
                   )}
+                  {termsPaged.part2Html ? (
+                    <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
+                      Continued…
+                    </p>
+                  ) : null}
                 </SectionBox>
 
-                <SectionBox title="Approved By">
+                <div ref={approvedByRef}>
+                  <SectionBox title="Approved By">
                   {approvals.length === 0 ? (
                     <p className="text-[11px] text-slate-400 py-0.5">No approvers selected yet.</p>
                   ) : (
@@ -888,27 +891,31 @@ export default function ProposalPreview() {
                     </div>
                   )}
                 </SectionBox>
+                </div>
               </div>
 
               <div className="flex flex-col gap-3 lg:col-span-8">
                 <SectionBox title="Proposal Summary">
                   <div
-                    ref={summaryRef}
+                    ref={summaryContentRef}
                     className="space-y-1.5 text-[13.5px] leading-relaxed text-slate-800"
+                    style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
                     dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.proposalSummaryHtml) }}
                   />
-                  {summaryOverflow && (
+                  {summaryPaged.part2Html ? (
                     <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
                       Continued…
                     </p>
-                  )}
+                  ) : null}
                 </SectionBox>
 
-                <FinancialBanner proposal={proposalData} />
+                <div ref={financialRef}>
+                  <FinancialBanner proposal={proposalData} />
+                </div>
               </div>
             </div>
 
-            <div className="mt-auto pt-4">
+            <div ref={page1FooterRef} className="mt-auto pt-4">
               <PageFooter company={company} />
             </div>
             </div>
@@ -923,10 +930,17 @@ export default function ProposalPreview() {
               <SectionBox title="Proposal in Details &amp; Specifications" className="flex-1">
                 <div className="flex h-full flex-1 flex-col justify-between">
                   <div
+                    ref={detailsContentRef}
                     className="space-y-3 text-[13px] leading-relaxed text-slate-800"
+                    style={detailsPaged.cap ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
                     dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.proposalInDetailsHtml) }}
                   />
                   <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
+                  {detailsPaged.part2Html ? (
+                    <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
+                      Continued…
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
                     --- End of proposal ---
                   </p>
@@ -934,11 +948,59 @@ export default function ProposalPreview() {
               </SectionBox>
             </div>
 
-            <div className="mt-auto pt-4">
+            <div ref={page2FooterRef} className="mt-auto pt-4">
               <PageFooter company={company} />
             </div>
             </div>
           </div>
+
+          {/* -------------------- PAGE 3 (SUMMARY CONTINUED) -------------------- */}
+          {summaryPaged.part2Html && (
+            <PagedSection
+              html={wrappableHtml(summaryPaged.part2Html)}
+              reserve={44}
+              contentClass="space-y-1.5 text-[13.5px] leading-relaxed text-slate-800"
+              sectionTitle="Proposal Summary (Continued)"
+              boxClass="rounded-xl border border-slate-300 bg-white"
+              titleClass="text-left"
+              pageHeader={
+                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (1/2)" company={company} />
+              }
+              pageFooter={<PageFooter company={company} />}
+            />
+          )}
+
+          {/* -------------------- PAGE 3 (PROPOSAL IN DETAILS CONTINUED) -------------------- */}
+          {detailsPaged.part2Html && (
+            <PagedSection
+              html={wrappableHtml(detailsPaged.part2Html)}
+              reserve={64}
+              contentClass="space-y-3 text-[13px] leading-relaxed text-slate-800"
+              sectionTitle="Proposal in Details &amp; Specifications (Continued)"
+              boxClass="rounded-xl border border-slate-300 bg-white"
+              titleClass="text-left"
+              pageHeader={
+                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (2/2)" company={company} />
+              }
+              pageFooter={<PageFooter company={company} />}
+            />
+          )}
+
+          {/* -------------------- LAST PAGE (TERMS & CONDITIONS CONTINUED) -------------------- */}
+          {termsPaged.part2Html && (
+            <PagedSection
+              html={wrappableHtml(termsPaged.part2Html)}
+              reserve={48}
+              contentClass="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
+              sectionTitle="Terms &amp; Conditions (Continued)"
+              boxClass="rounded-xl border border-slate-300 bg-white"
+              titleClass="text-left"
+              pageHeader={
+                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (3/2)" company={company} />
+              }
+              pageFooter={<PageFooter company={company} />}
+            />
+          )}
         </div>
       </div>
 

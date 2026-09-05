@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import Layout from '../../Layout/Layout'
+import usePagedContent from '../../utils/usePagedContent'
+import PagedSection from '../../utils/PagedSection'
 
 function wrappableHtml(html) {
   return String(html || '').replace(/&nbsp;/gi, ' ')
@@ -264,6 +266,18 @@ export default function OrderPreview() {
     return DEFAULT_ORDER
   })
 
+  const approvedRowRef = useRef(null)
+  const page2FooterRef = useRef(null)
+  const page3SigRef = useRef(null)
+  const summaryContentRef = useRef(null)
+  const termsSummaryContentRef = useRef(null)
+  const detailsContentRef = useRef(null)
+  const legalTermsContentRef = useRef(null)
+  const summaryPaged = usePagedContent(summaryContentRef, approvedRowRef, [], 48)
+  const termsSummaryPaged = usePagedContent(termsSummaryContentRef, approvedRowRef, [], 48)
+  const detailsPaged = usePagedContent(detailsContentRef, page2FooterRef, [], 64)
+  const legalPaged = usePagedContent(legalTermsContentRef, page3SigRef, [], 64)
+
   return (
     <Layout>
       <div className="space-y-4">
@@ -310,7 +324,7 @@ export default function OrderPreview() {
               PAGE 1: MAIN ORDER FORM (Annexure - A (2))
           ========================================================================= */}
           <div
-            className="print-page mx-auto w-full max-w-[210mm] min-h-[297mm] bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
+            className="print-page mx-auto w-full max-w-[210mm] h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
             style={{ boxSizing: 'border-box' }}
           >
             <div className="flex flex-col flex-1 justify-between">
@@ -358,14 +372,22 @@ export default function OrderPreview() {
               <div className="mt-2 grid grid-cols-12 gap-2 flex-1 min-h-[440px]">
                 {/* Left Column (col-span-7): Order Summary + Financial Banner */}
                 <div className="col-span-7 flex flex-col justify-between">
-                  <SectionBox title="ORDER SUMMARY" className="flex-1">
+<SectionBox title="ORDER SUMMARY" className="flex-1">
                     <div
+                      ref={summaryContentRef}
                       className="space-y-1.5 text-[13px] leading-relaxed text-black"
+                      style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
                       dangerouslySetInnerHTML={{ __html: wrappableHtml(orderData.orderSummaryHtml) }}
                     />
-                    <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
-                      --- Continued ---
-                    </p>
+                    {summaryPaged.part2Html ? (
+                      <p className="mt-2 text-right text-[10.5px] font-bold text-slate-500">
+                        --- Continued ---
+                      </p>
+                    ) : (
+                      <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
+                        --- Continued ---
+                      </p>
+                    )}
                   </SectionBox>
 
                   <FinancialBanner order={orderData} />
@@ -375,18 +397,26 @@ export default function OrderPreview() {
                 <div className="col-span-5 flex flex-col">
                   <SectionBox title="TERMS &amp; CONDITIONS" className="h-full">
 <div
+                      ref={termsSummaryContentRef}
                       className="space-y-1.5 text-[11px] leading-relaxed text-slate-700"
+                      style={termsSummaryPaged.cap ? { maxHeight: termsSummaryPaged.cap, overflow: 'hidden' } : undefined}
                       dangerouslySetInnerHTML={{ __html: wrappableHtml(orderData.termsSummaryHtml) }}
                     />
-                    <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
-                      --- Detailed continued in Page 2 ---
-                    </p>
+                    {termsSummaryPaged.part2Html ? (
+                      <p className="mt-2 text-right text-[10.5px] font-bold text-slate-500">
+                        --- Continued ---
+                      </p>
+                    ) : (
+                      <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
+                        --- Detailed continued in Page 2 ---
+                      </p>
+                    )}
                   </SectionBox>
                 </div>
               </div>
 
               {/* Bottom 2-Box Row: Approved By | Accepted By */}
-              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+              <div ref={approvedRowRef} className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
                 {/* Box 1: Approved By */}
                 <div className="rounded-md border border-black bg-white p-2 text-black flex flex-col justify-between">
                   <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11.5px] font-bold uppercase text-white mb-1.5">
@@ -430,24 +460,30 @@ export default function OrderPreview() {
               PAGE 2: ANNEXURE - A (1/2) ORDER IN DETAILS
           ========================================================================= */}
           <div
-            className="print-page mx-auto w-full max-w-[210mm] min-h-[297mm] bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
+            className="print-page mx-auto w-full max-w-[210mm] h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
             style={{ boxSizing: 'border-box' }}
           >
             <div className="flex flex-col flex-1 justify-between">
               <PageHeader order={orderData} annexLabel="ANNEXURE - A (1/2)" />
 
-              <div className="mt-3 flex-1 flex flex-col">
+<div className="mt-3 flex-1 flex flex-col">
                 <SectionBox title="ORDER IN DETAILS" className="flex-1 flex flex-col justify-between min-h-[580px]">
 <div
+                      ref={detailsContentRef}
                       className="space-y-3 text-[13px] leading-relaxed text-slate-800"
+                      style={detailsPaged.cap ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
                       dangerouslySetInnerHTML={{ __html: wrappableHtml(orderData.orderInDetailsHtml) }}
                     />
-                  <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- End of page ---</p>
+                  {detailsPaged.part2Html ? (
+                    <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- Continued ---</p>
+                  ) : (
+                    <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- End of page ---</p>
+                  )}
                 </SectionBox>
               </div>
             </div>
 
-            <div className="mt-3">
+            <div ref={page2FooterRef} className="mt-3">
               <PageFooter />
             </div>
           </div>
@@ -455,8 +491,8 @@ export default function OrderPreview() {
           {/* =========================================================================
               PAGE 3: ANNEXURE - A (2/2) TERMS & CONDITIONS
           ========================================================================= */}
-          <div
-            className="print-page mx-auto w-full max-w-[210mm] min-h-[297mm] bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
+<div
+            className="print-page mx-auto w-full max-w-[210mm] h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
             style={{ boxSizing: 'border-box' }}
           >
             <div className="flex flex-col flex-1 justify-between">
@@ -465,13 +501,18 @@ export default function OrderPreview() {
               <div className="mt-3 flex-1 flex flex-col justify-between">
                 <SectionBox title="TERMS &amp; CONDITIONS" className="flex-1">
 <div
+                      ref={legalTermsContentRef}
                       className="space-y-2 text-[12.5px] leading-relaxed text-slate-700"
+                      style={legalPaged.cap ? { maxHeight: legalPaged.cap, overflow: 'hidden' } : undefined}
                       dangerouslySetInnerHTML={{ __html: wrappableHtml(orderData.legalTermsHtml) }}
                     />
+                  {legalPaged.part2Html ? (
+                    <p className="mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                  ) : null}
                 </SectionBox>
 
                 {/* Final Signatures & QR Block */}
-                <div className="mt-2.5 grid grid-cols-12 gap-2">
+                <div ref={page3SigRef} className="mt-2.5 grid grid-cols-12 gap-2">
                   <div className="col-span-5 rounded-md border border-black bg-white p-2">
                     <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
                       Approved By
@@ -515,6 +556,54 @@ export default function OrderPreview() {
               <PageFooter />
             </div>
           </div>
+
+          {/* =========================================================================
+              CONTINUED PAGES (only rendered when a section overflows)
+              Each renders on an A4 page and paginates itself recursively so a
+              very long section never clips.
+          ========================================================================= */}
+          {summaryPaged.part2Html && (
+            <PagedSection
+              html={wrappableHtml(summaryPaged.part2Html)}
+              reserve={48}
+              contentClass="space-y-1.5 text-[13px] leading-relaxed text-black"
+              sectionTitle="ORDER SUMMARY (CONTINUED)"
+              boxClass="rounded-md border border-black bg-white"
+              titleClass="text-center border-b border-black"
+              pageHeader={<PageHeader order={orderData} annexLabel="ANNEXURE - A (1/2)" />}
+              pageFooter={<PageFooter />}
+              continueNote={false}
+            />
+          )}
+
+          {detailsPaged.part2Html && (
+            <PagedSection
+              html={wrappableHtml(detailsPaged.part2Html)}
+              reserve={64}
+              contentClass="space-y-3 text-[13px] leading-relaxed text-slate-800"
+              sectionTitle="ORDER IN DETAILS (CONTINUED)"
+              boxClass="rounded-md border border-black bg-white"
+              titleClass="text-center border-b border-black"
+              pageHeader={<PageHeader order={orderData} annexLabel="ANNEXURE - A (2/2)" />}
+              pageFooter={<PageFooter />}
+              pageFooterWrapClass="mt-3"
+              continueNote={false}
+            />
+          )}
+
+          {legalPaged.part2Html && (
+            <PagedSection
+              html={wrappableHtml(legalPaged.part2Html)}
+              reserve={64}
+              contentClass="space-y-2 text-[12.5px] leading-relaxed text-slate-700"
+              sectionTitle="TERMS &amp; CONDITIONS (CONTINUED)"
+              boxClass="rounded-md border border-black bg-white"
+              titleClass="text-center border-b border-black"
+              pageHeader={<PageHeader order={orderData} annexLabel="ANNEXURE - A (2/2)" />}
+              pageFooter={<PageFooter />}
+              continueNote={false}
+            />
+          )}
         </div>
       </div>
     </Layout>

@@ -159,7 +159,8 @@
   .print-page {
     width: 100% !important;
     max-width: 100% !important;
-    min-height: 275mm !important;
+    height: 275mm !important;
+    overflow: hidden !important;
     box-shadow: none !important;
     border: none !important;
     padding: 0 !important;
