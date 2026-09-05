@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    ClientOrderDetailView,
+    ClientOrderResponseView,
     ClientQuotationDetailView,
     ClientQuotationResponseView,
     LeadAssignView,
@@ -8,6 +10,7 @@ from .views import (
     LeadListView,
     OrderDetailView,
     OrderListCreateView,
+    OrderSendToClientView,
     ProposalDraftView,
     ProposalTemplateDetailView,
     ProposalTemplateListView,
@@ -25,6 +28,9 @@ urlpatterns = [
     path('leads/<pk>/', LeadDetailView.as_view(), name='transactions-lead-detail'),
     path('orders/', OrderListCreateView.as_view(), name='transactions-orders-list'),
     path('orders/<pk>/', OrderDetailView.as_view(), name='transactions-order-detail'),
+    path('orders/<pk>/send-to-client/', OrderSendToClientView.as_view(), name='transactions-order-send-client'),
+    path('public/orders/<token>/', ClientOrderDetailView.as_view(), name='transactions-order-client-detail'),
+    path('public/orders/<token>/respond/', ClientOrderResponseView.as_view(), name='transactions-order-client-respond'),
     path('quotations/approvers/', QuotationApproverListView.as_view(), name='transactions-quotation-approvers'),
     path('quotations/<lead_id>/', QuotationView.as_view(), name='transactions-quotation-detail'),
     path('quotations/<lead_id>/approval-otp/', QuotationOtpView.as_view(), name='transactions-quotation-otp'),

@@ -4,9 +4,12 @@ import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
+import SendToClientModal from './SendToClientModal'
 
 // Initial dataset of approved orders ready for execution
 const STAFF_LIST = [
@@ -106,6 +109,8 @@ function CloseIcon() {
 
 export default function ManageOrder() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canSendToClient = !!user && (can(user, 'order.edit') || user.is_superuser)
   const [ordersList, setOrdersList] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -118,6 +123,7 @@ export default function ManageOrder() {
   const menuRef = useRef(null)
   const cardRef = useRef(null)
   const [toastMessage, setToastMessage] = useState('')
+  const [sendClientOpen, setSendClientOpen] = useState(false)
 
   // Modal State for Order Form Editor
   const [orderModalOpen, setOrderModalOpen] = useState(false)
@@ -383,6 +389,12 @@ export default function ManageOrder() {
     } catch (err) {
       showToast(err.message || 'Could not mark order as accepted.')
     }
+  }
+
+  function handleOrderSent(updated) {
+    setOrdersList((prev) =>
+      prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
+    )
   }
 
   function showToast(msg) {
@@ -714,14 +726,20 @@ export default function ManageOrder() {
                 <span>Edit Order Details</span>
               </button>
 
-              <button
-                type="button"
-                onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Sent to Client', e)}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
-              >
-                <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Mark as Sent to Client</span>
-              </button>
+              {canSendToClient && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setOpenDropdownId(null)
+                    setSendClientOpen(true)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                >
+                  <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Send to Client</span>
+                </button>
+              )}
 
               <div className="my-1 border-t border-slate-100" />
 
@@ -1012,6 +1030,17 @@ export default function ManageOrder() {
           reset()
         }}
       />
+
+      {/* Send to Client modal */}
+      {sendClientOpen && (
+        <SendToClientModal
+          item={activeMenuOrder}
+          open
+          onClose={() => setSendClientOpen(false)}
+          onSent={handleOrderSent}
+          onToast={showToast}
+        />
+      )}
     </Layout>
   )
 }

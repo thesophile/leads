@@ -37,7 +37,7 @@ from .serializers import (
     QuotationApprovalSerializer,
     QuotationSerializer,
 )
-from .services import build_client_email
+from .services import build_client_email, build_order_client_email
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -1589,3 +1589,234 @@ class OrderDetailView(APIView):
             return Response({'detail': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
         order.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def order_url(order):
+    """Preview URL for a specific order."""
+    if order is None:
+        return ''
+    return f'/orders/preview/{order.id}'
+
+
+class OrderSendToClientView(APIView):
+    """Send an order form to the client via email / WhatsApp / link.
+
+    Generates (or reuses) a one-time signed client token, marks the order
+    ``Sent to Client``, and emails the order form (with PDF) when requested.
+    The signed page link is returned so the frontend can open WhatsApp or copy
+    it. The link is single-use: once the client responds they cannot decide
+    again.
+    """
+
+    permission_classes = [IsAuthenticated]
+    CLIENT_TOKEN_DAYS = 30
+    ALLOWED_CHANNELS = ('email', 'whatsapp', 'copy')
+
+    def post(self, request, pk):
+        if not (request.user.is_superuser or can(request.user, 'order.edit')):
+            return Response(
+                {'detail': 'You do not have permission to send orders to clients.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        order = scoped_orders(request.user).filter(pk=pk).first()
+        if order is None:
+            return Response({'detail': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        raw_channels = request.data.get('channels') or []
+        if isinstance(raw_channels, str):
+            try:
+                raw_channels = json.loads(raw_channels)
+            except (TypeError, ValueError):
+                raw_channels = [raw_channels]
+        channels = [c for c in raw_channels if c in self.ALLOWED_CHANNELS]
+        channels = list(dict.fromkeys(channels))
+        if not channels:
+            return Response(
+                {'detail': 'Please select at least one way to send the order.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if 'email' in channels and not order.email:
+            return Response(
+                {'detail': 'This order has no client email address to send to.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if 'whatsapp' in channels and not order.mobile:
+            return Response(
+                {'detail': 'This order has no client mobile number to send to.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+        needs_token = not order.client_token or (
+            order.client_token_expires_at
+            and order.client_token_expires_at < now
+        )
+        if needs_token:
+            order.client_token = secrets.token_urlsafe(32)
+            order.client_token_expires_at = now + timedelta(days=self.CLIENT_TOKEN_DAYS)
+        # Only an actual send (email / WhatsApp) marks the order as sent;
+        # copying the link just generates it without changing status.
+        is_actual_send = 'email' in channels or 'whatsapp' in channels
+        if is_actual_send:
+            if order.status != 'Sent to Client':
+                order.status = 'Sent to Client'
+            order.sent_to_client_at = now
+        order.client_status = order.client_status or Order.CLIENT_PENDING
+        order.save()
+
+        origin = (request.data.get('origin') or '').strip().rstrip('/')
+        path = f'/order/{order.client_token}'
+        link = f'{origin}{path}' if origin else path
+
+        email_sent = False
+        if 'email' in channels and order.email:
+            try:
+                email = build_order_client_email(
+                    order,
+                    link,
+                    message=(request.data.get('message') or '').strip(),
+                )
+                email.send(fail_silently=True)
+                email_sent = True
+            except Exception as exc:  # pragma: no cover - email never blocks the action
+                logger.warning('Failed to email order %s: %s', order.id, exc)
+
+        return Response(
+            {
+                'link': link,
+                'mobile': order.mobile,
+                'email': order.email,
+                'channels': channels,
+                'email_sent': email_sent,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+def public_order_payload(order):
+    """Safe summary of an order for the public client page."""
+    tenant = order.tenant
+    logo_url = ''
+    if tenant and tenant.logo and tenant.logo.name:
+        try:
+            logo_url = tenant.logo.url
+        except Exception:
+            logo_url = ''
+    return {
+        'id': order.id,
+        'proposalNo': order.proposal_no,
+        'proposalDate': order.proposal_date,
+        'company': order.company,
+        'customer': order.customer,
+        'category': order.category,
+        'city': order.city,
+        'date': order.date,
+        'total': order.total,
+        'discount': order.discount,
+        'netAmount': order.net_amount,
+        'currency': order.currency,
+        'scope': order.scope,
+        'details': order.details,
+        'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
+        'companyName': tenant.name if tenant else '',
+        'companyLogo': logo_url,
+        'companyAddress': tenant.address if tenant else '',
+        'companyEmail': tenant.email if tenant else '',
+        'companyPhone': tenant.phone if tenant else '',
+        'companyWebsite': tenant.website if tenant else '',
+        'status': order.status,
+        'clientStatus': order.client_status,
+        'clientMessage': order.client_message,
+        'clientRespondedAt': order.client_responded_at.isoformat()
+        if order.client_responded_at
+        else None,
+    }
+
+
+def _get_order_by_client_token(token):
+    return Order.objects.filter(client_token=str(token or '')).first()
+
+
+class ClientOrderDetailView(APIView):
+    """Public, unauthenticated read of an order form by signed token."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        order = _get_order_by_client_token(token)
+        if order is None:
+            return Response(
+                {'detail': 'This order link is not valid.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if order.client_token_expires_at and order.client_token_expires_at < timezone.now():
+            return Response(
+                {'detail': 'This order link has expired. Please request a fresh one.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(public_order_payload(order))
+
+
+class ClientOrderResponseView(APIView):
+    """Public, unauthenticated single-use accept/decline with comments."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        order = _get_order_by_client_token(token)
+        if order is None:
+            return Response(
+                {'detail': 'This order link is not valid.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if order.client_token_expires_at and order.client_token_expires_at < timezone.now():
+            return Response(
+                {'detail': 'This order link has expired. Please request a fresh one.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if order.client_status != Order.CLIENT_PENDING:
+            return Response(
+                {'detail': 'You have already responded to this order.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        decision = str(request.data.get('decision') or '').strip().lower()
+        accepted = decision in ('accepted', 'accept', 'yes')
+        declined = decision in ('declined', 'decline', 'reject', 'no')
+        if not accepted and not declined:
+            return Response(
+                {'detail': 'Please choose to accept or decline the order.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        message = str(request.data.get('message') or '').strip()
+        verb = 'accepted' if accepted else 'declined'
+        order.client_status = Order.CLIENT_ACCEPTED if accepted else Order.CLIENT_DECLINED
+        order.status = 'Accepted' if accepted else 'Rejected'
+        order.client_message = message
+        order.client_responded_at = timezone.now()
+        # Single-use: revoke the token once a decision is recorded.
+        order.client_token = ''
+        order.client_token_expires_at = None
+        order.save()
+
+        staff_member = None
+        if order.proposal_by:
+            staff_member = User.objects.filter(name__iexact=order.proposal_by).first()
+        if staff_member is None and order.staff:
+            staff_member = User.objects.filter(name__iexact=order.staff).first()
+        if staff_member is not None:
+            notify(
+                staff_member,
+                'Client',
+                f'Client {verb} the order',
+                (
+                    f'{order.id} - {order.company} was {verb} by the client'
+                    + (f'. Comment: {message}' if message else '.')
+                ),
+                url=order_url(order),
+                entity_type='order',
+                entity_id=order.id,
+            )
+
+        return Response(public_order_payload(order))

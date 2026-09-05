@@ -3,8 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import Layout from '../../Layout/Layout'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
+import SendToClientModal from './SendToClientModal'
 
 function wrappableHtml(html) {
   return String(html || '').replace(/&nbsp;/gi, ' ')
@@ -19,6 +22,7 @@ const DEFAULT_ORDER = {
   customerCompany: 'NAMBEESANS LAKSHMI LODGE',
   customerPhone: '9447151442',
   customerLocation: 'Thriprayar, Thrissur, Kerala',
+  email: '',
   bdm: 'Husna',
   proposalBy: 'Bincy',
   orderSummaryHtml: `
@@ -280,8 +284,10 @@ function SignatureBlock({ customerCompany, orderId }) {
 export default function OrderPreview() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
+  const canSendToClient = !!user && (can(user, 'order.edit') || user.is_superuser)
 
-  const [orderData] = useState(() => {
+  const [orderData, setOrderData] = useState(() => {
     if (location.state?.order) {
       const o = location.state.order
       return {
@@ -293,6 +299,8 @@ export default function OrderPreview() {
         customerPerson: o.customer || DEFAULT_ORDER.customerPerson,
         customerCompany: o.company || DEFAULT_ORDER.customerCompany,
         customerPhone: o.mobile || DEFAULT_ORDER.customerPhone,
+        customerLocation: o.city || DEFAULT_ORDER.customerLocation,
+        email: o.email || DEFAULT_ORDER.email,
         bdm: o.bdm || DEFAULT_ORDER.bdm,
         proposalBy: o.proposalBy || DEFAULT_ORDER.proposalBy,
         total: o.total || DEFAULT_ORDER.total,
@@ -307,6 +315,30 @@ export default function OrderPreview() {
     }
     return DEFAULT_ORDER
   })
+
+  const [sendClientOpen, setSendClientOpen] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
+
+  function showToast(msg) {
+    setToastMessage(msg)
+    setTimeout(() => {
+      setToastMessage('')
+    }, 3000)
+  }
+
+  const sendTarget = {
+    id: orderData.id,
+    customer: orderData.customerPerson,
+    company: orderData.customerCompany,
+    mobile: orderData.customerPhone,
+    email: orderData.email,
+    netAmount: orderData.net,
+    status: orderData.status,
+  }
+
+  function handleOrderSent(updated) {
+    setOrderData((prev) => ({ ...prev, ...updated }))
+  }
 
   const approvedRowRef = useRef(null)
   const page2FooterRef = useRef(null)
@@ -350,16 +382,29 @@ export default function OrderPreview() {
               <span>Print Order Form</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => alert(`Order Form ${orderData.id} sent to ${orderData.customerCompany}. Track acceptance in Manage Orders.`)}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-95"
-            >
-              <span>📱</span>
-              <span>Send via WhatsApp</span>
-            </button>
+            {canSendToClient && (
+              <button
+                type="button"
+                onClick={() => setSendClientOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-95"
+              >
+                <span>📤</span>
+                <span>Send to Client</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {toastMessage && (
+          <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+            <span className="text-xs font-semibold text-slate-800">{toastMessage}</span>
+          </div>
+        )}
 
         {/* Continuous Multi-Page Document Container */}
         <div className="space-y-8 print:space-y-0">
@@ -635,6 +680,17 @@ export default function OrderPreview() {
           )}
         </div>
       </div>
+
+      {/* Send to Client modal */}
+      {sendClientOpen && (
+        <SendToClientModal
+          item={sendTarget}
+          open
+          onClose={() => setSendClientOpen(false)}
+          onSent={handleOrderSent}
+          onToast={showToast}
+        />
+      )}
     </Layout>
   )
 }

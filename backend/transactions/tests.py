@@ -5,6 +5,7 @@ from transactions.models import (
     CallHistory,
     Lead,
     LeadContactHistory,
+    Order,
     ProposalDraft,
     ProposalTemplate,
     Quotation,
@@ -1097,3 +1098,168 @@ class ContactEditSyncTests(APITestCase):
         row = next(l for l in resp.data if l['id'] == 'RL-SYNC')
         self.assertEqual(row['contactHistory'][0]['field'], 'phone')
         self.assertEqual(row['contactHistory'][0]['toValue'], '444')
+
+
+class OrderSendToClientTests(APITestCase):
+    """Order forms are sent to the client via email / WhatsApp / link."""
+
+    def setUp(self):
+        company = make_company('OrderCo')
+        self.manager = User.objects.create_user(
+            email='mgr2@order.com', password='x', name='Manager Order',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.viewer = User.objects.create_user(
+            email='staff5@order.com', password='x', name='Staff Order',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.order = Order.objects.create(
+            id='P2026-0001',
+            company='Order Ltd',
+            customer='Client Person',
+            tenant=company,
+            mobile='9447000000',
+            email='client@order.com',
+            status='Pending',
+            scope='<p>Order summary</p>',
+            details='<p>Order details</p>',
+        )
+        self.send_url = f'/api/transactions/orders/{self.order.id}/send-to-client/'
+
+    def test_staff_without_edit_permission_cannot_send(self):
+        self.client.force_authenticate(self.viewer)
+        resp = self.client.post(self.send_url, {'channels': ['copy']}, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_requires_at_least_one_channel(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(self.send_url, {'channels': []}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_copy_link_returns_link_without_changing_status(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            self.send_url,
+            {'channels': ['copy'], 'origin': 'https://app.test'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('/order/', resp.data['link'])
+        self.assertEqual(resp.data['link'], 'https://app.test/order/' + Order.objects.get(id=self.order.id).client_token)
+        self.assertEqual(Order.objects.get(id=self.order.id).status, 'Pending')
+
+    def test_email_channel_marks_sent_and_sends(self):
+        self.client.force_authenticate(self.manager)
+        sent = {}
+
+        import types
+
+        def fake_send(fail_silently=True):
+            sent['called'] = True
+            return 1
+
+        fake_email = types.SimpleNamespace(send=fake_send)
+        with patch('transactions.views.build_order_client_email', return_value=fake_email):
+            resp = self.client.post(
+                self.send_url,
+                {'channels': ['email'], 'origin': 'https://app.test', 'message': 'Hi client'},
+                format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(sent.get('called'))
+        self.assertEqual(resp.data['email_sent'], True)
+        self.assertEqual(resp.data['email'], 'client@order.com')
+        order = Order.objects.get(id=self.order.id)
+        self.assertEqual(order.status, 'Sent to Client')
+        self.assertIsNotNone(order.sent_to_client_at)
+        self.assertTrue(order.client_token)
+
+    def test_whatsapp_channel_opens_number(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            self.send_url,
+            {'channels': ['whatsapp'], 'origin': 'https://app.test'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['mobile'], '9447000000')
+        order = Order.objects.get(id=self.order.id)
+        self.assertEqual(order.status, 'Sent to Client')
+        self.assertTrue(order.client_token)
+
+    def test_public_page_and_response_flow(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post(self.send_url, {'channels': ['copy'], 'origin': 'https://app.test'}, format='json')
+        token = Order.objects.get(id=self.order.id).client_token
+
+        for user in (None, self.manager):
+            if user is not None:
+                self.client.force_authenticate(user)
+            else:
+                self.client.force_authenticate(None)
+            detail = self.client.get(f'/api/transactions/public/orders/{token}/')
+            self.assertEqual(detail.status_code, 200)
+            self.assertEqual(detail.data['id'], self.order.id)
+            self.assertEqual(detail.data['clientStatus'], 'Pending')
+
+        # Accept the order.
+        self.client.force_authenticate(None)
+        resp = self.client.post(
+            f'/api/transactions/public/orders/{token}/respond/',
+            {'decision': 'accept', 'message': 'Looks good, proceed'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['clientStatus'], 'Accepted')
+        self.assertEqual(resp.data['status'], 'Accepted')
+        order = Order.objects.get(id=self.order.id)
+        self.assertEqual(order.status, 'Accepted')
+        self.assertEqual(order.client_message, 'Looks good, proceed')
+        self.assertIsNotNone(order.client_responded_at)
+        # Token is revoked: link is gone and re-respond is blocked.
+        self.assertEqual(order.client_token, '')
+
+        self.client.force_authenticate(None)
+        resp = self.client.post(
+            f'/api/transactions/public/orders/{token}/respond/',
+            {'decision': 'accept', 'message': ''},
+            format='json',
+        )
+        # The single-use link is revoked: it no longer resolves.
+        self.assertEqual(resp.status_code, 404)
+        self.client.force_authenticate(None)
+        resp = self.client.get(f'/api/transactions/public/orders/{token}/')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_public_response_can_decline(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post(self.send_url, {'channels': ['whatsapp'], 'origin': 'https://app.test'}, format='json')
+        token = Order.objects.get(id=self.order.id).client_token
+        self.client.force_authenticate(None)
+        resp = self.client.post(
+            f'/api/transactions/public/orders/{token}/respond/',
+            {'decision': 'decline', 'message': ''},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Order.objects.get(id=self.order.id).status, 'Rejected')
+
+    def test_invalid_and_expired_links_are_rejected(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        self.client.force_authenticate(self.manager)
+        self.client.post(self.send_url, {'channels': ['copy'], 'origin': 'https://app.test'}, format='json')
+        token = Order.objects.get(id=self.order.id).client_token
+        Order.objects.filter(id=self.order.id).update(
+            client_token_expires_at=timezone.now() - timedelta(days=1)
+        )
+
+        self.client.force_authenticate(None)
+        resp = self.client.get(f'/api/transactions/public/orders/{token}/')
+        self.assertEqual(resp.status_code, 404)
+
+        self.client.force_authenticate(None)
+        resp = self.client.get('/api/transactions/public/orders/NOPE/')
+        self.assertEqual(resp.status_code, 404)

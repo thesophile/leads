@@ -376,6 +376,218 @@ def render_quotation_pdf(quotation):
         return None
 
 
+def render_order_pdf(order):
+    """Return the order form as a PDF ``bytes`` payload (or ``None``)."""
+    try:
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=14 * mm,
+            rightMargin=14 * mm,
+            topMargin=14 * mm,
+            bottomMargin=16 * mm,
+            title=f'{order.id} - {order.company}',
+            author='LEADS',
+        )
+        pdf_styles = _PdfStyles()
+        company = order.tenant
+        elements = []
+
+        header_data = [
+            [
+                Paragraph(
+                    f'<font color="#0f172a"><b>{order.id}</b></font>',
+                    pdf_styles.mono,
+                ),
+                '',
+            ],
+            [
+                Paragraph(
+                    f'<b>{order.company}</b><br/>'
+                    f'{order.customer} &nbsp;|&nbsp; {order.mobile or "—"}',
+                    pdf_styles.value,
+                ),
+                '',
+            ],
+        ]
+        logo = None
+        if company and company.logo and company.logo.name:
+            try:
+                from pathlib import Path
+
+                logo_path = Path(settings.MEDIA_ROOT) / company.logo.name
+                with open(str(logo_path), 'rb') as handle:
+                    img = Image(handle)
+                ratio = img.imageWidth / (img.imageHeight or 1)
+                height = 26 * mm
+                img.drawHeight = height
+                img.drawWidth = min(58 * mm, height * ratio)
+                header_data[0][1] = img
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning('Could not embed company logo in PDF: %s', exc)
+
+        header = Table(header_data, colWidths=[92 * mm, 70 * mm])
+        header.setStyle(
+            TableStyle(
+                [
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                    ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                ]
+            )
+        )
+        elements.append(header)
+
+        elements.append(
+            Paragraph(
+                'ORDER FORM',
+                ParagraphStyle(
+                    'pagetitle',
+                    parent=pdf_styles.title,
+                    alignment=TA_CENTER,
+                    spaceBefore=6,
+                ),
+            )
+        )
+        elements.append(
+            Paragraph(
+                'Official Order Confirmation',
+                ParagraphStyle(
+                    'pagesub',
+                    parent=pdf_styles.subtitle,
+                    alignment=TA_CENTER,
+                    spaceAfter=8,
+                ),
+            )
+        )
+
+        detail_rows = [
+            ('Order #', order.id, 'Date', order.date or '—'),
+            ('Proposal #', order.proposal_no or '—', 'Category', order.category or '—'),
+            ('Prepared By', order.proposal_by or '—', 'BDM', order.bdm or '—'),
+            ('City', order.city or '—', 'Status', order.status or '—'),
+        ]
+        cells = []
+        for label, value, label2, value2 in detail_rows:
+            cells.append(
+                [
+                    Paragraph(label.upper(), pdf_styles.label),
+                    Paragraph(str(value or '—'), pdf_styles.value),
+                    Paragraph(label2.upper(), pdf_styles.label),
+                    Paragraph(str(value2 or '—'), pdf_styles.value),
+                ]
+            )
+        detail = Table(cells, colWidths=[34 * mm, 44 * mm, 34 * mm, 50 * mm])
+        detail.setStyle(
+            TableStyle(
+                [
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+                    ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+                    ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+        elements.append(detail)
+
+        financial = Table(
+            [
+                [
+                    Paragraph(
+                        f'<b>Total:</b>  {order.total or "—"}',
+                        pdf_styles.money,
+                    ),
+                    Paragraph(
+                        f'<b>Discount:</b>  {order.discount or "0"}',
+                        pdf_styles.money,
+                    ),
+                    Paragraph(
+                        f'<b>Net:</b>  {order.net_amount or order.total or "—"}',
+                        pdf_styles.money,
+                    ),
+                ]
+            ],
+            colWidths=[47 * mm, 47 * mm, 68 * mm],
+        )
+        financial.setStyle(
+            TableStyle(
+                [
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f1f5f9')),
+                    ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+                    ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
+                    ('TOPPADDING', (0, 0), (-1, -1), 7),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+        elements.append(Spacer(1, 8))
+        elements.append(financial)
+
+        scope_markup = html_to_pdf_markup(order.scope)
+        if scope_markup:
+            elements.append(Paragraph('ORDER SUMMARY', pdf_styles.section))
+            elements.append(Paragraph(scope_markup, pdf_styles.body))
+
+        details_markup = html_to_pdf_markup(order.details)
+        if details_markup:
+            elements.append(Paragraph('ORDER IN DETAILS', pdf_styles.section))
+            elements.append(Paragraph(details_markup, pdf_styles.body))
+
+        company_terms_markup = html_to_pdf_markup(
+            (getattr(company, 'terms_full_html', '') or getattr(company, 'terms_summary_html', '')) or ''
+        )
+        if company_terms_markup:
+            elements.append(Paragraph('TERMS &amp; CONDITIONS', pdf_styles.section))
+            elements.append(Paragraph(company_terms_markup, pdf_styles.body))
+
+        footer_parts = []
+        if company:
+            if company.name:
+                footer_parts.append(company.name)
+            if company.address:
+                footer_parts.append(company.address)
+            if company.email:
+                footer_parts.append(company.email)
+            if company.website:
+                footer_parts.append(company.website)
+            if company.phone:
+                footer_parts.append(f'Ph: {company.phone}')
+        footer_text = ' | '.join(footer_parts) or '— LEADS'
+        elements.append(Spacer(1, 14))
+        elements.append(
+            Table(
+                [[Paragraph(footer_text, pdf_styles.footer)]],
+                colWidths=[182 * mm],
+                style=TableStyle(
+                    [
+                        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+                        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+                        ('TOPPADDING', (0, 0), (-1, -1), 6),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                    ]
+                ),
+            )
+        )
+
+        doc.build(elements)
+        return buf.getvalue()
+    except Exception as exc:  # pragma: no cover - PDF must never break the action
+        logger.warning('Failed to render order PDF for %s: %s', order.id, exc)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Client email
 # ---------------------------------------------------------------------------
@@ -418,8 +630,7 @@ _CLIENT_EMAIL_TEMPLATE = """
                 Dear {customer},
               </p>
               <p style="color:#334155; font-size:13px; margin:0 0 18px 0; line-height:1.6;">
-                Please find our quotation for <strong>{company}</strong>. We have also attached the full
-                proposal document to this email for your reference.
+                {doc_intro}
               </p>
 
               {greeting_note}
@@ -452,8 +663,7 @@ _CLIENT_EMAIL_TEMPLATE = """
               {scope_html}
 
               <p style="color:#334155; font-size:13px; margin:0 0 18px 0; line-height:1.6;">
-                You can review the full details and share your decision online. To accept this quotation,
-                tap <strong>Accept</strong>; to decline it, tap <strong>Decline</strong>.
+                {decision_instruction}
               </p>
 
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:18px;">
@@ -569,6 +779,14 @@ def build_client_email(quotation, link, message=''):
         company=str(getattr(company, 'name', None) or quotation.company),
         logo_html=logo_html,
         customer=quotation.customer or 'Customer',
+        doc_intro=(
+            f'Please find our quotation for <strong>{quotation.company}</strong>. We have also '
+            f'attached the full proposal document to this email for your reference.'
+        ),
+        decision_instruction=(
+            'You can review the full details and share your decision online. To accept this '
+            'quotation, tap <strong>Accept</strong>; to decline it, tap <strong>Decline</strong>.'
+        ),
         greeting_note=greeting_note,
         total=total,
         discount=discount,
@@ -600,4 +818,106 @@ def build_client_email(quotation, link, message=''):
     pdf = render_quotation_pdf(quotation)
     if pdf:
         email.attach(f'{quotation.id}.pdf', pdf, 'application/pdf')
+    return email
+
+
+def build_order_client_email(order, link, message=''):
+    """Compose the one-time signed order email (HTML + text + PDF)."""
+    company = order.tenant
+    logo_html = ''
+    if company and company.logo and company.logo.name:
+        try:
+            logo_url = company.logo.url
+            logo_html = (
+                f'<img src="{logo_url}" alt="{company.name}" style="max-height:38px; '
+                f'max-width:160px; object-fit:contain;" />'
+            )
+        except Exception:
+            logo_html = ''
+
+    currency = currency_label(order.currency)
+    amount = lambda value: f'{currency} {value}'.strip()
+    total = amount(order.total or '0')
+    discount = amount(order.discount or '0')
+    net = amount(order.net_amount or order.total or '0')
+
+    greeting_note = ''
+    if message:
+        message_html = _strip_html(message).replace('\n', '<br/>')
+        greeting_note = (
+            f'<p style="background-color:#eff6ff; border-left:3px solid #3b82f6; color:#1e3a8a; '
+            f'padding:10px 14px; font-size:12px; margin:0 0 18px 0; line-height:1.5;">'
+            f'{message_html}</p>'
+        )
+
+    scope = _strip_html(order.scope)
+    scope_html = ''
+    if scope:
+        scope = scope[:420]
+        scope_html = (
+            '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+            'style="margin-bottom:18px;">'
+            '<tr><td style="color:#0f172a; font-size:11px; font-weight:bold; '
+            'text-transform:uppercase; padding-bottom:6px;">Order Summary</td></tr>'
+            f'<tr><td style="color:#475569; font-size:12px; line-height:1.6;">{scope}</td></tr>'
+            '</table>'
+        )
+
+    footer_parts = []
+    if company:
+        if company.name:
+            footer_parts.append(str(company.name))
+        if company.email:
+            footer_parts.append(str(company.email))
+        if company.phone:
+            footer_parts.append(f'Ph: {company.phone}')
+        if company.website:
+            footer_parts.append(str(company.website))
+    footer = ' | '.join(footer_parts) or '&mdash; LEADS'
+
+    subject = f'Order Form {order.id} — {order.company}'
+    html_body = _CLIENT_EMAIL_TEMPLATE.format(
+        quotation_id=order.id,
+        company=str(getattr(company, 'name', None) or order.company),
+        logo_html=logo_html,
+        customer=order.customer or 'Customer',
+        doc_intro=(
+            f'Please find our order form for <strong>{order.company}</strong>. We have also '
+            f'attached the full order form document to this email for your reference.'
+        ),
+        decision_instruction=(
+            'You can review the full details and share your decision online. To accept this '
+            'order, tap <strong>Accept</strong>; to decline it, tap <strong>Decline</strong>.'
+        ),
+        greeting_note=greeting_note,
+        total=total,
+        discount=discount,
+        net=net,
+        scope_html=scope_html,
+        accept_url=f'{link}?action=accept',
+        decline_url=f'{link}?action=decline',
+        view_url=link,
+        footer=footer,
+    )
+    text_body = (
+        f'Dear {order.customer},\n\n'
+        f'Please find our order form {order.id} for {order.company}.\n\n'
+        f'Total: {total}\nDiscount: {discount}\nNet: {net}\n\n'
+        f'Accept: {link}?action=accept\n'
+        f'Decline: {link}?action=decline\n'
+        f'View in site: {link}\n\n'
+        f'— {footer}'
+    )
+
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=None,
+        to=[order.email],
+        reply_to=[company.email] if company and company.email else None,
+    )
+    email.attach_alternative(html_body, 'text/html')
+    pdf = render_order_pdf(order)
+    if pdf:
+        email.attach(f'{order.id}.pdf', pdf, 'application/pdf')
     return email
