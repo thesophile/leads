@@ -60,7 +60,7 @@ pip-wheel-metadata/
 .ipynb_checkpoints/
 
 # Editor directories and files
-.vscode/*
+# .vscode/*
 !.vscode/extensions.json
 .idea/
 .DS_Store
