@@ -24,17 +24,21 @@ export default function PagedSection({
   pageFooterWrapClass = 'mt-2.5',
   pageClassName = 'print-page mx-auto w-full max-w-[210mm] h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between',
   continueNote = true,
+  endBlock = null,
+  endBlockClass = '',
 }) {
   const contentRef = useRef(null)
   const footerRef = useRef(null)
-  const paged = usePagedContent(contentRef, footerRef, [], reserve)
+  const endBlockRef = useRef(null)
+  const paged = usePagedContent(contentRef, footerRef, endBlock ? [endBlockRef] : [], reserve)
+  const showEnd = endBlock && !paged.part2Html
 
   return (
     <>
       <div className={pageClassName} style={{ boxSizing: 'border-box' }}>
         <div className="flex flex-1 flex-col">
           {pageHeader}
-          <div className="mt-3 flex-1 flex flex-col">
+          <div className={`mt-3 flex flex-col ${endBlock ? '' : 'flex-1'}`}>
             <div className={`overflow-hidden ${boxClass} flex flex-col`}>
               <div
                 className={`shrink-0 bg-black px-3 py-1.5 text-[13px] font-bold uppercase tracking-wider text-white ${titleClass}`}
@@ -57,6 +61,11 @@ export default function PagedSection({
               </div>
             </div>
           </div>
+          {showEnd ? (
+            <div ref={endBlockRef} className={`mt-auto pt-4 ${endBlockClass}`}>
+              {endBlock}
+            </div>
+          ) : null}
         </div>
         <div ref={footerRef} className={pageFooterWrapClass}>
           {pageFooter}
@@ -77,6 +86,8 @@ export default function PagedSection({
           pageFooterWrapClass={pageFooterWrapClass}
           pageClassName={pageClassName}
           continueNote={continueNote}
+          endBlock={endBlock}
+          endBlockClass={endBlockClass}
         />
       ) : null}
     </>

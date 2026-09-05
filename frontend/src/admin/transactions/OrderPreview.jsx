@@ -235,6 +235,48 @@ function PageFooter() {
   )
 }
 
+function SignatureBlock({ customerCompany, orderId }) {
+  return (
+    <div className="grid grid-cols-12 gap-2">
+      <div className="col-span-5 rounded-md border border-black bg-white p-2">
+        <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
+          Approved By
+        </div>
+        <div className="mt-1 text-[11px]">
+          <p className="font-bold text-emerald-700 flex items-center gap-1">
+            <span>Signature valid</span>
+            <span className="text-sm">✔</span>
+          </p>
+          <p className="text-slate-800 font-semibold mt-0.5">Programers International</p>
+          <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
+          <p className="text-slate-500 text-[9.5px]">Location: Thrissur</p>
+        </div>
+      </div>
+
+      <div className="col-span-5 rounded-md border border-black bg-white p-2">
+        <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
+          Accepted By
+        </div>
+        <div className="mt-1 text-[11px]">
+          <p className="font-bold text-emerald-700 flex items-center gap-1">
+            <span>Signature valid</span>
+            <span className="text-sm">✔</span>
+          </p>
+          <p className="text-slate-800 font-semibold mt-0.5">{customerCompany}</p>
+          <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
+          <p className="text-slate-500 text-[9.5px]">Location: KOCHI</p>
+        </div>
+      </div>
+
+      <div className="col-span-2 flex items-center justify-center rounded-md border border-black bg-white p-1">
+        <div className="h-[72px] w-[72px]">
+          <QRCodeVisual value={`https://leads.programersapps.com/orders/${orderId}`} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function OrderPreview() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -269,6 +311,7 @@ export default function OrderPreview() {
   const approvedRowRef = useRef(null)
   const page2FooterRef = useRef(null)
   const page3SigRef = useRef(null)
+  const page3FooterRef = useRef(null)
   const summaryContentRef = useRef(null)
   const termsSummaryContentRef = useRef(null)
   const detailsContentRef = useRef(null)
@@ -276,7 +319,7 @@ export default function OrderPreview() {
   const summaryPaged = usePagedContent(summaryContentRef, approvedRowRef, [], 48)
   const termsSummaryPaged = usePagedContent(termsSummaryContentRef, approvedRowRef, [], 48)
   const detailsPaged = usePagedContent(detailsContentRef, page2FooterRef, [], 64)
-  const legalPaged = usePagedContent(legalTermsContentRef, page3SigRef, [], 64)
+  const legalPaged = usePagedContent(legalTermsContentRef, page3FooterRef, [page3SigRef], 64)
 
   return (
     <Layout>
@@ -528,48 +571,16 @@ export default function OrderPreview() {
                   ) : null}
                 </SectionBox>
 
-                {/* Final Signatures & QR Block */}
-                <div ref={page3SigRef} className="mt-2.5 grid grid-cols-12 gap-2">
-                  <div className="col-span-5 rounded-md border border-black bg-white p-2">
-                    <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
-                      Approved By
-                    </div>
-                    <div className="mt-1 text-[11px]">
-                      <p className="font-bold text-emerald-700 flex items-center gap-1">
-                        <span>Signature valid</span>
-                        <span className="text-sm">✔</span>
-                      </p>
-                      <p className="text-slate-800 font-semibold mt-0.5">Programers International</p>
-                      <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
-                      <p className="text-slate-500 text-[9.5px]">Location: Thrissur</p>
-                    </div>
-                  </div>
-
-                  <div className="col-span-5 rounded-md border border-black bg-white p-2">
-                    <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
-                      Accepted By
-                    </div>
-                    <div className="mt-1 text-[11px]">
-                      <p className="font-bold text-emerald-700 flex items-center gap-1">
-                        <span>Signature valid</span>
-                        <span className="text-sm">✔</span>
-                      </p>
-                      <p className="text-slate-800 font-semibold mt-0.5">{orderData.customerCompany}</p>
-                      <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
-                      <p className="text-slate-500 text-[9.5px]">Location: KOCHI</p>
-                    </div>
-                  </div>
-
-                  <div className="col-span-2 flex items-center justify-center rounded-md border border-black bg-white p-1">
-                    <div className="h-[72px] w-[72px]">
-                      <QRCodeVisual value={`https://leads.programersapps.com/orders/${orderData.id}`} />
-                    </div>
-                  </div>
+                {/* Final Signatures & QR Block — only on the last page (page 3 when nothing continues) */}
+                <div ref={page3SigRef} className="mt-2.5">
+                  {!legalPaged.part2Html && (
+                    <SignatureBlock customerCompany={orderData.customerCompany} orderId={orderData.id} />
+                  )}
                 </div>
               </div>
             </div>
 
-            <div className="mt-2.5">
+            <div ref={page3FooterRef} className="mt-2.5">
               <PageFooter />
             </div>
           </div>
@@ -613,12 +624,13 @@ export default function OrderPreview() {
               html={wrappableHtml(legalPaged.part2Html)}
               reserve={64}
               contentClass="space-y-2 text-[12.5px] leading-relaxed text-slate-700"
-              sectionTitle="TERMS &amp; CONDITIONS (CONTINUED)"
+              sectionTitle="DETAILED TERMS &amp; CONDITIONS (CONTINUED)"
               boxClass="rounded-md border border-black bg-white"
               titleClass="text-center border-b border-black"
               pageHeader={<PageHeader order={orderData} annexLabel="ANNEXURE - A (2/2)" />}
               pageFooter={<PageFooter />}
               continueNote={false}
+              endBlock={<SignatureBlock customerCompany={orderData.customerCompany} orderId={orderData.id} />}
             />
           )}
         </div>
