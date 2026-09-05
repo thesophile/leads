@@ -39,17 +39,26 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     const c = Math.max(48, bottom - 16 - contentTop - below - gaps - reserve)
 
     const base = contentEl.getBoundingClientRect().top
+    let lastFit = 0
     const part2 = []
     for (const child of contentEl.children) {
       const rect = child.getBoundingClientRect()
-      if (rect.top + rect.height - base > c) part2.push(child.outerHTML)
+      const childBottom = rect.top + rect.height - base
+      if (childBottom > c) {
+        part2.push(child.outerHTML)
+      } else {
+        lastFit = childBottom
+      }
     }
     const part2Str = part2.join('')
+    // When content overflows, snap the cap to the bottom of the last block that
+    // fully fits so no block is partially clipped on this page.
+    const cap = part2.length ? Math.max(48, lastFit) : c
 
     const prev = committed.current
-    if (prev.cap !== c || prev.part2Html !== part2Str) {
-      committed.current = { cap: c, part2Html: part2Str }
-      setCap(c)
+    if (prev.cap !== cap || prev.part2Html !== part2Str) {
+      committed.current = { cap, part2Html: part2Str }
+      setCap(cap)
       setPart2Html(part2Str)
     }
   }, [contentRef, bottomRef, belowBlocks, reserve])

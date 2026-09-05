@@ -794,7 +794,11 @@ const approvedByRef = useRef(null)
                       dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.termsHtml) }}
                     />
                   ) : (
-                    <div className="space-y-3 text-[12.5px] leading-relaxed text-slate-700">
+                    <div
+                      ref={termsContentRef}
+                      className="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
+                      style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
+                    >
                       {proposalData.termsConditions.map((t, idx) => (
                         <div key={idx}>
                           <span className="font-bold text-slate-900">{t.title}</span> {t.content}
