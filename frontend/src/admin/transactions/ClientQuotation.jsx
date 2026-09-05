@@ -10,6 +10,10 @@ function stripHtml(html) {
     .trim()
 }
 
+function wrappableHtml(html) {
+  return String(html || '').replace(/&nbsp;/gi, ' ')
+}
+
 function currencySymbol(raw) {
   const m = String(raw || '').match(/(₹|€|£|AED|\$)/)
   return m ? m[1] : '₹'
@@ -291,7 +295,7 @@ export default function ClientQuotation() {
                   </div>
                   <div
                     className="bg-white p-4 text-[13px] leading-relaxed text-slate-800 space-y-2"
-                    dangerouslySetInnerHTML={{ __html: scopeHtml }}
+                    dangerouslySetInnerHTML={{ __html: wrappableHtml(scopeHtml) }}
                   />
                 </div>
               )}
@@ -305,7 +309,7 @@ export default function ClientQuotation() {
                   </div>
                   <div
                     className="bg-white p-4 text-[13px] leading-relaxed text-slate-800 space-y-2"
-                    dangerouslySetInnerHTML={{ __html: detailsHtml }}
+                    dangerouslySetInnerHTML={{ __html: wrappableHtml(detailsHtml) }}
                   />
                 </div>
               )}
@@ -319,7 +323,7 @@ export default function ClientQuotation() {
                   </div>
                   <div
                     className="bg-white p-4 text-[12.5px] leading-relaxed text-slate-700 space-y-2"
-                    dangerouslySetInnerHTML={{ __html: companyTerms }}
+                    dangerouslySetInnerHTML={{ __html: wrappableHtml(companyTerms) }}
                   />
                 </div>
               )}

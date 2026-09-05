@@ -43,7 +43,14 @@ class Company(models.Model):
     address = models.TextField(blank=True)
     website = models.URLField(blank=True)
     logo = models.ImageField(upload_to='company_logos/', blank=True, null=True)
-    terms_html = models.TextField(blank=True)
+    terms_summary_html = models.TextField(
+        blank=True,
+        help_text='Short Terms &amp; Conditions summary shown on proposals and order forms.',
+    )
+    terms_full_html = models.TextField(
+        blank=True,
+        help_text='Full Terms &amp; Conditions shown on proposals and order forms.',
+    )
     gstin = models.CharField(max_length=50, blank=True)
     default_bank = models.CharField(max_length=150, blank=True)
     base_currency = models.CharField(max_length=30, blank=True, default='INR (₹)')

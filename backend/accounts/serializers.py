@@ -10,7 +10,8 @@ User = get_user_model()
 
 
 class CompanySerializer(serializers.ModelSerializer):
-    termsHtml = serializers.CharField(source='terms_html', required=False, allow_blank=True)
+    termsSummaryHtml = serializers.CharField(source='terms_summary_html', required=False, allow_blank=True)
+    termsFullHtml = serializers.CharField(source='terms_full_html', required=False, allow_blank=True)
     currency = serializers.CharField(source='base_currency', required=False, allow_blank=True)
     gstNo = serializers.CharField(source='gstin', required=False, allow_blank=True)
     defaultBank = serializers.CharField(source='default_bank', required=False, allow_blank=True)
@@ -26,7 +27,8 @@ class CompanySerializer(serializers.ModelSerializer):
             'address',
             'website',
             'logo',
-            'termsHtml',
+            'termsSummaryHtml',
+            'termsFullHtml',
             'currency',
             'gstNo',
             'defaultBank',

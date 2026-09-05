@@ -7,6 +7,10 @@ import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 
+function wrappableHtml(html) {
+  return String(html || '').replace(/&nbsp;/gi, ' ')
+}
+
 // Initial Proposal Model matching exact PDF document
 const DEFAULT_PROPOSAL = {
   id: 'QTN403206072026A',
@@ -790,7 +794,7 @@ export default function ProposalPreview() {
                   {proposalData.termsHtml ? (
                     <div
                       className="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
-                      dangerouslySetInnerHTML={{ __html: proposalData.termsHtml }}
+                      dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.termsHtml) }}
                     />
                   ) : (
                     <div className="space-y-3 text-[12.5px] leading-relaxed text-slate-700">
@@ -890,8 +894,8 @@ export default function ProposalPreview() {
                 <SectionBox title="Proposal Summary">
                   <div
                     ref={summaryRef}
-                    className="space-y-1.5 break-words text-[13.5px] leading-relaxed text-slate-800"
-                    dangerouslySetInnerHTML={{ __html: proposalData.proposalSummaryHtml }}
+                    className="space-y-1.5 text-[13.5px] leading-relaxed text-slate-800"
+                    dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.proposalSummaryHtml) }}
                   />
                   {summaryOverflow && (
                     <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
@@ -920,7 +924,7 @@ export default function ProposalPreview() {
                 <div className="flex h-full flex-1 flex-col justify-between">
                   <div
                     className="space-y-3 text-[13px] leading-relaxed text-slate-800"
-                    dangerouslySetInnerHTML={{ __html: proposalData.proposalInDetailsHtml }}
+                    dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.proposalInDetailsHtml) }}
                   />
                   <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
                   <p className="mt-2 text-right text-[11px] font-bold text-slate-400">

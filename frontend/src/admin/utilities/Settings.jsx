@@ -115,6 +115,17 @@ function CheckIcon({ className = 'h-4 w-4' }) {
   )
 }
 
+function FileTextIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  )
+}
+
 function DownloadIcon({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -202,6 +213,7 @@ function CalendarIcon({ className = 'h-4 w-4' }) {
 const TABS = [
   { id: 'targets', label: 'Targets & KPIs', icon: SlidersIcon },
   { id: 'general', label: 'General & Finance', icon: BuildingIcon },
+  { id: 'templates', label: 'Templates', icon: FileTextIcon },
   { id: 'backup', label: 'Backup & Logs', icon: DatabaseIcon },
 ]
 
@@ -287,7 +299,8 @@ export default function Settings() {
   const [logoFile, setLogoFile] = useState(null)
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoWarning, setLogoWarning] = useState(null)
-  const [termsHtml, setTermsHtml] = useState('')
+  const [termsSummaryHtml, setTermsSummaryHtml] = useState('')
+  const [termsFullHtml, setTermsFullHtml] = useState('')
   const [gstNo, setGstNo] = useState('')
   const [currency, setCurrency] = useState('INR (₹)')
   const [defaultBank, setDefaultBank] = useState('')
@@ -313,7 +326,8 @@ export default function Settings() {
           if (company.website) setCompanyWebsite(company.website)
           if (company.address) setCompanyAddress(company.address)
           setCompanyLogo(company.logo || '')
-          if (company.termsHtml) setTermsHtml(company.termsHtml)
+          if (company.termsSummaryHtml !== undefined) setTermsSummaryHtml(company.termsSummaryHtml || '')
+          if (company.termsFullHtml !== undefined) setTermsFullHtml(company.termsFullHtml || '')
           if (company.currency) setCurrency(company.currency)
           if (company.gstNo !== undefined) setGstNo(company.gstNo || '')
           if (company.defaultBank !== undefined) setDefaultBank(company.defaultBank || '')
@@ -346,7 +360,6 @@ export default function Settings() {
         phone: companyPhone,
         website: companyWebsite,
         address: companyAddress,
-        termsHtml,
         currency,
         gstNo,
         defaultBank,
@@ -354,6 +367,19 @@ export default function Settings() {
       showToast('General settings saved successfully.')
     } catch (err) {
       showToast(`Failed to save settings: ${err.message}`)
+    }
+  }
+
+  async function handleSaveTemplates(e) {
+    e.preventDefault()
+    try {
+      await api.patch('/auth/company/', {
+        termsSummaryHtml,
+        termsFullHtml,
+      })
+      showToast('Terms & Conditions templates saved successfully.')
+    } catch (err) {
+      showToast(`Failed to save templates: ${err.message}`)
     }
   }
 
@@ -861,25 +887,6 @@ export default function Settings() {
                 )}
               </div>
 
-              <div className="px-6 py-6 md:px-8 md:py-7">
-                <SectionTitle>Standard Terms &amp; Conditions</SectionTitle>
-                <p className="mt-1.5 text-[11px] text-slate-400">
-                  Shown on the "Terms &amp; Conditions" box of every proposal. Leave empty to fall back
-                  to the built-in default terms.
-                </p>
-                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                  <ReactQuill
-                    theme="snow"
-                    className="quill-tall"
-                    value={termsHtml}
-                    onChange={setTermsHtml}
-                    modules={QUILL_MODULES}
-                    formats={QUILL_FORMATS}
-                    placeholder="e.g. 1. Payment Terms: 50% non-refundable advance... "
-                  />
-                </div>
-              </div>
-
               <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
                 <p className="text-[11px] text-slate-400">Changes apply immediately to new documents.</p>
                 <button
@@ -888,6 +895,75 @@ export default function Settings() {
                 >
                   <CheckIcon className="h-3.5 w-3.5" />
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'templates' && (
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden max-w-5xl">
+            <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                <FileTextIcon className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Terms &amp; Conditions Templates</h2>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Default text used when generating proposals and order forms. Edit it to suit your company —
+                  most companies can use the defaults as-is.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveTemplates}>
+              <div className="space-y-8 px-6 py-6 md:px-8 md:py-7">
+                <div>
+                  <SectionTitle>Terms &amp; Conditions Summary</SectionTitle>
+                  <p className="mt-1.5 text-[11px] text-slate-400">
+                    A short version shown in the "Terms &amp; Conditions" box of the proposal and on the first
+                    page of the order form.
+                  </p>
+                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <ReactQuill
+                      theme="snow"
+                      className="quill-tall"
+                      value={termsSummaryHtml}
+                      onChange={setTermsSummaryHtml}
+                      modules={QUILL_MODULES}
+                      formats={QUILL_FORMATS}
+                      placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <SectionTitle>Full Terms &amp; Conditions</SectionTitle>
+                  <p className="mt-1.5 text-[11px] text-slate-400">
+                    The complete legal terms shown on the final page of the order form and used for proposals.
+                  </p>
+                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <ReactQuill
+                      theme="snow"
+                      className="quill-tall"
+                      value={termsFullHtml}
+                      onChange={setTermsFullHtml}
+                      modules={QUILL_MODULES}
+                      formats={QUILL_FORMATS}
+                      placeholder="e.g. 1. Acceptance of Order... 2. Payment Terms & Billing... 3. Changes & Variations..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
+                <p className="text-[11px] text-slate-400">Changes apply immediately to newly generated proposals and order forms.</p>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
+                >
+                  <CheckIcon className="h-3.5 w-3.5" />
+                  Save Templates
                 </button>
               </div>
             </form>

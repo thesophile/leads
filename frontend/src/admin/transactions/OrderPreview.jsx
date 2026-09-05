@@ -4,6 +4,10 @@ import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import Layout from '../../Layout/Layout'
 
+function wrappableHtml(html) {
+  return String(html || '').replace(/&nbsp;/gi, ' ')
+}
+
 const DEFAULT_ORDER = {
   id: 'P2025-0004',
   orderDate: '12-12-2024',
@@ -252,6 +256,8 @@ export default function OrderPreview() {
         net: o.netAmount || DEFAULT_ORDER.net,
         orderSummaryHtml: o.scope || DEFAULT_ORDER.orderSummaryHtml,
         orderInDetailsHtml: o.details || DEFAULT_ORDER.orderInDetailsHtml,
+        termsSummaryHtml: o.termsSummaryHtml || DEFAULT_ORDER.termsSummaryHtml,
+        legalTermsHtml: o.termsFullHtml || DEFAULT_ORDER.legalTermsHtml,
         status: o.status || DEFAULT_ORDER.status,
       }
     }
@@ -355,7 +361,7 @@ export default function OrderPreview() {
                   <SectionBox title="ORDER SUMMARY" className="flex-1">
                     <div
                       className="space-y-1.5 text-[13px] leading-relaxed text-black"
-                      dangerouslySetInnerHTML={{ __html: orderData.orderSummaryHtml }}
+                      dangerouslySetInnerHTML={{ __html: wrappableHtml(orderData.orderSummaryHtml) }}
                     />
                     <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
                       --- Continued ---
@@ -368,9 +374,9 @@ export default function OrderPreview() {
                 {/* Right Column (col-span-5): Terms & Conditions */}
                 <div className="col-span-5 flex flex-col">
                   <SectionBox title="TERMS &amp; CONDITIONS" className="h-full">
-                    <div
-                      className="space-y-2 text-[12.5px] leading-relaxed text-black"
-                      dangerouslySetInnerHTML={{ __html: orderData.termsSummaryHtml }}
+<div
+                      className="space-y-1.5 text-[11px] leading-relaxed text-slate-700"
+                      dangerouslySetInnerHTML={{ __html: wrappableHtml(orderData.termsSummaryHtml) }}
                     />
                     <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
                       --- Detailed continued in Page 2 ---
@@ -432,10 +438,10 @@ export default function OrderPreview() {
 
               <div className="mt-3 flex-1 flex flex-col">
                 <SectionBox title="ORDER IN DETAILS" className="flex-1 flex flex-col justify-between min-h-[580px]">
-                  <div
-                    className="space-y-2 text-[13px] leading-relaxed text-black"
-                    dangerouslySetInnerHTML={{ __html: orderData.orderInDetailsHtml }}
-                  />
+<div
+                      className="space-y-3 text-[13px] leading-relaxed text-slate-800"
+                      dangerouslySetInnerHTML={{ __html: wrappableHtml(orderData.orderInDetailsHtml) }}
+                    />
                   <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- End of page ---</p>
                 </SectionBox>
               </div>
@@ -458,10 +464,10 @@ export default function OrderPreview() {
 
               <div className="mt-3 flex-1 flex flex-col justify-between">
                 <SectionBox title="TERMS &amp; CONDITIONS" className="flex-1">
-                  <div
-                    className="space-y-3 text-[12.5px] leading-relaxed text-black text-justify"
-                    dangerouslySetInnerHTML={{ __html: orderData.legalTermsHtml }}
-                  />
+<div
+                      className="space-y-2 text-[12.5px] leading-relaxed text-slate-700"
+                      dangerouslySetInnerHTML={{ __html: wrappableHtml(orderData.legalTermsHtml) }}
+                    />
                 </SectionBox>
 
                 {/* Final Signatures & QR Block */}

@@ -1106,7 +1106,7 @@ def public_quotation_payload(quotation):
         'currency': quotation.currency,
         'proposalScope': quotation.proposal_scope,
         'termsConditions': quotation.terms_conditions,
-        'companyTerms': tenant.terms_html if tenant else '',
+        'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
         'companyName': tenant.name if tenant else '',
         'companyLogo': logo_url,
         'companyAddress': tenant.address if tenant else '',

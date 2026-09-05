@@ -330,7 +330,9 @@ def render_quotation_pdf(quotation):
             elements.append(Paragraph('PROPOSAL IN DETAIL', pdf_styles.section))
             elements.append(Paragraph(terms_markup, pdf_styles.body))
 
-        company_terms_markup = html_to_pdf_markup(getattr(company, 'terms_html', '') or '')
+        company_terms_markup = html_to_pdf_markup(
+            (getattr(company, 'terms_full_html', '') or getattr(company, 'terms_summary_html', '')) or ''
+        )
         if company_terms_markup:
             elements.append(Paragraph('TERMS &amp; CONDITIONS', pdf_styles.section))
             elements.append(Paragraph(company_terms_markup, pdf_styles.body))

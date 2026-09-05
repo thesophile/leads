@@ -216,7 +216,7 @@ class QuotationSerializer(serializers.ModelSerializer):
         tenant = getattr(obj, 'tenant', None)
         if tenant is None:
             return ''
-        return tenant.terms_html or ''
+        return tenant.terms_summary_html or tenant.terms_full_html
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -225,6 +225,8 @@ class OrderSerializer(serializers.ModelSerializer):
     proposalDate = serializers.CharField(source='proposal_date', required=False, allow_blank=True)
     proposalBy = serializers.CharField(source='proposal_by', required=False, allow_blank=True)
     netAmount = serializers.CharField(source='net_amount', required=False, allow_blank=True)
+    termsSummaryHtml = serializers.SerializerMethodField()
+    termsFullHtml = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -251,7 +253,21 @@ class OrderSerializer(serializers.ModelSerializer):
             'remarks',
             'scope',
             'details',
+            'termsSummaryHtml',
+            'termsFullHtml',
         ]
+
+    def get_termsSummaryHtml(self, obj):
+        tenant = getattr(obj, 'tenant', None)
+        if tenant is None:
+            return ''
+        return tenant.terms_summary_html or ''
+
+    def get_termsFullHtml(self, obj):
+        tenant = getattr(obj, 'tenant', None)
+        if tenant is None:
+            return ''
+        return tenant.terms_full_html or ''
 
 
 class LeadSerializer(serializers.ModelSerializer):
