@@ -783,9 +783,9 @@ const approvedByRef = useRef(null)
               intent to proceed with the implementation as per the agreed terms and conditions.
             </p>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start">
-              <div className="flex flex-col gap-3 lg:col-span-4">
-                <SectionBox title="Terms &amp; Conditions">
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 flex-1">
+              <div className="flex flex-col justify-between gap-3 lg:col-span-4">
+                <SectionBox title="Terms &amp; Conditions" className="flex-1">
                   {proposalData.termsHtml ? (
                     <div
                       ref={termsContentRef}
@@ -898,8 +898,8 @@ const approvedByRef = useRef(null)
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 lg:col-span-8">
-                <SectionBox title="Proposal Summary">
+              <div className="flex flex-col justify-between gap-3 lg:col-span-8">
+                <SectionBox title="Proposal Summary" className="flex-1">
                   <div
                     ref={summaryContentRef}
                     className="space-y-1.5 text-[13.5px] leading-relaxed text-slate-800"
