@@ -489,6 +489,23 @@ export default function OrderPreview() {
           </div>
 
           {/* =========================================================================
+              TERMS & CONDITIONS (SUMMARY) CONTINUED — placed before the detailed T&C
+          ========================================================================= */}
+          {termsSummaryPaged.part2Html && (
+            <PagedSection
+              html={wrappableHtml(termsSummaryPaged.part2Html)}
+              reserve={48}
+              contentClass="space-y-1.5 text-[11px] leading-relaxed text-slate-700"
+              sectionTitle="TERMS &amp; CONDITIONS (CONTINUED)"
+              boxClass="rounded-md border border-black bg-white"
+              titleClass="text-center border-b border-black"
+              pageHeader={<PageHeader order={orderData} annexLabel="ANNEXURE - A (2/2)" />}
+              pageFooter={<PageFooter />}
+              continueNote={false}
+            />
+          )}
+
+          {/* =========================================================================
               PAGE 3: ANNEXURE - A (2/2) TERMS & CONDITIONS
           ========================================================================= */}
 <div
@@ -499,7 +516,7 @@ export default function OrderPreview() {
               <PageHeader order={orderData} annexLabel="ANNEXURE - A (2/2)" />
 
               <div className="mt-3 flex-1 flex flex-col justify-between">
-                <SectionBox title="TERMS &amp; CONDITIONS" className="flex-1">
+                <SectionBox title="DETAILED TERMS &amp; CONDITIONS" className="flex-1">
 <div
                       ref={legalTermsContentRef}
                       className="space-y-2 text-[12.5px] leading-relaxed text-slate-700"
