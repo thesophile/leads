@@ -956,5 +956,5 @@ def create_client_detail_from_order(order):
         category=order.category,
         accepted_date=date.today().strftime('%Y-%m-%d'),
         collected_by=order.proposal_by or order.staff,
-        status='Details Pending',
+        status=ClientDetail.STATUS_PENDING,
     )

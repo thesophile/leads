@@ -29,7 +29,37 @@ const CATEGORIES = [
   'SEO & Digital Marketing',
 ]
 
-const STATUS_LIST = ['All Status', 'Details Complete', 'Details Pending']
+const STATUS_VALUES = [
+  'Details Pending',
+  'Details Complete',
+  'In Progress',
+  'Completed',
+  'Paid',
+]
+
+const STATUS_LIST = ['All Status', ...STATUS_VALUES]
+
+const TAB_RAIL = [
+  { id: 'active', label: 'Active', statuses: ['Details Pending', 'Details Complete', 'In Progress'] },
+  { id: 'completed', label: 'Completed', statuses: ['Completed', 'Paid'] },
+  { id: 'all', label: 'All', statuses: null },
+]
+
+const STATUS_STYLES = {
+  'Details Pending': 'border-slate-200 bg-slate-50 text-slate-700',
+  'Details Complete': 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  'In Progress': 'border-blue-200 bg-blue-50 text-blue-700',
+  Completed: 'border-violet-200 bg-violet-50 text-violet-700',
+  Paid: 'border-teal-200 bg-teal-50 text-teal-700',
+}
+
+const STATUS_CHIP_STYLES = {
+  'Details Pending': 'border-amber-200 bg-amber-50/40 text-amber-700',
+  'Details Complete': 'border-emerald-200 bg-emerald-50/40 text-emerald-700',
+  'In Progress': 'border-blue-200 bg-blue-50/40 text-blue-700',
+  Completed: 'border-violet-200 bg-violet-50/40 text-violet-700',
+  Paid: 'border-teal-200 bg-teal-50/40 text-teal-700',
+}
 
 const EMPTY_FORM = {
   orderNo: '',
@@ -169,6 +199,7 @@ export default function ClientDetails() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
+  const [activeTab, setActiveTab] = useState('active')
 
   const [modalOpen, setModalOpen] = useState(() => Boolean(prefilledOrder))
   const [editingId, setEditingId] = useState(null)
@@ -254,7 +285,11 @@ export default function ClientDetails() {
   }, [])
 
   const filteredRecords = useMemo(() => {
+    const activeTabDef = TAB_RAIL.find((t) => t.id === activeTab)
     return records.filter((rec) => {
+      if (activeTabDef && activeTabDef.statuses && !activeTabDef.statuses.includes(rec.status)) {
+        return false
+      }
       const matchesStaff = selectedStaff === 'All Staff' || rec.collectedBy === selectedStaff
       const matchesStatus = selectedStatus === 'All Status' || rec.status === selectedStatus
 
@@ -272,11 +307,13 @@ export default function ClientDetails() {
 
       return matchesStaff && matchesStatus && matchesSearch
     })
-  }, [records, selectedStaff, selectedStatus, searchQuery])
+  }, [records, selectedStaff, selectedStatus, searchQuery, activeTab])
 
   const totalCount = records.length
-  const completeCount = records.filter((r) => r.status === 'Details Complete').length
-  const pendingCount = records.filter((r) => r.status === 'Details Pending').length
+  const statusCounts = STATUS_VALUES.map((status) => ({
+    status,
+    count: records.filter((r) => r.status === status).length,
+  }))
 
   function openAddModal() {
     setEditingId(null)
@@ -475,28 +512,56 @@ export default function ClientDetails() {
         </div>
 
         {/* KPI Chips */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Collected</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total</span>
             <div className="mt-1 flex items-baseline justify-between">
               <span className="text-xl font-bold text-slate-900">{totalCount}</span>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Clients</span>
             </div>
           </div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3.5 shadow-xs">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Details Complete</span>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-xl font-bold text-emerald-800">{completeCount}</span>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">Ready</span>
+          {statusCounts.map(({ status, count }) => (
+            <div key={status} className={`rounded-xl border p-3.5 shadow-xs ${STATUS_CHIP_STYLES[status] || 'border-slate-200 bg-white text-slate-700'}`}>
+              <span className="text-[10px] font-semibold uppercase tracking-wider">{status}</span>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-xl font-bold">{count}</span>
+              </div>
             </div>
-          </div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3.5 shadow-xs">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Details Pending</span>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-xl font-bold text-amber-800">{pendingCount}</span>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">Pending</span>
-            </div>
-          </div>
+          ))}
+        </div>
+
+        {/* Horizontal Tab Rail */}
+        <div className="flex flex-wrap items-center gap-2">
+          {TAB_RAIL.map((tab) => {
+            const count = tab.statuses
+              ? records.filter((r) => tab.statuses.includes(r.status)).length
+              : records.length
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setActiveTab(tab.id)
+                  setSelectedStatus('All Status')
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+                  isActive
+                    ? 'border-brand-600 bg-brand-600 text-white shadow-xs'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
         {/* Table Card */}
@@ -624,14 +689,13 @@ export default function ClientDetails() {
                           onChange={(e) => handleStatusChange(rec.id, e.target.value)}
                           title="Change status"
                           aria-label={`Status for ${rec.clientName}`}
-                          className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 ${
-                            rec.status === 'Details Complete'
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : 'border-amber-200 bg-amber-50 text-amber-700'
-                          }`}
+                          className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 ${STATUS_STYLES[rec.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}
                         >
-                          <option value="Details Complete">Details Complete</option>
-                          <option value="Details Pending">Details Pending</option>
+                          {STATUS_VALUES.map((statusValue) => (
+                            <option key={statusValue} value={statusValue}>
+                              {statusValue}
+                            </option>
+                          ))}
                         </select>
                       </td>
                       <td className="py-0.5 pr-3 text-center">
@@ -931,11 +995,7 @@ export default function ClientDetails() {
               </div>
               <div className="flex items-center gap-2">
                 <span
-                  className={`rounded-md border px-2 py-0.5 text-[11px] font-bold ${
-                    viewRecord.status === 'Details Complete'
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                      : 'border-amber-200 bg-amber-50 text-amber-700'
-                  }`}
+                  className={`rounded-md border px-2 py-0.5 text-[11px] font-bold ${STATUS_STYLES[viewRecord.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}
                 >
                   {viewRecord.status}
                 </span>

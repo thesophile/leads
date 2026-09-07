@@ -396,6 +396,19 @@ class Order(models.Model):
 
 
 class ClientDetail(models.Model):
+    STATUS_PENDING = 'Details Pending'
+    STATUS_COMPLETE = 'Details Complete'
+    STATUS_IN_PROGRESS = 'In Progress'
+    STATUS_COMPLETED = 'Completed'
+    STATUS_PAID = 'Paid'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, STATUS_PENDING),
+        (STATUS_COMPLETE, STATUS_COMPLETE),
+        (STATUS_IN_PROGRESS, STATUS_IN_PROGRESS),
+        (STATUS_COMPLETED, STATUS_COMPLETED),
+        (STATUS_PAID, STATUS_PAID),
+    ]
+
     id = models.CharField(max_length=20, primary_key=True)
     order_no = models.CharField(max_length=30, blank=True)
     lead_id = models.CharField(max_length=30, blank=True)
@@ -414,7 +427,7 @@ class ClientDetail(models.Model):
     accepted_date = models.CharField(max_length=30, blank=True)
     collected_by = models.CharField(max_length=120, blank=True)
     notes = models.TextField(blank=True)
-    status = models.CharField(max_length=50, default='Details Pending')
+    status = models.CharField(max_length=50, default=STATUS_PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

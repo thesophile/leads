@@ -1397,6 +1397,23 @@ class ClientDetailFlowTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 403)
 
+    def test_status_is_validated(self):
+        self.client.force_authenticate(self.manager)
+        record = ClientDetail.objects.create(
+            id='CD-STATUS-1', order_no='P2026-0777', company='Status Co', tenant=self.company,
+        )
+        bad = self.client.put(
+            f'/api/transactions/client-details/{record.id}/',
+            {'status': 'Not A Status'}, format='json',
+        )
+        self.assertEqual(bad.status_code, 400)
+        good = self.client.put(
+            f'/api/transactions/client-details/{record.id}/',
+            {'status': 'Paid'}, format='json',
+        )
+        self.assertEqual(good.status_code, 200)
+        self.assertEqual(good.data['status'], 'Paid')
+
 
 class ClientDetailAttachmentTests(APITestCase):
     """Handover files upload per organization with sane limits."""

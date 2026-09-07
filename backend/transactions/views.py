@@ -1545,6 +1545,19 @@ ATTACHMENT_ALLOWED_MIME = {
 }
 ATTACHMENT_ALLOWED_TYPE_PREFIXES = ('image/', 'audio/')
 
+# Canonical client-detail status lifecycle (frontend tab rail mirrors this).
+CLIENT_DETAIL_STATUSES = [code for code, _ in ClientDetail.STATUS_CHOICES]
+
+
+def validate_client_detail_status(request):
+    value = request.data.get('status')
+    if value and value not in CLIENT_DETAIL_STATUSES:
+        return Response(
+            {'detail': f'status: "{value}" is not a valid status.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
 
 def format_attachment_size(size):
     size = int(size or 0)
@@ -1662,6 +1675,9 @@ class ClientDetailListCreateView(APIView):
                 {'detail': 'company: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        status_error = validate_client_detail_status(request)
+        if status_error is not None:
+            return status_error
         order_no = str(request.data.get('orderNo') or '').strip()
         created = False
         record = None
@@ -1717,6 +1733,9 @@ class ClientDetailDetailView(APIView):
         record = self._get_scoped_record(request, pk)
         if record is None:
             return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        status_error = validate_client_detail_status(request)
+        if status_error is not None:
+            return status_error
         serializer = ClientDetailSerializer(record, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
