@@ -224,7 +224,6 @@ export default function ClientDetails() {
 
   const [previewAttachment, setPreviewAttachment] = useState(null)
   const [viewRecord, setViewRecord] = useState(null)
-  const [deleteId, setDeleteId] = useState(null)
   const [discardOpen, setDiscardOpen] = useState(false)
 
   const { dirty, reset } = useDirty(
@@ -458,18 +457,6 @@ export default function ClientDetails() {
     setTimeout(() => setToastMessage(''), 2500)
   }
 
-  async function confirmDelete() {
-    try {
-      await api.del(`/transactions/client-details/${encodeURIComponent(deleteId)}/`)
-      setRecords((prev) => prev.filter((r) => r.id !== deleteId))
-    } catch (err) {
-      setToastMessage(`✗ ${err.message || 'Could not delete the record.'}`)
-    }
-    setDeleteId(null)
-    setToastMessage('✓ Record removed.')
-    setTimeout(() => setToastMessage(''), 2500)
-  }
-
   function isImage(att) {
     return (att.mime || '').startsWith('image/')
   }
@@ -699,7 +686,7 @@ export default function ClientDetails() {
                         </select>
                       </td>
                       <td className="py-0.5 pr-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -710,17 +697,6 @@ export default function ClientDetails() {
                             title="Edit"
                           >
                             <PencilIcon className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleteId(rec.id)
-                            }}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-red-50 hover:text-red-600 transition cursor-pointer"
-                            title="Delete"
-                          >
-                            <TrashIcon className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>
@@ -1242,42 +1218,6 @@ export default function ClientDetails() {
                 className="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
                 Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setDeleteId(null)
-          }}
-        >
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl text-center animate-in fade-in zoom-in-95 duration-150">
-            <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600">
-              <TrashIcon className="h-5 w-5" />
-            </span>
-            <h3 className="mt-3 text-sm font-bold text-slate-900">Delete client details?</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              This will permanently remove the collected details and attachments.
-            </p>
-            <div className="mt-5 flex items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleteId(null)}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmDelete}
-                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 transition cursor-pointer"
-              >
-                Delete
               </button>
             </div>
           </div>

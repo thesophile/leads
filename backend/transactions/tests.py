@@ -1414,6 +1414,24 @@ class ClientDetailFlowTests(APITestCase):
         self.assertEqual(good.status_code, 200)
         self.assertEqual(good.data['status'], 'Paid')
 
+    def test_record_delete_is_superuser_only(self):
+        record = ClientDetail.objects.create(
+            id='CD-DEL-1', order_no='P2026-0888', company='Del Co', tenant=self.company,
+        )
+        # A normal manager is blocked even though they can edit client details.
+        self.client.force_authenticate(self.manager)
+        blocked = self.client.delete(f'/api/transactions/client-details/{record.id}/')
+        self.assertEqual(blocked.status_code, 403)
+        self.assertTrue(ClientDetail.objects.filter(pk='CD-DEL-1').exists())
+        # A superuser can delete.
+        admin = User.objects.create_user(
+            email='super@cd.com', password='x', name='Super CD', is_superuser=True,
+        )
+        self.client.force_authenticate(admin)
+        ok = self.client.delete(f'/api/transactions/client-details/{record.id}/')
+        self.assertEqual(ok.status_code, 204)
+        self.assertFalse(ClientDetail.objects.filter(pk='CD-DEL-1').exists())
+
 
 class ClientDetailAttachmentTests(APITestCase):
     """Handover files upload per organization with sane limits."""

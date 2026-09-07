@@ -1745,7 +1745,9 @@ class ClientDetailDetailView(APIView):
         return Response(ClientDetailSerializer(record).data)
 
     def delete(self, request, pk):
-        if not can(request.user, 'client.edit'):
+        # Client details are permanent business records: only platform
+        # superusers may delete one (e.g. via Django admin cleanup).
+        if not request.user.is_superuser:
             return Response(
                 {'detail': 'You do not have permission to delete client details.'},
                 status=status.HTTP_403_FORBIDDEN,
