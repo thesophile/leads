@@ -20,7 +20,9 @@ from master.models import Category, Source
 from utilities.models import Notification
 
 from .models import (
+    Attachment,
     CallHistory,
+    ClientDetail,
     Lead,
     LeadContactHistory,
     Order,
@@ -30,6 +32,7 @@ from .models import (
     QuotationApproval,
 )
 from .serializers import (
+    ClientDetailSerializer,
     LeadSerializer,
     OrderSerializer,
     ProposalDraftSerializer,
@@ -37,7 +40,7 @@ from .serializers import (
     QuotationApprovalSerializer,
     QuotationSerializer,
 )
-from .services import build_client_email, build_order_client_email
+from .services import build_client_email, build_order_client_email, create_client_detail_from_order
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -1200,6 +1203,16 @@ def create_order_from_quotation(quotation):
     )
 
 
+def mark_lead_as_client(lead_id):
+    """Move a lead to the ``client`` stage once its order is accepted."""
+    if not lead_id:
+        return
+    lead = Lead.objects.filter(id=lead_id).first()
+    if lead is not None and lead.status != Lead.STATUS_CLIENT:
+        lead.status = Lead.STATUS_CLIENT
+        lead.save(update_fields=['status', 'updated_at'])
+
+
 class ClientQuotationDetailView(APIView):
     """Public, unauthenticated read of an approved quotation by signed token."""
 
@@ -1507,6 +1520,149 @@ def scoped_orders(user):
     return qs
 
 
+def generate_client_detail_id():
+    existing = set(ClientDetail.objects.values_list('id', flat=True))
+    for _ in range(200):
+        candidate = f'CD-{random.randint(100000, 999999)}'
+        if candidate not in existing:
+            return candidate
+    return f'CD-{random.randint(1000000, 9999999)}'
+
+
+def scoped_client_details(user):
+    """Return the ClientDetail queryset visible to ``user`` (superusers see all)."""
+    qs = ClientDetail.objects.all()
+    if not user.is_superuser:
+        qs = qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+    return qs
+
+
+def replace_client_attachments(client_detail, raw_attachments):
+    """Replace a client detail's attachments with fresh metadata rows."""
+    client_detail.attachments.all().delete()
+    if not raw_attachments:
+        return
+    if isinstance(raw_attachments, str):
+        try:
+            raw_attachments = json.loads(raw_attachments)
+        except (TypeError, ValueError):
+            raw_attachments = []
+    for att in raw_attachments:
+        if not isinstance(att, dict):
+            continue
+        Attachment.objects.create(
+            client_detail=client_detail,
+            type=str(att.get('type') or '').strip(),
+            name=str(att.get('name') or '').strip(),
+            mime=str(att.get('mime') or '').strip(),
+            size=str(att.get('size') or '').strip(),
+            url='',
+        )
+
+
+class ClientDetailListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'client.view'):
+            return Response(
+                {'detail': 'You do not have permission to view client details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        records = scoped_client_details(request.user).order_by('-created_at')
+        records = records.prefetch_related('attachments')
+        return Response(ClientDetailSerializer(records, many=True).data)
+
+    def post(self, request):
+        if not can(request.user, 'client.create', 'client.edit'):
+            return Response(
+                {'detail': 'You do not have permission to add client details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        company = str(request.data.get('company') or '').strip()
+        if not company:
+            return Response(
+                {'detail': 'company: This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        order_no = str(request.data.get('orderNo') or '').strip()
+        created = False
+        record = None
+        if order_no:
+            record = ClientDetail.objects.filter(order_no=order_no).first()
+        if record is None:
+            record = ClientDetail(
+                id=f'CD-{order_no}' if order_no else generate_client_detail_id(),
+                order_no=order_no,
+                company=company,
+                tenant=request.user.company,
+            )
+            created = True
+        serializer = ClientDetailSerializer(record, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        record = serializer.save()
+        replace_client_attachments(record, request.data.get('attachments'))
+        if created:
+            status_code = status.HTTP_201_CREATED
+        else:
+            status_code = status.HTTP_200_OK
+        if record.lead_id:
+            mark_lead_as_client(record.lead_id)
+        return Response(
+            ClientDetailSerializer(record).data,
+            status=status_code,
+        )
+
+
+class ClientDetailDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_scoped_record(self, request, pk):
+        return scoped_client_details(request.user).filter(pk=pk).first()
+
+    def get(self, request, pk):
+        if not can(request.user, 'client.view'):
+            return Response(
+                {'detail': 'You do not have permission to view client details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ClientDetailSerializer(record).data)
+
+    def put(self, request, pk):
+        if not can(request.user, 'client.create', 'client.edit'):
+            return Response(
+                {'detail': 'You do not have permission to edit client details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = ClientDetailSerializer(record, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        record = serializer.save()
+        replace_client_attachments(record, request.data.get('attachments'))
+        if record.lead_id:
+            mark_lead_as_client(record.lead_id)
+        return Response(ClientDetailSerializer(record).data)
+
+    def delete(self, request, pk):
+        if not can(request.user, 'client.edit'):
+            return Response(
+                {'detail': 'You do not have permission to delete client details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        record.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class OrderListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1581,6 +1737,11 @@ class OrderDetailView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         order = serializer.save()
+        if order.status == 'Accepted':
+            # An accepted order moves out of Manage Orders and into Client
+            # Details: create the client record and convert the lead.
+            create_client_detail_from_order(order)
+            mark_lead_as_client(order.lead_id)
         return Response(OrderSerializer(order).data)
 
     def delete(self, request, pk):
@@ -1809,6 +1970,11 @@ class ClientOrderResponseView(APIView):
         order.client_token = ''
         order.client_token_expires_at = None
         order.save()
+        if accepted:
+            # An accepted order moves out of Manage Orders and into Client
+            # Details: create the client record and convert the lead.
+            create_client_detail_from_order(order)
+            mark_lead_as_client(order.lead_id)
 
         staff_member = None
         if order.proposal_by:

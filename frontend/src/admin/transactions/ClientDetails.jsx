@@ -3,79 +3,9 @@ import { useLocation } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
+import { api } from '../../api/client'
 
 const ATTACHMENT_TYPES = ['SRS Document', 'Business Card', 'Voice Clip', 'Other']
-
-const INITIAL_CLIENT_DETAILS = [
-  {
-    id: 'CD-001',
-    orderNo: 'ORD-2026-001',
-    leadId: 'TC-108',
-    clientName: 'Karthika Nambeesan',
-    company: 'NAMBEESANS LAKSHMI LODGE',
-    mobile: '9447151442',
-    email: 'bookings@nambeesanslodge.com',
-    category: 'Dynamic Website',
-    acceptedDate: '2026-08-12',
-    collectedBy: 'Bincy',
-    notes: 'SRS and business card handed over during site visit.',
-    attachments: [
-      { id: 1, type: 'SRS Document', name: 'nambeesans-srs.pdf', mime: 'application/pdf', size: '2.4 MB', url: '' },
-      { id: 2, type: 'Business Card', name: 'nambeesans-business-card.jpg', mime: 'image/jpeg', size: '310 KB', url: '' },
-    ],
-    status: 'Details Complete',
-  },
-  {
-    id: 'CD-002',
-    orderNo: 'ORD-2026-002',
-    leadId: 'TC-103',
-    clientName: 'Dr. Manzoor Ali',
-    company: 'MANZOOR SUPER SPECIALITY HOSPITAL',
-    mobile: '9447118234',
-    email: 'director@manzoorhospital.org',
-    category: 'Dynamic Web & OPD Suite',
-    acceptedDate: '2026-08-11',
-    collectedBy: 'Priya Sharma',
-    notes: 'Awaiting SRS document from hospital IT team.',
-    attachments: [],
-    status: 'Details Pending',
-  },
-  {
-    id: 'CD-003',
-    orderNo: 'ORD-2026-003',
-    leadId: 'TC-105',
-    clientName: 'Kabeer Khan',
-    company: 'ROYAL PALACE CONVENTION CENTRE',
-    mobile: '9567112004',
-    email: 'events@royalpalacekerala.com',
-    category: 'Dynamic Website',
-    acceptedDate: '2026-08-10',
-    collectedBy: 'Ananya Nair',
-    notes: 'Requirements captured in a voice clip.',
-    attachments: [
-      { id: 1, type: 'Voice Clip', name: 'royal-palace-requirements.m4a', mime: 'audio/mp4', size: '1.1 MB', url: '' },
-    ],
-    status: 'Details Complete',
-  },
-  {
-    id: 'CD-004',
-    orderNo: 'ORD-2026-004',
-    leadId: 'TC-102',
-    clientName: 'Rahul Menon',
-    company: 'SHADES.IN LUXURY EYEWEAR',
-    mobile: '9845123991',
-    email: 'management@shades.in',
-    category: 'Meta Ads',
-    acceptedDate: '2026-08-08',
-    collectedBy: 'Alex Joseph',
-    notes: 'Business card and ad copy brief received.',
-    attachments: [
-      { id: 1, type: 'Business Card', name: 'shades-business-card.jpg', mime: 'image/jpeg', size: '285 KB', url: '' },
-      { id: 2, type: 'SRS Document', name: 'shades-brief.pdf', mime: 'application/pdf', size: '980 KB', url: '' },
-    ],
-    status: 'Details Complete',
-  },
-]
 
 const STAFF_LIST = [
   'All Staff',
@@ -233,7 +163,9 @@ export default function ClientDetails() {
   const location = useLocation()
   const prefilledOrder = location.state?.order
 
-  const [records, setRecords] = useState(INITIAL_CLIENT_DETAILS)
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
@@ -285,6 +217,27 @@ export default function ClientDetails() {
       window.history.replaceState({}, document.title)
     }
   }, [location.state])
+
+  // Load real client detail records from the backend.
+  useEffect(() => {
+    let active = true
+    api
+      .get('/transactions/client-details/')
+      .then((data) => {
+        if (!active) return
+        setRecords(Array.isArray(data) ? data : [])
+      })
+      .catch((err) => {
+        if (!active) return
+        setLoadError(err.message || 'Could not load client details.')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const filteredRecords = useMemo(() => {
     return records.filter((rec) => {
@@ -357,34 +310,64 @@ export default function ClientDetails() {
     setNewAttachments((prev) => prev.filter((a) => a.id !== id))
   }
 
-  function handleSave(e) {
+  function toAttachmentMeta(attachments) {
+    return (attachments || []).map((a) => ({
+      type: a.type,
+      name: a.name,
+      mime: a.mime,
+      size: a.size,
+      url: a.url || '',
+    }))
+  }
+
+  async function handleSave(e) {
     e.preventDefault()
 
-    if (editingId) {
-      setRecords((prev) =>
-        prev.map((rec) =>
-          rec.id === editingId
-            ? {
-                ...rec,
-                ...form,
-                attachments: [...rec.attachments, ...newAttachments],
-                status: rec.attachments.length + newAttachments.length > 0 ? 'Details Complete' : 'Details Pending',
-              }
-            : rec
+    const status =
+      (editingId ? (records.find((r) => r.id === editingId)?.attachments || []).length : 0) +
+        newAttachments.length > 0
+        ? 'Details Complete'
+        : 'Details Pending'
+    const payload = {
+      ...form,
+      status,
+      attachments: editingId
+        ? [
+            ...toAttachmentMeta(records.find((r) => r.id === editingId)?.attachments || []),
+            ...toAttachmentMeta(newAttachments),
+          ]
+        : toAttachmentMeta(newAttachments),
+    }
+    if (!editingId) {
+      // Keep the order/lead link when saving a fresh (pre-filled) record.
+      payload.leadId = form.leadId || prefilledOrder?.leadId || ''
+    }
+
+    try {
+      if (editingId) {
+        const updated = await api.put(
+          `/transactions/client-details/${encodeURIComponent(editingId)}/`,
+          payload
         )
-      )
-      setToastMessage('✓ Client details updated!')
-    } else {
-      const nextId = `CD-${String(records.length + 1).padStart(3, '0')}`
-      const newRecord = {
-        id: nextId,
-        leadId: '',
-        ...form,
-        attachments: newAttachments,
-        status: newAttachments.length > 0 ? 'Details Complete' : 'Details Pending',
+        setRecords((prev) => prev.map((rec) => (rec.id === editingId ? updated : rec)))
+        setToastMessage('✓ Client details updated!')
+      } else {
+        const created = await api.post('/transactions/client-details/', payload)
+        setRecords((prev) => {
+          const existingIdx = prev.findIndex((r) => r.orderNo === created.orderNo)
+          if (existingIdx >= 0) {
+            const next = [...prev]
+            next[existingIdx] = created
+            return next
+          }
+          return [created, ...prev]
+        })
+        setToastMessage('✓ Client details collected!')
       }
-      setRecords([newRecord, ...records])
-      setToastMessage('✓ Client details collected!')
+    } catch (err) {
+      setToastMessage(`✗ ${err.message || 'Could not save client details.'}`)
+      setTimeout(() => setToastMessage(''), 3000)
+      return
     }
 
     setModalOpen(false)
@@ -393,12 +376,23 @@ export default function ClientDetails() {
     setTimeout(() => setToastMessage(''), 2500)
   }
 
-  function handleStatusChange(id, newStatus) {
+  async function handleStatusChange(id, newStatus) {
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r)))
+    try {
+      await api.put(`/transactions/client-details/${encodeURIComponent(id)}/`, { status: newStatus })
+    } catch (err) {
+      setToastMessage(`✗ ${err.message || 'Could not update status.'}`)
+      setTimeout(() => setToastMessage(''), 3000)
+    }
   }
 
-  function confirmDelete() {
-    setRecords((prev) => prev.filter((r) => r.id !== deleteId))
+  async function confirmDelete() {
+    try {
+      await api.del(`/transactions/client-details/${encodeURIComponent(deleteId)}/`)
+      setRecords((prev) => prev.filter((r) => r.id !== deleteId))
+    } catch (err) {
+      setToastMessage(`✗ ${err.message || 'Could not delete the record.'}`)
+    }
     setDeleteId(null)
     setToastMessage('✓ Record removed.')
     setTimeout(() => setToastMessage(''), 2500)
@@ -526,7 +520,19 @@ export default function ClientDetails() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-300">
-                {filteredRecords.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                      Loading client details...
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-xs text-rose-500">
+                      {loadError}
+                    </td>
+                  </tr>
+                ) : filteredRecords.length > 0 ? (
                   filteredRecords.map((rec) => (
                     <tr key={rec.id} onClick={() => openEditModal(rec)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                       <td className="py-0.5 pr-3 font-mono font-bold text-slate-950">{rec.orderNo}</td>

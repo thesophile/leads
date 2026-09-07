@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    ClientDetailDetailView,
+    ClientDetailListCreateView,
     ClientOrderDetailView,
     ClientOrderResponseView,
     ClientQuotationDetailView,
@@ -29,6 +31,8 @@ urlpatterns = [
     path('orders/', OrderListCreateView.as_view(), name='transactions-orders-list'),
     path('orders/<pk>/', OrderDetailView.as_view(), name='transactions-order-detail'),
     path('orders/<pk>/send-to-client/', OrderSendToClientView.as_view(), name='transactions-order-send-client'),
+    path('client-details/', ClientDetailListCreateView.as_view(), name='transactions-client-details-list'),
+    path('client-details/<pk>/', ClientDetailDetailView.as_view(), name='transactions-client-detail'),
     path('public/orders/<token>/', ClientOrderDetailView.as_view(), name='transactions-order-client-detail'),
     path('public/orders/<token>/respond/', ClientOrderResponseView.as_view(), name='transactions-order-client-respond'),
     path('quotations/approvers/', QuotationApproverListView.as_view(), name='transactions-quotation-approvers'),

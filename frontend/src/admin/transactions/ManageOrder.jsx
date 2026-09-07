@@ -27,7 +27,6 @@ const STATUS_LIST = [
   'All Status',
   'Pending',
   'Sent to Client',
-  'Accepted',
   'Rejected',
 ]
 
@@ -405,8 +404,14 @@ export default function ManageOrder() {
   }
 
   // Filtered dataset
+  // Accepted orders have moved to Client Details, so they no longer appear here.
+  const activeOrders = useMemo(
+    () => ordersList.filter((o) => o.status !== 'Accepted'),
+    [ordersList]
+  )
+
   const filteredOrders = useMemo(() => {
-    return ordersList.filter((item) => {
+    return activeOrders.filter((item) => {
       const matchesStaff =
         selectedStaff === 'All Staff' || item.staff === selectedStaff || item.bdm === selectedStaff || item.proposalBy === selectedStaff
 
@@ -422,25 +427,21 @@ export default function ManageOrder() {
 
       return matchesStaff && matchesStatus && matchesSearch
     })
-  }, [ordersList, selectedStaff, selectedStatus, searchQuery])
+  }, [activeOrders, selectedStaff, selectedStatus, searchQuery])
 
   // Metric counts
-  const totalOrdersCount = ordersList.length
+  const totalOrdersCount = activeOrders.length
   const pendingCount = useMemo(
-    () => ordersList.filter((o) => o.status === 'Pending').length,
-    [ordersList]
+    () => activeOrders.filter((o) => o.status === 'Pending').length,
+    [activeOrders]
   )
   const sentCount = useMemo(
-    () => ordersList.filter((o) => o.status === 'Sent to Client').length,
-    [ordersList]
-  )
-  const acceptedCount = useMemo(
-    () => ordersList.filter((o) => o.status === 'Accepted').length,
-    [ordersList]
+    () => activeOrders.filter((o) => o.status === 'Sent to Client').length,
+    [activeOrders]
   )
   const rejectedCount = useMemo(
-    () => ordersList.filter((o) => o.status === 'Rejected').length,
-    [ordersList]
+    () => activeOrders.filter((o) => o.status === 'Rejected').length,
+    [activeOrders]
   )
 
   return (
@@ -482,10 +483,6 @@ export default function ManageOrder() {
               <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Sent</span>
                 <span className="text-xs font-bold text-indigo-700 ml-1">{sentCount}</span>
-              </div>
-              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Accepted</span>
-                <span className="text-xs font-bold text-emerald-700 ml-1">{acceptedCount}</span>
               </div>
               <div className="rounded-xl border border-red-200/80 bg-red-50/60 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">Rejected</span>

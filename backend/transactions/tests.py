@@ -2,7 +2,9 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from transactions.models import (
+    Attachment,
     CallHistory,
+    ClientDetail,
     Lead,
     LeadContactHistory,
     Order,
@@ -1263,3 +1265,134 @@ class OrderSendToClientTests(APITestCase):
         self.client.force_authenticate(None)
         resp = self.client.get('/api/transactions/public/orders/NOPE/')
         self.assertEqual(resp.status_code, 404)
+class ClientDetailFlowTests(APITestCase):
+    """Accepted orders move from Manage Orders into Client Details."""
+
+    def setUp(self):
+        company = make_company('ClientDetailCo')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@cd.com', password='x', name='Manager CD',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.viewer = User.objects.create_user(
+            email='staff@cd.com', password='x', name='Staff CD',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.lead = Lead.objects.create(
+            id='TC-CLIENT', company='Client Co', assigned_to='Staff CD',
+            tenant=company, status=Lead.STATUS_ORDER,
+        )
+        self.order = Order.objects.create(
+            id='P2026-0001', lead_id='TC-CLIENT', company='Client Co',
+            customer='Client Person', tenant=company, mobile='9447000000',
+            email='client@cd.com', category='Dynamic Website',
+            proposal_by='Staff CD', staff='Staff CD', status='Pending',
+        )
+
+    def test_client_accept_creates_client_detail_and_moves_lead(self):
+        self.order.client_token = 'abc123'
+        self.order.status = 'Sent to Client'
+        self.order.save()
+        resp = self.client.post(
+            '/api/transactions/public/orders/abc123/respond/',
+            {'decision': 'accept'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        record = ClientDetail.objects.filter(order_no=self.order.id).first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.company, 'Client Co')
+        self.assertEqual(record.client_name, 'Client Person')
+        self.assertEqual(record.status, 'Details Pending')
+        self.assertEqual(record.tenant, self.company)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, Lead.STATUS_CLIENT)
+
+    def test_client_decline_does_not_create_client_detail(self):
+        self.order.client_token = 'abc456'
+        self.order.status = 'Sent to Client'
+        self.order.save()
+        self.client.post(
+            '/api/transactions/public/orders/abc456/respond/',
+            {'decision': 'decline'}, format='json',
+        )
+        self.assertFalse(ClientDetail.objects.filter(order_no=self.order.id).exists())
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, Lead.STATUS_ORDER)
+
+    def test_admin_mark_accepted_creates_client_detail(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.put(
+            f'/api/transactions/orders/{self.order.id}/',
+            {'status': 'Accepted'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'Accepted')
+        record = ClientDetail.objects.filter(order_no=self.order.id).first()
+        self.assertIsNotNone(record)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, Lead.STATUS_CLIENT)
+
+    def test_client_details_list_is_scoped(self):
+        other = make_company('OtherClientCo')
+        other_order = Order.objects.create(
+            id='P2026-0099', company='Other Co', tenant=other, status='Accepted',
+        )
+        from transactions.services import create_client_detail_from_order
+        create_client_detail_from_order(self.order)
+        create_client_detail_from_order(other_order)
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/client-details/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual({r['orderNo'] for r in resp.data}, {self.order.id})
+
+    def test_create_upserts_by_order_no(self):
+        from transactions.services import create_client_detail_from_order
+        create_client_detail_from_order(self.order)
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/client-details/', {
+            'orderNo': self.order.id,
+            'company': 'Client Co',
+            'clientName': 'Renamed Person',
+            'status': 'Details Complete',
+            'attachments': [
+                {'type': 'SRS Document', 'name': 'srs.pdf', 'mime': 'application/pdf', 'size': '200 KB'},
+            ],
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(ClientDetail.objects.filter(order_no=self.order.id).count(), 1)
+        self.assertEqual(resp.data['clientName'], 'Renamed Person')
+        self.assertEqual(resp.data['status'], 'Details Complete')
+        record = ClientDetail.objects.get(order_no=self.order.id)
+        self.assertEqual(record.attachments.count(), 1)
+
+    def test_create_new_record_with_attachments(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/client-details/', {
+            'orderNo': 'P2026-0002',
+            'leadId': 'TC-CLIENT',
+            'clientName': 'New Person',
+            'company': 'New Co',
+            'mobile': '9447000001',
+            'email': 'new@cd.com',
+            'category': 'Static Website',
+            'acceptedDate': '2026-09-07',
+            'collectedBy': 'Staff CD',
+            'status': 'Details Complete',
+            'attachments': [
+                {'type': 'Business Card', 'name': 'card.jpg', 'mime': 'image/jpeg', 'size': '300 KB'},
+            ],
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        record = ClientDetail.objects.get(id=resp.data['id'])
+        self.assertEqual(record.attachments.count(), 1)
+        self.assertEqual(record.attachments.first().type, 'Business Card')
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, Lead.STATUS_CLIENT)
+
+    def test_viewer_only_sorted_by_client_view_perm(self):
+        self.client.force_authenticate(self.viewer)
+        resp = self.client.post('/api/transactions/client-details/', {
+            'orderNo': 'P2026-0003', 'company': 'No Perm Co',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)

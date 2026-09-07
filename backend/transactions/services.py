@@ -8,6 +8,7 @@ attached to the client email, and ``build_client_email`` composes that email
 import io
 import logging
 import re
+from datetime import date
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -921,3 +922,39 @@ def build_order_client_email(order, link, message=''):
     if pdf:
         email.attach(f'{order.id}.pdf', pdf, 'application/pdf')
     return email
+
+
+# ---------------------------------------------------------------------------
+# Client details
+# ---------------------------------------------------------------------------
+
+
+def create_client_detail_from_order(order):
+    """Create a ``ClientDetail`` for an order that has been accepted.
+
+    Idempotent: returns the existing record when a client detail already
+    exists for the same order number. The auto-created row is a starting
+    point ("Details Pending") that staff then enrich with SRS, business
+    cards and other handover material.
+    """
+    from .models import ClientDetail
+
+    if order is None:
+        return None
+    existing = ClientDetail.objects.filter(order_no=order.id).first()
+    if existing is not None:
+        return existing
+    return ClientDetail.objects.create(
+        id=f'CD-{order.id}',
+        order_no=order.id,
+        lead_id=order.lead_id,
+        client_name=order.customer,
+        company=order.company,
+        tenant=order.tenant,
+        mobile=order.mobile,
+        email=order.email,
+        category=order.category,
+        accepted_date=date.today().strftime('%Y-%m-%d'),
+        collected_by=order.proposal_by or order.staff,
+        status='Details Pending',
+    )

@@ -1,6 +1,47 @@
 from rest_framework import serializers
 
-from .models import CallHistory, Lead, LeadContactHistory, Order, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+from .models import Attachment, CallHistory, ClientDetail, Lead, LeadContactHistory, Order, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+
+
+class AttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attachment
+        fields = ['id', 'type', 'name', 'mime', 'size', 'url']
+        read_only_fields = ['id']
+
+
+class ClientDetailSerializer(serializers.ModelSerializer):
+    orderNo = serializers.CharField(source='order_no', required=False, allow_blank=True)
+    leadId = serializers.CharField(source='lead_id', required=False, allow_blank=True)
+    clientName = serializers.CharField(source='client_name', required=False, allow_blank=True)
+    acceptedDate = serializers.CharField(source='accepted_date', required=False, allow_blank=True)
+    collectedBy = serializers.CharField(source='collected_by', required=False, allow_blank=True)
+    attachments = AttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ClientDetail
+        fields = [
+            'id',
+            'orderNo',
+            'leadId',
+            'clientName',
+            'company',
+            'mobile',
+            'email',
+            'category',
+            'acceptedDate',
+            'collectedBy',
+            'notes',
+            'status',
+            'attachments',
+            'createdAt',
+        ]
+        read_only_fields = ['id', 'createdAt']
+
+    createdAt = serializers.SerializerMethodField()
+
+    def get_createdAt(self, obj):
+        return obj.created_at.isoformat() if obj.created_at else ''
 
 
 class CallHistorySerializer(serializers.ModelSerializer):
