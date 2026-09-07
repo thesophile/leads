@@ -486,17 +486,22 @@ export default function Managequotation() {
         const text = encodeURIComponent(`${sendClientMessage || 'Your quotation is ready.'}\n\n${link}`)
         window.open(`https://wa.me/${digits}?text=${text}`, '_blank')
       }
-      setQuotationsList((prev) =>
-        prev.map((item) =>
-          item.id === sendClientQuoteId ? { ...item, status: 'Sent to Client' } : item
+      if (sendClientChannels.includes('email') && data.email_sent === false) {
+        const reason = data.email_error ? ` (${data.email_error})` : ''
+        showToast(`✗ Email could not be sent${reason}. Quotation link is ready to share.`, 'error')
+      } else {
+        setQuotationsList((prev) =>
+          prev.map((item) =>
+            item.id === sendClientQuoteId ? { ...item, status: 'Sent to Client' } : item
+          )
         )
-      )
+        showToast(
+          sendClientChannels.includes('email')
+            ? '✓ Quotation sent to the client.'
+            : '✓ Quotation link ready to share.'
+        )
+      }
       setSendClientOpen(false)
-      showToast(
-        sendClientChannels.includes('email')
-          ? '✓ Quotation sent to the client.'
-          : '✓ Quotation link ready to share.'
-      )
     } catch (err) {
       showToast(err.message, 'error')
     } finally {

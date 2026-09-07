@@ -1043,32 +1043,36 @@ class QuotationSendToClientView(APIView):
         if needs_token:
             quotation.client_token = secrets.token_urlsafe(32)
             quotation.client_token_expires_at = now + timedelta(days=self.CLIENT_TOKEN_DAYS)
-        # Only an actual send (email / WhatsApp) marks the quotation as sent;
-        # copying the link just generates it without changing status.
-        is_actual_send = 'email' in channels or 'whatsapp' in channels
-        if is_actual_send:
-            if quotation.status != 'Sent to Client':
-                quotation.status = 'Sent to Client'
-            quotation.sent_to_client_at = now
-        quotation.client_status = quotation.client_status or Quotation.CLIENT_PENDING
-        quotation.save()
 
         origin = (request.data.get('origin') or '').strip().rstrip('/')
         path = f'/quotation/{quotation.client_token}'
         link = f'{origin}{path}' if origin else path
 
         email_sent = False
-        if 'email' in channels and quotation.email:
+        email_error = None
+        if 'email' in channels:
             try:
                 email = build_client_email(
                     quotation,
                     link,
                     message=(request.data.get('message') or '').strip(),
                 )
-                email.send(fail_silently=True)
-                email_sent = True
-            except Exception as exc:  # pragma: no cover - email never blocks the action
+                email_sent = email.send(fail_silently=False) > 0
+            except Exception as exc:  # email failure is reported, never blocks the action
+                email_sent = False
+                email_error = str(exc) or exc.__class__.__name__
                 logger.warning('Failed to email quotation %s: %s', quotation.id, exc)
+
+        # Only an actual send marks the quotation as sent; a failed email is
+        # not treated as sent. Copying the link just generates it without
+        # changing status.
+        is_actual_send = 'email' in channels or 'whatsapp' in channels
+        if is_actual_send and (email_sent or 'whatsapp' in channels):
+            if quotation.status != 'Sent to Client':
+                quotation.status = 'Sent to Client'
+            quotation.sent_to_client_at = now
+        quotation.client_status = quotation.client_status or Quotation.CLIENT_PENDING
+        quotation.save()
 
         return Response(
             {
@@ -1077,6 +1081,7 @@ class QuotationSendToClientView(APIView):
                 'email': quotation.email,
                 'channels': channels,
                 'email_sent': email_sent,
+                'email_error': email_error,
             },
             status=status.HTTP_200_OK,
         )
@@ -1654,32 +1659,36 @@ class OrderSendToClientView(APIView):
         if needs_token:
             order.client_token = secrets.token_urlsafe(32)
             order.client_token_expires_at = now + timedelta(days=self.CLIENT_TOKEN_DAYS)
-        # Only an actual send (email / WhatsApp) marks the order as sent;
-        # copying the link just generates it without changing status.
-        is_actual_send = 'email' in channels or 'whatsapp' in channels
-        if is_actual_send:
-            if order.status != 'Sent to Client':
-                order.status = 'Sent to Client'
-            order.sent_to_client_at = now
-        order.client_status = order.client_status or Order.CLIENT_PENDING
-        order.save()
 
         origin = (request.data.get('origin') or '').strip().rstrip('/')
         path = f'/order/{order.client_token}'
         link = f'{origin}{path}' if origin else path
 
         email_sent = False
-        if 'email' in channels and order.email:
+        email_error = None
+        if 'email' in channels:
             try:
                 email = build_order_client_email(
                     order,
                     link,
                     message=(request.data.get('message') or '').strip(),
                 )
-                email.send(fail_silently=True)
-                email_sent = True
-            except Exception as exc:  # pragma: no cover - email never blocks the action
+                email_sent = email.send(fail_silently=False) > 0
+            except Exception as exc:  # email failure is reported, never blocks the action
+                email_sent = False
+                email_error = str(exc) or exc.__class__.__name__
                 logger.warning('Failed to email order %s: %s', order.id, exc)
+
+        # Only an actual send marks the order as sent; a failed email is not
+        # treated as sent. Copying the link just generates it without changing
+        # status.
+        is_actual_send = 'email' in channels or 'whatsapp' in channels
+        if is_actual_send and (email_sent or 'whatsapp' in channels):
+            if order.status != 'Sent to Client':
+                order.status = 'Sent to Client'
+            order.sent_to_client_at = now
+        order.client_status = order.client_status or Order.CLIENT_PENDING
+        order.save()
 
         return Response(
             {
@@ -1688,6 +1697,7 @@ class OrderSendToClientView(APIView):
                 'email': order.email,
                 'channels': channels,
                 'email_sent': email_sent,
+                'email_error': email_error,
             },
             status=status.HTTP_200_OK,
         )

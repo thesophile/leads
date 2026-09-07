@@ -22,8 +22,8 @@ pymysql.install_as_MySQLdb()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables from .env.dev
-load_dotenv(BASE_DIR / '.env.dev')
+# Load environment variables from .env.dev at the repository root.
+load_dotenv(BASE_DIR.parent / '.env.dev')
 
 
 # Quick-start development settings - unsuitable for production
@@ -155,10 +155,11 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# Email: reset emails print to the terminal in development; in production
-# set EMAIL_HOST (and the rest) in the environment to send real mail.
+# Email: when EMAIL_HOST is set in the environment, real mail is sent over
+# SMTP and every message is also printed to the terminal. Without EMAIL_HOST
+# the console backend is used, which only prints to the terminal.
 if os.environ.get('EMAIL_HOST'):
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_BACKEND = 'config.email_backends.PrintAndSendEmailBackend'
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')

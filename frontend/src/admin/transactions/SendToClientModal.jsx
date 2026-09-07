@@ -68,6 +68,12 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
         const text = encodeURIComponent(`${message || 'Your order form is ready.'}\n\n${link}`)
         window.open(`https://wa.me/${digits}?text=${text}`, '_blank')
       }
+      if (channels.includes('email') && data.email_sent === false) {
+        const reason = data.email_error ? ` (${data.email_error})` : ''
+        toast(`✗ Email could not be sent${reason}. Order link is ready to share.`, 'error')
+        onClose()
+        return
+      }
       toast(channels.includes('email') ? '✓ Order sent to the client.' : '✓ Order link ready to share.')
       onSent?.({ ...order, status: 'Sent to Client' })
       onClose()
