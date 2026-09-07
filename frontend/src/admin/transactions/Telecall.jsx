@@ -83,6 +83,14 @@ function HistoryIcon({ className = 'w-4 h-4 text-brand-600' }) {
   )
 }
 
+function ChevronDownIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  )
+}
+
 export default function Telecall() {
   const { user } = useAuth()
   const [telecallList, setTelecallList] = useState([])
@@ -194,6 +202,9 @@ export default function Telecall() {
     source: '',
   })
   const [isSaving, setIsSaving] = useState(false)
+
+  // Company Details section collapsed by default in the update drawer
+  const [companyDetailsOpen, setCompanyDetailsOpen] = useState(false)
 
   // History Panel State (opens on row click)
   const [historyVisible, setHistoryVisible] = useState(false)
@@ -785,16 +796,31 @@ export default function Telecall() {
 
                 {/* Drawer Form */}
                 <form id="telecall-form" onSubmit={handleSaveCall} className="mt-5 space-y-4 text-xs">
-                  {/* Company Details (editable at every stage) */}
+                  {/* Company Details (editable at every stage, collapsed by default) */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    <button
+                      type="button"
+                      onClick={() => setCompanyDetailsOpen((v) => !v)}
+                      className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 text-left transition hover:bg-slate-100 cursor-pointer"
+                      aria-expanded={companyDetailsOpen}
+                    >
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                         Company Details
-                      </h4>
-                      <span className="text-[10px] text-slate-400">
-                        Changes sync to the lead &amp; quotation
                       </span>
-                    </div>
+                      <span className="flex items-center gap-1.5">
+                        {!companyDetailsOpen && (
+                          <span className="text-[10px] font-medium text-slate-400">
+                            Changes sync to the lead &amp; quotation
+                          </span>
+                        )}
+                        <ChevronDownIcon
+                          className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${
+                            companyDetailsOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </span>
+                    </button>
+                    {companyDetailsOpen && (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
                         <label className="mb-1.5 block text-xs font-medium text-slate-600">
@@ -890,6 +916,7 @@ export default function Telecall() {
                         </select>
                       </div>
                     </div>
+                    )}
                   </div>
 
                   {/* Call Details */}
