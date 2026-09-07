@@ -425,13 +425,27 @@ class ClientDetail(models.Model):
         return f'{self.id} - {self.company}'
 
 
+def attachment_upload_path(instance, filename):
+    """Store attachment files under a per-organization folder.
+
+    Files belong to the client detail's tenant so each organisation keeps its
+    own handover material. Legacy rows without a tenant fall back to an
+    ``unsorted`` folder. Path separators are stripped to stay safe.
+    """
+    safe_name = str(filename).replace('\\', '/').split('/')[-1]
+    org = instance.client_detail.tenant_id if instance.client_detail else None
+    folder = f'org-{org}' if org else 'unsorted'
+    return f'client_attachments/{folder}/{safe_name}'
+
+
 class Attachment(models.Model):
     client_detail = models.ForeignKey(ClientDetail, on_delete=models.CASCADE, related_name='attachments')
     type = models.CharField(max_length=50, blank=True)
     name = models.CharField(max_length=200, blank=True)
     mime = models.CharField(max_length=100, blank=True)
     size = models.CharField(max_length=30, blank=True)
-    url = models.URLField(blank=True)
+    url = models.CharField(max_length=500, blank=True)
+    file = models.FileField(upload_to=attachment_upload_path, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -192,6 +192,7 @@ export default function ClientDetails() {
   const [toastMessage, setToastMessage] = useState('')
 
   const [previewAttachment, setPreviewAttachment] = useState(null)
+  const [viewRecord, setViewRecord] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
   const [discardOpen, setDiscardOpen] = useState(false)
 
@@ -218,6 +219,18 @@ export default function ClientDetails() {
     }
   }, [location.state])
 
+  const loadRecords = useCallback(async () => {
+    try {
+      const data = await api.get('/transactions/client-details/')
+      setRecords(Array.isArray(data) ? data : [])
+      setLoadError('')
+    } catch (err) {
+      setLoadError(err.message || 'Could not load client details.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   // Load real client detail records from the backend.
   useEffect(() => {
     let active = true
@@ -226,6 +239,7 @@ export default function ClientDetails() {
       .then((data) => {
         if (!active) return
         setRecords(Array.isArray(data) ? data : [])
+        setLoadError('')
       })
       .catch((err) => {
         if (!active) return
@@ -288,6 +302,10 @@ export default function ClientDetails() {
     setModalOpen(true)
   }
 
+  function openViewModal(rec) {
+    setViewRecord(rec)
+  }
+
   function handleField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
@@ -296,6 +314,7 @@ export default function ClientDetails() {
     const files = Array.from(e.target.files || [])
     const added = files.map((file) => ({
       id: Date.now() + Math.random(),
+      file,
       type: selectedFileType,
       name: file.name,
       mime: file.type || 'application/octet-stream',
@@ -310,60 +329,55 @@ export default function ClientDetails() {
     setNewAttachments((prev) => prev.filter((a) => a.id !== id))
   }
 
-  function toAttachmentMeta(attachments) {
-    return (attachments || []).map((a) => ({
-      type: a.type,
-      name: a.name,
-      mime: a.mime,
-      size: a.size,
-      url: a.url || '',
-    }))
+  async function uploadAttachment(recordId, file, type) {
+    const fd = new FormData()
+    fd.append('file', file)
+    if (type) fd.append('type', type)
+    const access = localStorage.getItem('leads_access') || sessionStorage.getItem('leads_access')
+    const res = await fetch(
+      `/api/transactions/client-details/${encodeURIComponent(recordId)}/attachments/`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${access}` },
+        body: fd,
+      }
+    )
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      throw new Error(data?.detail || `Upload failed (${res.status})`)
+    }
+    return data
   }
 
   async function handleSave(e) {
     e.preventDefault()
 
-    const status =
-      (editingId ? (records.find((r) => r.id === editingId)?.attachments || []).length : 0) +
-        newAttachments.length > 0
-        ? 'Details Complete'
-        : 'Details Pending'
-    const payload = {
-      ...form,
-      status,
-      attachments: editingId
-        ? [
-            ...toAttachmentMeta(records.find((r) => r.id === editingId)?.attachments || []),
-            ...toAttachmentMeta(newAttachments),
-          ]
-        : toAttachmentMeta(newAttachments),
-    }
+    const hasExisting = editingId
+      ? (records.find((r) => r.id === editingId)?.attachments || []).length > 0
+      : false
+    const status = hasExisting || newAttachments.length > 0 ? 'Details Complete' : 'Details Pending'
+    const payload = { ...form, status }
     if (!editingId) {
       // Keep the order/lead link when saving a fresh (pre-filled) record.
       payload.leadId = form.leadId || prefilledOrder?.leadId || ''
     }
 
     try {
+      let record
       if (editingId) {
-        const updated = await api.put(
+        record = await api.put(
           `/transactions/client-details/${encodeURIComponent(editingId)}/`,
           payload
         )
-        setRecords((prev) => prev.map((rec) => (rec.id === editingId ? updated : rec)))
-        setToastMessage('✓ Client details updated!')
       } else {
-        const created = await api.post('/transactions/client-details/', payload)
-        setRecords((prev) => {
-          const existingIdx = prev.findIndex((r) => r.orderNo === created.orderNo)
-          if (existingIdx >= 0) {
-            const next = [...prev]
-            next[existingIdx] = created
-            return next
-          }
-          return [created, ...prev]
-        })
-        setToastMessage('✓ Client details collected!')
+        record = await api.post('/transactions/client-details/', payload)
       }
+      // Upload any newly selected files now that the record has an id.
+      for (const att of newAttachments) {
+        await uploadAttachment(record.id, att.file, att.type)
+      }
+      await loadRecords()
+      setToastMessage(editingId ? '✓ Client details updated!' : '✓ Client details collected!')
     } catch (err) {
       setToastMessage(`✗ ${err.message || 'Could not save client details.'}`)
       setTimeout(() => setToastMessage(''), 3000)
@@ -386,6 +400,27 @@ export default function ClientDetails() {
     }
   }
 
+  async function removeExistingAttachment(att) {
+    const record = records.find((r) => r.id === editingId)
+    if (!record) return
+    try {
+      await api.del(
+        `/transactions/client-details/${encodeURIComponent(record.id)}/attachments/${att.id}/`
+      )
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === record.id
+            ? { ...r, attachments: r.attachments.filter((a) => a.id !== att.id) }
+            : r
+        )
+      )
+      setToastMessage('✓ Attachment removed.')
+    } catch (err) {
+      setToastMessage(`✗ ${err.message || 'Could not remove attachment.'}`)
+    }
+    setTimeout(() => setToastMessage(''), 2500)
+  }
+
   async function confirmDelete() {
     try {
       await api.del(`/transactions/client-details/${encodeURIComponent(deleteId)}/`)
@@ -404,6 +439,14 @@ export default function ClientDetails() {
   function isAudio(att) {
     return (att.mime || '').startsWith('audio/')
   }
+  function isPdf(att) {
+    return (att.mime || '').toLowerCase() === 'application/pdf' || /\.pdf$/i.test(att.name || '')
+  }
+  function openAttachment(att) {
+    if (att.url) window.open(att.url, '_blank', 'noopener,noreferrer')
+  }
+
+  const editableRecord = editingId ? records.find((r) => r.id === editingId) : null
 
   return (
     <Layout>
@@ -534,7 +577,7 @@ export default function ClientDetails() {
                   </tr>
                 ) : filteredRecords.length > 0 ? (
                   filteredRecords.map((rec) => (
-                    <tr key={rec.id} onClick={() => openEditModal(rec)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
+                    <tr key={rec.id} onClick={() => openViewModal(rec)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                       <td className="py-0.5 pr-3 font-mono font-bold text-slate-950">{rec.orderNo}</td>
                       <td className="py-0.5 pr-3 min-w-0">
                         <div className="font-semibold text-slate-900 truncate max-w-[160px]" title={rec.clientName}>{rec.clientName}</div>
@@ -754,8 +797,42 @@ export default function ClientDetails() {
               <div className="border-t border-slate-100 pt-4">
                 <h4 className="font-bold text-slate-800 text-xs">Client Documents & Handover Material</h4>
                 <p className="mt-0.5 text-[11px] text-slate-400">
-                  Attach SRS, business card image, voice clip or any other handover file. Files are kept in-session only.
+                  Attach SRS, business card image, voice clip or any other handover file (PDF, image or audio,
+                  up to 10 MB each).
                 </p>
+
+                {editableRecord && editableRecord.attachments.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {editableRecord.attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700"
+                      >
+                        <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${TYPE_STYLES[att.type] || TYPE_STYLES.Other}`}>
+                          <TypeIcon type={att.type} className="h-3 w-3" />
+                          {att.type}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openAttachment(att)}
+                          className="max-w-[180px] truncate hover:text-blue-600 cursor-pointer"
+                          title="Open document"
+                        >
+                          {att.name}
+                        </button>
+                        <span className="text-[10px] text-slate-400">{att.size}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeExistingAttachment(att)}
+                          className="rounded p-0.5 text-slate-400 hover:text-red-600 cursor-pointer"
+                          title="Remove document"
+                        >
+                          <TrashIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select
@@ -836,6 +913,197 @@ export default function ClientDetails() {
         </div>
       )}
 
+      {/* View Client Details Modal (read-only) */}
+      {viewRecord && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setViewRecord(null)
+          }}
+        >
+          <div className="w-full max-w-2xl my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-3.5 bg-white">
+              <div>
+                <p className="font-mono text-[10px] font-bold text-brand-600 uppercase tracking-wider">
+                  {viewRecord.orderNo || 'Client Details'}
+                </p>
+                <h3 className="text-sm font-bold text-slate-900">{viewRecord.clientName}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-md border px-2 py-0.5 text-[11px] font-bold ${
+                    viewRecord.status === 'Details Complete'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border-amber-200 bg-amber-50 text-amber-700'
+                  }`}
+                >
+                  {viewRecord.status}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setViewRecord(null)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Order No</p>
+                  <p className="mt-0.5 text-xs font-mono font-semibold text-slate-800">{viewRecord.orderNo || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Client Name</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-800">{viewRecord.clientName || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Company</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-800">{viewRecord.company || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Mobile</p>
+                  <p className="mt-0.5 text-xs font-mono text-slate-800">{viewRecord.mobile || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
+                  <p className="mt-0.5 text-xs text-slate-800">{viewRecord.email || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Category</p>
+                  <p className="mt-0.5 text-xs text-slate-800">{viewRecord.category || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Accepted Date</p>
+                  <p className="mt-0.5 text-xs text-slate-800">{viewRecord.acceptedDate || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Collected By</p>
+                  <p className="mt-0.5 text-xs text-slate-800">{viewRecord.collectedBy || '—'}</p>
+                </div>
+              </div>
+
+              {viewRecord.notes && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Notes</p>
+                  <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700 leading-relaxed">
+                    {viewRecord.notes}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Documents ({viewRecord.attachments.length})
+                </p>
+                {viewRecord.attachments.length > 0 ? (
+                  <div className="mt-2 space-y-3">
+                    {viewRecord.attachments.map((att) => (
+                      <div key={att.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${TYPE_STYLES[att.type] || TYPE_STYLES.Other}`}>
+                              <TypeIcon type={att.type} className="h-3 w-3" />
+                              {att.type}
+                            </span>
+                            <span className="truncate text-xs font-semibold text-slate-800" title={att.name}>
+                              {att.name}
+                            </span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {att.url && (
+                              <>
+                                <a
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                                >
+                                  Open
+                                </a>
+                                <a
+                                  href={att.url}
+                                  download={att.name}
+                                  className="rounded-md bg-brand-50 px-2 py-1 text-[10px] font-bold text-brand-700 hover:bg-brand-100 transition cursor-pointer"
+                                >
+                                  Download
+                                </a>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div
+                          className="mt-2.5 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPreviewAttachment(att)
+                          }}
+                          title="Preview"
+                        >
+                          {isImage(att) ? (
+                            <img
+                              src={att.url}
+                              alt={att.name}
+                              className="max-h-44 w-full rounded-lg border border-slate-200 bg-white object-contain"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewAttachment(att)
+                              }}
+                            />
+                          ) : isAudio(att) ? (
+                            <div className="rounded-lg border border-slate-200 bg-white p-2">
+                              <audio controls src={att.url} className="w-full" />
+                            </div>
+                          ) : isPdf(att) ? (
+                            <iframe
+                              src={att.url}
+                              title={att.name}
+                              className="h-48 w-full rounded-lg border border-slate-200 bg-white"
+                            />
+                          ) : (
+                            <div className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-[11px] text-slate-400">
+                              Preview not supported — open or download the file.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-[11px] text-slate-400">
+                    No documents uploaded yet.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-6 py-3.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const rec = viewRecord
+                  setViewRecord(null)
+                  openEditModal(rec)
+                }}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-brand-700 transition cursor-pointer"
+              >
+                Edit Details
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewRecord(null)}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Preview Attachment Modal */}
       {previewAttachment && (
         <div
@@ -871,6 +1139,12 @@ export default function ClientDetails() {
                   <img src={previewAttachment.url} alt={previewAttachment.name} className="max-h-72 rounded-lg border border-slate-200 object-contain" />
                 ) : isAudio(previewAttachment) ? (
                   <audio controls src={previewAttachment.url} className="w-full" />
+                ) : isPdf(previewAttachment) ? (
+                  <iframe
+                    src={previewAttachment.url}
+                    title={previewAttachment.name}
+                    className="h-[420px] w-full rounded-lg border border-slate-200 bg-slate-100"
+                  />
                 ) : (
                   <a
                     href={previewAttachment.url}
@@ -886,13 +1160,22 @@ export default function ClientDetails() {
                   <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                     <EyeIcon className="h-5 w-5" />
                   </span>
-                  <p className="mt-2 text-xs font-semibold text-slate-500">No live preview for this demo record</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">No live preview available</p>
                   <p className="mt-0.5 text-[11px] text-slate-400">{previewAttachment.name}</p>
                 </div>
               )}
             </div>
 
-            <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
+            <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
+              {previewAttachment.url && (
+                <a
+                  href={previewAttachment.url}
+                  download={previewAttachment.name}
+                  className="rounded-lg bg-brand-50 px-3.5 py-1.5 text-xs font-bold text-brand-700 hover:bg-brand-100 transition cursor-pointer"
+                >
+                  Download
+                </a>
+              )}
               <button
                 type="button"
                 onClick={() => setPreviewAttachment(null)}

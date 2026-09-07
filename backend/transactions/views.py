@@ -32,6 +32,7 @@ from .models import (
     QuotationApproval,
 )
 from .serializers import (
+    AttachmentSerializer,
     ClientDetailSerializer,
     LeadSerializer,
     OrderSerializer,
@@ -1537,27 +1538,103 @@ def scoped_client_details(user):
     return qs
 
 
-def replace_client_attachments(client_detail, raw_attachments):
-    """Replace a client detail's attachments with fresh metadata rows."""
-    client_detail.attachments.all().delete()
-    if not raw_attachments:
-        return
-    if isinstance(raw_attachments, str):
-        try:
-            raw_attachments = json.loads(raw_attachments)
-        except (TypeError, ValueError):
-            raw_attachments = []
-    for att in raw_attachments:
-        if not isinstance(att, dict):
-            continue
-        Attachment.objects.create(
-            client_detail=client_detail,
-            type=str(att.get('type') or '').strip(),
-            name=str(att.get('name') or '').strip(),
-            mime=str(att.get('mime') or '').strip(),
-            size=str(att.get('size') or '').strip(),
-            url='',
+# Allowed handover material and its upload limits.
+ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB per file
+ATTACHMENT_ALLOWED_MIME = {
+    'application/pdf',
+}
+ATTACHMENT_ALLOWED_TYPE_PREFIXES = ('image/', 'audio/')
+
+
+def format_attachment_size(size):
+    size = int(size or 0)
+    if size < 1024:
+        return f'{size} B'
+    if size < 1024 * 1024:
+        return f'{size // 1024} KB'
+    return f'{size / (1024 * 1024):.1f} MB'
+
+
+def guess_attachment_type(mime):
+    if mime == 'application/pdf':
+        return 'SRS Document'
+    if mime.startswith('image/'):
+        return 'Business Card'
+    if mime.startswith('audio/'):
+        return 'Voice Clip'
+    return 'Other'
+
+
+class ClientDetailAttachmentView(APIView):
+    """Upload a handover file (PDF / image / audio) onto a client detail.
+
+    Files are validated (MIME + size) and stored per organization via the
+    attachment's upload path. Returns the serialized attachment.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not can(request.user, 'client.create', 'client.edit'):
+            return Response(
+                {'detail': 'You do not have permission to edit client details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = scoped_client_details(request.user).filter(pk=pk).first()
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        uploaded = request.FILES.get('file')
+        if uploaded is None:
+            return Response({'detail': 'Please attach a file to upload.'}, status=status.HTTP_400_BAD_REQUEST)
+        mime = (uploaded.content_type or '').lower()
+        if mime != 'application/pdf' and not mime.startswith(ATTACHMENT_ALLOWED_TYPE_PREFIXES):
+            return Response(
+                {'detail': 'Only PDF, image and audio files can be uploaded.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if uploaded.size > ATTACHMENT_MAX_BYTES:
+            return Response(
+                {'detail': f'File exceeds the {ATTACHMENT_MAX_BYTES // (1024 * 1024)} MB upload limit.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        label = str(request.data.get('type') or '').strip() or guess_attachment_type(mime)
+        attachment = Attachment(
+            client_detail=record,
+            type=label,
+            name=uploaded.name,
+            mime=mime,
+            size=format_attachment_size(uploaded.size),
         )
+        attachment.file.save(uploaded.name, uploaded, save=False)
+        attachment.url = attachment.file.url
+        attachment.save()
+        return Response(
+            AttachmentSerializer(attachment).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ClientDetailAttachmentDeleteView(APIView):
+    """Remove a handover file (storage + record row)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk, aid):
+        if not can(request.user, 'client.edit'):
+            return Response(
+                {'detail': 'You do not have permission to edit client details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = scoped_client_details(request.user).filter(pk=pk).first()
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        attachment = Attachment.objects.filter(pk=aid, client_detail=record).first()
+        if attachment is None:
+            return Response({'detail': 'Attachment not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if attachment.file:
+            attachment.file.delete(save=False)
+        attachment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ClientDetailListCreateView(APIView):
@@ -1602,7 +1679,6 @@ class ClientDetailListCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         record = serializer.save()
-        replace_client_attachments(record, request.data.get('attachments'))
         if created:
             status_code = status.HTTP_201_CREATED
         else:
@@ -1645,7 +1721,6 @@ class ClientDetailDetailView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         record = serializer.save()
-        replace_client_attachments(record, request.data.get('attachments'))
         if record.lead_id:
             mark_lead_as_client(record.lead_id)
         return Response(ClientDetailSerializer(record).data)

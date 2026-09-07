@@ -1355,16 +1355,11 @@ class ClientDetailFlowTests(APITestCase):
             'company': 'Client Co',
             'clientName': 'Renamed Person',
             'status': 'Details Complete',
-            'attachments': [
-                {'type': 'SRS Document', 'name': 'srs.pdf', 'mime': 'application/pdf', 'size': '200 KB'},
-            ],
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(ClientDetail.objects.filter(order_no=self.order.id).count(), 1)
         self.assertEqual(resp.data['clientName'], 'Renamed Person')
         self.assertEqual(resp.data['status'], 'Details Complete')
-        record = ClientDetail.objects.get(order_no=self.order.id)
-        self.assertEqual(record.attachments.count(), 1)
 
     def test_create_new_record_with_attachments(self):
         self.client.force_authenticate(self.manager)
@@ -1379,12 +1374,17 @@ class ClientDetailFlowTests(APITestCase):
             'acceptedDate': '2026-09-07',
             'collectedBy': 'Staff CD',
             'status': 'Details Complete',
-            'attachments': [
-                {'type': 'Business Card', 'name': 'card.jpg', 'mime': 'image/jpeg', 'size': '300 KB'},
-            ],
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         record = ClientDetail.objects.get(id=resp.data['id'])
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile('card.jpg', b'fake-img-bytes', content_type='image/jpeg')
+        upload = self.client.post(
+            f'/api/transactions/client-details/{record.id}/attachments/',
+            {'file': f, 'type': 'Business Card'}, format='multipart',
+        )
+        self.assertEqual(upload.status_code, 201)
+        record.refresh_from_db()
         self.assertEqual(record.attachments.count(), 1)
         self.assertEqual(record.attachments.first().type, 'Business Card')
         self.lead.refresh_from_db()
@@ -1396,3 +1396,99 @@ class ClientDetailFlowTests(APITestCase):
             'orderNo': 'P2026-0003', 'company': 'No Perm Co',
         }, format='json')
         self.assertEqual(resp.status_code, 403)
+
+
+class ClientDetailAttachmentTests(APITestCase):
+    """Handover files upload per organization with sane limits."""
+
+    def setUp(self):
+        company = make_company('AttachCo')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@att.com', password='x', name='Manager Att',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@att.com', password='x', name='Staff Att',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.lead = Lead.objects.create(
+            id='TC-ATT', company='Att Co', assigned_to='Staff Att',
+            tenant=company, status=Lead.STATUS_CLIENT,
+        )
+        self.record = ClientDetail.objects.create(
+            id='CD-P2026-0001', order_no='P2026-0001', lead_id='TC-ATT',
+            company='Att Co', tenant=company, status='Details Pending',
+        )
+        self.upload_url = f'/api/transactions/client-details/{self.record.id}/attachments/'
+
+    def _upload(self, name='srs.pdf', content_type='application/pdf', content=b'%PDF-1.4\x0a%per-org', att_type='SRS Document'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile(name, content, content_type=content_type)
+        return self.client.post(self.upload_url, {'file': f, 'type': att_type}, format='multipart')
+
+    def test_upload_pdf_stores_file_per_organization(self):
+        self.client.force_authenticate(self.manager)
+        resp = self._upload()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['mime'], 'application/pdf')
+        self.assertEqual(resp.data['type'], 'SRS Document')
+        self.assertTrue(resp.data['url'])
+        att = Attachment.objects.get(pk=resp.data['id'])
+        self.assertTrue(att.file.name.startswith(f'client_attachments/org-{self.company.id}/'))
+        self.assertEqual(att.client_detail_id, self.record.id)
+
+    def test_upload_rejects_unsupported_type(self):
+        self.client.force_authenticate(self.manager)
+        resp = self._upload(name='note.txt', content_type='text/plain', content=b'hello')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(Attachment.objects.count(), 0)
+
+    def test_upload_rejects_files_over_limit(self):
+        self.client.force_authenticate(self.manager)
+        from transactions.views import ATTACHMENT_MAX_BYTES
+        with patch('transactions.views.ATTACHMENT_MAX_BYTES', 100):
+            resp = self._upload(content=b'x' * 500)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('upload limit', resp.data['detail'])
+
+    def test_upload_requires_edit_permission(self):
+        self.client.force_authenticate(self.staff)
+        resp = self._upload()
+        self.assertEqual(resp.status_code, 403)
+
+    def test_upload_scoped_to_own_company(self):
+        other = make_company('OtherAttCo')
+        other_record = ClientDetail.objects.create(
+            id='CD-P2026-0999', order_no='P2026-0999', company='Other Co', tenant=other,
+        )
+        self.client.force_authenticate(self.manager)
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile('srs.pdf', b'%PDF', content_type='application/pdf')
+        resp = self.client.post(
+            f'/api/transactions/client-details/{other_record.id}/attachments/',
+            {'file': f}, format='multipart',
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_delete_attachment_removes_file_and_row(self):
+        self.client.force_authenticate(self.manager)
+        uploaded = self._upload().data
+        att = Attachment.objects.get(pk=uploaded['id'])
+        path = att.file.path
+        self.assertTrue(att.file.storage.exists(att.file.name))
+        resp = self.client.delete(f"{self.upload_url}{att.pk}/")
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(Attachment.objects.filter(pk=att.pk).exists())
+        self.assertFalse(att.file.storage.exists(att.file.name))
+
+    def test_client_detail_json_save_ignores_attachments(self):
+        # Attachments are managed by the dedicated upload/delete endpoints.
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/client-details/', {
+            'orderNo': 'P2026-0210', 'company': 'No Files Co',
+            'attachments': [{'type': 'SRS Document', 'name': 'fake.pdf'}],
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(Attachment.objects.filter(client_detail_id=resp.data['id']).count(), 0)
+

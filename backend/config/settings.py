@@ -191,6 +191,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Allow client handover PDFs to preview inline in an iframe on the app.
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+
 # Uploaded media (company logos)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
