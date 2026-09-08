@@ -501,27 +501,29 @@ export default function Dashboard() {
                       })}
                     </div>
                   ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={conversionData} layout="vertical" margin={{ top: 0, right: 15, left: 10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                        <XAxis type="number" hide />
-                        <YAxis
-                          dataKey="name"
-                          type="category"
-                          tickLine={false}
-                          axisLine={false}
-                          stroke="#475569"
-                          width={100}
-                          tick={{ fontSize: 11, fontWeight: 600 }}
-                        />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(val, name, item) => [`${Number(val).toLocaleString()} leads (${item.payload.rate})`, 'Count']} />
-                        <Bar dataKey="value" name="Count" radius={[0, 6, 6, 0]} barSize={20}>
-                          {conversionData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="h-64 text-[11px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={conversionData} layout="vertical" margin={{ top: 0, right: 15, left: 10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                          <XAxis type="number" hide />
+                          <YAxis
+                            dataKey="name"
+                            type="category"
+                            tickLine={false}
+                            axisLine={false}
+                            stroke="#475569"
+                            width={100}
+                            tick={{ fontSize: 11, fontWeight: 600 }}
+                          />
+                          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(val, name, item) => [`${Number(val).toLocaleString()} leads (${item.payload.rate})`, 'Count']} />
+                          <Bar dataKey="value" name="Count" radius={[0, 6, 6, 0]} barSize={20}>
+                            {conversionData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </div>
 
