@@ -71,6 +71,11 @@ class Company(models.Model):
             from .rbac import seed_default_roles
 
             seed_default_roles(self)
+            # Give the new company a fresh per-company copy of the standard
+            # category/source catalog so lead entry works immediately.
+            from master.models import seed_default_master_catalog
+
+            seed_default_master_catalog(self)
 
 
 class Role(models.Model):

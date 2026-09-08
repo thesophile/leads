@@ -20,6 +20,7 @@ export default function ForgotPassword() {
 
   async function handleRequest(e) {
     e.preventDefault()
+    if (loading) return
     setError('')
     setLoading(true)
     try {
@@ -37,6 +38,7 @@ export default function ForgotPassword() {
 
   async function handleConfirm(e) {
     e.preventDefault()
+    if (loading) return
     setError('')
     if (password !== password2) {
       setError('Passwords do not match.')

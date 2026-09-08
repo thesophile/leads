@@ -51,6 +51,13 @@ function toISODate(d) {
   return `${y}-${m}-${day}`
 }
 
+function leadPathByStatus(status) {
+  if (status === 'Quotation' || status === 'quotation') return '/quotations'
+  if (status === 'Order' || status === 'order') return '/orders'
+  if (status === 'Client' || status === 'client') return '/client-details'
+  return '/tele-calling'
+}
+
 function ActivityIcon() {
   return (
     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -594,7 +601,7 @@ export default function Dashboard() {
                           </div>
                           <div className="flex gap-1.5">
                             <button
-                              onClick={() => navigate('/tele-calling')}
+                              onClick={() => navigate(leadPathByStatus(lead.status))}
                               className="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition cursor-pointer"
                             >
                               Action

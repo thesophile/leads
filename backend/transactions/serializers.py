@@ -171,6 +171,7 @@ class QuotationSerializer(serializers.ModelSerializer):
     clientMessage = serializers.CharField(source='client_message', read_only=True)
     clientRespondedAt = serializers.SerializerMethodField()
     sentToClientAt = serializers.SerializerMethodField()
+    clientToken = serializers.CharField(source='client_token', read_only=True)
 
     class Meta:
         model = Quotation
@@ -216,6 +217,7 @@ class QuotationSerializer(serializers.ModelSerializer):
             'clientMessage',
             'clientRespondedAt',
             'sentToClientAt',
+            'clientToken',
         ]
 
     def _iso(self, value):
@@ -268,6 +270,9 @@ class OrderSerializer(serializers.ModelSerializer):
     netAmount = serializers.CharField(source='net_amount', required=False, allow_blank=True)
     termsSummaryHtml = serializers.SerializerMethodField()
     termsFullHtml = serializers.SerializerMethodField()
+    clientStatus = serializers.SerializerMethodField()
+    clientRespondedAt = serializers.SerializerMethodField()
+    clientToken = serializers.CharField(source='client_token', read_only=True)
 
     class Meta:
         model = Order
@@ -296,7 +301,16 @@ class OrderSerializer(serializers.ModelSerializer):
             'details',
             'termsSummaryHtml',
             'termsFullHtml',
+            'clientStatus',
+            'clientRespondedAt',
+            'clientToken',
         ]
+
+    def get_clientStatus(self, obj):
+        return obj.client_status
+
+    def get_clientRespondedAt(self, obj):
+        return obj.client_responded_at.isoformat() if obj.client_responded_at else ''
 
     def get_termsSummaryHtml(self, obj):
         tenant = getattr(obj, 'tenant', None)

@@ -573,11 +573,14 @@ export default function Admins() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  setResetModal(admin)
-                                  setResetPw('')
+                                  if (!protectedAcct) {
+                                    setResetModal(admin)
+                                    setResetPw('')
+                                  }
                                 }}
-                                title="Reset password"
-                                className="rounded-lg p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                                title={protectedAcct ? 'Platform superadmin accounts cannot be reset here' : 'Reset password'}
+                                disabled={protectedAcct}
+                                className="rounded-lg p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 <KeyIcon />
                               </button>

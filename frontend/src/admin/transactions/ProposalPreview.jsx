@@ -13,99 +13,6 @@ function wrappableHtml(html) {
   return String(html || '').replace(/&nbsp;/gi, ' ')
 }
 
-// Initial Proposal Model matching exact PDF document
-const DEFAULT_PROPOSAL = {
-  id: 'QTN403206072026A',
-  orderDate: '06-07-2026',
-  customerCompany: 'TEST COMPANY141',
-  customerPerson: 'TEST PERSON',
-  customerPhone: '9541258742',
-  customerLocation: 'TEST LOCATION',
-  bdm: 'Husna',
-  quotationBy: 'Bincy',
-  revisionNo: 'QTN403206072026A (Revised #14)',
-  category: 'CLINIC',
-  customerType: '',
-  sources: 'test source',
-  termsConditions: [
-    {
-      title: '1. Payment Terms:',
-      content:
-        '50% non-refundable advance is required on signing. Remaining 50% must be paid before hosting, deployment, or handover. Payments via Bank Transfer or UPI only. Prices exclude GST. Delays over 7 days after completion may incur a 5% weekly late fee and withholding of launch. All fees paid are non-refundable.',
-    },
-    {
-      title: '2. Renewals:',
-      content:
-        'Yearly hosting and domain fees will be charged as per the Order Form and may change with prior notice. Service period starts from domain registration date, regardless of launch. Renewal fees for Domain, SSL, and Server Space must be paid at least 30 days before expiry.',
-    },
-    {
-      title: '3. Support:',
-      content:
-        'Provided via Email/WhatsApp, 10 AM–5 PM, Mon–Sat (excluding holidays). Covers bug fixes and server uptime only; no new features, design, or content updates without an AMC. After warranty, support requires a valid AMC or is charged hourly.',
-    },
-  ],
-  proposalSummaryHtml: `
-    <p><strong>Greetings from PROGRAMERS INTERNATIONAL,</strong></p>
-    <p>Dear Sir/Madam,</p>
-    <p>We are pleased to submit our formal commercial proposal for the end-to-end design, custom development, and cloud deployment of your <strong>Enterprise Web Platform & Business Management Suite</strong>. Our solution is engineered to automate your operational workflow, accelerate client conversions, and provide robust cloud scalability.</p>
-    <br/>
-    <p><strong>Key Project Deliverables:</strong></p>
-    <p>• <strong>Custom Web Platform:</strong> Modern, high-performance UI/UX optimized for all mobile, tablet, and desktop viewports.<br/>
-       • <strong>Operational CRM & Lead Engine:</strong> Real-time customer inquiry capture, automated WhatsApp/SMS notifications, and follow-up tracking.<br/>
-       • <strong>Integrated Billing & Tax Engine:</strong> GST-compliant quotation generation, proforma invoicing, and accounting integration.<br/>
-       • <strong>Cloud Hosting & Domain Setup:</strong> High-speed SSL-secured cloud server deployment with 99.9% uptime SLA.</p>
-    <br/>
-    <p><strong>Commercial Representative:</strong><br/>
-       <strong>Husna M S</strong> — Senior Business Development Manager<br/>
-       Phone: +91 9447151442 | Email: husna@programers.in<br/>
-       Programers International, Thrissur, Kerala
-    </p>
-  `,
-  proposalInDetailsHtml: `
-    <h4 style="font-weight:bold; font-size:13px; color:#0f172a; margin-bottom:6px; border-bottom:1px solid #cbd5e1; padding-bottom:4px;">
-      1. TECHNICAL ARCHITECTURE & MODULE BREAKDOWN
-    </h4>
-    <div style="margin-bottom:12px; line-height:1.6;">
-      <p><strong>A. Responsive User Experience & Frontend Interface (UI/UX)</strong></p>
-      <p style="color:#334155;">Constructed with a modern Single-Page Application (SPA) architecture guaranteeing sub-second load times, cross-browser compatibility, and adherence to international WCAG accessibility guidelines.</p>
-      
-      <p style="margin-top:6px;"><strong>B. Operational Command Center & Staff CRM</strong></p>
-      <p style="color:#334155;">Multi-tier role-based access control (Super Admin, Branch Managers, Sales/Telecalling Staff), centralized lead lifecycle pipeline, and real-time operational analytics dashboard.</p>
-      
-      <p style="margin-top:6px;"><strong>C. Cloud Infrastructure & Security Hardening</strong></p>
-      <p style="color:#334155;">256-bit TLS enterprise encryption, automated daily offsite database snapshots, Web Application Firewall (WAF), and DDoS mitigation protocols.</p>
-    </div>
-
-    <h4 style="font-weight:bold; font-size:13px; color:#0f172a; margin-top:14px; margin-bottom:6px; border-bottom:1px solid #cbd5e1; padding-bottom:4px;">
-      2. IMPLEMENTATION PHASES & DELIVERY ROADMAP
-    </h4>
-    <div style="line-height:1.6;">
-      <p><strong>• Phase 1 — Discovery & UI Wireframing (Week 1):</strong> Formal requirement sign-off, system workflow mapping, and prototype approval.</p>
-      <p><strong>• Phase 2 — Core Engine & Integration (Weeks 2–3):</strong> Database modeling, API integrations, business logic implementation, and security hardening.</p>
-      <p><strong>• Phase 3 — Quality Assurance & Go-Live (Week 4):</strong> End-to-end stress testing, user acceptance testing (UAT), production cloud deployment, and staff training.</p>
-    </div>
-  `,
-  proposalDetailsContinuedHtml: `
-    <h4 style="font-weight:bold; font-size:13px; color:#0f172a; margin-bottom:6px; border-bottom:1px solid #cbd5e1; padding-bottom:4px;">
-      3. SERVICE LEVEL AGREEMENT (SLA) & WARRANTY SUPPORT
-    </h4>
-    <div style="margin-bottom:14px; line-height:1.6;">
-      <p><strong>A. 12-Month Comprehensive Technical Warranty</strong></p>
-      <p style="color:#334155;">Includes full resolution of system anomalies, framework security updates, performance tuning, and 99.9% server uptime monitoring with zero additional labor charges during the warranty term.</p>
-      
-      <p style="margin-top:6px;"><strong>B. Priority Support Desk & SLA Response Times</strong></p>
-      <p style="color:#334155;">Multi-channel technical assistance provided via Helpdesk Portal, WhatsApp Priority Channel, and Phone (Mon–Sat, 9:30 AM – 6:00 PM IST) with guaranteed 2-hour response for critical priority tickets.</p>
-      
-      <p style="margin-top:6px;"><strong>C. Intellectual Property & Data Ownership</strong></p>
-      <p style="color:#334155;">Upon completion of final milestone payments, the client retains 100% exclusive ownership of all organizational data and operational rights under standard non-disclosure terms.</p>
-    </div>
-  `,
-  total: '26,000/-',
-  discount: '1,000.00/-',
-  net: '25,000.00/-',
-  amountWords: 'Twenty-five Thousand Only',
-  status: 'Quotation Requested',
-}
 
 const CLIENT_ACCEPTANCE_HTML = `
   <div style="border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; padding:12px; margin-top:16px;">
@@ -127,7 +34,7 @@ const CLIENT_ACCEPTANCE_HTML = `
 `
 
 // NPM Generated Crisp QR Code Component
-function QRCodeVisual({ value = `https://leads.programersapps.com/quotation/proposalform/${DEFAULT_PROPOSAL.id}` }) {
+function QRCodeVisual({ value = '' }) {
   return (
     <div className="flex h-full w-full items-center justify-center bg-white p-0.5">
       <QRCodeSVG
@@ -175,7 +82,7 @@ function GeMBadge() {
 }
 
 // NPM Generated Barcode Component
-function BarcodeVisual({ code = DEFAULT_PROPOSAL.id }) {
+function BarcodeVisual({ code = '' }) {
   return (
     <div className="flex flex-col items-end overflow-hidden">
       <Barcode
@@ -244,7 +151,7 @@ function PageHeader({ proposal, annexLabel, company }) {
     <div className="flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-4">
       <div className="flex items-center gap-3">
         <div className="h-16 w-16 shrink-0 rounded-lg border border-slate-300 bg-white p-1">
-          <QRCodeVisual value={`https://leads.programersapps.com/quotation/proposalform/${proposal.id}`} />
+          <QRCodeVisual value={`${window.location.origin}/quotation/${proposal.clientToken || ''}`} />
         </div>
         <div className="space-y-2.5">
           <InfoBlock label="Quotation #" value={proposal.id} />
@@ -381,6 +288,7 @@ export default function ProposalPreview() {
   const [company, setCompany] = useState({})
   const [proposal, setProposal] = useState(() => location.state?.proposal || null)
   const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.proposal)
+  const [notFound, setNotFound] = useState(false)
 
   // Send-for-approval
   const [approvers, setApprovers] = useState([])
@@ -437,9 +345,15 @@ export default function ProposalPreview() {
     ;(async () => {
       try {
         const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
-        if (!cancelled) setProposal(data || null)
+        if (!cancelled) {
+          setProposal(data || null)
+          if (!data) setNotFound(true)
+        }
       } catch (err) {
-        if (!cancelled) setActionError(err.message)
+        if (!cancelled) {
+          setNotFound(true)
+          setActionError(err.message)
+        }
       } finally {
         if (!cancelled) setLoadingQuote(false)
       }
@@ -477,28 +391,25 @@ export default function ProposalPreview() {
     if (proposal) {
       const p = proposal
       return {
-        ...DEFAULT_PROPOSAL,
-        id: p.id || DEFAULT_PROPOSAL.id,
-        orderDate: p.date || DEFAULT_PROPOSAL.orderDate,
-        customerCompany: p.company || DEFAULT_PROPOSAL.customerCompany,
-        customerPerson: p.customer || DEFAULT_PROPOSAL.customerPerson,
-        customerPhone: p.mobile || DEFAULT_PROPOSAL.customerPhone,
-        customerLocation: p.city || DEFAULT_PROPOSAL.customerLocation,
-        bdm: p.bdm || p.staff || DEFAULT_PROPOSAL.bdm,
-        quotationBy: p.qtnBy || p.staff || DEFAULT_PROPOSAL.quotationBy,
+        id: p.id || '',
+        orderDate: p.date || '',
+        customerCompany: p.company || '',
+        customerPerson: p.customer || '',
+        customerPhone: p.mobile || '',
+        customerLocation: p.city || '',
+        bdm: p.bdm || p.staff || '',
+        quotationBy: p.qtnBy || p.staff || '',
         revisionNo: p.revisionNo || '',
-        category: p.category || DEFAULT_PROPOSAL.category,
+        category: p.category || '',
         customerType: p.customerType || '',
-        sources: p.source || DEFAULT_PROPOSAL.sources,
-        total: p.total || DEFAULT_PROPOSAL.total,
-        discount: p.discount || DEFAULT_PROPOSAL.discount,
-        net: p.netAmount || DEFAULT_PROPOSAL.net,
+        sources: p.source || '',
+        total: p.total || '',
+        discount: p.discount || '',
+        net: p.netAmount || '',
         termsHtml: p.companyTerms || '',
-        proposalSummaryHtml: p.proposalScope || DEFAULT_PROPOSAL.proposalSummaryHtml,
-        proposalInDetailsHtml:
-          p.termsConditions ||
-          DEFAULT_PROPOSAL.proposalInDetailsHtml + DEFAULT_PROPOSAL.proposalDetailsContinuedHtml,
-        status: p.status || DEFAULT_PROPOSAL.status,
+        proposalSummaryHtml: p.proposalScope || '',
+        proposalInDetailsHtml: p.termsConditions || '',
+        status: p.status || '',
         leadId: p.leadId || p.id,
         approverName: p.approverName || '',
         signedBy: p.signedBy || '',
@@ -512,7 +423,7 @@ export default function ProposalPreview() {
         hasProposal: true,
       }
     }
-    return DEFAULT_PROPOSAL
+    return null
   }, [proposal])
 
   const isSent = proposalData.status === 'Pending Approval'
@@ -615,7 +526,12 @@ const approvedByRef = useRef(null)
       )
       setProposal(updated)
       setApproveOpen(false)
-      setApproveNotice('✓ Proposal approved. Digital signature recorded.')
+      const fullyApproved = updated?.status === 'Approved'
+      setApproveNotice(
+        fullyApproved
+          ? '✓ Proposal approved. Digital signature recorded.'
+          : '✓ Your approval was recorded. Awaiting the remaining approvers.'
+      )
     } catch (err) {
       setActionError(err.message)
     } finally {
@@ -646,6 +562,28 @@ const approvedByRef = useRef(null)
       <Layout>
         <div className="flex h-64 items-center justify-center">
           <span className="text-xs text-slate-500">Loading proposal…</span>
+        </div>
+      </Layout>
+    )
+  }
+
+  if (notFound || !proposal) {
+    return (
+      <Layout>
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => navigate('/quotations')}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-200 cursor-pointer"
+          >
+            ← Back
+          </button>
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xs">
+            <p className="text-sm font-bold text-slate-800">Proposal not found</p>
+            <p className="mt-1 text-xs text-slate-500">
+              This proposal does not exist or you do not have permission to view it.
+            </p>
+          </div>
         </div>
       </Layout>
     )

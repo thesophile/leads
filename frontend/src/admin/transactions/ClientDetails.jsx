@@ -4,6 +4,7 @@ import Layout from '../../Layout/Layout'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
 import useDirty from '../../utils/useDirty'
+import { localISO } from '../../utils/date'
 import { api } from '../../api/client'
 
 const ATTACHMENT_TYPES = ['SRS Document', 'Business Card', 'Voice Clip', 'Other']
@@ -213,7 +214,7 @@ export default function ClientDetails() {
           mobile: prefilledOrder.mobile || '',
           email: prefilledOrder.email || '',
           category: prefilledOrder.category || 'Dynamic Website',
-          acceptedDate: new Date().toISOString().slice(0, 10),
+          acceptedDate: localISO(),
           collectedBy: prefilledOrder.proposalBy || prefilledOrder.staff || '',
           notes: '',
         }
@@ -373,32 +374,21 @@ export default function ClientDetails() {
     const fd = new FormData()
     fd.append('file', file)
     if (type) fd.append('type', type)
-    const access = localStorage.getItem('leads_access') || sessionStorage.getItem('leads_access')
-    const res = await fetch(
-      `/api/transactions/client-details/${encodeURIComponent(recordId)}/attachments/`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${access}` },
-        body: fd,
-      }
+    return api.post(
+      `/transactions/client-details/${encodeURIComponent(recordId)}/attachments/`,
+      fd
     )
-    const data = await res.json().catch(() => null)
-    if (!res.ok) {
-      throw new Error(data?.detail || `Upload failed (${res.status})`)
-    }
-    return data
   }
 
   async function handleSave(e) {
     e.preventDefault()
     if (saving) return
 
-    const hasExisting = editingId
-      ? (records.find((r) => r.id === editingId)?.attachments || []).length > 0
-      : false
-    const status = hasExisting || newAttachments.length > 0 ? 'Details Complete' : 'Details Pending'
-    const payload = { ...form, status }
+    const payload = { ...form }
     if (!editingId) {
+      // Status is only assigned when a record is first created; editing a
+      // later-stage record must never regress its lifecycle status.
+      payload.status = newAttachments.length > 0 ? 'Details Complete' : 'Details Pending'
       // Keep the order/lead link when saving a fresh (pre-filled) record.
       payload.leadId = form.leadId || prefilledOrder?.leadId || ''
     }
@@ -437,10 +427,15 @@ export default function ClientDetails() {
   async function handleStatusChange(id, newStatus) {
     if (statusSavingId) return
     setStatusSavingId(id)
+    const previous = records.find((r) => r.id === id)?.status
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r)))
     try {
       await api.put(`/transactions/client-details/${encodeURIComponent(id)}/`, { status: newStatus })
     } catch (err) {
+      // Roll back the optimistic update so the UI matches the server.
+      setRecords((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: previous } : r))
+      )
       setToastMessage(`✗ ${err.message || 'Could not update status.'}`)
       setTimeout(() => setToastMessage(''), 3000)
     } finally {

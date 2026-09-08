@@ -3,6 +3,7 @@ import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
+import { localISO } from '../../utils/date'
 
 const STATUSES = [
   'All Status',
@@ -1028,7 +1029,7 @@ export default function Telecall() {
                           d.setDate(d.getDate() + 1)
                           setFormData((prev) => ({
                             ...prev,
-                            nextFollowUpDate: d.toISOString().split('T')[0],
+                            nextFollowUpDate: localISO(d),
                           }))
                         }}
                         className="text-[11px] font-medium text-brand-600 hover:underline"

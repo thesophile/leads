@@ -26,15 +26,23 @@ class MasterNameUniquenessTests(APITestCase):
         self.other_admin = make_admin('Admin B', 'Globex')
 
     def test_duplicate_category_is_rejected_case_insensitive(self):
-        Category.objects.create(name='Hospital', code='H01')
+        Category.objects.create(name='Blood Bank', code='BB01', company=self.admin.company)
         self.client.force_authenticate(self.admin)
         resp = self.client.post('/api/master/categories/', {
-            'name': 'hospital',
+            'name': 'blood bank',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
+    def test_same_category_in_other_company_is_allowed(self):
+        Category.objects.create(name='Blood Bank', code='BB01', company=self.other_admin.company)
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/master/categories/', {
+            'name': 'Blood Bank',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+
     def test_duplicate_source_is_rejected(self):
-        Source.objects.create(name='Google Search', code='G01')
+        Source.objects.create(name='Google Search', code='G01', company=self.admin.company)
         self.client.force_authenticate(self.admin)
         resp = self.client.post('/api/master/sources/', {
             'name': 'Google Search',

@@ -319,6 +319,7 @@ class QuotationApproval(models.Model):
     otp_hash = models.CharField(max_length=160, blank=True)
     otp_sent_at = models.DateTimeField(null=True, blank=True)
     otp_expires_at = models.DateTimeField(null=True, blank=True)
+    otp_attempts = models.PositiveIntegerField(default=0)
     rejection_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -332,6 +332,20 @@ def format_display_date(value):
     return value.strftime('%d %b %Y') if value else ''
 
 
+def parse_due_date(value):
+    """Best-effort parse of the free-text follow-up due date (ISO or common
+    dd-mm-yyyy / dd/mm/yyyy). Returns a ``date`` or ``None`` when unparseable."""
+    if not value:
+        return None
+    text = str(value).strip()
+    for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%Y/%m/%d'):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
 def find_duplicate_lead(user, company):
     """Return an existing Lead with the same normalized company name, from
     across the org (not just the current user's own records) and regardless
@@ -397,9 +411,13 @@ class LeadListView(APIView):
         category = request.data.get('category', '').strip()
         source = request.data.get('source', '').strip()
         invalid = []
-        if category and not Category.objects.filter(name=category).exists():
+        if category and not Category.objects.filter(
+            company=request.user.company, name=category
+        ).exists():
             invalid.append(f'category: Unknown category "{category}".')
-        if source and not Source.objects.filter(name=source).exists():
+        if source and not Source.objects.filter(
+            company=request.user.company, name=source
+        ).exists():
             invalid.append(f'source: Unknown source "{source}".')
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
@@ -465,6 +483,7 @@ class LeadDetailView(APIView):
             )
         edited_contact_fields = [f for f in CONTACT_FIELD_MAP if f in request.data]
         old_contact = {f: getattr(lead, f) for f in edited_contact_fields}
+        old_call_status = lead.call_status
         if 'company' in request.data:
             company = request.data.get('company', '').strip()
             if not company:
@@ -498,9 +517,22 @@ class LeadDetailView(APIView):
                 setattr(lead, field, value)
         invalid = []
         submitted = set(request.data)
-        if 'category' in submitted and lead.category and not Category.objects.filter(name=lead.category).exists():
+        # Reassigning a lead to another staff member is an assign action: only
+        # users with an assign permission may change who owns a lead. This keeps
+        # the per-lead edit path consistent with the bulk-assign gate.
+        if 'assigned_to' in submitted:
+            if not user.has_permission('leads.assign') and not user.has_permission('telecall.assign'):
+                return Response(
+                    {'detail': 'You do not have permission to reassign leads.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        if 'category' in submitted and lead.category and not Category.objects.filter(
+            company=user.company, name=lead.category
+        ).exists():
             invalid.append(f'category: Unknown category "{lead.category}".')
-        if 'source' in submitted and lead.source and not Source.objects.filter(name=lead.source).exists():
+        if 'source' in submitted and lead.source and not Source.objects.filter(
+            company=user.company, name=lead.source
+        ).exists():
             invalid.append(f'source: Unknown source "{lead.source}".')
         if 'call_status' in submitted and lead.call_status not in Lead.CALL_STATUS_VALUES:
             invalid.append(f'call_status: "{lead.call_status}" is not a valid call status.')
@@ -521,10 +553,19 @@ class LeadDetailView(APIView):
             if conflict is not None and conflict.id != lead.id:
                 return duplicate_response(conflict)
             raise
+        # Assigning a raw lead via the edit path must move it out of the raw
+        # pool, mirroring the bulk-assign behaviour.
+        if 'assigned_to' in submitted and lead.assigned_to and lead.status == Lead.STATUS_RAW:
+            lead.status = Lead.STATUS_ASSIGNED
+            lead.call_status = lead.call_status or 'Pending Call'
+            lead.save(update_fields=['status', 'updated_at'])
         if lead.call_status == 'Quotation Requested' and lead.status != Lead.STATUS_QUOTATION:
             lead.status = Lead.STATUS_QUOTATION
             lead.save(update_fields=['status', 'updated_at'])
-        if 'call_status' in request.data and lead.call_status != 'Pending Call':
+        # Call-history noise guard: only record a call entry when the call
+        # status actually changed (re-saving an unchanged status must not
+        # append duplicate history rows).
+        if 'call_status' in request.data and lead.call_status != old_call_status and lead.call_status != 'Pending Call':
             report = request.data.get('remarks')
             if report is None:
                 report = lead.remarks
@@ -689,6 +730,16 @@ class QuotationView(APIView):
                 {'detail': 'The proposal status cannot be set directly. Use the approve / reject action.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # "Pending Approval" can only be entered through the send-for-approval
+        # flow (which requires approvers). Without approval rows the proposal
+        # would be wedged in limbo with no approver to act on it. Editing an
+        # already-pending proposal (approvals exist) stays allowed.
+        if new_status == 'Pending Approval' and not is_send_action:
+            if not quotation.approvals.exists():
+                return Response(
+                    {'detail': 'Send the proposal for approval using the "Send for Approval" action.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         for camel, field in self.QUOTATION_FIELDS.items():
             if camel in request.data:
                 value = request.data.get(camel)
@@ -764,6 +815,14 @@ class QuotationView(APIView):
         lead = scoped_queryset(request.user).filter(pk=quotation.lead_id).first()
         if lead is None:
             return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        # Never let quotation deletion regress a lead that already produced an
+        # order/client record — otherwise the pipeline and the order book diverge.
+        if Order.objects.filter(lead_id=quotation.lead_id).exists() or \
+                ClientDetail.objects.filter(lead_id=quotation.lead_id).exists():
+            return Response(
+                {'detail': 'This lead already has an order/client record. Quotation cannot be deleted here.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         Quotation.objects.filter(lead_id=quotation.lead_id).delete()
         lead.status = Lead.STATUS_ASSIGNED
         lead.call_status = 'Pending Call'
@@ -848,7 +907,8 @@ class QuotationOtpView(QuotationApprovalBaseView):
         approval.otp_hash = hash_otp(code, approval.id)
         approval.otp_sent_at = timezone.now()
         approval.otp_expires_at = timezone.now() + timedelta(minutes=self.OTP_MINUTES)
-        approval.save(update_fields=['otp_hash', 'otp_sent_at', 'otp_expires_at', 'updated_at'])
+        approval.otp_attempts = 0
+        approval.save(update_fields=['otp_hash', 'otp_sent_at', 'otp_expires_at', 'otp_attempts', 'updated_at'])
         try:
             send_mail(
                 subject='LEADS — Quotation approval code',
@@ -904,7 +964,15 @@ class QuotationApproveView(QuotationApprovalBaseView):
                 {'detail': 'The approval code has expired. Please request a new one.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        MAX_OTP_ATTEMPTS = 5
+        if approval.otp_attempts >= MAX_OTP_ATTEMPTS:
+            return Response(
+                {'detail': 'Too many incorrect attempts. Please request a new approval code.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if hash_otp(code, approval.id) != approval.otp_hash:
+            approval.otp_attempts += 1
+            approval.save(update_fields=['otp_attempts', 'updated_at'])
             return Response(
                 {'detail': 'The approval code is invalid. Please try again.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1160,7 +1228,6 @@ def _public_sibling_versions(quotation):
                 'currency': q.currency,
                 'status': q.status,
                 'clientStatus': q.client_status,
-                'clientToken': q.client_token,
             })
     return siblings
 
@@ -1172,9 +1239,14 @@ def _get_by_client_token(token):
 def create_order_from_quotation(quotation):
     """Create an Order record from an accepted quotation.
 
-    Returns the created order, or the existing order if one already exists for
-    the same proposal (idempotent for repeated calls).
+    Returns the created order, or an existing order for the same lead if one
+    already exists so a lead never ends up with duplicate active orders
+    (dedupe is per-lead, not per-version, by design).
     """
+    if quotation.lead_id:
+        existing = Order.objects.filter(lead_id=quotation.lead_id).first()
+        if existing is not None:
+            return existing
     existing = Order.objects.filter(id=quotation.id).first()
     if existing is not None:
         return existing
@@ -1284,6 +1356,17 @@ class ClientQuotationResponseView(APIView):
             if lead is not None and lead.status != Lead.STATUS_ORDER:
                 lead.status = Lead.STATUS_ORDER
                 lead.save(update_fields=['status', 'updated_at'])
+            # Once any version is accepted, no other live version of the same
+            # lead may be accepted later: revoke sibling links so we never end
+            # up with a second order for the same deal.
+            if quotation.lead_id:
+                Quotation.objects.filter(
+                    lead_id=quotation.lead_id,
+                    client_token__gt='',
+                ).exclude(pk=quotation.pk).update(
+                    client_token='',
+                    client_token_expires_at=None,
+                )
         if quotation.submitted_by_id:
             notify(
                 quotation.submitted_by,
@@ -1683,10 +1766,21 @@ class ClientDetailListCreateView(APIView):
         created = False
         record = None
         if order_no:
-            record = ClientDetail.objects.filter(order_no=order_no).first()
+            # Scope the upsert lookup to the requester's own company so a
+            # matching order_no in another tenant is never found or overwritten.
+            record = ClientDetail.objects.filter(
+                order_no=order_no,
+                tenant=request.user.company,
+            ).first()
         if record is None:
+            # The record id is derived from order_no (CD-<order_no>). If that
+            # id is already taken by another tenant, fall back to a random id
+            # instead of colliding on the primary key.
+            candidate_id = f'CD-{order_no}' if order_no else generate_client_detail_id()
+            if order_no and ClientDetail.objects.filter(pk=candidate_id).exists():
+                candidate_id = generate_client_detail_id()
             record = ClientDetail(
-                id=f'CD-{order_no}' if order_no else generate_client_detail_id(),
+                id=candidate_id,
                 order_no=order_no,
                 company=company,
                 tenant=request.user.company,
@@ -1700,8 +1794,12 @@ class ClientDetailListCreateView(APIView):
             status_code = status.HTTP_201_CREATED
         else:
             status_code = status.HTTP_200_OK
+        # Only flip the linked lead to the client stage when that lead actually
+        # belongs to this caller's company (never mutate another tenant's lead).
         if record.lead_id:
-            mark_lead_as_client(record.lead_id)
+            lead = scoped_queryset(request.user).filter(pk=record.lead_id).first()
+            if lead is not None:
+                mark_lead_as_client(lead.id)
         return Response(
             ClientDetailSerializer(record).data,
             status=status_code,
@@ -2088,16 +2186,12 @@ class DashboardStatsView(APIView):
                 'color': source_colors[i % len(source_colors)],
             })
 
-        # Conversion funnel stages are cumulative so each stage always contains
-        # the next one (Total -> Contacted -> Interested -> Quotations -> Orders).
-        beyond_quotation = scoped.filter(
-            status__in=[Lead.STATUS_QUOTATION, Lead.STATUS_ORDER, Lead.STATUS_CLIENT]
-        )
-
+        # Conversion funnel stages are independent current-stage counts so each
+        # bar reflects where leads are right now (no cumulative double counting).
         funnel = {
             'raw': scoped.filter(status=Lead.STATUS_RAW).count(),
             'assigned': scoped.filter(status=Lead.STATUS_ASSIGNED).count(),
-            'quotation': beyond_quotation.count(),
+            'quotation': scoped.filter(status=Lead.STATUS_QUOTATION).count(),
             'order': scoped.filter(status=Lead.STATUS_ORDER).count(),
             'client': scoped.filter(status=Lead.STATUS_CLIENT).count(),
             'contacted': contacted_total,
@@ -2112,11 +2206,40 @@ class DashboardStatsView(APIView):
 
         # KPIs within range.
         hot_leads = scoped.filter(priority__icontains='hot').count()
-        follow_ups_due = scoped.filter(has_follow_up=True).count()
-        open_quotations = scoped.filter(status=Lead.STATUS_QUOTATION).count()
-        orders_accepted = scoped.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).count()
-        calls_in_period = CallHistory.objects.filter(
+
+        # Follow-up due = flagged for follow-up AND the due date is today/past
+        # (or no parseable date was stored). Future-dated follow-ups are not due.
+        follow_ups_due = 0
+        due_leads = scoped.filter(has_follow_up=True).only('next_follow_up_date')
+        for lead in due_leads:
+            due_date = parse_due_date(lead.next_follow_up_date)
+            if due_date is None or due_date <= date.today():
+                follow_ups_due += 1
+
+        # Open quotations = leads in the quotation stage that have NOT had a
+        # proposal declined (declined proposals are no longer open pipeline).
+        declined_lead_ids = Quotation.objects.filter(
+            lead_id__in=scoped.filter(status=Lead.STATUS_QUOTATION).values_list('id', flat=True),
+            status='Declined',
+        ).values_list('lead_id', flat=True)
+        open_quotations = scoped.filter(
+            status=Lead.STATUS_QUOTATION
+        ).exclude(id__in=list(declined_lead_ids)).count()
+
+        # Orders accepted = orders whose client actually accepted, counted by
+        # the order date in the period (not by lead status, which includes
+        # pending/declined orders).
+        orders_accepted = Order.objects.filter(
             lead_id__in=scoped.values_list('id', flat=True),
+            client_status=Order.CLIENT_ACCEPTED,
+            created_at__date__range=(start_date, end_date),
+        ).count()
+
+        # Calls in period are counted by their own call date across the leads
+        # the user can see — a call on an older lead still counts.
+        scoped_all = scoped_queryset(request.user)
+        calls_in_period = CallHistory.objects.filter(
+            lead_id__in=scoped_all.values_list('id', flat=True),
             created_at__date__range=(start_date, end_date),
         ).count()
 
@@ -2273,10 +2396,13 @@ class ClientOrderResponseView(APIView):
             mark_lead_as_client(order.lead_id)
 
         staff_member = None
+        # Resolve the staff member within this order's own company so an
+        # employee with the same name in another tenant is never notified.
+        company_filter = {'company': order.tenant_id} if order.tenant_id else {}
         if order.proposal_by:
-            staff_member = User.objects.filter(name__iexact=order.proposal_by).first()
+            staff_member = User.objects.filter(name__iexact=order.proposal_by, **company_filter).first()
         if staff_member is None and order.staff:
-            staff_member = User.objects.filter(name__iexact=order.staff).first()
+            staff_member = User.objects.filter(name__iexact=order.staff, **company_filter).first()
         if staff_member is not None:
             notify(
                 staff_member,

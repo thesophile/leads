@@ -314,6 +314,11 @@ function ShareIcon({ className = 'h-3.5 w-3.5' }) {
   )
 }
 
+function currencySymbol(currency) {
+  const m = String(currency || '').match(/\(([^)]+)\)/)
+  return m ? m[1] : (currency || '₹')
+}
+
 export default function Managequotation() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -1845,8 +1850,8 @@ export default function Managequotation() {
                   <tr key={`hist-${item.id}`} onClick={() => handleViewProposal(item)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                     <td className="py-0.5 pr-3 font-mono font-bold text-slate-900 whitespace-nowrap">{item.id}</td>
                     <td className="hidden md:table-cell py-0.5 pr-3 font-mono text-[11px] whitespace-nowrap">{item.date}</td>
-                    <td className="py-0.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">₹{item.total}</td>
-                    <td className="hidden sm:table-cell py-0.5 pr-3 font-mono text-slate-500 whitespace-nowrap">₹{item.discount}</td>
+                    <td className="py-0.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">{currencySymbol(item.currency)}{item.total}</td>
+                    <td className="hidden sm:table-cell py-0.5 pr-3 font-mono text-slate-500 whitespace-nowrap">{currencySymbol(item.currency)}{item.discount}</td>
                     <td className="hidden md:table-cell py-0.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.qtnBy || item.staff}>{item.qtnBy || item.staff}</td>
                     <td className="hidden lg:table-cell py-0.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.bdm || 'Husna'}>{item.bdm || 'Husna'}</td>
                     <td className="py-0.5 pr-3 whitespace-nowrap">
@@ -2233,7 +2238,7 @@ export default function Managequotation() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 pt-1">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Total (₹)
+                    Total ({currencySymbol(currencyVal)})
                   </label>
                   <input
                     type="text"
@@ -2254,7 +2259,7 @@ export default function Managequotation() {
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Discount (₹)
+                    Discount ({currencySymbol(currencyVal)})
                   </label>
                   <input
                     type="text"
@@ -2445,7 +2450,7 @@ export default function Managequotation() {
                           {quote.company}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-600">
-                          {quote.customer} • ₹{quote.netAmount}
+                          {quote.customer} • {currencySymbol(quote.currency)}{quote.netAmount}
                         </p>
                       </div>
                       <span
@@ -2580,7 +2585,7 @@ export default function Managequotation() {
                         {sendClientQuote.company}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-600">
-                        {sendClientQuote.customer} • ₹{sendClientQuote.netAmount}
+                        {sendClientQuote.customer} • {currencySymbol(sendClientQuote.currency)}{sendClientQuote.netAmount}
                       </p>
                     </div>
                     <span

@@ -161,6 +161,7 @@ export default function Login() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (loading) return
     setError('')
 
     if (!email.trim()) {

@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
-from .models import User
+from .models import Role, User
 
 
 def _next_staff_code():
@@ -59,9 +59,27 @@ def keep_staff_profile_in_sync(sender, instance, created, **kwargs):
             profile.save(update_fields=list(fields))
 
     old_name = getattr(instance, '_old_name', None)
-    if old_name and old_name != instance.name:
+    if old_name and old_name != instance.name and instance.company_id:
+        # Renames must never leak across companies: assignment/added-by/caller
+        # are stored as plain names that are only unique within one company, so
+        # scope every rewrite to the user's own tenant.
         from transactions.models import CallHistory, Lead
 
-        Lead.objects.filter(assigned_to=old_name).update(assigned_to=instance.name)
-        Lead.objects.filter(added_by=old_name).update(added_by=instance.name)
-        CallHistory.objects.filter(caller=old_name).update(caller=instance.name)
+        Lead.objects.filter(
+            tenant=instance.company, assigned_to=old_name
+        ).update(assigned_to=instance.name)
+        Lead.objects.filter(
+            tenant=instance.company, added_by=old_name
+        ).update(added_by=instance.name)
+        CallHistory.objects.filter(
+            caller=old_name, lead__tenant=instance.company
+        ).update(caller=instance.name)
+
+
+@receiver(post_save, sender=Role)
+def keep_staff_role_label_in_sync(sender, instance, **kwargs):
+    # Mirrored Staff.role stores the role *name* as a string; keep it in sync
+    # when a role is renamed so admin screens don't show stale labels.
+    from master.models import Staff
+
+    Staff.objects.filter(user__role=instance).update(role=instance.name)

@@ -292,11 +292,23 @@ class LeadVisibilityTests(APITestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_patch_reassign_to_unknown_staff_is_rejected(self):
-        self.client.force_authenticate(self.shanu)
+        # Managers hold the assign permission; unknown names are still rejected.
+        self.client.force_authenticate(self.manager)
         resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'assigned_to': 'Ghost User',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
+        self.lead = Lead.objects.get(id='TC-1')
+        self.assertEqual(self.lead.assigned_to, 'Shanu VR')
+
+    def test_staff_without_assign_permission_cannot_reassign(self):
+        # A plain staff member must not be able to move a lead to a colleague;
+        # reassignment is gated behind the assign permission.
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'assigned_to': 'Priya Sharma',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
         self.lead = Lead.objects.get(id='TC-1')
         self.assertEqual(self.lead.assigned_to, 'Shanu VR')
 
@@ -374,7 +386,7 @@ class LeadDuplicateScopingTests(APITestCase):
     def test_create_rejects_unknown_category(self):
         from master.models import Category
 
-        Category.objects.get_or_create(name='Hospital')
+        Category.objects.get_or_create(name='Hospital', company=self.manager.company)
         self.client.force_authenticate(self.manager)
         bad = self.client.post('/api/transactions/leads/', {
             'company': 'Some Co', 'category': 'Not A Category',
@@ -1526,4 +1538,106 @@ class ClientDetailAttachmentTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(Attachment.objects.filter(client_detail_id=resp.data['id']).count(), 0)
+
+
+class ClientDetailTenantIsolationTests(APITestCase):
+    def setUp(self):
+        self.acme = make_company('CD Acme')
+        self.globex = make_company('CD Globex')
+        self.mgr_a = User.objects.create_user(
+            email='cd@acme.com', password='x', name='CD A',
+            role=self.acme.roles.get(code='manager'), company=self.acme,
+        )
+        self.mgr_b = User.objects.create_user(
+            email='cd@globex.com', password='x', name='CD B',
+            role=self.globex.roles.get(code='manager'), company=self.globex,
+        )
+
+    def test_same_order_number_in_other_company_creates_own_record(self):
+        self.client.force_authenticate(self.mgr_a)
+        first = self.client.post('/api/transactions/client-details/', {
+            'orderNo': 'ORD-1', 'company': 'Alpha Co',
+        }, format='json')
+        self.assertEqual(first.status_code, 201)
+        first_id = first.data['id']
+
+        self.client.force_authenticate(self.mgr_b)
+        second = self.client.post('/api/transactions/client-details/', {
+            'orderNo': 'ORD-1', 'company': 'Beta Co',
+        }, format='json')
+        # Must create a brand-new record in company B, not overwrite company A's.
+        self.assertEqual(second.status_code, 201)
+        self.assertNotEqual(second.data['id'], first_id)
+        self.assertEqual(ClientDetail.objects.filter(order_no='ORD-1').count(), 2)
+
+        self.client.force_authenticate(self.mgr_a)
+        list_a = self.client.get('/api/transactions/client-details/')
+        self.assertEqual([r['id'] for r in list_a.data], [first_id])
+
+    def test_upsert_only_updates_own_company_record(self):
+        self.client.force_authenticate(self.mgr_a)
+        self.client.post('/api/transactions/client-details/', {
+            'orderNo': 'ORD-2', 'company': 'Alpha Co', 'notes': 'v1',
+        }, format='json')
+        # Re-post the same orderNo within the SAME company updates in place.
+        resp = self.client.post('/api/transactions/client-details/', {
+            'orderNo': 'ORD-2', 'company': 'Alpha Co', 'notes': 'v2',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(ClientDetail.objects.filter(order_no='ORD-2').count(), 1)
+        self.assertEqual(ClientDetail.objects.get(order_no='ORD-2').notes, 'v2')
+
+
+class QuotationWedgeRegressionTests(APITestCase):
+    def setUp(self):
+        company = make_company('WedgeCo')
+        self.manager = User.objects.create_user(
+            email='wg@wedge.com', password='x', name='Wedge A',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.lead = make_raw_lead(company, 'Wedge Ltd', assigned_to='Wedge A')
+        self.lead.status = Lead.STATUS_QUOTATION
+        self.lead.save(update_fields=['status', 'updated_at'])
+
+    def test_pending_approval_without_approvers_is_rejected(self):
+        # First create the proposal draft, then try to wedge it into approval.
+        self.client.force_authenticate(self.manager)
+        draft = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Prepared', 'customer': 'Wedge Ltd',
+        }, format='json')
+        self.assertEqual(draft.status_code, 200)
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Pending Approval',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_delete_quotation_with_existing_order_is_rejected(self):
+        self.client.force_authenticate(self.manager)
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Prepared', 'customer': 'Wedge Ltd',
+        }, format='json')
+        Order.objects.create(
+            id='O-WEDGE-1', lead_id=self.lead.id, company='Wedge Ltd',
+            tenant=self.manager.company, status='Pending',
+        )
+        resp = self.client.delete(f'/api/transactions/quotations/{self.lead.id}/')
+        self.assertEqual(resp.status_code, 400)
+        self.assertTrue(Quotation.objects.filter(lead_id=self.lead.id).exists())
+
+    def test_order_derived_from_lead_is_not_duplicated(self):
+        # Accepting two quotation versions for the same lead must yield only
+        # one order row (dedupe is per-lead).
+        from transactions.views import create_order_from_quotation
+
+        self.client.force_authenticate(self.manager)
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
+            'status': 'Prepared', 'customer': 'Wedge Ltd', 'total': '10000', 'netAmount': '10000',
+        }, format='json')
+        q1 = Quotation.objects.get(id=self.lead.id)
+        q1.status = 'Accepted'
+        q1.save(update_fields=['status'])
+        order1 = create_order_from_quotation(q1)
+        order2 = create_order_from_quotation(q1)
+        self.assertEqual(Order.objects.filter(lead_id=self.lead.id).count(), 1)
+        self.assertEqual(order1.id, order2.id)
 

@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import Layout from '../../Layout/Layout'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
+import { api } from '../../api/client'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import SendToClientModal from './SendToClientModal'
@@ -13,94 +14,63 @@ function wrappableHtml(html) {
   return String(html || '').replace(/&nbsp;/gi, ' ')
 }
 
-const DEFAULT_ORDER = {
-  id: 'P2025-0004',
-  orderDate: '12-12-2024',
-  proposalNo: 'P2026-0004',
-  proposalDate: '25-06-2026',
-  customerPerson: 'Karthika Nambeesan',
-  customerCompany: 'NAMBEESANS LAKSHMI LODGE',
-  customerPhone: '9447151442',
-  customerLocation: 'Thriprayar, Thrissur, Kerala',
-  email: '',
-  bdm: 'Husna',
-  proposalBy: 'Bincy',
-  orderSummaryHtml: `
-    <p>To,</p>
-    <p><strong>The Managing Director</strong><br/>
-    Nambeesans Lakshmi Lodge, Thriprayar, Thrissur</p>
-    <p><strong>Sub: - Website Redesign Quotation Nambeesans Lakshmi Lodge</strong></p>
-    <br/>
-    <p><strong>Domain + Server + SSL Cost</strong></p>
-    <p>Domian And Server Registration for one year Cost: Already registered<br/>
-       SSL Certificate Cost INR 3500: NA</p>
-    <br/>
-    <p><strong>Website Development – Static</strong></p>
-    <p>We propose to design and develop a professional, mobile-friendly website for Nambeesans Lakshmi Lodge.</p>
-    <br/>
-    <p><strong>Features Included:</strong></p>
-    <p>* Home Page<br/>
-       * About Us<br/>
-       * Facilities</p>
-  `,
-  termsSummaryHtml: `
-    <p><strong>1. Payment Terms:</strong> 50% non-refundable advance is required on signing. Remaining 50% must be paid before hosting, deployment, or handover. Payments via Bank Transfer or UPI only. Prices exclude GST. Delays over 7 days after completion may incur a 5% weekly late fee and withholding of launch. All fees paid are non-refundable.</p>
-    <p><strong>2. Renewals:</strong> Yearly hosting and domain fees will be charged as per the Order Form and may change with prior notice. Service period starts from domain registration date, regardless of launch. Renewal fees for Domain, SSL, and Server Space must be paid at least 30 days before expiry.</p>
-    <p><strong>3. Support:</strong> Provided via Email/WhatsApp, 10 AM–5 PM, Mon–Sat (excluding holidays). Covers bug fixes and server uptime only; no new features, design, or content updates without an AMC. After warranty, support requires a valid AMC or is charged hourly.</p>
-  `,
-  orderInDetailsHtml: `
-    <p>* Gallery<br/>
-       * Tariff<br/>
-       * Restaurants<br/>
-       * Contact Page</p>
-    <p>Restaurant page/section will be developed as a Dynamic page for easy image updates.</p>
-    <br/>
-    <p><strong>Pricing:</strong></p>
-    <p>Website Development: ₹20,000<br/>
-       Discount: ₹2,000<br/>
-       Final Amount: <strong>₹18,000</strong></p>
-    <br/>
-    <p><strong>Google Business Profile Management:</strong></p>
-    <p>Management of 2 Google Business Profiles including:</p>
-    <p>* Profile Updates<br/>
-       * Photo Uploads<br/>
-       * Review Monitoring<br/>
-       * Performance Optimization</p>
-    <p><strong>Monthly Charge: ₹5,000/month</strong></p>
-    <br/>
-    <p><strong>Terms &amp; Conditions:</strong> Continuous operational support with dedicated account manager.</p>
-  `,
-  legalTermsHtml: `
-    <p><strong>1. Payments &amp; Commercials: Payment Schedule:</strong> A non-refundable advance payment of 50% of the total project value must be made upon signing the contract/order form. The remaining 50% balance must be cleared in full before the final hosting, server deployment, or handover of the product. <strong>Mode of Payment:</strong> All payments must be made via Bank Transfer or UPI. <strong>Taxes:</strong> All mentioned prices are exclusive of applicable taxes (GST) unless specified otherwise. <strong>Delay in Payment:</strong> If the final payment is delayed by more than 7 days after the project completion notification, Programers International reserves the right to withhold the launch/handover and charge a late fee of 5% per week on the outstanding amount. <strong>No Refunds:</strong> Fees once paid (including advance payments and domain registration fees) are non-refundable.</p>
+function mapOrder(o) {
+  if (!o) {
+    return null
+  }
+  return {
+    id: o.id || '',
+    orderDate: o.date || '',
+    proposalNo: o.proposalNo || '',
+    proposalDate: o.proposalDate || '',
+    customerPerson: o.customer || '',
+    customerCompany: o.company || '',
+    customerPhone: o.mobile || '',
+    customerLocation: o.city || '',
+    email: o.email || '',
+    bdm: o.bdm || '',
+    proposalBy: o.proposalBy || o.staff || '',
+    total: o.total || '',
+    discount: o.discount || '',
+    net: o.netAmount || '',
+    orderSummaryHtml: o.scope || '',
+    orderInDetailsHtml: o.details || '',
+    termsSummaryHtml: o.termsSummaryHtml || '',
+    legalTermsHtml: o.termsFullHtml || '',
+    status: o.status || 'Pending',
+    clientStatus: o.clientStatus || '',
+    clientRespondedAt: o.clientRespondedAt || '',
+    clientToken: o.clientToken || '',
+    currency: o.currency || '',
+    clientLink: clientOrderLink(o.clientToken),
+    orderBarcode: orderBarcodeValue(o.id),
+  }
+}
 
-    <p><strong>2. Renewals (Hosting &amp; Domain): Billing Cycle:</strong> Yearly renewal fees (Yearly Rent) will be charged as per the rates mentioned in the Order Form. Rates are subject to revision with prior notice. <strong>Service Period:</strong> The service period for server space and domain validity commences from the date of domain registration, regardless of the actual website launch or hosting date. <strong>Payment Deadline:</strong> Renewal charges (covering Domain, SSL, and Server Space) must be paid at least 30 days prior to the expiry date. <strong>Lapse of Service:</strong> Programers International is not responsible for the loss of any domain name, email data, or website content if the renewal payment is not made within the stipulated time. Restoration of expired domains (if possible) may incur high redemption fees payable by the Client.</p>
+function formatStamp(iso) {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toISOString().replace('T', ' ').replace('Z', '')
+  } catch {
+    return iso
+  }
+}
 
-    <p><strong>3. Support &amp; Maintenance: Channels &amp; Hours:</strong> Support is provided via Email and WhatsApp for troubleshooting software/web issues. Support hours are 10:00 AM to 5:00 PM, Monday through Saturday (excluding public holidays). <strong>Scope of Support:</strong> Support covers bug fixes and server uptime issues only. It does not cover feature additions, design changes, or content updates unless a separate Annual Maintenance Contract (AMC) is signed. <strong>AMC Requirement:</strong> Post-warranty support is strictly subject to a valid ALC/AMC (Annual Maintenance Contract). Without an AMC, support will be charged on an hourly basis.</p>
+function orderBarcodeValue(id) {
+  const digits = String(id || '').replace(/\D/g, '')
+  return (digits || id).slice(0, 14)
+}
 
-    <p><strong>4. Scope of Work &amp; Variations: Project Scope:</strong> The project will be executed strictly according to the feature list/sitemap approved in the initial agreement. <strong>Change Requests:</strong> Any additions, changes to the design, or new feature requests made after the project has commenced will be considered "Out of Scope" and will be billed additionally. <strong>Client Deliverables:</strong> The Client must provide all necessary content (text, images, logos) within the agreed timeframe. Delays in providing content will result in a delay in the project delivery date, for which the Company is not liable.</p>
-
-    <p><strong>5. Intellectual Property &amp; Ownership: Ownership:</strong> Full ownership of the final website/software code is transferred to the Client only upon the full realization of all pending payments. Until then, the code remains the property of Programers International. <strong>Company Rights:</strong> Programers International reserves the right to place a small credit link ("Designed/Developed by Programers International") in the footer of the website unless explicitly negotiated otherwise. <strong>Source Code:</strong> Unless specifically mentioned in the Order Form, the "Source Code" for proprietary software products belongs to Programers International; the Client is granted a license to use it.</p>
-
-    <p><strong>6. Client Responsibilities &amp; Content Liability: Legality:</strong> The Client is solely responsible for the content (text, images, media) hosted on the website. Programers International is not liable for any copyright infringement, trademark violations, or illegal content posted by the Client. <strong>Prohibited Use:</strong> The Client shall not use the server for spamming, hosting malicious software, or illegal activities. Such actions will result in immediate termination of services without refund.</p>
-
-    <p><strong>7. Limitation of Liability: Data Loss:</strong> While the Company takes standard measures to ensure server stability, Programers International shall not be held liable for any data loss, database corruption, or business loss due to hacking, server failure, or unforeseen technical issues. The Client is advised to maintain their own local backups. <strong>Maximum Liability:</strong> In any event, the Company's total liability shall be limited to the value of the specific service fee paid by the Client for that month/year.</p>
-
-    <p><strong>8. Termination:</strong> Programers International reserves the right to terminate the contract and suspend services immediately if the Client breaches these terms, fails to make payments, or engages in abusive behavior towards the Company's staff.</p>
-
-    <p><strong>9. Jurisdiction:</strong> Any disputes arising out of this agreement shall be subject to the exclusive jurisdiction of the courts located in the city of Thrissur, Kerala, India where the Programers International's registered office is situated.</p>
-  `,
-  total: '50000/-',
-  discount: '5000/-',
-  net: '45,000.00/-',
-  amountWords: 'FORTY-FIVE THOUSAND ONLY',
-  status: 'Pending',
+function clientOrderLink(clientToken) {
+  if (!clientToken) return ''
+  return `${window.location.origin}/order/${clientToken}`
 }
 
 function QRCodeVisual({ value }) {
   return (
     <div className="flex h-full w-full items-center justify-center bg-white p-0.5">
       <QRCodeSVG
-        value={value || 'https://leads.programersapps.com/orders/verify/P2025-0004'}
+        value={value || 'NO-LINK'}
         size={84}
         level="H"
         fgColor="#000000"
@@ -131,7 +101,7 @@ function PageHeader({ order, annexLabel }) {
         <ProgramersLogo />
         <div className="pt-0.5">
           <Barcode
-            value="6780611629"
+            value={order.orderBarcode}
             format="CODE128"
             width={1.8}
             height={26}
@@ -178,7 +148,7 @@ function PageHeader({ order, annexLabel }) {
 
         <div className="flex flex-col items-center">
           <div className="h-16 w-16 overflow-hidden rounded border border-black bg-white p-0.5">
-            <QRCodeVisual value={`https://leads.programersapps.com/orders/${order.id}`} />
+            <QRCodeVisual value={order.clientLink} />
           </div>
           <span className="mt-1 text-[10px] font-black uppercase tracking-wider text-black">
             {annexLabel}
@@ -219,9 +189,11 @@ function FinancialBanner({ order }) {
           Net: <span className="font-mono">{order.net}</span>
         </div>
       </div>
-      <div className="mt-1.5 border-t border-slate-300 pt-1 text-center text-[12px] font-black uppercase tracking-widest text-black">
-        {order.amountWords}
-      </div>
+      {order.amountWords ? (
+        <div className="mt-1.5 border-t border-slate-300 pt-1 text-center text-[12px] font-black uppercase tracking-widest text-black">
+          {order.amountWords}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -239,42 +211,68 @@ function PageFooter() {
   )
 }
 
-function SignatureBlock({ customerCompany, orderId }) {
+function SignatureCell({ title, statusTone, badge, company, stamp, children }) {
+  return (
+    <div className="col-span-5 rounded-md border border-black bg-white p-2">
+      <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
+        {title}
+      </div>
+      <div className="mt-1 text-[11px]">
+        <p className={`font-bold flex items-center gap-1 ${statusTone}`}>
+          {badge}
+        </p>
+        {company ? (
+          <p className="text-slate-800 font-semibold mt-0.5">{company}</p>
+        ) : null}
+        {stamp ? (
+          <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">{stamp}</p>
+        ) : null}
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function SignatureBlock({ order }) {
+  const accepted = order.clientStatus === 'Accepted'
+  const declined = order.clientStatus === 'Declined'
+  const decided = accepted || declined
+  const respondedStamp = order.clientRespondedAt
+    ? `Date: ${formatStamp(order.clientRespondedAt)}`
+    : ''
   return (
     <div className="grid grid-cols-12 gap-2">
-      <div className="col-span-5 rounded-md border border-black bg-white p-2">
-        <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
-          Approved By
-        </div>
-        <div className="mt-1 text-[11px]">
-          <p className="font-bold text-emerald-700 flex items-center gap-1">
-            <span>Signature valid</span>
-            <span className="text-sm">✔</span>
+      <SignatureCell
+        title="Approved By"
+        statusTone={decided ? 'text-emerald-700' : 'text-slate-400'}
+        badge={decided ? <><span>Signed &amp; recorded</span><span className="text-sm">✔</span></> : <span>Awaiting signature</span>}
+        company={decided ? 'Programers International' : ''}
+        stamp={decided ? respondedStamp : ''}
+      >
+        {!decided && (
+          <p className="text-slate-400 text-[9.5px] mt-0.5">
+            Signature is recorded once the client responds to this order form.
           </p>
-          <p className="text-slate-800 font-semibold mt-0.5">Programers International</p>
-          <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
-          <p className="text-slate-500 text-[9.5px]">Location: Thrissur</p>
-        </div>
-      </div>
+        )}
+      </SignatureCell>
 
-      <div className="col-span-5 rounded-md border border-black bg-white p-2">
-        <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
-          Accepted By
-        </div>
-        <div className="mt-1 text-[11px]">
-          <p className="font-bold text-emerald-700 flex items-center gap-1">
-            <span>Signature valid</span>
-            <span className="text-sm">✔</span>
-          </p>
-          <p className="text-slate-800 font-semibold mt-0.5">{customerCompany}</p>
-          <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">Date: 2026.04.18 08:22:30 +00:00</p>
-          <p className="text-slate-500 text-[9.5px]">Location: KOCHI</p>
-        </div>
-      </div>
+      <SignatureCell
+        title="Accepted By"
+        statusTone={accepted ? 'text-emerald-700' : declined ? 'text-rose-600' : 'text-slate-400'}
+        badge={
+          accepted
+            ? <><span>Signature valid</span><span className="text-sm">✔</span></>
+            : declined
+              ? <span>Client declined this order</span>
+              : <span>Awaiting client acceptance</span>
+        }
+        company={accepted || declined ? order.customerCompany : ''}
+        stamp={decided ? respondedStamp : ''}
+      />
 
       <div className="col-span-2 flex items-center justify-center rounded-md border border-black bg-white p-1">
         <div className="h-[72px] w-[72px]">
-          <QRCodeVisual value={`https://leads.programersapps.com/orders/${orderId}`} />
+          <QRCodeVisual value={order.clientLink} />
         </div>
       </div>
     </div>
@@ -284,37 +282,36 @@ function SignatureBlock({ customerCompany, orderId }) {
 export default function OrderPreview() {
   const navigate = useNavigate()
   const location = useLocation()
+  const params = useParams()
   const { user } = useAuth()
   const canSendToClient = !!user && (can(user, 'order.edit') || user.is_superuser)
 
-  const [orderData, setOrderData] = useState(() => {
-    if (location.state?.order) {
-      const o = location.state.order
-      return {
-        ...DEFAULT_ORDER,
-        id: o.id || DEFAULT_ORDER.id,
-        orderDate: o.date || DEFAULT_ORDER.orderDate,
-        proposalNo: o.proposalNo || DEFAULT_ORDER.proposalNo,
-        proposalDate: o.proposalDate || DEFAULT_ORDER.proposalDate,
-        customerPerson: o.customer || DEFAULT_ORDER.customerPerson,
-        customerCompany: o.company || DEFAULT_ORDER.customerCompany,
-        customerPhone: o.mobile || DEFAULT_ORDER.customerPhone,
-        customerLocation: o.city || DEFAULT_ORDER.customerLocation,
-        email: o.email || DEFAULT_ORDER.email,
-        bdm: o.bdm || DEFAULT_ORDER.bdm,
-        proposalBy: o.proposalBy || DEFAULT_ORDER.proposalBy,
-        total: o.total || DEFAULT_ORDER.total,
-        discount: o.discount || DEFAULT_ORDER.discount,
-        net: o.netAmount || DEFAULT_ORDER.net,
-        orderSummaryHtml: o.scope || DEFAULT_ORDER.orderSummaryHtml,
-        orderInDetailsHtml: o.details || DEFAULT_ORDER.orderInDetailsHtml,
-        termsSummaryHtml: o.termsSummaryHtml || DEFAULT_ORDER.termsSummaryHtml,
-        legalTermsHtml: o.termsFullHtml || DEFAULT_ORDER.legalTermsHtml,
-        status: o.status || DEFAULT_ORDER.status,
+  const [orderData, setOrderData] = useState(() =>
+    location.state?.order ? mapOrder(location.state.order) : null
+  )
+  const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.order)
+  const [notFound, setNotFound] = useState(false)
+
+  // If we arrived without navigation state (refresh, direct link, notification
+  // click), load the real order by its id from the backend.
+  useEffect(() => {
+    if (orderData || !params.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get(`/transactions/orders/${encodeURIComponent(params.id)}/`)
+        if (!cancelled) setOrderData(data ? mapOrder(data) : null)
+        if (!cancelled && !data) setNotFound(true)
+      } catch {
+        if (!cancelled) setNotFound(true)
+      } finally {
+        if (!cancelled) setLoadingQuote(false)
       }
+    })()
+    return () => {
+      cancelled = true
     }
-    return DEFAULT_ORDER
-  })
+  }, [params.id, orderData])
 
   const [sendClientOpen, setSendClientOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -327,17 +324,17 @@ export default function OrderPreview() {
   }
 
   const sendTarget = {
-    id: orderData.id,
-    customer: orderData.customerPerson,
-    company: orderData.customerCompany,
-    mobile: orderData.customerPhone,
-    email: orderData.email,
-    netAmount: orderData.net,
-    status: orderData.status,
+    id: orderData?.id || '',
+    customer: orderData?.customerPerson || '',
+    company: orderData?.customerCompany || '',
+    mobile: orderData?.customerPhone || '',
+    email: orderData?.email || '',
+    netAmount: orderData?.net || '',
+    status: orderData?.status || '',
   }
 
   function handleOrderSent(updated) {
-    setOrderData((prev) => ({ ...prev, ...updated }))
+    setOrderData((prev) => ({ ...(prev || {}), ...mapOrder(updated || {}) }))
   }
 
   const approvedRowRef = useRef(null)
@@ -352,6 +349,39 @@ export default function OrderPreview() {
   const termsSummaryPaged = usePagedContent(termsSummaryContentRef, approvedRowRef, [], 48)
   const detailsPaged = usePagedContent(detailsContentRef, page2FooterRef, [], 64)
   const legalPaged = usePagedContent(legalTermsContentRef, page3FooterRef, [page3SigRef], 64)
+
+  if (loadingQuote) {
+    return (
+      <Layout>
+        <div className="flex h-64 items-center justify-center text-sm font-semibold text-slate-500">
+          Loading order form…
+        </div>
+      </Layout>
+    )
+  }
+
+  if (notFound || !orderData) {
+    return (
+      <Layout>
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => navigate('/orders')}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-100 transition cursor-pointer"
+          >
+            <span>←</span>
+            <span>Back to Orders</span>
+          </button>
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xs">
+            <p className="text-sm font-bold text-slate-800">Order not found</p>
+            <p className="mt-1 text-xs text-slate-500">
+              This order does not exist or you do not have permission to view it.
+            </p>
+          </div>
+        </div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>
@@ -505,37 +535,40 @@ export default function OrderPreview() {
 
               {/* Bottom 2-Box Row: Approved By | Accepted By */}
               <div ref={approvedRowRef} className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                {/* Box 1: Approved By */}
-                <div className="rounded-md border border-black bg-white p-2 text-black flex flex-col justify-between">
-                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11.5px] font-bold uppercase text-white mb-1.5">
-                    Approved By
-                  </div>
-                  <div className="space-y-1">
-                    <p className="font-bold text-emerald-700 flex items-center gap-1">
-                      <span>Signature valid</span>
-                      <span className="text-sm">✔</span>
-                    </p>
-                    <p className="text-[10.5px] text-slate-800">Digitally signed by <strong>Programers International</strong></p>
-                    <p className="font-mono text-[9.5px] text-slate-500">Date: 2026.04.18 08:22:30 +00:00</p>
-                    <p className="text-slate-500 text-[9.5px]">Location: Thrissur</p>
-                  </div>
-                </div>
-
-                {/* Box 2: Accepted By */}
-                <div className="rounded-md border border-black bg-white p-2 text-black flex flex-col justify-between">
-                  <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11.5px] font-bold uppercase text-white mb-1.5">
-                    Accepted By
-                  </div>
-                  <div className="space-y-1">
-                    <p className="font-bold text-emerald-700 flex items-center gap-1">
-                      <span>Signature valid</span>
-                      <span className="text-sm">✔</span>
-                    </p>
-                    <p className="text-[10.5px] text-slate-800">Digitally signed by <strong>{orderData.customerCompany}</strong></p>
-                    <p className="font-mono text-[9.5px] text-slate-500">Date: 2026.04.18 08:22:30 +00:00</p>
-                    <p className="text-slate-500 text-[9.5px]">Location: KOCHI</p>
-                  </div>
-                </div>
+                <SignatureCell
+                  title="Approved By"
+                  statusTone={orderData.clientStatus ? 'text-emerald-700' : 'text-slate-400'}
+                  badge={
+                    orderData.clientStatus
+                      ? <><span>Signed &amp; recorded</span><span className="text-sm">✔</span></>
+                      : <span>Awaiting signature</span>
+                  }
+                  company={orderData.clientStatus ? 'Programers International' : ''}
+                  stamp={orderData.clientRespondedAt ? `Date: ${formatStamp(orderData.clientRespondedAt)}` : ''}
+                />
+                <SignatureCell
+                  title="Accepted By"
+                  statusTone={
+                    orderData.clientStatus === 'Accepted'
+                      ? 'text-emerald-700'
+                      : orderData.clientStatus === 'Declined'
+                        ? 'text-rose-600'
+                        : 'text-slate-400'
+                  }
+                  badge={
+                    orderData.clientStatus === 'Accepted'
+                      ? <><span>Signature valid</span><span className="text-sm">✔</span></>
+                      : orderData.clientStatus === 'Declined'
+                        ? <span>Client declined this order</span>
+                        : <span>Awaiting client acceptance</span>
+                  }
+                  company={
+                    orderData.clientStatus === 'Accepted' || orderData.clientStatus === 'Declined'
+                      ? orderData.customerCompany
+                      : ''
+                  }
+                  stamp={orderData.clientRespondedAt ? `Date: ${formatStamp(orderData.clientRespondedAt)}` : ''}
+                />
               </div>
             </div>
 
@@ -619,7 +652,7 @@ export default function OrderPreview() {
                 {/* Final Signatures & QR Block — only on the last page (page 3 when nothing continues) */}
                 <div ref={page3SigRef} className="mt-2.5">
                   {!legalPaged.part2Html && (
-                    <SignatureBlock customerCompany={orderData.customerCompany} orderId={orderData.id} />
+<SignatureBlock order={orderData} />
                   )}
                 </div>
               </div>
@@ -675,7 +708,7 @@ export default function OrderPreview() {
               pageHeader={<PageHeader order={orderData} annexLabel="ANNEXURE - A (2/2)" />}
               pageFooter={<PageFooter />}
               continueNote={false}
-              endBlock={<SignatureBlock customerCompany={orderData.customerCompany} orderId={orderData.id} />}
+              endBlock={<SignatureBlock order={orderData} />}
             />
           )}
         </div>

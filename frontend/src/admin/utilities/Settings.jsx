@@ -410,15 +410,7 @@ export default function Settings() {
       const fd = new FormData()
       fd.append('logo', logoFile)
       if (confirm) fd.append('confirm', '1')
-      const res = await fetch('/api/auth/company/logo/', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('leads_access') || sessionStorage.getItem('leads_access')}` },
-        body: fd,
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok) {
-        throw new Error(data?.detail || `Upload failed (${res.status})`)
-      }
+      const data = await api.post('/auth/company/logo/', fd)
       if (data?.status === 'warning') {
         setLogoWarning(data)
         return

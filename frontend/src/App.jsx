@@ -62,7 +62,6 @@ function App() {
         <Route path="/telecalling-register" element={guard(<TelecalligRegister />, { perm: 'reports.view' })} />
         <Route path="/quotation-submitted-register" element={guard(<QuotationRegister />, { perm: 'reports.view' })} />
         <Route path="/order-received-register" element={guard(<OrderReceived />, { perm: 'reports.view' })} />
-        <Route path="/order-received" element={guard(<OrderReceived />, { perm: 'reports.view' })} />
         <Route path="/settings" element={guard(<Settings />)} />
         <Route path="/notifications" element={guard(<Notifications />)} />
         <Route path="/admins" element={guard(<Admins />, { superAdminOnly: true })} />

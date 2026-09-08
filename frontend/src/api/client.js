@@ -44,13 +44,31 @@ async function refreshAccessToken() {
 
   refreshPromise = (async () => {
     const { refresh } = getStoredTokens()
-    if (!refresh) throw new Error('No refresh token available')
-    const res = await fetch(`${API_BASE}/auth/token/refresh/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh }),
-    })
-    if (!res.ok) throw new Error('Token refresh failed')
+    if (!refresh) {
+      const err = new Error('No refresh token available')
+      err.isInvalid = true
+      throw err
+    }
+    let res
+    try {
+      res = await fetch(`${API_BASE}/auth/token/refresh/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh }),
+      })
+    } catch {
+      // Network failure / server unreachable: the session is still valid,
+      // do not treat this as session expiry.
+      throw new Error('Unable to reach the server while refreshing your session.')
+    }
+    if (res.status === 400 || res.status === 401) {
+      const err = new Error('Token refresh failed')
+      err.isInvalid = true
+      throw err
+    }
+    if (!res.ok) {
+      throw new Error('Token refresh failed')
+    }
     const data = await res.json()
     const storage = currentStorage()
     storage.setItem(ACCESS_KEY, data.access)
@@ -97,9 +115,11 @@ async function request(path, { method = 'GET', body, headers = {}, auth = true, 
   }
   const config = {
     method,
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: { ...headers },
   }
-  if (body !== undefined) config.body = JSON.stringify(body)
+  const isForm = body instanceof FormData
+  if (!isForm) config.headers['Content-Type'] = 'application/json'
+  if (body !== undefined) config.body = isForm ? body : JSON.stringify(body)
 
   const { access, refresh } = getStoredTokens()
   if (auth && access) config.headers.Authorization = `Bearer ${access}`
@@ -107,11 +127,29 @@ async function request(path, { method = 'GET', body, headers = {}, auth = true, 
   let res = await fetch(url, config)
 
   if (res.status === 401 && auth && refresh) {
+    let newAccess
     try {
-      const newAccess = await refreshAccessToken()
-      config.headers.Authorization = `Bearer ${newAccess}`
-      res = await fetch(url, config)
-    } catch {
+      newAccess = await refreshAccessToken()
+    } catch (refreshErr) {
+      // Only an invalid/expired refresh token means the session is really over.
+      // Network problems or server errors must NOT clear a still-valid session.
+      if (refreshErr.isInvalid) {
+        clearAuth()
+        onAuthFailure?.()
+      }
+      throw new ApiError(
+        refreshErr.isInvalid
+          ? 'Your session has expired. Please sign in again.'
+          : 'Unable to reach the server. Your session is still valid — please try again.',
+        401
+      )
+    }
+    config.headers.Authorization = `Bearer ${newAccess}`
+    res = await fetch(url, config)
+    if (res.status === 401) {
+      // Refresh succeeded but the request is still rejected: the session is
+      // genuinely dead (e.g. user disabled). Log out rather than leaving a
+      // half-alive session.
       clearAuth()
       onAuthFailure?.()
       throw new ApiError('Your session has expired. Please sign in again.', 401)

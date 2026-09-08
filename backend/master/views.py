@@ -12,15 +12,25 @@ from .models import Branch, Category, Source
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    company = serializers.SerializerMethodField()
+
     class Meta:
         model = Category
-        fields = ['id', 'code', 'name']
+        fields = ['id', 'code', 'name', 'company']
+
+    def get_company(self, obj):
+        return obj.company.name if obj.company else ''
 
 
 class SourceSerializer(serializers.ModelSerializer):
+    company = serializers.SerializerMethodField()
+
     class Meta:
         model = Source
-        fields = ['id', 'code', 'name']
+        fields = ['id', 'code', 'name', 'company']
+
+    def get_company(self, obj):
+        return obj.company.name if obj.company else ''
 
 
 class BranchSerializer(serializers.ModelSerializer):
@@ -42,29 +52,44 @@ def generate_branch_code(name):
         candidate = f'{base}{random.randint(10, 99)}'
         if candidate not in existing:
             return candidate
-    return f'{base}{random.randint(100, 999)}'
+    while True:
+        candidate = f'{base}{random.randint(100, 999)}'
+        if candidate not in existing:
+            return candidate
 
 
-def generate_category_code(name):
+def generate_category_code(name, company=None):
     prefix = re.sub(r'[^A-Za-z]', '', name)[:2].upper() or 'CT'
     base = f'{prefix}'
-    existing = set(Category.objects.filter(code__startswith=base).values_list('code', flat=True))
+    qs = Category.objects.all()
+    if company is not None:
+        qs = qs.filter(company=company)
+    existing = set(qs.filter(code__startswith=base).values_list('code', flat=True))
     for _ in range(100):
         candidate = f'{base}{random.randint(10, 99)}'
         if candidate not in existing:
             return candidate
-    return f'{base}{random.randint(100, 999)}'
+    while True:
+        candidate = f'{base}{random.randint(100, 999)}'
+        if candidate not in existing:
+            return candidate
 
 
-def generate_source_code(name):
+def generate_source_code(name, company=None):
     prefix = re.sub(r'[^A-Za-z]', '', name)[:2].upper() or 'SC'
     base = f'{prefix}'
-    existing = set(Source.objects.filter(code__startswith=base).values_list('code', flat=True))
+    qs = Source.objects.all()
+    if company is not None:
+        qs = qs.filter(company=company)
+    existing = set(qs.filter(code__startswith=base).values_list('code', flat=True))
     for _ in range(100):
         candidate = f'{base}{random.randint(10, 99)}'
         if candidate not in existing:
             return candidate
-    return f'{base}{random.randint(100, 999)}'
+    while True:
+        candidate = f'{base}{random.randint(100, 999)}'
+        if candidate not in existing:
+            return candidate
 
 
 class BranchListView(APIView):
@@ -174,8 +199,14 @@ class BranchDetailView(APIView):
 class CategoryListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def _scoped(self, request):
+        qs = Category.objects.all()
+        if not getattr(request.user, 'is_superuser', False):
+            qs = qs.filter(company=request.user.company)
+        return qs
+
     def get(self, request):
-        categories = Category.objects.all().order_by('name')
+        categories = self._scoped(request).order_by('name')
         return Response(CategorySerializer(categories, many=True).data)
 
     def post(self, request):
@@ -184,20 +215,27 @@ class CategoryListView(APIView):
                 {'detail': 'You do not have permission to create categories.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        company = getattr(request.user, 'company', None)
+        if company is None:
+            return Response(
+                {'detail': 'A company is required to create a category.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         name = request.data.get('name', '').strip()
         if not name:
             return Response(
                 {'detail': 'name: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if Category.objects.filter(name__iexact=name).exists():
+        if Category.objects.filter(company=company, name__iexact=name).exists():
             return Response(
-                {'detail': f'name: A category named "{name}" already exists.'},
+                {'detail': f'name: A category named "{name}" already exists in this company.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         category = Category.objects.create(
+            company=company,
             name=name,
-            code=generate_category_code(name),
+            code=generate_category_code(name, company),
         )
         return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
 
@@ -206,8 +244,11 @@ class CategoryDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
+        qs = Category.objects.all()
+        if not getattr(self.request.user, 'is_superuser', False):
+            qs = qs.filter(company=self.request.user.company)
         try:
-            return Category.objects.get(pk=pk)
+            return qs.get(pk=pk)
         except Category.DoesNotExist:
             return None
 
@@ -229,10 +270,10 @@ class CategoryDetailView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if name.lower() != category.name.lower() and Category.objects.filter(
-                name__iexact=name
+                company=category.company, name__iexact=name
             ).exclude(pk=category.pk).exists():
                 return Response(
-                    {'detail': f'name: A category named "{name}" already exists.'},
+                    {'detail': f'name: A category named "{name}" already exists in this company.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             category.name = name
@@ -261,8 +302,14 @@ class CategoryDetailView(APIView):
 class SourceListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def _scoped(self, request):
+        qs = Source.objects.all()
+        if not getattr(request.user, 'is_superuser', False):
+            qs = qs.filter(company=request.user.company)
+        return qs
+
     def get(self, request):
-        sources = Source.objects.all().order_by('name')
+        sources = self._scoped(request).order_by('name')
         return Response(SourceSerializer(sources, many=True).data)
 
     def post(self, request):
@@ -271,20 +318,27 @@ class SourceListView(APIView):
                 {'detail': 'You do not have permission to create sources.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        company = getattr(request.user, 'company', None)
+        if company is None:
+            return Response(
+                {'detail': 'A company is required to create a source.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         name = request.data.get('name', '').strip()
         if not name:
             return Response(
                 {'detail': 'name: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if Source.objects.filter(name__iexact=name).exists():
+        if Source.objects.filter(company=company, name__iexact=name).exists():
             return Response(
-                {'detail': f'name: A source named "{name}" already exists.'},
+                {'detail': f'name: A source named "{name}" already exists in this company.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         source = Source.objects.create(
+            company=company,
             name=name,
-            code=generate_source_code(name),
+            code=generate_source_code(name, company),
         )
         return Response(SourceSerializer(source).data, status=status.HTTP_201_CREATED)
 
@@ -293,8 +347,11 @@ class SourceDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
+        qs = Source.objects.all()
+        if not getattr(self.request.user, 'is_superuser', False):
+            qs = qs.filter(company=self.request.user.company)
         try:
-            return Source.objects.get(pk=pk)
+            return qs.get(pk=pk)
         except Source.DoesNotExist:
             return None
 
@@ -316,10 +373,10 @@ class SourceDetailView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if name.lower() != source.name.lower() and Source.objects.filter(
-                name__iexact=name
+                company=source.company, name__iexact=name
             ).exclude(pk=source.pk).exists():
                 return Response(
-                    {'detail': f'name: A source named "{name}" already exists.'},
+                    {'detail': f'name: A source named "{name}" already exists in this company.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             source.name = name

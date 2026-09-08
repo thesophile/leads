@@ -27,6 +27,7 @@ export default function Register() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (loading) return
     setError('')
 
     if (!company.trim()) {

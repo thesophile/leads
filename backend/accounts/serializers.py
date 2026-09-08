@@ -242,6 +242,43 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         role = attrs.get('role')
         if role is not None and role.is_system:
             raise serializers.ValidationError({'role': 'The system admin role cannot be assigned here.'})
+
+        request = self.context.get('request')
+        actor = request.user if request else None
+        target = self.instance
+
+        # The company's system-admin account is protected: only the admin
+        # themselves (or a platform superuser) may edit it, and never deactivate
+        # it. This prevents a manager from demoting/locking out the admin.
+        if target is not None and target.pk and target.role_id and target.role.is_system:
+            can_edit_admin = actor is not None and (
+                actor.is_superuser or actor.pk == target.pk
+            )
+            if not can_edit_admin:
+                raise serializers.ValidationError(
+                    {'detail': 'The company admin account cannot be edited by another staff member.'}
+                )
+            if attrs.get('is_active') is False and not (actor and actor.is_superuser):
+                raise serializers.ValidationError(
+                    {'detail': 'The company admin account cannot be deactivated.'}
+                )
+
+        # Block deactivating a staff member who still owns working leads;
+        # leads must be reassigned first so they are not orphaned.
+        if attrs.get('is_active') is False and target is not None and target.pk:
+            from transactions.models import Lead
+
+            owns_leads = Lead.objects.filter(
+                tenant=target.company,
+                assigned_to=target.name,
+            ).exclude(status='client').exists()
+            if owns_leads:
+                raise serializers.ValidationError(
+                    {'detail': (
+                        f'{target.name} still has assigned leads. '
+                        'Reassign those leads before deactivating this account.'
+                    )}
+                )
         return attrs
 
     def update(self, instance, validated_data):

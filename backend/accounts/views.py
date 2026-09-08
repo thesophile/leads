@@ -123,6 +123,14 @@ class StaffDetailView(APIView):
         user = self.get_object(pk)
         if user is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        # Belt-and-braces guard for the protected system-admin account.
+        if user.role_id and user.role.is_system and not (
+            request.user.is_superuser or request.user.pk == user.pk
+        ):
+            return Response(
+                {'detail': 'The company admin account cannot be edited by another staff member.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = StaffUpdateSerializer(user, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -139,6 +147,15 @@ class StaffResetPasswordView(APIView):
             user = User.objects.get(pk=pk, company=request.user.company)
         except User.DoesNotExist:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        # Password-reset can escalate to full admin; protect the system-admin
+        # account from being reset by a lesser staff role.
+        if user.role_id and user.role.is_system and not (
+            request.user.is_superuser or request.user.pk == user.pk
+        ):
+            return Response(
+                {'detail': 'The company admin account password cannot be reset by another staff member.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = PasswordResetByAdminSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user.set_password(serializer.validated_data['new_password'])
@@ -336,10 +353,21 @@ class SuperuserAdminResetPasswordView(APIView):
     permission_classes = [IsSuperuser]
 
     def post(self, request, pk):
+        if pk == str(request.user.pk):
+            return Response(
+                {'detail': 'Use the Change Password screen for your own password.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             user = User.objects.get(pk=pk)
         except User.DoesNotExist:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        # A platform superuser must not be able to reset a peer's password.
+        if user.is_superuser:
+            return Response(
+                {'detail': 'Platform superadmin accounts cannot be reset here.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = PasswordResetByAdminSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user.set_password(serializer.validated_data['new_password'])

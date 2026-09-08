@@ -231,6 +231,132 @@ class StaffRenamePropagationTests(APITestCase):
         self.assertEqual(profile.email, self.staff.email)
 
 
+class StaffRenameCrossTenantIsolationTests(APITestCase):
+    def setUp(self):
+        from transactions.models import Lead
+
+        acme = make_company('Acme')
+        globex = make_company('Globex')
+        self.admin_a = User.objects.create_user(
+            email='admin_a@acme.com', password='x', name='Admin A',
+            role=admin_role(acme), company=acme,
+        )
+        # Both tenants have an employee named "Shanu VR" with their own leads.
+        self.shanu_a = User.objects.create_user(
+            email='shanu@acme.com', password='x', name='Shanu VR', company=acme,
+        )
+        self.shanu_b = User.objects.create_user(
+            email='shanu@globex.com', password='x', name='Shanu VR', company=globex,
+        )
+        self.lead_a = Lead.objects.create(
+            id='RL-1', company='Hospital One', assigned_to='Shanu VR',
+            added_by='Shanu VR', tenant=acme,
+        )
+        self.lead_b = Lead.objects.create(
+            id='RL-2', company='Clinic Two', assigned_to='Shanu VR',
+            added_by='Shanu VR', tenant=globex,
+        )
+
+    def test_rename_in_one_company_does_not_touch_another(self):
+        self.client.force_authenticate(self.admin_a)
+        resp = self.client.patch(f'/api/auth/users/{self.shanu_a.pk}/', {
+            'name': 'Shanu Kumar',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.lead_a.refresh_from_db()
+        self.lead_b.refresh_from_db()
+        self.assertEqual(self.lead_a.assigned_to, 'Shanu Kumar')
+        # The other tenant's identical-name employee must be left untouched.
+        self.assertEqual(self.lead_b.assigned_to, 'Shanu VR')
+
+
+class StaffAdminProtectionTests(APITestCase):
+    def setUp(self):
+        company = make_company('Acme')
+        self.admin = User.objects.create_user(
+            email='admin@acme.com', password='x', name='Admin A',
+            role=admin_role(company), company=company,
+        )
+        self.manager = User.objects.create_user(
+            email='mgr@acme.com', password='x', name='Manager A',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@acme.com', password='x', name='Staff A', company=company,
+        )
+
+    def test_manager_cannot_deactivate_the_admin(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.admin.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_manager_cannot_rename_the_admin(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.admin.pk}/', {
+            'name': 'Hijacked',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_manager_cannot_reset_the_admin_password(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            f'/api/auth/users/{self.admin.pk}/reset-password/',
+            {'new_password': 'Hacked123!'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.admin.refresh_from_db()
+        self.assertFalse(self.admin.check_password('Hacked123!'))
+
+    def test_manager_cannot_deactivate_staff_who_owns_leads(self):
+        from transactions.models import Lead
+
+        Lead.objects.create(
+            id='TC-1', company='Hospital One', tenant=self.manager.company,
+            assigned_to=self.staff.name, status='assigned',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.is_active)
+
+    def test_manager_can_reassign_then_deactivate(self):
+        from transactions.models import Lead
+
+        Lead.objects.create(
+            id='TC-1', company='Hospital One', tenant=self.manager.company,
+            assigned_to=self.staff.name, status='assigned',
+        )
+        # Reassign the lead away, then deactivation is allowed.
+        Lead.objects.filter(tenant=self.manager.company, assigned_to=self.staff.name).update(
+            assigned_to='Manager A'
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_superuser_reset_blocked_for_platform_admin(self):
+        superuser = User.objects.create_superuser(
+            email='root@platform.com', password='x', name='Root',
+        )
+        self.client.force_authenticate(superuser)
+        resp = self.client.post(
+            f'/api/auth/admins/{superuser.pk}/reset-password/',
+            {'new_password': 'Hacked123!'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
+
 class AdminRenamePropagationTests(APITestCase):
     def setUp(self):
         from transactions.models import Lead

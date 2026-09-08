@@ -120,8 +120,8 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState(EMPTY)
   const [activeTab, setActiveTab] = useState('All')
   const [loading, setLoading] = useState(true)
-  const [markingAll, setMarkingAll] = useState(false)
-  const [markingId, setMarkingId] = useState(null)
+const [markingAll, setMarkingAll] = useState(false)
+const [markingIds, setMarkingIds] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -157,15 +157,16 @@ export default function Notifications() {
   }
 
   async function markRead(id, read) {
-    if (markingId) return
-    setMarkingId(id)
+    if (markingIds.includes(id)) return
+    setMarkingIds((prev) => [...prev, id])
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read } : n)))
     try {
       await api.patch(`/notifications/${id}/`, { read })
     } catch {
-      // ignore network hiccups
+      // Roll the optimistic toggle back so the UI matches the server.
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: !read } : n)))
     } finally {
-      setMarkingId(null)
+      setMarkingIds((prev) => prev.filter((x) => x !== id))
     }
   }
 
@@ -176,7 +177,9 @@ export default function Notifications() {
     try {
       await api.post('/notifications/read-all/', {})
     } catch {
-      // ignore
+      // Reload from server on failure so the UI matches the true state.
+      const data = await api.get('/notifications/').catch(() => null)
+      if (data && Array.isArray(data)) setNotifications(data)
     } finally {
       setMarkingAll(false)
     }
@@ -196,7 +199,7 @@ export default function Notifications() {
           <button
             type="button"
             onClick={markAllRead}
-            disabled={unreadCount === 0 || markingAll || markingId !== null}
+            disabled={unreadCount === 0 || markingAll || markingIds.length > 0}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
             {markingAll ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon />}
@@ -253,7 +256,7 @@ export default function Notifications() {
                     <button
                       type="button"
                       onClick={() => toggleRead(n)}
-                      disabled={markingId === n.id}
+                      disabled={markingIds.includes(n.id)}
                       className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
                         n.read ? 'bg-white hover:bg-slate-50/70' : 'bg-brand-50/40 hover:bg-brand-50/70'
                       }`}
