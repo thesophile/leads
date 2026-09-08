@@ -2060,10 +2060,12 @@ class DashboardStatsView(APIView):
         scoped = scoped_queryset(request.user).filter(date__range=(start_date, end_date))
         total_leads = scoped.count()
 
-        # Contacted: a lead counts as contacted if it has call history rows or a
-        # non-default call_status.
+        # Contacted: a lead counts as contacted if it has call history rows, a
+        # non-default call_status, or has progressed past the assigned stage.
         contacted_qs = scoped.filter(
-            Q(history__isnull=False) | ~Q(call_status='Pending Call')
+            Q(history__isnull=False)
+            | ~Q(call_status='Pending Call')
+            | Q(status__in=[Lead.STATUS_QUOTATION, Lead.STATUS_ORDER, Lead.STATUS_CLIENT])
         ).distinct()
         contacted_total = contacted_qs.count()
 
@@ -2086,28 +2088,36 @@ class DashboardStatsView(APIView):
                 'color': source_colors[i % len(source_colors)],
             })
 
-        # Conversion funnel stages.
-        def count_by_status(status):
-            return scoped.filter(status=status).count()
+        # Conversion funnel stages are cumulative so each stage always contains
+        # the next one (Total -> Contacted -> Interested -> Quotations -> Orders).
+        beyond_quotation = scoped.filter(
+            status__in=[Lead.STATUS_QUOTATION, Lead.STATUS_ORDER, Lead.STATUS_CLIENT]
+        )
 
         funnel = {
-            'raw': count_by_status(Lead.STATUS_RAW),
-            'assigned': count_by_status(Lead.STATUS_ASSIGNED),
-            'quotation': count_by_status(Lead.STATUS_QUOTATION),
-            'order': count_by_status(Lead.STATUS_ORDER),
-            'client': count_by_status(Lead.STATUS_CLIENT),
+            'raw': scoped.filter(status=Lead.STATUS_RAW).count(),
+            'assigned': scoped.filter(status=Lead.STATUS_ASSIGNED).count(),
+            'quotation': beyond_quotation.count(),
+            'order': scoped.filter(status=Lead.STATUS_ORDER).count(),
+            'client': scoped.filter(status=Lead.STATUS_CLIENT).count(),
+            'contacted': contacted_total,
+            'interested': (
+                scoped.filter(
+                    Q(call_status__in=['Interested', 'Quotation Requested', 'Considering'])
+                    | Q(status__in=[Lead.STATUS_QUOTATION, Lead.STATUS_ORDER, Lead.STATUS_CLIENT])
+                ).count()
+            ),
+            'total': total_leads,
         }
-        funnel['contacted'] = contacted_total
-        funnel['interested'] = scoped.filter(call_status='Interested').count()
-        funnel['total'] = total_leads
 
         # KPIs within range.
         hot_leads = scoped.filter(priority__icontains='hot').count()
         follow_ups_due = scoped.filter(has_follow_up=True).count()
         open_quotations = scoped.filter(status=Lead.STATUS_QUOTATION).count()
         orders_accepted = scoped.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).count()
-        calls_today = CallHistory.objects.filter(
-            created_at__date__range=(start_date, end_date)
+        calls_in_period = CallHistory.objects.filter(
+            lead_id__in=scoped.values_list('id', flat=True),
+            created_at__date__range=(start_date, end_date),
         ).count()
 
         # Trend series bucketed by the chosen interval.
@@ -2175,9 +2185,7 @@ class DashboardStatsView(APIView):
 
         # Hot leads requiring action (highest priority, most recent).
         hot_leads_list = []
-        hot_qs = scoped.filter(priority__icontains='hot')
-        candidate_qs = hot_qs if hot_qs.exists() else scoped
-        for lead in candidate_qs.order_by('-created_at')[:3]:
+        for lead in scoped.filter(priority__icontains='hot').order_by('-created_at')[:3]:
             status_text = dict(Lead.STATUS_CHOICES).get(lead.status, lead.status)
             hot_leads_list.append({
                 'id': lead.id,
@@ -2196,7 +2204,7 @@ class DashboardStatsView(APIView):
             'group_by': group_by,
             'kpis': {
                 'total_leads': total_leads,
-                'calls_today': calls_today,
+                'calls_in_period': calls_in_period,
                 'hot_leads': hot_leads,
                 'follow_ups_due': follow_ups_due,
                 'open_quotations': open_quotations,

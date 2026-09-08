@@ -30,7 +30,7 @@ const TOOLTIP_STYLE = {
 const EMPTY = {
   kpis: {
     total_leads: 0,
-    calls_today: 0,
+    calls_in_period: 0,
     hot_leads: 0,
     follow_ups_due: 0,
     open_quotations: 0,
@@ -174,7 +174,7 @@ export default function Dashboard() {
   const kpiDefs = useMemo(
     () => [
       { label: 'Total Leads', key: 'total_leads', trend: 'up', change: '', tone: 'blue', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
-      { label: 'Calls', key: 'calls_today', trend: 'up', change: '', tone: 'violet', icon: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z' },
+      { label: 'Calls', key: 'calls_in_period', trend: 'up', change: '', tone: 'violet', icon: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z' },
       { label: 'Hot Leads', key: 'hot_leads', trend: 'urgent', change: 'Urgent', tone: 'red', isHighlight: true, icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' },
       { label: 'Follow-ups Due', key: 'follow_ups_due', trend: 'down', change: 'Overdue', tone: 'amber', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
       { label: 'Open Quotations', key: 'open_quotations', trend: 'neutral', change: 'open', tone: 'orange', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
@@ -467,7 +467,11 @@ export default function Dashboard() {
                 </div>
 
                 <div className="p-5">
-                  {chartMode === 'funnel' ? (
+                  {conversionData[0].value === 0 ? (
+                    <div className="flex h-64 items-center justify-center text-sm text-slate-400">
+                      No data for this period
+                    </div>
+                  ) : chartMode === 'funnel' ? (
                     <div className="w-full space-y-3 py-1">
                       {conversionData.map((s) => {
                         const pct = (s.value / conversionData[0].value) * 100
