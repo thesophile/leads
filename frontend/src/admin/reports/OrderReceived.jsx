@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
+import { api } from '../../api/client'
+import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 
 function PackageIcon({ className = 'h-4 w-4' }) {
   return (
@@ -18,16 +20,6 @@ function DownloadIcon({ className = 'h-3.5 w-3.5' }) {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  )
-}
-
-function PrinterIcon({ className = 'h-3.5 w-3.5' }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="6 9 6 2 18 2 18 9" />
-      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-      <rect x="6" y="14" width="12" height="8" />
     </svg>
   )
 }
@@ -52,178 +44,60 @@ function CloseIcon({ className = 'h-4 w-4' }) {
   )
 }
 
-const INITIAL_CONVERTED_REGISTER = [
-  {
-    id: 1,
-    orderNo: 'ORD-2026-001',
-    leadId: 'TC-108',
-    date: '12-08-2026',
-    rawDate: '2026-08-12',
-    company: 'NAMBEESANS LAKSHMI LODGE',
-    customer: 'Karthika Nambeesan',
-    mobile: '9447151442',
-    email: 'bookings@nambeesanslodge.com',
-    location: 'Thriprayar',
-    staff: 'Bincy',
-    bdm: 'Husna',
-    category: 'Dynamic Website',
-    detailsStatus: 'Collected',
-    remarks: 'Order accepted by client. SRS and business card collected.',
-  },
-  {
-    id: 2,
-    orderNo: 'ORD-2026-002',
-    leadId: 'TC-103',
-    date: '11-08-2026',
-    rawDate: '2026-08-11',
-    company: 'MANZOOR SUPER SPECIALITY HOSPITAL',
-    customer: 'Dr. Manzoor Ali',
-    mobile: '9447118234',
-    email: 'director@manzoorhospital.org',
-    location: 'Trivandrum',
-    staff: 'Priya Sharma',
-    bdm: 'Alex Joseph',
-    category: 'Dynamic Web & OPD Suite',
-    detailsStatus: 'Pending',
-    remarks: 'Order form sent and accepted. Awaiting SRS and business card.',
-  },
-  {
-    id: 3,
-    orderNo: 'ORD-2026-003',
-    leadId: 'TC-105',
-    date: '10-08-2026',
-    rawDate: '2026-08-10',
-    company: 'ROYAL PALACE CONVENTION CENTRE',
-    customer: 'Kabeer Khan',
-    mobile: '9567112004',
-    email: 'events@royalpalacekerala.com',
-    location: 'Thrissur',
-    staff: 'Ananya Nair',
-    bdm: 'Shanu VR',
-    category: 'Dynamic Website',
-    detailsStatus: 'Collected',
-    remarks: 'Accepted via WhatsApp. Requirements call recorded as voice clip.',
-  },
-  {
-    id: 4,
-    orderNo: 'ORD-2026-004',
-    leadId: 'TC-102',
-    date: '08-08-2026',
-    rawDate: '2026-08-08',
-    company: 'SHADES.IN LUXURY EYEWEAR',
-    customer: 'Rahul Menon',
-    mobile: '9845123991',
-    email: 'management@shades.in',
-    location: 'Kochi',
-    staff: 'Alex Joseph',
-    bdm: 'Alex Joseph',
-    category: 'Meta Ads',
-    detailsStatus: 'Collected',
-    remarks: 'Campaign brief approved. Business card and ad copy shared.',
-  },
-  {
-    id: 5,
-    orderNo: 'ORD-2026-005',
-    leadId: 'TC-110',
-    date: '05-08-2026',
-    rawDate: '2026-08-05',
-    company: 'NEW LIFE MATERNITY HOSPITAL',
-    customer: 'Dr. Susan Thomas',
-    mobile: '8714546783',
-    email: 'contact@newlifehospital.org',
-    location: 'Kozhikode',
-    staff: 'Shanu VR',
-    bdm: 'Shanu VR',
-    category: 'Mobile App',
-    detailsStatus: 'Pending',
-    remarks: 'Accepted in principle. SRS document expected from IT team.',
-  },
-  {
-    id: 6,
-    orderNo: 'ORD-2026-006',
-    leadId: 'TC-115',
-    date: '02-08-2026',
-    rawDate: '2026-08-02',
-    company: 'KERALA SPICES & EXPORTS',
-    customer: 'Varghese Mathew',
-    mobile: '9446221100',
-    email: 'exports@keralaspices.in',
-    location: 'Cochin',
-    staff: 'Priya Sharma',
-    bdm: 'Priya Sharma',
-    category: 'SEO & Digital Marketing',
-    detailsStatus: 'Collected',
-    remarks: 'Order accepted. Keywords list and business card received.',
-  },
-  {
-    id: 7,
-    orderNo: 'ORD-2026-007',
-    leadId: 'TC-120',
-    date: '28-07-2026',
-    rawDate: '2026-07-28',
-    company: 'CALICUT GOLD & DIAMONDS',
-    customer: 'Anoop Chandran',
-    mobile: '9847113355',
-    email: 'sales@calicutgold.com',
-    location: 'Calicut',
-    staff: 'NIMISHA DAVIS',
-    bdm: 'NIMISHA DAVIS',
-    category: 'Static Website',
-    detailsStatus: 'Collected',
-    remarks: 'Client accepted. Content and images handed over.',
-  },
-  {
-    id: 8,
-    orderNo: 'ORD-2026-008',
-    leadId: 'TC-124',
-    date: '25-07-2026',
-    rawDate: '2026-07-25',
-    company: 'GREEN VALLEY RESORTS & SPA',
-    customer: 'Harikrishnan R',
-    mobile: '9744118822',
-    email: 'info@greenvalleyresorts.com',
-    location: 'Munnar',
-    staff: 'Husna',
-    bdm: 'Husna',
-    category: 'Google Ads',
-    detailsStatus: 'Pending',
-    remarks: 'Accepted over call. Waiting for signed order form and brief.',
-  },
-]
+function sameText(a, b) {
+  return String(a || '').toLowerCase() === String(b || '').toLowerCase()
+}
 
-const CATEGORIES = [
-  'All Category',
-  'Dynamic Website',
-  'Static Website',
-  'Mobile App',
-  'Dynamic Web & OPD Suite',
-  'Meta Ads',
-  'Google Ads',
-  'SEO & Digital Marketing',
-]
+// Best-effort parse of free-text order dates into a comparable ISO string.
+function toIsoDate(value) {
+  if (!value) return ''
+  const text = String(value).trim()
+  const a = /^(\d{4})-(\d{2})-(\d{2})/.exec(text)
+  if (a) return a[0]
+  const d = /^(\d{2})-(\d{2})-(\d{4})/.exec(text)
+  if (d) return `${d[3]}-${d[2]}-${d[1]}`
+  const s = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(text)
+  if (s) return `${s[3]}-${s[2]}-${s[1]}`
+  return ''
+}
 
-const STAFF_LIST = [
-  'All Staff',
-  'Bincy',
-  'Priya Sharma',
-  'Ananya Nair',
-  'Alex Joseph',
-  'Shanu VR',
-  'NIMISHA DAVIS',
-  'Husna',
-  'Malavika',
-  'Karthika',
-]
+// Client-detail status -> register "Collected"/"Pending" summary.
+function detailsStatusOf(clientDetail) {
+  const status = clientDetail?.status || ''
+  if (['Details Complete', 'Completed', 'Paid'].includes(status)) return 'Collected'
+  return 'Pending'
+}
 
-const DETAILS_STATUS_LIST = [
-  'All Details',
-  'Collected',
-  'Pending',
-]
+// Map an order returned by the backend (merged with its client-detail record)
+// into the register row shape.
+function orderToRow(order, detailMap) {
+  const iso = toIsoDate(order.date)
+  const cd = detailMap.get(order.id)
+  return {
+    id: order.id,
+    orderNo: order.id || '',
+    leadId: order.leadId || '',
+    date: order.date || '',
+    rawDate: iso,
+    company: order.company || '',
+    customer: order.customer || cd?.clientName || '',
+    mobile: order.mobile || '',
+    email: order.email || '',
+    location: order.city || '',
+    staff: order.staff || '',
+    bdm: order.bdm || '',
+    category: order.category || '',
+    detailsStatus: detailsStatusOf(cd),
+    remarks: order.remarks || '',
+  }
+}
 
 export default function OrderReceived() {
   const navigate = useNavigate()
 
+  const [registerRows, setRegisterRows] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
@@ -233,61 +107,94 @@ export default function OrderReceived() {
 
   const [selectedOrder, setSelectedOrder] = useState(null)
 
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
+  // Load the real orders + their client-detail records from the database.
+  useEffect(() => {
+    let cancelled = false
 
-  const [appliedFilters, setAppliedFilters] = useState({
-    fromDate: '',
-    toDate: '',
-    category: 'All Category',
-    staff: 'All Staff',
-    detailsStatus: 'All Details',
-  })
+    async function fetchOrders() {
+      setIsLoading(true)
+      setError('')
+      try {
+        const [orders, clientDetails] = await Promise.all([
+          api.get('/transactions/orders/'),
+          api.get('/transactions/client-details/'),
+        ])
+        if (cancelled) return
+        const detailMap = new Map()
+        ;(Array.isArray(clientDetails) ? clientDetails : []).forEach((cd) => {
+          if (cd.orderNo && !detailMap.has(cd.orderNo)) detailMap.set(cd.orderNo, cd)
+        })
+        setRegisterRows(
+          (Array.isArray(orders) ? orders : []).map((o) => orderToRow(o, detailMap))
+        )
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
 
-  function handleApplyFilter(e) {
-    e.preventDefault()
-    setAppliedFilters({
-      fromDate,
-      toDate,
-      category,
-      staff,
-      detailsStatus,
-    })
-    setCurrentPage(1)
-  }
+    fetchOrders()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  function handleResetFilters() {
+  // Staff choices are derived from the actual records so the filters always
+  // match what the current user is allowed to see.
+  const staffOptions = useMemo(() => {
+    const names = [...new Set(registerRows.map((r) => r.staff).filter(Boolean))]
+    return ['All Staff', ...names.sort((a, b) => a.localeCompare(b))]
+  }, [registerRows])
+
+  const categoryOptions = useMemo(() => {
+    const values = [...new Set(registerRows.map((r) => r.category).filter(Boolean))]
+    return ['All Category', ...values.sort((a, b) => a.localeCompare(b))]
+  }, [registerRows])
+
+  const [isExporting, setIsExporting] = useState(false)
+
+  const hasActiveFilters =
+    fromDate !== '' ||
+    toDate !== '' ||
+    category !== 'All Category' ||
+    staff !== 'All Staff' ||
+    detailsStatus !== 'All Details' ||
+    searchQuery.trim() !== ''
+
+  function clearAllFilters() {
     setFromDate('')
     setToDate('')
     setCategory('All Category')
     setStaff('All Staff')
     setDetailsStatus('All Details')
     setSearchQuery('')
-    setAppliedFilters({
-      fromDate: '',
-      toDate: '',
-      category: 'All Category',
-      staff: 'All Staff',
-      detailsStatus: 'All Details',
-    })
-    setCurrentPage(1)
   }
 
+  // Filters apply live as the user changes them — no Apply button needed.
   const filteredData = useMemo(() => {
-    return INITIAL_CONVERTED_REGISTER.filter((item) => {
-      if (appliedFilters.fromDate && item.rawDate < appliedFilters.fromDate) return false
-      if (appliedFilters.toDate && item.rawDate > appliedFilters.toDate) return false
-      if (appliedFilters.category !== 'All Category' && item.category !== appliedFilters.category) return false
-      if (appliedFilters.staff !== 'All Staff' && item.staff !== appliedFilters.staff) return false
-      if (appliedFilters.detailsStatus !== 'All Details' && item.detailsStatus !== appliedFilters.detailsStatus) return false
+    const q = searchQuery.trim().toLowerCase()
+    return registerRows.filter((item) => {
+      // Date filter
+      if (fromDate && item.rawDate < fromDate) return false
+      if (toDate && item.rawDate > toDate) return false
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
+      // Category filter
+      if (category !== 'All Category' && !sameText(item.category, category)) return false
+
+      // Staff filter
+      if (staff !== 'All Staff' && !sameText(item.staff, staff)) return false
+
+      // Client details status filter
+      if (detailsStatus !== 'All Details' && !sameText(item.detailsStatus, detailsStatus)) return false
+
+      // Search query
+      if (q) {
         return (
           item.orderNo.toLowerCase().includes(q) ||
           item.company.toLowerCase().includes(q) ||
           item.customer.toLowerCase().includes(q) ||
-          item.mobile.includes(q) ||
+          item.mobile.toLowerCase().includes(q) ||
           item.location.toLowerCase().includes(q) ||
           item.staff.toLowerCase().includes(q) ||
           item.category.toLowerCase().includes(q)
@@ -296,17 +203,56 @@ export default function OrderReceived() {
 
       return true
     })
-  }, [appliedFilters, searchQuery])
+  }, [registerRows, fromDate, toDate, category, staff, detailsStatus, searchQuery])
 
   const totalConvertedCount = filteredData.length
   const pendingDetailsCount = filteredData.filter((i) => i.detailsStatus === 'Pending').length
   const collectedDetailsCount = filteredData.filter((i) => i.detailsStatus === 'Collected').length
 
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage
-    return filteredData.slice(start, start + itemsPerPage)
-  }, [filteredData, currentPage])
+  async function exportPdf() {
+    if (isExporting) return
+    setIsExporting(true)
+    try {
+      await exportRegisterPdf({
+        title: 'CONVERTED CLIENTS REGISTER',
+        fileNamePrefix: 'Converted_Clients_Register',
+        columns: ['Order No', 'Date', 'Company', 'Customer', 'Phone', 'Location', 'Staff', 'BDM', 'Category', 'Client Details'],
+        rows: filteredData.map((r) => [
+          r.orderNo,
+          r.date,
+          r.company,
+          r.customer,
+          r.mobile,
+          r.location,
+          r.staff,
+          r.bdm,
+          r.category,
+          r.detailsStatus,
+        ]),
+        filters: {
+          Category: category !== 'All Category' ? category : '',
+          Staff: staff !== 'All Staff' ? staff : '',
+          Details: detailsStatus !== 'All Details' ? detailsStatus : '',
+          From: fromDate || '',
+          To: toDate || '',
+        },
+        columnStyles: {
+          0: { cellWidth: 70 },
+          1: { cellWidth: 55 },
+          2: { cellWidth: 'auto' },
+          3: { cellWidth: 'auto' },
+          4: { cellWidth: 70 },
+          5: { cellWidth: 'auto' },
+          6: { cellWidth: 'auto' },
+          7: { cellWidth: 'auto' },
+          8: { cellWidth: 'auto' },
+          9: { cellWidth: 'auto' },
+        },
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   function handleExportCSV() {
     const headers = [
@@ -354,6 +300,12 @@ export default function OrderReceived() {
   return (
     <Layout>
       <div className="space-y-4">
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600 print:hidden">
+            Could not load converted clients register: {error}
+          </div>
+        )}
+
         {/* Printable Official Header */}
         <div className="hidden print:block border-b pb-4 mb-4">
           <div className="text-center">
@@ -380,21 +332,23 @@ export default function OrderReceived() {
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
+                onClick={exportPdf}
+                disabled={isLoading || isExporting}
+                title={isLoading ? 'Wait for the register to load before exporting.' : 'Download register as PDF'}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span>{isExporting ? '⏳' : '📄'}</span>
+                <span>{isExporting ? 'Exporting…' : 'Export PDF'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleExportCSV}
                 className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer active:scale-95"
                 title="Export as CSV"
               >
                 <DownloadIcon />
                 <span>Export CSV</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-95"
-              >
-                <PrinterIcon />
-                <span>Print Register</span>
               </button>
 
               <div className="flex items-center">
@@ -420,8 +374,8 @@ export default function OrderReceived() {
             </div>
           </div>
 
-          {/* Filter Form */}
-          <form onSubmit={handleApplyFilter} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-6 items-end">
+          {/* Filters applied live as they change */}
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-6 items-end">
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">From Date</label>
               <input
@@ -449,7 +403,7 @@ export default function OrderReceived() {
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none"
               >
-                {CATEGORIES.map((c) => (
+                {categoryOptions.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
@@ -464,7 +418,7 @@ export default function OrderReceived() {
                 onChange={(e) => setStaff(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none"
               >
-                {STAFF_LIST.map((s) => (
+                {staffOptions.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
@@ -479,31 +433,25 @@ export default function OrderReceived() {
                 onChange={(e) => setDetailsStatus(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none"
               >
-                {DETAILS_STATUS_LIST.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
+                <option value="All Details">All Details</option>
+                <option value="Collected">Collected</option>
+                <option value="Pending">Pending</option>
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="submit"
-                className="flex-1 rounded-lg bg-emerald-600 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-95"
-              >
-                Filter
-              </button>
+            <div className="flex items-end">
               <button
                 type="button"
-                onClick={handleResetFilters}
-                className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
-                title="Reset Filters"
+                onClick={clearAllFilters}
+                disabled={!hasActiveFilters}
+                title="Clear all filters"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-600 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Reset
+                <span>✕</span>
+                <span>Clear Filters</span>
               </button>
             </div>
-          </form>
+          </div>
         </div>
 
         {/* Metric Summary Cards */}
@@ -562,20 +510,26 @@ export default function OrderReceived() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {paginatedData.length === 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-400">
+                      Loading converted clients register…
+                    </td>
+                  </tr>
+                ) : filteredData.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-slate-400">
                       No converted client records match the selected filter criteria.
                     </td>
                   </tr>
                 ) : (
-                  paginatedData.map((order, idx) => (
+                  filteredData.map((order, idx) => (
                     <tr
                       key={order.id}
                       className="hover:bg-slate-50/80 transition-colors"
                     >
                       <td className="py-3 px-3 text-center font-semibold text-slate-400">
-                        {(currentPage - 1) * itemsPerPage + idx + 1}
+                        {idx + 1}
                       </td>
 
                       <td className="py-3 px-3 whitespace-nowrap">
@@ -646,50 +600,11 @@ export default function OrderReceived() {
           <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between text-xs text-slate-500">
             <div>
               Showing{' '}
-              <span className="font-semibold text-slate-800">
-                {filteredData.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}
-              </span>{' '}
-              to{' '}
-              <span className="font-semibold text-slate-800">
-                {Math.min(currentPage * itemsPerPage, filteredData.length)}
-              </span>{' '}
-              of <span className="font-semibold text-slate-800">{filteredData.length}</span> converted clients
+              <span className="font-semibold text-slate-800">{filteredData.length}</span>{' '}
+              converted clients
             </div>
 
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                Previous
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => (
-                <button
-                  key={pg}
-                  type="button"
-                  onClick={() => setCurrentPage(pg)}
-                  className={`min-w-[28px] rounded-lg px-2 py-1 text-xs font-semibold transition cursor-pointer ${
-                    currentPage === pg
-                      ? 'bg-emerald-600 text-white'
-                      : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {pg}
-                </button>
-              ))}
-
-              <button
-                type="button"
-                disabled={currentPage === totalPages || totalPages === 0}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                Next
-              </button>
-            </div>
+            <div className="font-mono text-[10px]">PROGRAMERS INTERNATIONAL &bull; REGISTER AUDIT</div>
           </div>
         </div>
 

@@ -1,30 +1,48 @@
 import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
+import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 
-const INITIAL_TELECALLING_REGISTER = [
-  { id: 1, date: '10-08-2026', rawDate: '2026-08-10', lastCalledDate: '11-08-2026', company: 'N K BALAKRISHNAN MEMORIAL HOSPITAL', number: '4672284102', location: 'KSGD', staff: 'Malavika', category: 'Hospital', status: 'Not Interested' },
-  { id: 2, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'SOFAART FURNITURE', number: '6235270770', location: 'KSGD', staff: 'Malavika', category: 'Furniture', status: 'Not Interested' },
-  { id: 3, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'TAMAM FURNITURES & INTERIORS', number: '9895843554', location: 'KSGD', staff: 'Malavika', category: 'Furniture', status: 'Not Interested' },
-  { id: 4, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'BHARATH GLASS', number: '9567120090', location: 'KSGD', staff: 'Malavika', category: 'Glass', status: 'Not Interested' },
-  { id: 5, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'JAYALAKSHMI FURNITURE & HOME APPLIANCES', number: '9947500678', location: 'KSGD', staff: 'Malavika', category: 'Furniture', status: 'Not Interested' },
-  { id: 6, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'ROYAL DECOR FURNITURE & INTERIORS SHOWROOM', number: '9447067217', location: 'KSGD', staff: 'Malavika', category: 'Furniture', status: 'Not Interested' },
-  { id: 7, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: "ROOT'S THE FAMILY SALON", number: '9700744357', location: 'KSGD', staff: 'Malavika', category: 'Salon', status: 'Called' },
-  { id: 8, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'HANUSREE PERMANENT MAKEUP & ACADEMY', number: '9550851892', location: 'KSGD', staff: 'Malavika', category: 'Beauty Parlour', status: 'Not Interested' },
-  { id: 9, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'ANV UNISEX SALON', number: '9182034960', location: 'KSGD', staff: 'Malavika', category: 'Salon', status: 'Called' },
-  { id: 10, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'STAR UNISEX SALON | UPPAL', number: '7998044445', location: 'KSGD', staff: 'Malavika', category: 'Salon', status: 'Not Interested' },
-  { id: 11, date: '11-08-2026', rawDate: '2026-08-11', lastCalledDate: '12-08-2026', company: 'MANZOOR SUPER SPECIALITY HOSPITAL', number: '9447118234', location: 'TRIVANDRUM', staff: 'Priya Sharma', category: 'Hospital', status: 'Quotation Requested' },
-  { id: 12, date: '09-08-2026', rawDate: '2026-08-09', lastCalledDate: '11-08-2026', company: 'ROYAL PALACE CONVENTION CENTRE', number: '9567112004', location: 'THRISSUR', staff: 'Ananya Nair', category: 'Resort', status: 'Quotation Requested' },
-  { id: 13, date: '08-08-2026', rawDate: '2026-08-08', lastCalledDate: '10-08-2026', company: 'NAMBEESANS LAKSHMI LODGE', number: '9447151442', location: 'THRISSUR', staff: 'Bincy', category: 'Resort', status: 'Follow Up' },
-  { id: 14, date: '07-08-2026', rawDate: '2026-08-07', lastCalledDate: '09-08-2026', company: 'SHADES.IN LUXURY EYEWEAR', number: '9845123991', location: 'ERNAKULAM', staff: 'Alex Joseph', category: 'Boutique', status: 'Converted' },
-]
+function toDmyDate(value) {
+  if (!value) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value))
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  return String(value)
+}
 
-const STAFF_LIST = ['All Staff', 'Malavika', 'Husna', 'Bincy', 'Alex Joseph', 'Priya Sharma', 'NIMISHA DAVIS', 'Ananya Nair', 'Shanu VR']
-const STATUS_LIST = ['All Status', 'Called', 'Not Interested', 'Quotation Requested', 'Follow Up', 'Converted', 'Wrong Number']
-const LOCATIONS = ['All Locations', 'KSGD', 'ALLEPPEY', 'THRISSUR', 'ERNAKULAM', 'KOZHIKODE', 'TRIVANDRUM', 'PALAKKAD']
+function sameText(a, b) {
+  return String(a || '').toLowerCase() === String(b || '').toLowerCase()
+}
+
+// Live telecalling pipeline stages (everything past Raw Data).
+const LEAD_STATUSES = ['assigned', 'quotation', 'order', 'client']
+
+// Map a lead returned by the backend into the register row shape. The status
+// column reflects the call outcome the lead currently sits at in the pipeline.
+function leadToRow(item) {
+  const iso = item.date ? String(item.date).slice(0, 10) : ''
+  let status = item.callStatus || 'Pending Call'
+  if (item.status === 'quotation') status = 'Quotation Requested'
+  if (item.status === 'order' || item.status === 'client') status = 'Converted'
+  return {
+    id: item.id,
+    date: toDmyDate(iso),
+    rawDate: iso,
+    lastCallDate: item.lastCallDate || '',
+    company: item.company || '',
+    number: item.phone || '',
+    location: item.city || '',
+    staff: item.assignedTo || '',
+    category: item.category || '',
+    status,
+  }
+}
 
 export default function TelecalligRegister() {
   const [categoryOptions, setCategoryOptions] = useState([])
+  const [registerRows, setRegisterRows] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
@@ -51,47 +69,99 @@ export default function TelecalligRegister() {
     }
   }, [])
 
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
+  // Load every lead in the telecalling pipeline from the database.
+  useEffect(() => {
+    let cancelled = false
 
-  // Applied Filter State
-  const [appliedFilters, setAppliedFilters] = useState({
-    fromDate: '',
-    toDate: '',
-    category: 'All Category',
-    staff: 'All Staff',
-    status: 'All Status',
-    location: 'All Locations',
-  })
+    async function fetchTelecallLeads() {
+      setIsLoading(true)
+      setError('')
+      try {
+        const results = await Promise.all(
+          LEAD_STATUSES.map((s) => api.get(`/transactions/leads/?status=${s}`))
+        )
+        if (cancelled) return
+        const rows = []
+        results.forEach((data) => {
+          ;(Array.isArray(data) ? data : []).forEach((item) => rows.push(leadToRow(item)))
+        })
+        setRegisterRows(rows)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
 
-  function handleApplyFilter(e) {
-    e.preventDefault()
-    setAppliedFilters({
-      fromDate,
-      toDate,
-      category,
-      staff,
-      status,
-      location,
-    })
-    setCurrentPage(1)
+    fetchTelecallLeads()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Staff, location and status choices are derived from the actual records so
+  // the filters always match what the current user is allowed to see.
+  const staffOptions = useMemo(() => {
+    const names = [...new Set(registerRows.map((r) => r.staff).filter(Boolean))]
+    return ['All Staff', ...names.sort((a, b) => a.localeCompare(b))]
+  }, [registerRows])
+
+  const locationOptions = useMemo(() => {
+    const places = [...new Set(registerRows.map((r) => r.location).filter(Boolean))]
+    return ['All Locations', ...places.sort((a, b) => a.localeCompare(b))]
+  }, [registerRows])
+
+  const statusOptions = useMemo(() => {
+    const values = [...new Set(registerRows.map((r) => r.status).filter(Boolean))]
+    return ['All Status', ...values.sort((a, b) => a.localeCompare(b))]
+  }, [registerRows])
+
+  const [isExporting, setIsExporting] = useState(false)
+
+  const hasActiveFilters =
+    fromDate !== '' ||
+    toDate !== '' ||
+    category !== 'All Category' ||
+    staff !== 'All Staff' ||
+    status !== 'All Status' ||
+    location !== 'All Locations' ||
+    searchQuery.trim() !== ''
+
+  function clearAllFilters() {
+    setFromDate('')
+    setToDate('')
+    setCategory('All Category')
+    setStaff('All Staff')
+    setStatus('All Status')
+    setLocation('All Locations')
+    setSearchQuery('')
   }
 
-  // Filtered Data
+  // Filters apply live as the user changes them — no Apply button needed.
   const filteredData = useMemo(() => {
-    return INITIAL_TELECALLING_REGISTER.filter((item) => {
-      if (appliedFilters.fromDate && item.rawDate < appliedFilters.fromDate) return false
-      if (appliedFilters.toDate && item.rawDate > appliedFilters.toDate) return false
-      if (appliedFilters.category !== 'All Category' && item.category !== appliedFilters.category) return false
-      if (appliedFilters.staff !== 'All Staff' && item.staff !== appliedFilters.staff) return false
-      if (appliedFilters.status !== 'All Status' && item.status !== appliedFilters.status) return false
-      if (appliedFilters.location !== 'All Locations' && item.location !== appliedFilters.location) return false
+    const q = searchQuery.trim().toLowerCase()
+    return registerRows.filter((item) => {
+      // Date filter
+      if (fromDate && item.rawDate < fromDate) return false
+      if (toDate && item.rawDate > toDate) return false
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
+      // Category filter
+      if (category !== 'All Category' && !sameText(item.category, category)) return false
+
+      // Staff filter
+      if (staff !== 'All Staff' && !sameText(item.staff, staff)) return false
+
+      // Status filter
+      if (status !== 'All Status' && !sameText(item.status, status)) return false
+
+      // Location filter
+      if (location !== 'All Locations' && !sameText(item.location, location)) return false
+
+      // Search query
+      if (q) {
         return (
           item.company.toLowerCase().includes(q) ||
-          item.number.includes(q) ||
+          item.number.toLowerCase().includes(q) ||
           item.location.toLowerCase().includes(q) ||
           item.staff.toLowerCase().includes(q) ||
           item.status.toLowerCase().includes(q)
@@ -100,20 +170,60 @@ export default function TelecalligRegister() {
 
       return true
     })
-  }, [appliedFilters, searchQuery])
+  }, [registerRows, fromDate, toDate, category, staff, status, location, searchQuery])
 
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage
-    return filteredData.slice(start, start + itemsPerPage)
-  }, [filteredData, currentPage])
+  async function exportPdf() {
+    if (isExporting) return
+    setIsExporting(true)
+    try {
+      await exportRegisterPdf({
+        title: 'TELECALLING REGISTER',
+        fileNamePrefix: 'Telecalling_Register',
+        columns: ['Date', 'Last Called', 'Company', 'Number', 'Location', 'Staff', 'Status'],
+        rows: filteredData.map((r) => [
+          r.date,
+          r.lastCallDate,
+          r.company,
+          r.number,
+          r.location,
+          r.staff,
+          r.status,
+        ]),
+        filters: {
+          Category: category !== 'All Category' ? category : '',
+          Staff: staff !== 'All Staff' ? staff : '',
+          Status: status !== 'All Status' ? status : '',
+          Location: location !== 'All Locations' ? location : '',
+          From: fromDate || '',
+          To: toDate || '',
+        },
+        columnStyles: {
+          0: { cellWidth: 60 },
+          1: { cellWidth: 65 },
+          2: { cellWidth: 'auto' },
+          3: { cellWidth: 75 },
+          4: { cellWidth: 'auto' },
+          5: { cellWidth: 'auto' },
+          6: { cellWidth: 'auto' },
+        },
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   return (
     <Layout>
-      <div className="space-y-4">
-        {/* Header & Filter Card */}
+      <div className="space-y-4 print-sheet">
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600 print:hidden">
+            Could not load telecalling register: {error}
+          </div>
+        )}
+
+        {/* Screen Only Header Card */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs print:hidden">
-          {/* Top Bar */}
+          {/* Top Bar: Title & Export PDF + Search Box */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
@@ -122,15 +232,17 @@ export default function TelecalligRegister() {
               <span>Telecalling Register</span>
             </div>
 
-            {/* Right: Print Button + Search Box */}
+            {/* Right: Export PDF Button + Search Box */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-95"
+                onClick={exportPdf}
+                disabled={isLoading || isExporting}
+                title={isLoading ? 'Wait for the register to load before exporting.' : 'Download register as PDF'}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>🖨</span>
-                <span>Print</span>
+                <span>{isExporting ? '⏳' : '📄'}</span>
+                <span>{isExporting ? 'Exporting…' : 'Export PDF'}</span>
               </button>
 
               <div className="flex items-center">
@@ -156,8 +268,8 @@ export default function TelecalligRegister() {
             </div>
           </div>
 
-          {/* Filter Form with 6 inputs + Apply Filter Button */}
-          <form onSubmit={handleApplyFilter} className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-7 items-end">
+          {/* Filters are applied live as soon as they change — no Apply button needed */}
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-7 items-end">
             {/* From Date */}
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">
@@ -167,7 +279,7 @@ export default function TelecalligRegister() {
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none"
               />
             </div>
 
@@ -180,7 +292,7 @@ export default function TelecalligRegister() {
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none"
               />
             </div>
 
@@ -192,7 +304,7 @@ export default function TelecalligRegister() {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
               >
                 <option value="All Category">All Category</option>
                 {categoryOptions.map((cat) => (
@@ -211,9 +323,9 @@ export default function TelecalligRegister() {
               <select
                 value={staff}
                 onChange={(e) => setStaff(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
               >
-                {STAFF_LIST.map((s) => (
+                {staffOptions.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
@@ -229,9 +341,9 @@ export default function TelecalligRegister() {
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
               >
-                {STATUS_LIST.map((st) => (
+                {statusOptions.map((st) => (
                   <option key={st} value={st}>
                     {st}
                   </option>
@@ -247,9 +359,9 @@ export default function TelecalligRegister() {
               <select
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
               >
-                {LOCATIONS.map((loc) => (
+                {locationOptions.map((loc) => (
                   <option key={loc} value={loc}>
                     {loc}
                   </option>
@@ -257,20 +369,23 @@ export default function TelecalligRegister() {
               </select>
             </div>
 
-            {/* Apply Filter Button */}
-            <div>
+            {/* Clear Filters */}
+            <div className="flex items-end">
               <button
-                type="submit"
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 transition cursor-pointer active:scale-95"
+                type="button"
+                onClick={clearAllFilters}
+                disabled={!hasActiveFilters}
+                title="Clear all filters"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-600 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <span>☩</span>
-                <span>Apply Filter</span>
+                <span>✕</span>
+                <span>Clear Filters</span>
               </button>
             </div>
-          </form>
+          </div>
         </div>
 
-        {/* Printable Official Register Header */}
+        {/* Printable Official Register Header (Only Visible When Printed) */}
         <div className="hidden print:block mb-4 border-b-2 border-black pb-3 text-black">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -288,21 +403,34 @@ export default function TelecalligRegister() {
             </div>
           </div>
 
+          {/* Applied Filter Tags */}
           <div className="mt-2 flex flex-wrap gap-2 text-[9px] bg-slate-100 p-1.5 rounded border border-slate-300 font-medium">
-            <span><strong>Category:</strong> {appliedFilters.category}</span>
+            <span><strong>Category:</strong> {category}</span>
             <span>&bull;</span>
-            <span><strong>Staff:</strong> {appliedFilters.staff}</span>
+            <span><strong>Staff:</strong> {staff}</span>
             <span>&bull;</span>
-            <span><strong>Status:</strong> {appliedFilters.status}</span>
+            <span><strong>Status:</strong> {status}</span>
             <span>&bull;</span>
-            <span><strong>Location:</strong> {appliedFilters.location}</span>
+            <span><strong>Location:</strong> {location}</span>
+            {fromDate && (
+              <>
+                <span>&bull;</span>
+                <span><strong>From:</strong> {fromDate}</span>
+              </>
+            )}
+            {toDate && (
+              <>
+                <span>&bull;</span>
+                <span><strong>To:</strong> {toDate}</span>
+              </>
+            )}
           </div>
         </div>
 
         {/* Register Table Card */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs print:p-0 print:border-none print:shadow-none">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="register-table w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-bold text-[11px] print:border-black print:text-black">
                   <th className="py-1.5 pr-3 font-bold">Date</th>
@@ -315,19 +443,25 @@ export default function TelecalligRegister() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 print:divide-slate-200">
-                {paginatedData.length > 0 ? (
-                  paginatedData.map((row) => (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                      Loading telecalling register…
+                    </td>
+                  </tr>
+                ) : filteredData.length > 0 ? (
+                  filteredData.map((row) => (
                     <tr key={row.id} className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
-                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap">
+                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell">
                         {row.date}
                       </td>
-                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap">
-                        {row.lastCalledDate}
+                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell">
+                        {row.lastCallDate}
                       </td>
-                      <td className="py-1.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px]" title={row.company}>
+                      <td className="py-1.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px] company-cell" title={row.company}>
                         {row.company}
                       </td>
-                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap">
+                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap nowrap-cell">
                         {row.number}
                       </td>
                       <td className="py-1.5 pr-3 font-medium text-slate-700 print:text-black uppercase text-[11px]">
@@ -358,7 +492,7 @@ export default function TelecalligRegister() {
                 ) : (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
-                      No telecalling register records found matching criteria.
+                      No telecalling register records found matching the selected filter criteria.
                     </td>
                   </tr>
                 )}
@@ -366,48 +500,10 @@ export default function TelecalligRegister() {
             </table>
           </div>
 
-          {/* Pagination & Footer Stats (Matching Screenshot) */}
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-500 print:hidden">
-            <span>
-              Showing {filteredData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{' '}
-              {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} entries
-            </span>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  className="flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  &lt;
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                  <button
-                    key={pageNum}
-                    type="button"
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`flex h-7 w-7 items-center justify-center rounded text-xs font-bold transition cursor-pointer ${
-                      currentPage === pageNum
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                  className="flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  &gt;
-                </button>
-              </div>
-            )}
+          {/* Footer stats */}
+          <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-500 print:text-black">
+            <span>Showing <strong>{filteredData.length}</strong> total records</span>
+            <span className="font-mono text-[10px]">PROGRAMERS INTERNATIONAL &bull; REGISTER AUDIT</span>
           </div>
         </div>
       </div>
