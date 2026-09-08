@@ -93,6 +93,23 @@ export default function RawDataRegister() {
     return ['All Locations', ...places.sort((a, b) => a.localeCompare(b))]
   }, [registerRows])
 
+  const hasActiveFilters =
+    fromDate !== '' ||
+    toDate !== '' ||
+    category !== 'All Category' ||
+    staff !== 'All Staff' ||
+    location !== 'All Locations' ||
+    searchQuery.trim() !== ''
+
+  function clearAllFilters() {
+    setFromDate('')
+    setToDate('')
+    setCategory('All Category')
+    setStaff('All Staff')
+    setLocation('All Locations')
+    setSearchQuery('')
+  }
+
   // Filters apply live as the user changes them — no Apply button needed.
   const filteredData = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -182,7 +199,7 @@ export default function RawDataRegister() {
           </div>
 
           {/* Filters are applied live as soon as they change — no Apply button needed */}
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-5 items-end">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-6 items-end">
             {/* From Date */}
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">
@@ -262,6 +279,20 @@ export default function RawDataRegister() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Clear Filters */}
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                disabled={!hasActiveFilters}
+                title="Clear all filters"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-600 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span>✕</span>
+                <span>Clear Filters</span>
+              </button>
             </div>
 
           </div>
