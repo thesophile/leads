@@ -178,6 +178,15 @@ export default function RawDataRegister() {
       const marginY = 40
       const contentW = pageW - marginX * 2
 
+      // Resolve the caller's IP for the audit footer (fall back if unavailable).
+      let clientIp = '-'
+      try {
+        const ipData = await api.get('/auth/client-ip/')
+        if (ipData && ipData.ip) clientIp = ipData.ip
+      } catch {
+        clientIp = '-'
+      }
+
       const stamp = new Date().toLocaleDateString('en-GB')
       const rows = filteredData.map((r) => [r.date, r.company, r.number, r.location, r.staff])
       const companyName = company?.name || 'Your Company'
@@ -292,6 +301,17 @@ export default function RawDataRegister() {
         return cursorY
       }
 
+      const drawFooter = (pageNumber, totalPages) => {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(80)
+        doc.text(clientIp, marginX, pageH - 18)
+        doc.text('Leads | Powered by Programers.in', pageW / 2, pageH - 18, { align: 'center' })
+        doc.text(`Page ${pageNumber} of ${totalPages}`, pageW - marginX, pageH - 18, {
+          align: 'right',
+        })
+      }
+
       autoTable(doc, {
         startY: drawHeader(),
         head: [['Date', 'Company', 'Number', 'Location', 'Staff']],
@@ -319,20 +339,15 @@ export default function RawDataRegister() {
           3: { cellWidth: 'auto' },
           4: { cellWidth: 'auto' },
         },
-        didDrawPage: () => {
-          const pageNumber = doc.getNumberOfPages()
-          if (pageNumber > 1) {
-            doc.setFontSize(8)
-            doc.setTextColor(80)
-            doc.text(
-              `Raw Data Register  •  Page ${pageNumber}`,
-              pageW / 2,
-              pageH - 18,
-              { align: 'center' }
-            )
-          }
-        },
+        didDrawPage: () => {},
       })
+
+      // Draw the audit footer on every page (all pages the table touched).
+      const totalPages = doc.getNumberOfPages()
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p)
+        drawFooter(p, totalPages)
+      }
 
       // Footer stats under the final table row
       const finalY = doc.lastAutoTable.finalY + 10

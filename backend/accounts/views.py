@@ -408,6 +408,24 @@ class MeView(APIView):
         return Response(UserSerializer(request.user).data)
 
 
+class ClientIPView(APIView):
+    """Authenticated user: the client's IP address as seen by the server.
+
+    Used for audit footers on exported PDFs. Reads the left-most forwarded
+    address when the app runs behind a proxy, otherwise the raw peer address.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+        if forwarded:
+            ip = forwarded.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR', '')
+        return Response({'ip': ip or '-'})
+
+
 class CompanyDetailView(APIView):
     """Authenticated user: view and edit the details of their own company."""
 
