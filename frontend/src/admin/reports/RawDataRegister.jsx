@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 
@@ -93,6 +95,8 @@ export default function RawDataRegister() {
     return ['All Locations', ...places.sort((a, b) => a.localeCompare(b))]
   }, [registerRows])
 
+  const [isExporting, setIsExporting] = useState(false)
+
   const hasActiveFilters =
     fromDate !== '' ||
     toDate !== '' ||
@@ -142,6 +146,145 @@ export default function RawDataRegister() {
     })
   }, [registerRows, fromDate, toDate, category, staff, location, searchQuery])
 
+  // Build a properly paginated A4 PDF of the register and download it.
+  async function exportPdf() {
+    if (isExporting) return
+    setIsExporting(true)
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+      const pageW = doc.internal.pageSize.getWidth()
+      const pageH = doc.internal.pageSize.getHeight()
+      const marginX = 40
+      const marginY = 40
+      const contentW = pageW - marginX * 2
+
+      const stamp = new Date().toLocaleDateString('en-GB')
+      const rows = filteredData.map((r) => [r.date, r.company, r.number, r.location, r.staff])
+
+      // Try to embed the company logo; fall back to text only if it cannot load.
+      let logo = null
+      try {
+        const resp = await fetch('/programers-logo-BLACCK.png')
+        if (resp.ok) {
+          const blob = await resp.blob()
+          logo = await new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result)
+            reader.onerror = () => resolve(null)
+            reader.readAsDataURL(blob)
+          })
+        }
+      } catch {
+        logo = null
+      }
+
+      const drawHeader = () => {
+        let cursorY = marginY
+
+        // Left side: logo + company block
+        if (logo) {
+          doc.addImage(logo, 'PNG', marginX, cursorY, 46, 46)
+        }
+        const textX = logo ? marginX + 54 : marginX
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(15)
+        doc.text('PROGRAMERS INTERNATIONAL', textX, cursorY + 16)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(80)
+        doc.text('4th Floor, Park House, Round North, Thrissur, Kerala', textX, cursorY + 27)
+
+        // Right side: title + printed meta
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(12)
+        doc.setTextColor(0)
+        doc.text('RAW DATA REGISTER', pageW - marginX, cursorY + 12, { align: 'right' })
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(80)
+        doc.text(`Printed: ${stamp}  |  Records: ${rows.length}`, pageW - marginX, cursorY + 22, { align: 'right' })
+
+        cursorY += 48
+
+        // Applied filters line
+        const filters = []
+        if (category !== 'All Category') filters.push(`Category: ${category}`)
+        if (staff !== 'All Staff') filters.push(`Staff: ${staff}`)
+        if (location !== 'All Locations') filters.push(`Location: ${location}`)
+        if (fromDate) filters.push(`From: ${fromDate}`)
+        if (toDate) filters.push(`To: ${toDate}`)
+        if (filters.length > 0) {
+          doc.setFillColor(241, 245, 249)
+          doc.setDrawColor(203, 213, 225)
+          doc.roundedRect(marginX, cursorY, contentW, 18, 3, 3, 'FD')
+          doc.setFontSize(8)
+          doc.setTextColor(0)
+          doc.text(filters.join('   •   '), marginX + 8, cursorY + 12)
+          cursorY += 26
+        }
+        return cursorY
+      }
+
+      autoTable(doc, {
+        startY: drawHeader(),
+        head: [['Date', 'Company', 'Number', 'Location', 'Staff']],
+        body: rows,
+        margin: { left: marginX, right: marginX },
+        styles: {
+          font: 'helvetica',
+          fontSize: 8,
+          cellPadding: 4,
+          lineColor: [0, 0, 0],
+          lineWidth: 0.5,
+          textColor: [0, 0, 0],
+          overflow: 'linebreak',
+        },
+        headStyles: {
+          fillColor: [226, 226, 226],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold',
+        },
+        alternateRowStyles: { fillColor: [255, 255, 255] },
+        columnStyles: {
+          0: { cellWidth: 62 },
+          1: { cellWidth: 'auto' },
+          2: { cellWidth: 80 },
+          3: { cellWidth: 'auto' },
+          4: { cellWidth: 'auto' },
+        },
+        didDrawPage: () => {
+          const pageNumber = doc.getNumberOfPages()
+          if (pageNumber > 1) {
+            doc.setFontSize(8)
+            doc.setTextColor(80)
+            doc.text(
+              `Raw Data Register  •  Page ${pageNumber}`,
+              pageW / 2,
+              pageH - 18,
+              { align: 'center' }
+            )
+          }
+        },
+      })
+
+      // Footer stats under the final table row
+      const finalY = doc.lastAutoTable.finalY + 10
+      doc.setDrawColor(0)
+      doc.setLineWidth(0.5)
+      doc.line(marginX, finalY - 4, pageW - marginX, finalY - 4)
+      doc.setFontSize(8)
+      doc.setTextColor(0)
+      doc.text(`Showing ${rows.length} total records`, marginX, finalY + 10)
+      doc.text('PROGRAMERS INTERNATIONAL  •  REGISTER AUDIT', pageW - marginX, finalY + 10, {
+        align: 'right',
+      })
+
+      doc.save(`Raw_Data_Register_${stamp.replace(/\//g, '-')}.pdf`)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <Layout>
       <div className="space-y-4 print-sheet">
@@ -153,7 +296,7 @@ export default function RawDataRegister() {
 
         {/* Screen Only Header Card */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs print:hidden">
-          {/* Top Bar: Title & Print + Search Box */}
+          {/* Top Bar: Title & Export PDF + Search Box */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
@@ -162,17 +305,17 @@ export default function RawDataRegister() {
               <span>Raw Data Register</span>
             </div>
 
-            {/* Right: Print Button + Search Box */}
+            {/* Right: Export PDF Button + Search Box */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => window.print()}
-                disabled={isLoading}
-                title={isLoading ? 'Wait for the register to load before printing.' : 'Print register'}
+                onClick={exportPdf}
+                disabled={isLoading || isExporting}
+                title={isLoading ? 'Wait for the register to load before exporting.' : 'Download register as PDF'}
                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>🖨</span>
-                <span>Print</span>
+                <span>{isExporting ? '⏳' : '📄'}</span>
+                <span>{isExporting ? 'Exporting…' : 'Export PDF'}</span>
               </button>
 
               <div className="flex items-center">
