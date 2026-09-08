@@ -9,6 +9,7 @@ from .views import (
     ClientOrderResponseView,
     ClientQuotationDetailView,
     ClientQuotationResponseView,
+    DashboardStatsView,
     LeadAssignView,
     LeadDetailView,
     LeadListView,
@@ -27,6 +28,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path('dashboard/stats/', DashboardStatsView.as_view(), name='transactions-dashboard-stats'),
     path('leads/', LeadListView.as_view(), name='transactions-leads-list'),
     path('leads/assign/', LeadAssignView.as_view(), name='transactions-leads-assign'),
     path('leads/<pk>/', LeadDetailView.as_view(), name='transactions-lead-detail'),

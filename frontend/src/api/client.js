@@ -87,8 +87,14 @@ function extractMessage(data) {
   return JSON.stringify(data)
 }
 
-async function request(path, { method = 'GET', body, headers = {}, auth = true } = {}) {
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`
+async function request(path, { method = 'GET', body, headers = {}, auth = true, params = null } = {}) {
+  let url = path.startsWith('http') ? path : `${API_BASE}${path}`
+  if (params) {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    )
+    if (String(qs)) url += `?${qs}`
+  }
   const config = {
     method,
     headers: { 'Content-Type': 'application/json', ...headers },

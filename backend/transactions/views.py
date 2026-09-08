@@ -8,7 +8,8 @@ from datetime import date, datetime, timedelta
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db import IntegrityError
-from django.db.models import Max, Q
+from django.db.models import Count, Max, Q
+from django.db.models.functions import TruncDay, TruncMonth, TruncYear
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -2023,6 +2024,197 @@ class ClientOrderDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(public_order_payload(order))
+
+
+class DashboardStatsView(APIView):
+    """Aggregate dashboard metrics from the current user's scoped lead data.
+
+    Accepts ``group_by`` (``daily`` | ``monthly`` | ``yearly``) and optional
+    ``start_date`` / ``end_date`` (``YYYY-MM-DD``). Defaults to the last 31
+    days. All date bucketing is based on the lead's ``date`` field.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'leads.view', 'telecall.view'):
+            return Response(
+                {'detail': 'You do not have permission to view dashboard data.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            start_date = date.fromisoformat(request.query_params.get('start_date'))
+            end_date = date.fromisoformat(request.query_params.get('end_date'))
+        except (TypeError, ValueError):
+            end_date = date.today()
+            start_date = end_date - timedelta(days=30)
+
+        group_by = request.query_params.get('group_by') or 'daily'
+        if group_by not in ('daily', 'monthly', 'yearly'):
+            group_by = 'daily'
+
+        # Daily bucketing for the trend series unless monthly/yearly requested.
+        bucket_fn = {'daily': TruncDay, 'monthly': TruncMonth, 'yearly': TruncYear}[group_by]
+
+        scoped = scoped_queryset(request.user).filter(date__range=(start_date, end_date))
+        total_leads = scoped.count()
+
+        # Contacted: a lead counts as contacted if it has call history rows or a
+        # non-default call_status.
+        contacted_qs = scoped.filter(
+            Q(history__isnull=False) | ~Q(call_status='Pending Call')
+        ).distinct()
+        contacted_total = contacted_qs.count()
+
+        # Sources breakdown.
+        source_rows = (
+            scoped.exclude(source='')
+            .values('source')
+            .annotate(value=Count('id'))
+            .order_by('-value')
+        )
+        source_data = []
+        source_colors = [
+            '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981',
+            '#f97316', '#64748b', '#ef4444', '#06b6d4',
+        ]
+        for i, row in enumerate(source_rows):
+            source_data.append({
+                'name': row['source'],
+                'value': row['value'],
+                'color': source_colors[i % len(source_colors)],
+            })
+
+        # Conversion funnel stages.
+        def count_by_status(status):
+            return scoped.filter(status=status).count()
+
+        funnel = {
+            'raw': count_by_status(Lead.STATUS_RAW),
+            'assigned': count_by_status(Lead.STATUS_ASSIGNED),
+            'quotation': count_by_status(Lead.STATUS_QUOTATION),
+            'order': count_by_status(Lead.STATUS_ORDER),
+            'client': count_by_status(Lead.STATUS_CLIENT),
+        }
+        funnel['contacted'] = contacted_total
+        funnel['interested'] = scoped.filter(call_status='Interested').count()
+        funnel['total'] = total_leads
+
+        # KPIs within range.
+        hot_leads = scoped.filter(priority__icontains='hot').count()
+        follow_ups_due = scoped.filter(has_follow_up=True).count()
+        open_quotations = scoped.filter(status=Lead.STATUS_QUOTATION).count()
+        orders_accepted = scoped.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).count()
+        calls_today = CallHistory.objects.filter(
+            created_at__date__range=(start_date, end_date)
+        ).count()
+
+        # Trend series bucketed by the chosen interval.
+        # Group leads and contacted leads separately, then merge.
+        trend = []
+        trend_map = {}
+        for row in scoped.annotate(bucket=bucket_fn('date')).values('bucket'):
+            key = row['bucket']
+            if key is None:
+                continue
+            trend_map.setdefault(key, {'leads': 0, 'contacted': 0})
+            trend_map[key]['leads'] += 1
+        for row in contacted_qs.annotate(bucket=bucket_fn('date')).values('bucket'):
+            key = row['bucket']
+            if key is None:
+                continue
+            trend_map.setdefault(key, {'leads': 0, 'contacted': 0})
+            trend_map[key]['contacted'] += 1
+
+        for key in sorted(trend_map):
+            trend.append({
+                'label': self._label(key),
+                'leads': trend_map[key]['leads'],
+                'contacted': trend_map[key]['contacted'],
+            })
+
+        # Quotation / order pipeline bucketed the same way (counts by lead status).
+        quoted_map = {}
+        ordered_map = {}
+        for row in scoped.annotate(bucket=bucket_fn('date')).filter(status=Lead.STATUS_QUOTATION).values('bucket'):
+            key = row['bucket']
+            if key is None:
+                continue
+            quoted_map[key] = quoted_map.get(key, 0) + 1
+        for row in scoped.annotate(bucket=bucket_fn('date')).filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).values('bucket'):
+            key = row['bucket']
+            if key is None:
+                continue
+            ordered_map[key] = ordered_map.get(key, 0) + 1
+
+        pipeline = []
+        for key in sorted(set(trend_map) | set(quoted_map) | set(ordered_map)):
+            pipeline.append({
+                'label': self._label(key),
+                'quotations': quoted_map.get(key, 0),
+                'orders': ordered_map.get(key, 0),
+            })
+
+        # Team performance: group by assigned_to within range.
+        team_rows = (
+            scoped.exclude(assigned_to='')
+            .values('assigned_to')
+            .annotate(quotation_count=Count('id'))
+            .order_by('-quotation_count')
+        )
+        team = []
+        for row in team_rows[:8]:
+            name = row['assigned_to']
+            person_qs = scoped.filter(assigned_to=name)
+            team.append({
+                'name': name,
+                'quotations': person_qs.filter(status=Lead.STATUS_QUOTATION).count(),
+                'orders': person_qs.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).count(),
+            })
+
+        # Hot leads requiring action (highest priority, most recent).
+        hot_leads_list = []
+        hot_qs = scoped.filter(priority__icontains='hot')
+        candidate_qs = hot_qs if hot_qs.exists() else scoped
+        for lead in candidate_qs.order_by('-created_at')[:3]:
+            status_text = dict(Lead.STATUS_CHOICES).get(lead.status, lead.status)
+            hot_leads_list.append({
+                'id': lead.id,
+                'company': lead.company,
+                'category': lead.category,
+                'phone': lead.phone,
+                'status': status_text,
+                'priority': lead.priority or 'Hot',
+                'assignedTo': lead.assigned_to,
+                'nextAction': 'Send Quotation' if lead.status == Lead.STATUS_QUOTATION else 'Follow Up',
+                'due': '',
+            })
+
+        return Response({
+            'range': {'start_date': start_date.isoformat(), 'end_date': end_date.isoformat()},
+            'group_by': group_by,
+            'kpis': {
+                'total_leads': total_leads,
+                'calls_today': calls_today,
+                'hot_leads': hot_leads,
+                'follow_ups_due': follow_ups_due,
+                'open_quotations': open_quotations,
+                'orders_accepted': orders_accepted,
+            },
+            'trend': trend,
+            'sources': source_data,
+            'funnel': funnel,
+            'pipeline': pipeline,
+            'team': team,
+            'hot_leads_list': hot_leads_list,
+        })
+
+    @staticmethod
+    def _label(key):
+        if key is None:
+            return ''
+        return key.strftime('%d %b %Y')
 
 
 class ClientOrderResponseView(APIView):
