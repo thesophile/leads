@@ -1,3 +1,5 @@
+import Spinner from './Spinner'
+
 export default function ConfirmDialog({
   open,
   title = 'Discard changes?',
@@ -8,6 +10,8 @@ export default function ConfirmDialog({
   onExtra,
   onCancel,
   onConfirm,
+  saving,
+  savingLabel = 'Saving…',
 }) {
   if (!open) return null
 
@@ -15,7 +19,7 @@ export default function ConfirmDialog({
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel()
+        if (e.target === e.currentTarget && !saving) onCancel()
       }}
     >
       <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -35,7 +39,8 @@ export default function ConfirmDialog({
             <button
               type="button"
               onClick={onExtra}
-              className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition cursor-pointer shadow-xs mr-auto"
+              disabled={saving}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition cursor-pointer shadow-xs mr-auto disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {extraLabel}
             </button>
@@ -43,16 +48,19 @@ export default function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+            disabled={saving}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {cancelLabel}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 transition cursor-pointer shadow-xs"
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 transition cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {confirmLabel}
+            {saving && <Spinner className="h-3 w-3" />}
+            {saving ? savingLabel : confirmLabel}
           </button>
         </div>
       </div>

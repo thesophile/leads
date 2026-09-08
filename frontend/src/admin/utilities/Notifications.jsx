@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
+import Spinner from '../../components/Spinner'
 
 const EMPTY = []
 
@@ -119,6 +120,8 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState(EMPTY)
   const [activeTab, setActiveTab] = useState('All')
   const [loading, setLoading] = useState(true)
+  const [markingAll, setMarkingAll] = useState(false)
+  const [markingId, setMarkingId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -154,20 +157,28 @@ export default function Notifications() {
   }
 
   async function markRead(id, read) {
+    if (markingId) return
+    setMarkingId(id)
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read } : n)))
     try {
       await api.patch(`/notifications/${id}/`, { read })
     } catch {
       // ignore network hiccups
+    } finally {
+      setMarkingId(null)
     }
   }
 
   async function markAllRead() {
+    if (markingAll) return
+    setMarkingAll(true)
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
     try {
       await api.post('/notifications/read-all/', {})
     } catch {
       // ignore
+    } finally {
+      setMarkingAll(false)
     }
   }
 
@@ -185,11 +196,11 @@ export default function Notifications() {
           <button
             type="button"
             onClick={markAllRead}
-            disabled={unreadCount === 0}
+            disabled={unreadCount === 0 || markingAll || markingId !== null}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <CheckIcon />
-            Mark all as read
+            {markingAll ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon />}
+            {markingAll ? 'Marking…' : 'Mark all as read'}
           </button>
         </div>
 
@@ -242,7 +253,8 @@ export default function Notifications() {
                     <button
                       type="button"
                       onClick={() => toggleRead(n)}
-                      className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors cursor-pointer ${
+                      disabled={markingId === n.id}
+                      className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
                         n.read ? 'bg-white hover:bg-slate-50/70' : 'bg-brand-50/40 hover:bg-brand-50/70'
                       }`}
                     >

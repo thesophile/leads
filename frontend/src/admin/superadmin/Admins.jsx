@@ -3,6 +3,7 @@ import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import PasswordInput from '../../components/PasswordInput'
+import Spinner from '../../components/Spinner'
 
 function PlusCircleIcon() {
   return (
@@ -212,6 +213,9 @@ export default function Admins() {
   const [deleteModal, setDeleteModal] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [togglingId, setTogglingId] = useState(null)
+  const [resettingPw, setResettingPw] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -258,6 +262,7 @@ export default function Admins() {
   async function handleSave(e) {
     e.preventDefault()
     setError('')
+    if (saving) return
 
     if (!formData.name.trim() || !formData.email.trim()) {
       setError('Name and email are required.')
@@ -276,6 +281,7 @@ export default function Admins() {
       return
     }
 
+    setSaving(true)
     try {
       if (editingId) {
         await api.patch(`/auth/admins/${editingId}/`, {
@@ -301,6 +307,8 @@ export default function Admins() {
       await refreshData()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -323,22 +331,28 @@ export default function Admins() {
   }
 
   async function handleToggleActive(admin) {
+    if (togglingId) return
+    setTogglingId(admin.id)
     try {
       await api.patch(`/auth/admins/${admin.id}/`, { is_active: !admin.is_active })
       showToast(admin.is_active ? `Deactivated ${admin.name}.` : `Activated ${admin.name}.`)
       await refreshData()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setTogglingId(null)
     }
   }
 
   async function handleResetPassword(e) {
     e.preventDefault()
     setError('')
+    if (resettingPw) return
     if (resetPw.length < 8) {
       setError('New password must be at least 8 characters.')
       return
     }
+    setResettingPw(true)
     try {
       await api.post(`/auth/admins/${resetModal.id}/reset-password/`, { new_password: resetPw })
       showToast(`Password updated for ${resetModal.name}.`)
@@ -346,6 +360,8 @@ export default function Admins() {
       setResetPw('')
     } catch (err) {
       setError(err.message)
+    } finally {
+      setResettingPw(false)
     }
   }
 
@@ -452,14 +468,21 @@ export default function Admins() {
                 )}
                 <button
                   type="submit"
-                  className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98] cursor-pointer ${
+                  disabled={saving}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 ${
                     isEditing
                       ? 'flex-1 bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
                       : 'w-full bg-brand-600 hover:bg-brand-700 shadow-brand-600/10'
                   }`}
                 >
-                  {isEditing ? <RefreshIcon className="h-3.5 w-3.5 text-white" /> : <SaveIcon />}
-                  <span>{isEditing ? 'Update' : 'Add Admin'}</span>
+                  {saving ? (
+                    <Spinner className="h-3.5 w-3.5" />
+                  ) : isEditing ? (
+                    <RefreshIcon className="h-3.5 w-3.5 text-white" />
+                  ) : (
+                    <SaveIcon />
+                  )}
+                  <span>{saving ? 'Saving…' : isEditing ? 'Update' : 'Add Admin'}</span>
                 </button>
               </div>
             </form>
@@ -566,9 +589,14 @@ export default function Admins() {
                                     handleToggleActive(admin)
                                   }}
                                   title={admin.is_active ? 'Deactivate' : 'Activate'}
-                                  className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                                  disabled={togglingId !== null}
+                                  className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
-                                  <PowerIcon active={admin.is_active} />
+                                  {togglingId === admin.id ? (
+                                    <Spinner className="h-3.5 w-3.5 text-emerald-500" />
+                                  ) : (
+                                    <PowerIcon active={admin.is_active} />
+                                  )}
                                 </button>
                               )}
                               {!protectedAcct && (
@@ -674,15 +702,18 @@ export default function Admins() {
                 <button
                   type="button"
                   onClick={() => setResetModal(null)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  disabled={resettingPw}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm"
+                  disabled={resettingPw}
+                  className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Save password
+                  {resettingPw && <Spinner className="h-3.5 w-3.5" />}
+                  {resettingPw ? 'Saving…' : 'Save password'}
                 </button>
               </div>
             </form>

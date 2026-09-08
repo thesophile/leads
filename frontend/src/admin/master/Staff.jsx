@@ -4,6 +4,7 @@ import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import PasswordInput from '../../components/PasswordInput'
 import { can } from '../../utils/permissions'
+import Spinner from '../../components/Spinner'
 
 function PlusCircleIcon() {
   return (
@@ -248,6 +249,9 @@ export default function Staff() {
   const [resetModal, setResetModal] = useState(null) // user object for reset
   const [resetPw, setResetPw] = useState('')
   const [toast, setToast] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [togglingId, setTogglingId] = useState(null)
+  const [resettingPw, setResettingPw] = useState(false)
 
   // Roles & Permissions editor state
   const [editingRole, setEditingRole] = useState(null) // role object being edited
@@ -311,6 +315,7 @@ export default function Staff() {
   async function handleSave(e) {
     e.preventDefault()
     setError('')
+    if (saving) return
 
     if (!formData.name.trim() || !formData.email.trim()) {
       setError('Name and email are required.')
@@ -321,6 +326,7 @@ export default function Staff() {
       return
     }
 
+    setSaving(true)
     try {
       if (editingId) {
         const payload = {
@@ -350,6 +356,8 @@ export default function Staff() {
       await refreshData()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -373,22 +381,28 @@ export default function Staff() {
   }
 
   async function handleToggleActive(emp) {
+    if (togglingId) return
+    setTogglingId(emp.id)
     try {
       await api.patch(`/auth/users/${emp.id}/`, { is_active: !emp.is_active })
       showToast(emp.is_active ? `Deactivated ${emp.name}.` : `Activated ${emp.name}.`)
       await refreshData()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setTogglingId(null)
     }
   }
 
   async function handleResetPassword(e) {
     e.preventDefault()
     setError('')
+    if (resettingPw) return
     if (resetPw.length < 8) {
       setError('New password must be at least 8 characters.')
       return
     }
+    setResettingPw(true)
     try {
       await api.post(`/auth/users/${resetModal.id}/reset-password/`, { new_password: resetPw })
       showToast(`Password updated for ${resetModal.name}.`)
@@ -396,6 +410,8 @@ export default function Staff() {
       setResetPw('')
     } catch (err) {
       setError(err.message)
+    } finally {
+      setResettingPw(false)
     }
   }
 
@@ -565,14 +581,21 @@ export default function Staff() {
                 )}
                 <button
                   type="submit"
-                  className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98] cursor-pointer ${
+                  disabled={saving}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 ${
                     isEditing
                       ? 'flex-1 bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
                       : 'w-full bg-brand-600 hover:bg-brand-700 shadow-brand-600/10'
                   }`}
                 >
-                  {isEditing ? <RefreshIcon className="h-3.5 w-3.5 text-white" /> : <SaveIcon />}
-                  <span>{isEditing ? 'Update' : 'Add Employee'}</span>
+                  {saving ? (
+                    <Spinner className="h-3.5 w-3.5" />
+                  ) : isEditing ? (
+                    <RefreshIcon className="h-3.5 w-3.5 text-white" />
+                  ) : (
+                    <SaveIcon />
+                  )}
+                  <span>{saving ? 'Saving…' : isEditing ? 'Update' : 'Add Employee'}</span>
                 </button>
               </div>
             </form>
@@ -681,9 +704,14 @@ export default function Staff() {
                                   handleToggleActive(emp)
                                 }}
                                 title={emp.is_active ? 'Deactivate' : 'Activate'}
-                                className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                                disabled={togglingId !== null}
+                                className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                               >
-                                <PowerIcon active={emp.is_active} />
+                                {togglingId === emp.id ? (
+                                  <Spinner className="h-3.5 w-3.5 text-emerald-500" />
+                                ) : (
+                                  <PowerIcon active={emp.is_active} />
+                                )}
                               </button>
                             )}
                           </div>
@@ -774,15 +802,18 @@ export default function Staff() {
                 <button
                   type="button"
                   onClick={() => setResetModal(null)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  disabled={resettingPw}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm"
+                  disabled={resettingPw}
+                  className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Save password
+                  {resettingPw && <Spinner className="h-3.5 w-3.5" />}
+                  {resettingPw ? 'Saving…' : 'Save password'}
                 </button>
               </div>
             </form>
@@ -811,6 +842,8 @@ function RolesEditor({
   setError,
 }) {
   const [saveError, setSaveError] = useState('')
+  const [roleSaving, setRoleSaving] = useState(false)
+  const [roleDeleting, setRoleDeleting] = useState(false)
 
   function startNewRole() {
     setIsNewRole(true)
@@ -838,10 +871,12 @@ function RolesEditor({
 
   async function saveRole() {
     setSaveError('')
+    if (roleSaving) return
     if (!roleFormName.trim()) {
       setSaveError('Role name is required.')
       return
     }
+    setRoleSaving(true)
     try {
       if (isNewRole) {
         await api.post('/auth/roles/', {
@@ -867,11 +902,15 @@ function RolesEditor({
     } catch (err) {
       setError(err.message)
       setSaveError(err.message)
+    } finally {
+      setRoleSaving(false)
     }
   }
 
   async function deleteRole(role) {
     if (!window.confirm(`Delete the "${role.name}" role?`)) return
+    if (roleDeleting) return
+    setRoleDeleting(true)
     try {
       await api.del(`/auth/roles/${role.id}/`)
       showToast(`Role "${role.name}" deleted.`)
@@ -884,6 +923,8 @@ function RolesEditor({
     } catch (err) {
       setError(err.message)
       setSaveError(err.message)
+    } finally {
+      setRoleDeleting(false)
     }
   }
 
@@ -940,9 +981,11 @@ function RolesEditor({
                 <button
                   type="button"
                   onClick={() => deleteRole(editingRole)}
-                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 cursor-pointer"
+                  disabled={roleDeleting}
+                  className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Delete
+                  {roleDeleting && <Spinner className="h-3 w-3" />}
+                  {roleDeleting ? 'Deleting…' : 'Delete'}
                 </button>
               )}
             </div>
@@ -982,11 +1025,17 @@ function RolesEditor({
                 <button
                   type="button"
                   onClick={saveRole}
-                  className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white shadow-md transition-all cursor-pointer ${
+                  disabled={roleSaving}
+                  className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white shadow-md transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                     editingRole?.is_system ? 'bg-brand-600 hover:bg-brand-700' : 'bg-brand-600 hover:bg-brand-700'
                   }`}
                 >
-                  <SaveIcon /> {isNewRole ? 'Create Role' : 'Save Changes'}
+                  {roleSaving ? (
+                    <Spinner className="h-3 w-3" />
+                  ) : (
+                    <SaveIcon />
+                  )}
+                  {roleSaving ? 'Saving…' : isNewRole ? 'Create Role' : 'Save Changes'}
                 </button>
                 <button
                   type="button"

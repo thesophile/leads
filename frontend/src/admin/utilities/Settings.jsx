@@ -3,6 +3,7 @@ import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
+import Spinner from '../../components/Spinner'
 
 const LOGO_TARGET_WIDTH = 400
 const LOGO_TARGET_HEIGHT = 160
@@ -313,6 +314,9 @@ export default function Settings() {
   const [targetDrawerVisible, setTargetDrawerVisible] = useState(false)
 
   const [toastMessage, setToastMessage] = useState('')
+  const [savingGeneral, setSavingGeneral] = useState(false)
+  const [savingTemplates, setSavingTemplates] = useState(false)
+  const [removingLogo, setRemovingLogo] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -353,6 +357,8 @@ export default function Settings() {
 
   async function handleSaveGeneral(e) {
     e.preventDefault()
+    if (savingGeneral) return
+    setSavingGeneral(true)
     try {
       await api.patch('/auth/company/', {
         name: companyName,
@@ -367,11 +373,15 @@ export default function Settings() {
       showToast('General settings saved successfully.')
     } catch (err) {
       showToast(`Failed to save settings: ${err.message}`)
+    } finally {
+      setSavingGeneral(false)
     }
   }
 
   async function handleSaveTemplates(e) {
     e.preventDefault()
+    if (savingTemplates) return
+    setSavingTemplates(true)
     try {
       await api.patch('/auth/company/', {
         termsSummaryHtml,
@@ -380,6 +390,8 @@ export default function Settings() {
       showToast('Terms & Conditions templates saved successfully.')
     } catch (err) {
       showToast(`Failed to save templates: ${err.message}`)
+    } finally {
+      setSavingTemplates(false)
     }
   }
 
@@ -426,12 +438,15 @@ export default function Settings() {
   }
 
   function handleCancelLogoWarning() {
+    if (logoUploading) return
     setLogoWarning(null)
     setLogoFile(null)
   }
 
   async function handleRemoveLogo() {
+    if (removingLogo) return
     if (window.confirm('Remove the current company logo?')) {
+      setRemovingLogo(true)
       try {
         await api.del('/auth/company/logo/')
         setCompanyLogo('')
@@ -440,6 +455,8 @@ export default function Settings() {
         showToast('Company logo removed.')
       } catch (err) {
         showToast(`Failed to remove logo: ${err.message}`)
+      } finally {
+        setRemovingLogo(false)
       }
     }
   }
@@ -869,10 +886,11 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={handleRemoveLogo}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-100 cursor-pointer"
+                        disabled={removingLogo}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-100 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <TrashIcon className="h-3.5 w-3.5" />
-                        Remove
+                        {removingLogo ? <Spinner className="h-3.5 w-3.5" /> : <TrashIcon className="h-3.5 w-3.5" />}
+                        {removingLogo ? 'Removing…' : 'Remove'}
                       </button>
                     )}
                   </div>
@@ -891,10 +909,11 @@ export default function Settings() {
                 <p className="text-[11px] text-slate-400">Changes apply immediately to new documents.</p>
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
+                  disabled={savingGeneral}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <CheckIcon className="h-3.5 w-3.5" />
-                  Save Changes
+                  {savingGeneral ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon className="h-3.5 w-3.5" />}
+                  {savingGeneral ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </form>
@@ -960,10 +979,11 @@ export default function Settings() {
                 <p className="text-[11px] text-slate-400">Changes apply immediately to newly generated proposals and order forms.</p>
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
+                  disabled={savingTemplates}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <CheckIcon className="h-3.5 w-3.5" />
-                  Save Templates
+                  {savingTemplates ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon className="h-3.5 w-3.5" />}
+                  {savingTemplates ? 'Saving…' : 'Save Templates'}
                 </button>
               </div>
             </form>
@@ -1060,9 +1080,11 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={handleConfirmResizeLogo}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer"
+                disabled={logoUploading}
+                className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Auto-Resize to {logoWarning.required_width}×{logoWarning.required_height}px
+                {logoUploading && <Spinner className="h-3.5 w-3.5" />}
+                {logoUploading ? 'Uploading…' : `Auto-Resize to ${logoWarning.required_width}×${logoWarning.required_height}px`}
               </button>
             </div>
           </div>

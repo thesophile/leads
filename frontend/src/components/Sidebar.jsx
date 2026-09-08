@@ -124,6 +124,7 @@ export default function Sidebar({
   const menuSections = useMemo(() => filterMenu(user), [user])
   const navRef = useRef(null)
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useLayoutEffect(() => {
     if (navRef.current) navRef.current.scrollTop = persistedNavScrollTop
@@ -171,8 +172,14 @@ export default function Sidebar({
   }
 
   async function confirmLogout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await logout()
+    } finally {
+      setLoggingOut(false)
+    }
     setConfirmLogoutOpen(false)
-    await logout()
     navigate('/login')
     onCloseMobile?.()
   }
@@ -338,6 +345,8 @@ export default function Sidebar({
         message="You will be signed out of your account. You can sign back in anytime to pick up where you left off."
         cancelLabel="Cancel"
         confirmLabel="Logout"
+        saving={loggingOut}
+        savingLabel="Logging out…"
         onCancel={() => setConfirmLogoutOpen(false)}
         onConfirm={confirmLogout}
       />

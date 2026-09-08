@@ -3,6 +3,7 @@ import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
+import Spinner from '../../components/Spinner'
 
 function PlusCircleIcon() {
   return (
@@ -115,6 +116,8 @@ export default function Branch() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deleteModalId, setDeleteModalId] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const pageSize = 50
 
   useEffect(() => {
@@ -144,13 +147,14 @@ export default function Branch() {
 
   async function handleSave(e) {
     e.preventDefault()
-    if (!canManage) return
+    if (!canManage || saving) return
     setError('')
     if (!branchName.trim()) {
       setError('Branch name is required.')
       return
     }
 
+    setSaving(true)
     try {
       if (editingId) {
         await api.patch(`/master/branches/${editingId}/`, {
@@ -171,6 +175,8 @@ export default function Branch() {
       await refreshData()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -201,13 +207,17 @@ export default function Branch() {
   }
 
   async function confirmDelete(id) {
-    setDeleteModalId(null)
+    if (deleting) return
+    setDeleting(true)
     try {
       await api.del(`/master/branches/${id}/`)
       showToast('Branch deleted.')
+      setDeleteModalId(null)
       await refreshData()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -360,14 +370,21 @@ export default function Branch() {
                   )}
                   <button
                     type="submit"
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98] cursor-pointer ${
+                    disabled={saving}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 ${
                       isEditing
                         ? 'flex-1 bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
                         : 'w-full bg-brand-600 hover:bg-brand-700 shadow-brand-600/10'
                     }`}
                   >
-                    {isEditing ? <RefreshIcon className="h-3.5 w-3.5 text-white" /> : <SaveIcon />}
-                    <span>{isEditing ? 'Update' : 'Save'}</span>
+                    {saving ? (
+                      <Spinner className="h-3.5 w-3.5" />
+                    ) : isEditing ? (
+                      <RefreshIcon className="h-3.5 w-3.5 text-white" />
+                    ) : (
+                      <SaveIcon />
+                    )}
+                    <span>{saving ? 'Saving…' : isEditing ? 'Update' : 'Save'}</span>
                   </button>
                 </div>
               ) : (
@@ -550,16 +567,19 @@ export default function Branch() {
               <button
                 type="button"
                 onClick={() => setDeleteModalId(null)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                disabled={deleting}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => confirmDelete(deleteModalId)}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 shadow-sm"
+                disabled={deleting}
+                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Delete
+                {deleting && <Spinner className="h-3.5 w-3.5" />}
+                {deleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

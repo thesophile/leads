@@ -4,6 +4,7 @@ import { useAuth } from '../../context/auth-context'
 import Layout from '../../Layout/Layout'
 import { can } from '../../utils/permissions'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import Spinner from '../../components/Spinner'
 import useDirty from '../../utils/useDirty'
 
 function PlusIcon() {
@@ -273,6 +274,7 @@ export default function RawData() {
   const [drawerHistory, setDrawerHistory] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteModalId, setDeleteModalId] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [duplicateRecord, setDuplicateRecord] = useState(null)
@@ -596,14 +598,18 @@ async function handleBulkImport(e) {
   }
 
   async function confirmDelete(id) {
-    setDeleteModalId(null)
+    if (deleting) return
     setError('')
+    setDeleting(true)
     try {
       await api.del(`/transactions/leads/${id}/`)
       showToast('Raw data deleted.')
+      setDeleteModalId(null)
       await refreshData()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -2142,16 +2148,19 @@ async function handleBulkImport(e) {
               <button
                 type="button"
                 onClick={() => setDeleteModalId(null)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                disabled={deleting}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => confirmDelete(deleteModalId)}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 shadow-sm"
+                disabled={deleting}
+                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Delete
+                {deleting && <Spinner className="h-3.5 w-3.5" />}
+                {deleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

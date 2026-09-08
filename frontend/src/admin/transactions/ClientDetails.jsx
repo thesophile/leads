@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import Spinner from '../../components/Spinner'
 import useDirty from '../../utils/useDirty'
 import { api } from '../../api/client'
 
@@ -225,6 +226,9 @@ export default function ClientDetails() {
   const [previewAttachment, setPreviewAttachment] = useState(null)
   const [viewRecord, setViewRecord] = useState(null)
   const [discardOpen, setDiscardOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deletingAttachment, setDeletingAttachment] = useState(null)
+  const [statusSavingId, setStatusSavingId] = useState(null)
 
   const { dirty, reset } = useDirty(
     modalOpen,
@@ -387,6 +391,7 @@ export default function ClientDetails() {
 
   async function handleSave(e) {
     e.preventDefault()
+    if (saving) return
 
     const hasExisting = editingId
       ? (records.find((r) => r.id === editingId)?.attachments || []).length > 0
@@ -398,6 +403,7 @@ export default function ClientDetails() {
       payload.leadId = form.leadId || prefilledOrder?.leadId || ''
     }
 
+    setSaving(true)
     try {
       let record
       if (editingId) {
@@ -417,9 +423,11 @@ export default function ClientDetails() {
     } catch (err) {
       setToastMessage(`✗ ${err.message || 'Could not save client details.'}`)
       setTimeout(() => setToastMessage(''), 3000)
+      setSaving(false)
       return
     }
 
+    setSaving(false)
     setModalOpen(false)
     setNewAttachments([])
     reset()
@@ -427,18 +435,24 @@ export default function ClientDetails() {
   }
 
   async function handleStatusChange(id, newStatus) {
+    if (statusSavingId) return
+    setStatusSavingId(id)
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r)))
     try {
       await api.put(`/transactions/client-details/${encodeURIComponent(id)}/`, { status: newStatus })
     } catch (err) {
       setToastMessage(`✗ ${err.message || 'Could not update status.'}`)
       setTimeout(() => setToastMessage(''), 3000)
+    } finally {
+      setStatusSavingId(null)
     }
   }
 
   async function removeExistingAttachment(att) {
+    if (deletingAttachment) return
     const record = records.find((r) => r.id === editingId)
     if (!record) return
+    setDeletingAttachment(att.id)
     try {
       await api.del(
         `/transactions/client-details/${encodeURIComponent(record.id)}/attachments/${att.id}/`
@@ -454,6 +468,7 @@ export default function ClientDetails() {
     } catch (err) {
       setToastMessage(`✗ ${err.message || 'Could not remove attachment.'}`)
     }
+    setDeletingAttachment(null)
     setTimeout(() => setToastMessage(''), 2500)
   }
 
@@ -675,8 +690,9 @@ export default function ClientDetails() {
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => handleStatusChange(rec.id, e.target.value)}
                           title="Change status"
+                          disabled={statusSavingId === rec.id}
                           aria-label={`Status for ${rec.clientName}`}
-                          className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 ${STATUS_STYLES[rec.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}
+                          className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60 disabled:cursor-not-allowed ${STATUS_STYLES[rec.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}
                         >
                           {STATUS_VALUES.map((statusValue) => (
                             <option key={statusValue} value={statusValue}>
@@ -864,10 +880,15 @@ export default function ClientDetails() {
                         <button
                           type="button"
                           onClick={() => removeExistingAttachment(att)}
-                          className="rounded p-0.5 text-slate-400 hover:text-red-600 cursor-pointer"
+                          disabled={deletingAttachment === att.id}
+                          className="rounded p-0.5 text-slate-400 hover:text-red-600 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                           title="Remove document"
                         >
-                          <TrashIcon className="h-3.5 w-3.5" />
+                          {deletingAttachment === att.id ? (
+                            <Spinner className="h-3.5 w-3.5 text-red-500" />
+                          ) : (
+                            <TrashIcon className="h-3.5 w-3.5" />
+                          )}
                         </button>
                       </div>
                     ))}
@@ -943,9 +964,15 @@ export default function ClientDetails() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white hover:bg-brand-700 transition cursor-pointer shadow-xs"
+                  disabled={saving}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white hover:bg-brand-700 transition cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {editingId ? 'Save Changes' : 'Save Client Details'}
+                  {saving && <Spinner className="h-3.5 w-3.5" />}
+                  {saving
+                    ? 'Saving…'
+                    : editingId
+                      ? 'Save Changes'
+                      : 'Save Client Details'}
                 </button>
               </div>
             </form>

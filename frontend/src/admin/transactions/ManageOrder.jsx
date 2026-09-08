@@ -10,6 +10,7 @@ import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
 import SendToClientModal from './SendToClientModal'
+import Spinner from '../../components/Spinner'
 
 // Initial dataset of approved orders ready for execution
 const STAFF_LIST = [
@@ -148,6 +149,9 @@ export default function ManageOrder() {
   const [remarksVal, setRemarksVal] = useState('')
   const [submitMessage, setSubmitMessage] = useState('')
   const [discardOpen, setDiscardOpen] = useState(false)
+  const [savingOrder, setSavingOrder] = useState(false)
+  const [statusPending, setStatusPending] = useState(null)
+  const [markingAccepted, setMarkingAccepted] = useState(false)
 
   const { dirty, reset } = useDirty(
     orderModalOpen,
@@ -288,7 +292,8 @@ export default function ManageOrder() {
 
   async function handleSubmitOrder(e) {
     e.preventDefault()
-
+    if (savingOrder) return
+    setSavingOrder(true)
     try {
       if (editingOrderId) {
         // Update existing
@@ -353,12 +358,16 @@ export default function ManageOrder() {
       reset()
     } catch (err) {
       setSubmitMessage(`✗ ${err.message || 'Could not save the order.'}`)
+    } finally {
+      setSavingOrder(false)
     }
   }
 
   async function handleUpdateOrderStatus(orderId, nextStatus, e) {
     e.stopPropagation()
     setOpenDropdownId(null)
+    if (statusPending || markingAccepted) return
+    setStatusPending(orderId)
     try {
       const updated = await api.put(
         `/transactions/orders/${encodeURIComponent(orderId)}/`,
@@ -371,11 +380,15 @@ export default function ManageOrder() {
       showToast(`Order ${orderId} marked as ${label}.`)
     } catch (err) {
       showToast(err.message || 'Could not update order status.')
+    } finally {
+      setStatusPending(null)
     }
   }
 
   async function handleMarkAccepted(order) {
+    if (statusPending || markingAccepted) return
     setOpenDropdownId(null)
+    setMarkingAccepted(true)
     try {
       const updated = await api.put(
         `/transactions/orders/${encodeURIComponent(order.id)}/`,
@@ -387,6 +400,8 @@ export default function ManageOrder() {
       navigate('/client-details', { state: { order: { ...order, ...updated } } })
     } catch (err) {
       showToast(err.message || 'Could not mark order as accepted.')
+    } finally {
+      setMarkingAccepted(false)
     }
   }
 
@@ -743,9 +758,14 @@ export default function ManageOrder() {
               <button
                 type="button"
                 onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Pending', e)}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition cursor-pointer"
+                disabled={statusPending !== null || markingAccepted}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <span>Mark as Pending (Not Sent)</span>
+                {statusPending === activeMenuOrder.id ? (
+                  <Spinner className="h-3 w-3" />
+                ) : (
+                  <span>Mark as Pending (Not Sent)</span>
+                )}
               </button>
 
               <button
@@ -755,17 +775,27 @@ export default function ManageOrder() {
                   setOpenDropdownId(null)
                   handleMarkAccepted(activeMenuOrder)
                 }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
+                disabled={statusPending !== null || markingAccepted}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <span>Mark Accepted</span>
+                {markingAccepted ? (
+                  <Spinner className="h-3 w-3" />
+                ) : (
+                  <span>Mark Accepted</span>
+                )}
               </button>
 
               <button
                 type="button"
                 onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Rejected', e)}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 transition cursor-pointer"
+                disabled={statusPending !== null || markingAccepted}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <span>Mark Rejected</span>
+                {statusPending === activeMenuOrder.id ? (
+                  <Spinner className="h-3 w-3" />
+                ) : (
+                  <span>Mark Rejected</span>
+                )}
               </button>
             </div>
             </>
@@ -1007,9 +1037,11 @@ export default function ManageOrder() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-slate-950 px-5 py-2 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer shadow-xs active:scale-98"
+                  disabled={savingOrder}
+                  className="flex items-center gap-1.5 rounded-lg bg-slate-950 px-5 py-2 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer shadow-xs active:scale-98 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Save &amp; Generate Order Form
+                  {savingOrder && <Spinner className="h-3.5 w-3.5" />}
+                  {savingOrder ? 'Saving…' : 'Save &amp; Generate Order Form'}
                 </button>
               </div>
             </form>

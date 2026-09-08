@@ -8,6 +8,7 @@ import { can } from '../../utils/permissions'
 import { useAuth } from '../../context/auth-context'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import Spinner from '../../components/Spinner'
 import useDirty from '../../utils/useDirty'
 
 const QUILL_MODULES = {
@@ -435,6 +436,11 @@ export default function Managequotation() {
   const [approvalQuoteId, setApprovalQuoteId] = useState(null)
   const [selectedApprovers, setSelectedApprovers] = useState([])
   const [approvalSent, setApprovalSent] = useState('')
+  const [sendingApproval, setSendingApproval] = useState(false)
+  const [submittingProposal, setSubmittingProposal] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [templateAction, setTemplateAction] = useState(null) // 'update' | 'save' | 'delete'
+  const [revertingQuote, setRevertingQuote] = useState(false)
 
   function toggleApprover(id) {
     setSelectedApprovers((prev) =>
@@ -545,7 +551,7 @@ export default function Managequotation() {
   }
 
   async function handleConfirmSendForApproval() {
-    if (selectedApprovers.length === 0) return
+    if (selectedApprovers.length === 0 || sendingApproval) return
     const quote = quotationsList.find((item) => item.id === approvalQuoteId)
     const chosen = approverOptions.filter((a) => selectedApprovers.includes(a.id))
     const approverNames = chosen.map((a) => a.name).join(', ')
@@ -566,6 +572,7 @@ export default function Managequotation() {
     resetApprovalDirty()
     if (quote?.id) {
       let updated = null
+      setSendingApproval(true)
       try {
         updated = await api.put(`/transactions/quotations/${quote.id}/`, {
           status: 'Pending Approval',
@@ -574,6 +581,8 @@ export default function Managequotation() {
         })
       } catch (err) {
         console.error('Failed to persist approval status', err)
+      } finally {
+        setSendingApproval(false)
       }
       if (updated) {
         setQuotationsList((prev) =>
@@ -858,8 +867,10 @@ export default function Managequotation() {
   }
 
   async function handleDeleteTemplate() {
+    if (templateAction) return
     const tpl = templateToDelete
     if (!tpl) return
+    setTemplateAction('delete')
     try {
       await api.del(`/transactions/proposal-templates/${tpl.id}/`)
       setSavedTemplates((prev) => prev.filter((t) => String(t.id) !== String(tpl.id)))
@@ -868,6 +879,7 @@ export default function Managequotation() {
     } catch (err) {
       showToast(`Failed to delete template: ${err.message}`)
     } finally {
+      setTemplateAction(null)
       setTemplateToDelete(null)
     }
   }
@@ -1116,6 +1128,7 @@ export default function Managequotation() {
     }
 
     if (persistLeadId) {
+      setSubmittingProposal(true)
       try {
         const payload = {
           customer: targetQuote.customer,
@@ -1169,8 +1182,10 @@ export default function Managequotation() {
         }
       } catch (err) {
         setSubmitMessage(`Failed to save proposal: ${err.message}`)
+        setSubmittingProposal(false)
         return
       }
+      setSubmittingProposal(false)
     }
 
     resetProposalDirty()
@@ -1208,6 +1223,7 @@ export default function Managequotation() {
       currency: currencyVal,
       remarks: remarksVal,
     }
+    setSavingDraft(true)
     try {
       await api.put('/transactions/proposal-drafts/', payload)
       showToast('✓ Draft saved.')
@@ -1215,6 +1231,8 @@ export default function Managequotation() {
     } catch (err) {
       setSubmitMessage(`Failed to save draft: ${err.message}`)
       return false
+    } finally {
+      setSavingDraft(false)
     }
   }
 
@@ -1237,6 +1255,7 @@ export default function Managequotation() {
   }
 
   async function handleUpdateTemplate() {
+    if (templateAction || !editingSavedTemplate) return
     const tpl = activeTemplate
     if (!editingSavedTemplate || !tpl) return
     const id = String(selectedTemplateId).replace('saved-', '')
@@ -1248,16 +1267,20 @@ export default function Managequotation() {
       scopeHtml,
       detailHtml: termsHtml,
     }
+    setTemplateAction('update')
     try {
       const data = await api.put(`/transactions/proposal-templates/${id}/`, payload)
       setSavedTemplates((prev) => prev.map((t) => (String(t.id) === id ? data : t)))
       showToast(`✓ Template "${data.name || tpl.name}" updated.`)
     } catch (err) {
       showToast(`Failed to update template: ${err.message}`)
+    } finally {
+      setTemplateAction(null)
     }
   }
 
   async function handleSaveTemplate() {
+    if (templateAction) return
     const name = templateName.trim()
     if (!name) {
       showToast('Please enter a name for the template.')
@@ -1276,6 +1299,7 @@ export default function Managequotation() {
       scopeHtml,
       detailHtml: termsHtml,
     }
+    setTemplateAction('save')
     try {
       const data = await api.post('/transactions/proposal-templates/', payload)
       setSavedTemplates((prev) => [...prev, data])
@@ -1284,6 +1308,8 @@ export default function Managequotation() {
       showToast('✓ Template saved. It is now available in the Choose template dropdown.')
     } catch (err) {
       showToast(`Failed to save template: ${err.message}`)
+    } finally {
+      setTemplateAction(null)
     }
   }
 
@@ -1296,14 +1322,16 @@ export default function Managequotation() {
   }
 
   async function handleConfirmRevertQuotation() {
-    if (!revertQuote) return
+    if (!revertQuote || revertingQuote) return
     const quote = revertQuote
+    setRevertingQuote(true)
     try {
       if (quote?.id) await api.del(`/transactions/quotations/${quote.id}/`)
       setQuotationsList((prev) => prev.filter((item) => item.leadId !== quote.leadId))
     } catch (err) {
       window.alert(`Failed to revert quotation: ${err.message}`)
     } finally {
+      setRevertingQuote(false)
       setRevertQuote(null)
     }
   }
@@ -2329,31 +2357,44 @@ export default function Managequotation() {
                   <button
                     type="button"
                     onClick={handleSaveDraft}
-                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                    disabled={savingDraft || submittingProposal || templateAction !== null}
+                    className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Save Draft
+                    {savingDraft && <Spinner className="h-3 w-3" />}
+                    {savingDraft ? 'Saving…' : 'Save Draft'}
                   </button>
                   <button
                     type="button"
                     onClick={editingSavedTemplate ? handleUpdateTemplate : openSaveTemplateDialog}
-                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                    disabled={templateAction !== null || submittingProposal || savingDraft}
+                    className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {editingSavedTemplate ? 'Update Template' : usingPrebuiltTemplate ? 'Save As' : 'Save Template'}
+                    {templateAction === 'update' && <Spinner className="h-3 w-3" />}
+                    {templateAction === 'update'
+                      ? 'Updating…'
+                      : editingSavedTemplate
+                        ? 'Update Template'
+                        : usingPrebuiltTemplate
+                          ? 'Save As'
+                          : 'Save Template'}
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={requestCloseProposal}
-                    className="rounded-md bg-slate-600 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 transition cursor-pointer"
+                    disabled={submittingProposal}
+                    className="rounded-md bg-slate-600 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     Close
                   </button>
                   <button
                     type="submit"
-                    className="rounded-md bg-rose-600 px-5 py-2 text-xs font-medium text-white hover:bg-rose-700 transition cursor-pointer shadow-xs active:scale-[0.98]"
+                    disabled={submittingProposal}
+                    className="flex items-center gap-1.5 rounded-md bg-rose-600 px-5 py-2 text-xs font-medium text-white hover:bg-rose-700 transition cursor-pointer shadow-xs active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                   >
-                    Submit
+                    {submittingProposal && <Spinner className="h-3 w-3" />}
+                    {submittingProposal ? 'Saving…' : 'Submit'}
                   </button>
                 </div>
               </div>
@@ -2484,11 +2525,15 @@ export default function Managequotation() {
               <button
                 type="button"
                 onClick={handleConfirmSendForApproval}
-                disabled={selectedApprovers.length === 0}
+                disabled={selectedApprovers.length === 0 || sendingApproval}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <SendIcon className="h-3.5 w-3.5" />
-                Send for Approval
+                {sendingApproval ? (
+                  <Spinner className="h-3.5 w-3.5" />
+                ) : (
+                  <SendIcon className="h-3.5 w-3.5" />
+                )}
+                {sendingApproval ? 'Sending…' : 'Send for Approval'}
               </button>
             </div>
           </div>
@@ -2665,6 +2710,7 @@ export default function Managequotation() {
         cancelLabel="Keep Editing"
         confirmLabel="Discard"
         extraLabel="Save Draft"
+        saving={savingDraft}
         onExtra={handleSaveDraftAndClose}
         onCancel={() => setDiscardProposalOpen(false)}
         onConfirm={() => {
@@ -2690,6 +2736,8 @@ export default function Managequotation() {
         message={`"${revertQuote?.customer}" (${revertQuote?.id}) will be removed from quotations and sent back to the Telecalling pipeline. Continue?`}
         cancelLabel="Cancel"
         confirmLabel="Revert"
+        saving={revertingQuote}
+        savingLabel="Reverting…"
         onCancel={() => setRevertQuote(null)}
         onConfirm={handleConfirmRevertQuotation}
       />
@@ -2716,6 +2764,8 @@ export default function Managequotation() {
         message={`"${templateToDelete?.name}" will be permanently removed from your templates. This cannot be undone. Continue?`}
         cancelLabel="Cancel"
         confirmLabel="Delete"
+        saving={templateAction === 'delete'}
+        savingLabel="Deleting…"
         onCancel={() => setTemplateToDelete(null)}
         onConfirm={handleDeleteTemplate}
       />
@@ -2759,16 +2809,23 @@ export default function Managequotation() {
               <button
                 type="button"
                 onClick={() => setSaveTemplateOpen(false)}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                disabled={templateAction !== null}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveTemplate}
-                className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition cursor-pointer shadow-xs"
+                disabled={templateAction !== null}
+                className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-900 transition cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {usingPrebuiltTemplate ? 'Save As' : 'Save Template'}
+                {templateAction === 'save' && <Spinner className="h-3.5 w-3.5" />}
+                {templateAction === 'save'
+                  ? 'Saving…'
+                  : usingPrebuiltTemplate
+                    ? 'Save As'
+                    : 'Save Template'}
               </button>
             </div>
           </div>
