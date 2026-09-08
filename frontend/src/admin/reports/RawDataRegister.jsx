@@ -2,35 +2,37 @@ import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 
-const INITIAL_RAW_DATA_REGISTER = [
-  { id: 1, date: '11-08-2026', rawDate: '2026-08-11', company: 'LAVENDER BEAUTY LOUNGE, CHETTIKULANGARA', number: '9567484794', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
-  { id: 2, date: '11-08-2026', rawDate: '2026-08-11', company: 'DAZZLE BEAUTY LOUNGE.', number: '9496750735', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
-  { id: 3, date: '11-08-2026', rawDate: '2026-08-11', company: "GLAM N' GLOW BY SHEEJA", number: '9447994799', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
-  { id: 4, date: '11-08-2026', rawDate: '2026-08-11', company: "MAYA'S CINDERELLA UNISEX SALON", number: '8848131144', location: 'ALLEPPEY', staff: 'Malavika', category: 'Salon' },
-  { id: 5, date: '11-08-2026', rawDate: '2026-08-11', company: 'PARVANAM HAIR&FLAIR', number: '9747088330', location: 'ALLEPPEY', staff: 'Malavika', category: 'Salon' },
-  { id: 6, date: '11-08-2026', rawDate: '2026-08-11', company: 'RAREKUTS UNISEX FAMILY SALON', number: '6282362331', location: 'ALLEPPEY', staff: 'Malavika', category: 'Salon' },
-  { id: 7, date: '11-08-2026', rawDate: '2026-08-11', company: 'MANTRA MAKEOVER STUDIO', number: '9400539788', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
-  { id: 8, date: '11-08-2026', rawDate: '2026-08-11', company: 'LEBEN ROUGE - KAYAMKULAM', number: '9497407656', location: 'ALLEPPEY', staff: 'Malavika', category: 'Salon' },
-  { id: 9, date: '11-08-2026', rawDate: '2026-08-11', company: 'L♥FLORA BEAUTY CARE', number: '8921518131', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
-  { id: 10, date: '11-08-2026', rawDate: '2026-08-11', company: 'CLAIR UNISEX BEAUTY SALON & SPA, KAYAMKULAM', number: '9947277170', location: 'ALLEPPEY', staff: 'Malavika', category: 'Salon' },
-  { id: 11, date: '11-08-2026', rawDate: '2026-08-11', company: "SUKANYA'S KAYA FAMILY SALON", number: '9048088819', location: 'ALLEPPEY', staff: 'Malavika', category: 'Salon' },
-  { id: 12, date: '11-08-2026', rawDate: '2026-08-11', company: 'REMAKE FAMILY SALON', number: '7306504435', location: 'ALLEPPEY', staff: 'Malavika', category: 'Salon' },
-  { id: 13, date: '11-08-2026', rawDate: '2026-08-11', company: 'ASSORT BAY', number: '9633345333', location: 'ALLEPPEY', staff: 'Malavika', category: 'Boutique' },
-  { id: 14, date: '11-08-2026', rawDate: '2026-08-11', company: 'ANSHAS BRIDAL MAKEOVER STUDIO ARTHUNKAL', number: '9497011921', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
-  { id: 15, date: '11-08-2026', rawDate: '2026-08-11', company: 'THE GLOW ZONE MAKEUP STUDIO', number: '9496872921', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
-  { id: 16, date: '11-08-2026', rawDate: '2026-08-11', company: 'LAVANYA BEAUTY PARLOUR & MAKE UP STUDIO (LADIES ONLY)', number: '9388908438', location: 'ALLEPPEY', staff: 'Malavika', category: 'Beauty Parlour' },
-  { id: 17, date: '10-08-2026', rawDate: '2026-08-10', company: 'MANZOOR SUPER SPECIALITY HOSPITAL', number: '9447118234', location: 'TRIVANDRUM', staff: 'Alex Joseph', category: 'Hospital' },
-  { id: 18, date: '10-08-2026', rawDate: '2026-08-10', company: 'ROYAL PALACE CONVENTION CENTRE', number: '9567112004', location: 'THRISSUR', staff: 'Shanu VR', category: 'Resort' },
-  { id: 19, date: '09-08-2026', rawDate: '2026-08-09', company: 'NAMBEESANS LAKSHMI LODGE', number: '9447151442', location: 'THRISSUR', staff: 'Husna', category: 'Resort' },
-  { id: 20, date: '09-08-2026', rawDate: '2026-08-09', company: 'SHADES.IN LUXURY EYEWEAR', number: '9845123991', location: 'ERNAKULAM', staff: 'Alex Joseph', category: 'Boutique' },
-  { id: 21, date: '08-08-2026', rawDate: '2026-08-08', company: 'CALICUT AYURVEDIC WELLNESS RETREAT', number: '9495110842', location: 'KOZHIKODE', staff: 'Bincy', category: 'Clinic' },
-]
+function toDmyDate(value) {
+  if (!value) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value))
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  return String(value)
+}
 
-const STAFF_LIST = ['All Staff', 'Malavika', 'Husna', 'Bincy', 'Alex Joseph', 'Priya Sharma', 'NIMISHA DAVIS', 'Ananya Nair', 'Shanu VR']
-const LOCATIONS = ['All Locations', 'ALLEPPEY', 'THRISSUR', 'ERNAKULAM', 'KOZHIKODE', 'TRIVANDRUM', 'KANNUR', 'PALAKKAD']
+function sameText(a, b) {
+  return String(a || '').toLowerCase() === String(b || '').toLowerCase()
+}
+
+// Map a raw lead returned by the backend into the row shape the register renders.
+function leadToRow(item) {
+  const iso = item.date ? String(item.date).slice(0, 10) : ''
+  return {
+    id: item.id,
+    date: toDmyDate(iso),
+    rawDate: iso,
+    company: item.company || '',
+    number: item.phone || '',
+    location: item.city || '',
+    staff: item.addedBy || '',
+    category: item.category || '',
+  }
+}
 
 export default function RawDataRegister() {
   const [categoryOptions, setCategoryOptions] = useState([])
+  const [registerRows, setRegisterRows] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
@@ -56,60 +58,82 @@ export default function RawDataRegister() {
     }
   }, [])
 
-  // Applied Filter state
-  const [appliedFilters, setAppliedFilters] = useState({
-    fromDate: '',
-    toDate: '',
-    category: 'All Category',
-    staff: 'All Staff',
-    location: 'All Locations',
-  })
+  // Load the real raw leads (status=raw) from the database.
+  useEffect(() => {
+    let cancelled = false
 
-  function handleApplyFilter(e) {
-    e.preventDefault()
-    setAppliedFilters({
-      fromDate,
-      toDate,
-      category,
-      staff,
-      location,
-    })
-  }
+    async function fetchRawLeads() {
+      setIsLoading(true)
+      setError('')
+      try {
+        const data = await api.get('/transactions/leads/?status=raw')
+        if (!cancelled) setRegisterRows((Array.isArray(data) ? data : []).map(leadToRow))
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
 
-  // Filtered dataset
+    fetchRawLeads()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Staff and location choices are derived from the actual records so the
+  // filters always match what the current user is allowed to see.
+  const staffOptions = useMemo(() => {
+    const names = [...new Set(registerRows.map((r) => r.staff).filter(Boolean))]
+    return ['All Staff', ...names.sort((a, b) => a.localeCompare(b))]
+  }, [registerRows])
+
+  const locationOptions = useMemo(() => {
+    const places = [...new Set(registerRows.map((r) => r.location).filter(Boolean))]
+    return ['All Locations', ...places.sort((a, b) => a.localeCompare(b))]
+  }, [registerRows])
+
+  // Filters apply live as the user changes them — no Apply button needed.
   const filteredData = useMemo(() => {
-    return INITIAL_RAW_DATA_REGISTER.filter((item) => {
+    const q = searchQuery.trim().toLowerCase()
+    return registerRows.filter((item) => {
       // Date filter
-      if (appliedFilters.fromDate && item.rawDate < appliedFilters.fromDate) return false
-      if (appliedFilters.toDate && item.rawDate > appliedFilters.toDate) return false
+      if (fromDate && item.rawDate < fromDate) return false
+      if (toDate && item.rawDate > toDate) return false
 
       // Category filter
-      if (appliedFilters.category !== 'All Category' && item.category !== appliedFilters.category) return false
+      if (category !== 'All Category' && !sameText(item.category, category)) return false
 
       // Staff filter
-      if (appliedFilters.staff !== 'All Staff' && item.staff !== appliedFilters.staff) return false
+      if (staff !== 'All Staff' && !sameText(item.staff, staff)) return false
 
       // Location filter
-      if (appliedFilters.location !== 'All Locations' && item.location !== appliedFilters.location) return false
+      if (location !== 'All Locations' && !sameText(item.location, location)) return false
 
       // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
+      if (q) {
         return (
           item.company.toLowerCase().includes(q) ||
-          item.number.includes(q) ||
+          item.number.toLowerCase().includes(q) ||
           item.location.toLowerCase().includes(q) ||
-          item.staff.toLowerCase().includes(q)
+          item.staff.toLowerCase().includes(q) ||
+          item.category.toLowerCase().includes(q)
         )
       }
 
       return true
     })
-  }, [appliedFilters, searchQuery])
+  }, [registerRows, fromDate, toDate, category, staff, location, searchQuery])
 
   return (
     <Layout>
-      <div className="space-y-4">
+      <div className="space-y-4 print-sheet">
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600 print:hidden">
+            Could not load raw data register: {error}
+          </div>
+        )}
+
         {/* Screen Only Header Card */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs print:hidden">
           {/* Top Bar: Title & Print + Search Box */}
@@ -126,7 +150,9 @@ export default function RawDataRegister() {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-95"
+                disabled={isLoading}
+                title={isLoading ? 'Wait for the register to load before printing.' : 'Print register'}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>🖨</span>
                 <span>Print</span>
@@ -155,8 +181,8 @@ export default function RawDataRegister() {
             </div>
           </div>
 
-          {/* Filter Form (Matching Reference Screenshot) */}
-          <form onSubmit={handleApplyFilter} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-6 items-end">
+          {/* Filters are applied live as soon as they change — no Apply button needed */}
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-5 items-end">
             {/* From Date */}
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">
@@ -212,7 +238,7 @@ export default function RawDataRegister() {
                 onChange={(e) => setStaff(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
               >
-                {STAFF_LIST.map((s) => (
+                {staffOptions.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
@@ -230,7 +256,7 @@ export default function RawDataRegister() {
                 onChange={(e) => setLocation(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none cursor-pointer"
               >
-                {LOCATIONS.map((loc) => (
+                {locationOptions.map((loc) => (
                   <option key={loc} value={loc}>
                     {loc}
                   </option>
@@ -238,17 +264,7 @@ export default function RawDataRegister() {
               </select>
             </div>
 
-            {/* Apply Filter Button */}
-            <div>
-              <button
-                type="submit"
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 transition cursor-pointer active:scale-95"
-              >
-                <span>☩</span>
-                <span>Apply Filter</span>
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
 
         {/* Printable Official Register Header (Only Visible When Printed) */}
@@ -271,21 +287,21 @@ export default function RawDataRegister() {
 
           {/* Applied Filter Tags */}
           <div className="mt-2 flex flex-wrap gap-2 text-[9px] bg-slate-100 p-1.5 rounded border border-slate-300 font-medium">
-            <span><strong>Category:</strong> {appliedFilters.category}</span>
+            <span><strong>Category:</strong> {category}</span>
             <span>&bull;</span>
-            <span><strong>Staff:</strong> {appliedFilters.staff}</span>
+            <span><strong>Staff:</strong> {staff}</span>
             <span>&bull;</span>
-            <span><strong>Location:</strong> {appliedFilters.location}</span>
-            {appliedFilters.fromDate && (
+            <span><strong>Location:</strong> {location}</span>
+            {fromDate && (
               <>
                 <span>&bull;</span>
-                <span><strong>From:</strong> {appliedFilters.fromDate}</span>
+                <span><strong>From:</strong> {fromDate}</span>
               </>
             )}
-            {appliedFilters.toDate && (
+            {toDate && (
               <>
                 <span>&bull;</span>
-                <span><strong>To:</strong> {appliedFilters.toDate}</span>
+                <span><strong>To:</strong> {toDate}</span>
               </>
             )}
           </div>
@@ -294,7 +310,7 @@ export default function RawDataRegister() {
         {/* Register Table Card */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs print:p-0 print:border-none print:shadow-none">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="register-table w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-bold text-[11px] print:border-black print:text-black">
                   <th className="py-1.5 pr-4 font-bold">Date</th>
@@ -305,16 +321,22 @@ export default function RawDataRegister() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 print:divide-slate-200">
-                {filteredData.length > 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                      Loading raw data register…
+                    </td>
+                  </tr>
+                ) : filteredData.length > 0 ? (
                   filteredData.map((row) => (
                     <tr key={row.id} className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
-                      <td className="py-1.5 pr-4 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap">
+                      <td className="py-1.5 pr-4 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell">
                         {row.date}
                       </td>
-                      <td className="py-1.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px]" title={row.company}>
+                      <td className="py-1.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px] company-cell" title={row.company}>
                         {row.company}
                       </td>
-                      <td className="py-1.5 pr-4 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap">
+                      <td className="py-1.5 pr-4 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap nowrap-cell">
                         {row.number}
                       </td>
                       <td className="py-1.5 pr-4 font-medium text-slate-700 print:text-black uppercase text-[11px]">

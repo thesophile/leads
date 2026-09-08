@@ -186,4 +186,47 @@
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
+  /* Register / report sheets: clean bordered tables that repeat their header */
+  .print-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .print-sheet .register-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+  .print-sheet .register-table thead {
+    display: table-header-group !important;
+  }
+  .print-sheet .register-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .print-sheet .register-table th,
+  .print-sheet .register-table td {
+    border: 1px solid #000 !important;
+    padding: 4px 6px !important;
+    text-align: left !important;
+    vertical-align: top !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    max-width: none !important;
+    color: #000 !important;
+    background: transparent !important;
+  }
+  .print-sheet .register-table th {
+    font-weight: 700 !important;
+    background: #e2e2e2 !important;
+  }
+  .print-sheet .register-table .company-cell {
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+  .print-sheet .register-table .nowrap-cell {
+    white-space: nowrap !important;
+  }
 }
