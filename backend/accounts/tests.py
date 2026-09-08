@@ -25,6 +25,8 @@ class RegistrationTests(TestCase):
     def test_registered_admin_is_not_superuser(self):
         serializer = AdminRegisterSerializer(data={
             'company': 'Acme Corp',
+            'company_email': 'accounts@acme.com',
+            'company_phone': '+91 9447000000',
             'name': 'Jane Doe',
             'email': 'jane@acme.com',
             'phone': '123',
@@ -37,12 +39,16 @@ class RegistrationTests(TestCase):
         self.assertTrue(user.is_staff)
         self.assertFalse(user.is_superuser)
         self.assertEqual(user.company.name, 'Acme Corp')
+        self.assertEqual(user.company.email, 'accounts@acme.com')
+        self.assertEqual(user.company.phone, '+91 9447000000')
 
     def test_same_company_name_registration_is_rejected(self):
         # Public self-registration must NOT let a stranger join an existing
         # company as its admin; only the first registrant can claim the name.
         data = {
             'name': 'Jane Doe', 'phone': '123',
+            'company_email': 'accounts@acme.com',
+            'company_phone': '+91 9447000000',
             'password': 'Str0ngPass!', 'password2': 'Str0ngPass!',
             'company': 'Acme',
         }
@@ -143,6 +149,8 @@ class SuperuserAdminManagementTests(APITestCase):
         self.client.force_authenticate(self.superuser)
         resp = self.client.post('/api/auth/admins/', {
             'company': 'Globex',
+            'company_email': 'accounts@globex.com',
+            'company_phone': '+91 9447000001',
             'name': 'New Admin',
             'email': 'new_admin@globex.com',
             'phone': '999',

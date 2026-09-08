@@ -278,10 +278,13 @@ function SectionTitle({ children }) {
   )
 }
 
-function Field({ label, children }) {
+function Field({ label, required, children }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-slate-600">{label}</label>
+      <label className="block text-xs font-semibold text-slate-600">
+        {label}
+        {required && <span className="ml-1 text-slate-400">*</span>}
+      </label>
       <div className="mt-1.5">{children}</div>
     </div>
   )
@@ -704,7 +707,7 @@ export default function Settings() {
               <div className="grid grid-cols-1 gap-x-12 gap-y-8 px-6 py-6 md:grid-cols-2 md:px-8 md:py-7">
                 <div className="space-y-6">
                   <SectionTitle>Company Identity</SectionTitle>
-                  <Field label="Company Name">
+                  <Field label="Company Name" required>
                     <input
                       type="text"
                       required
@@ -713,7 +716,7 @@ export default function Settings() {
                       className={inputClass}
                     />
                   </Field>
-                  <Field label="Primary Email">
+                  <Field label="Primary Email" required>
                     <input
                       type="email"
                       required
@@ -722,9 +725,10 @@ export default function Settings() {
                       className={inputClass}
                     />
                   </Field>
-                  <Field label="Phone">
+                  <Field label="Phone" required>
                     <input
                       type="tel"
+                      required
                       value={companyPhone}
                       onChange={(e) => setCompanyPhone(e.target.value)}
                       className={inputClass}
@@ -740,8 +744,9 @@ export default function Settings() {
                       placeholder="e.g. www.company.com"
                     />
                   </Field>
-                  <Field label="Address">
+                  <Field label="Address" required>
                     <textarea
+                      required
                       value={companyAddress}
                       onChange={(e) => setCompanyAddress(e.target.value)}
                       className={`${inputClass} min-h-20 resize-y`}
@@ -751,11 +756,10 @@ export default function Settings() {
                   <Field label="GSTIN">
                     <input
                       type="text"
-                      required
                       value={gstNo}
                       onChange={(e) => setGstNo(e.target.value)}
                       className={`${inputClass} font-mono`}
-                      placeholder="e.g. 32AAAAA1111A1Z1"
+                      placeholder="e.g. 32AAAAA1111A1Z1 (optional)"
                     />
                   </Field>
                 </div>
@@ -808,7 +812,6 @@ export default function Settings() {
                   <Field label="Default Bank">
                     <input
                       type="text"
-                      required
                       value={defaultBank}
                       onChange={(e) => setDefaultBank(e.target.value)}
                       className={inputClass}

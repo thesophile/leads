@@ -145,7 +145,7 @@ function SpinnerIcon() {
 const inputClass =
   'peer relative z-0 w-full rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-3 text-xs text-slate-800 transition-all focus:outline-none focus:ring-4 focus:border-brand-500 focus:ring-brand-500/10'
 
-function FloatingField({ label, id, value, onChange, type = 'text', icon }) {
+function FloatingField({ label, id, value, onChange, type = 'text', icon, required }) {
   const [show, setShow] = useState(false)
   const isPassword = type === 'password'
   return (
@@ -191,12 +191,17 @@ function FloatingField({ label, id, value, onChange, type = 'text', icon }) {
         className={`absolute ${icon ? 'left-8' : 'left-3'} -top-2 z-10 bg-white px-1 text-[10px] font-medium text-slate-500 transition-all pointer-events-none peer-placeholder-shown:top-2 peer-placeholder-shown:text-xs peer-placeholder-shown:text-slate-400 peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600`}
       >
         {label}
+        {required && <span className="ml-0.5 text-slate-400">*</span>}
       </label>
     </div>
   )
 }
 
-const emptyForm = { name: '', email: '', phone: '', company: '', password: '', password2: '' }
+const emptyForm = {
+  name: '', email: '', phone: '',
+  company: '', companyEmail: '', companyPhone: '', companyGstin: '',
+  password: '', password2: '',
+}
 
 export default function Admins() {
   const { user } = useAuth()
@@ -272,6 +277,14 @@ export default function Admins() {
       setError('Company name is required.')
       return
     }
+    if (!editingId && !formData.companyEmail.trim()) {
+      setError('Company email is required.')
+      return
+    }
+    if (!editingId && !formData.companyPhone.trim()) {
+      setError('Company phone number is required.')
+      return
+    }
     if (!editingId && formData.password.length < 8) {
       setError('Initial password must be at least 8 characters.')
       return
@@ -296,6 +309,9 @@ export default function Admins() {
           email: formData.email,
           phone: formData.phone,
           company: formData.company,
+          company_email: formData.companyEmail,
+          company_phone: formData.companyPhone,
+          company_gstin: formData.companyGstin,
           password: formData.password,
           password2: formData.password2,
         })
@@ -436,14 +452,26 @@ export default function Admins() {
             </div>
 
             <form onSubmit={handleSave} className="mt-3 space-y-3">
-              <FloatingField label="Full Name" id="adm_name" value={formData.name} onChange={(v) => setFormData({ ...formData, name: v })} icon={<UserIcon />} />
+              <FloatingField label="Full Name" id="adm_name" value={formData.name} onChange={(v) => setFormData({ ...formData, name: v })} icon={<UserIcon />} required />
 
-              <FloatingField label="Email" id="adm_email" type="email" value={formData.email} onChange={(v) => setFormData({ ...formData, email: v })} icon={<MailIcon />} />
+              <FloatingField label="Email" id="adm_email" type="email" value={formData.email} onChange={(v) => setFormData({ ...formData, email: v })} icon={<MailIcon />} required />
 
               <FloatingField label="Phone" id="adm_phone" value={formData.phone} onChange={(v) => setFormData({ ...formData, phone: v })} icon={<PhoneIcon />} />
 
               {!isEditing && (
-                <FloatingField label="Company" id="adm_company" value={formData.company} onChange={(v) => setFormData({ ...formData, company: v })} icon={<BuildingIcon />} />
+                <FloatingField label="Company" id="adm_company" value={formData.company} onChange={(v) => setFormData({ ...formData, company: v })} icon={<BuildingIcon />} required />
+              )}
+
+              {!isEditing && (
+                <FloatingField label="Company Email" id="adm_company_email" type="email" value={formData.companyEmail} onChange={(v) => setFormData({ ...formData, companyEmail: v })} icon={<MailIcon />} required />
+              )}
+
+              {!isEditing && (
+                <FloatingField label="Company Phone" id="adm_company_phone" value={formData.companyPhone} onChange={(v) => setFormData({ ...formData, companyPhone: v })} icon={<PhoneIcon />} required />
+              )}
+
+              {!isEditing && (
+                <FloatingField label="Company GSTIN (optional)" id="adm_company_gstin" value={formData.companyGstin} onChange={(v) => setFormData({ ...formData, companyGstin: v })} icon={<BuildingIcon />} />
               )}
 
               {!isEditing && (

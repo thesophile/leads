@@ -15,6 +15,9 @@ export default function Register() {
   const { register, isAuthenticated } = useAuth()
 
   const [company, setCompany] = useState('')
+  const [companyEmail, setCompanyEmail] = useState('')
+  const [companyPhone, setCompanyPhone] = useState('')
+  const [companyGstin, setCompanyGstin] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -34,6 +37,14 @@ export default function Register() {
       setError('Please enter your company name.')
       return
     }
+    if (!companyEmail.trim()) {
+      setError('Please enter your company email.')
+      return
+    }
+    if (!companyPhone.trim()) {
+      setError('Please enter your company phone number.')
+      return
+    }
     if (password !== password2) {
       setError('Passwords do not match.')
       return
@@ -41,7 +52,17 @@ export default function Register() {
 
     setLoading(true)
     try {
-      await register({ company, name, email, phone, password, password2 })
+      await register({
+        company,
+        company_email: companyEmail,
+        company_phone: companyPhone,
+        company_gstin: companyGstin,
+        name,
+        email,
+        phone,
+        password,
+        password2,
+      })
       navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'Unable to create your admin account.')
@@ -63,9 +84,9 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
             <div>
-              <label htmlFor="company" className="mb-1.5 block text-sm font-semibold text-slate-700">
-                Company Name
-              </label>
+<label htmlFor="company" className="mb-1.5 block text-sm font-semibold text-slate-700">
+  Company Name <span className="ml-0.5 text-slate-400">*</span>
+</label>
               <input
                 id="company"
                 type="text"
@@ -79,9 +100,55 @@ export default function Register() {
             </div>
 
             <div>
-              <label htmlFor="name" className="mb-1.5 block text-sm font-semibold text-slate-700">
-                Admin Name
+<label htmlFor="companyEmail" className="mb-1.5 block text-sm font-semibold text-slate-700">
+  Company Email <span className="ml-0.5 text-slate-400">*</span>
+</label>
+              <input
+                id="companyEmail"
+                type="email"
+                autoComplete="email"
+                required
+                value={companyEmail}
+                onChange={(e) => setCompanyEmail(e.target.value)}
+                className={inputClass(!companyEmail)}
+                placeholder="accounts@company.com"
+              />
+            </div>
+
+            <div>
+<label htmlFor="companyPhone" className="mb-1.5 block text-sm font-semibold text-slate-700">
+  Company Phone <span className="ml-0.5 text-slate-400">*</span>
+</label>
+              <input
+                id="companyPhone"
+                type="tel"
+                autoComplete="tel"
+                required
+                value={companyPhone}
+                onChange={(e) => setCompanyPhone(e.target.value)}
+                className={inputClass(!companyPhone)}
+                placeholder="e.g. +91 9447000000"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="companyGstin" className="mb-1.5 block text-sm font-semibold text-slate-700">
+                Company GSTIN
               </label>
+              <input
+                id="companyGstin"
+                type="text"
+                value={companyGstin}
+                onChange={(e) => setCompanyGstin(e.target.value)}
+                className={inputClass(false)}
+                placeholder="Optional"
+              />
+            </div>
+
+            <div>
+<label htmlFor="name" className="mb-1.5 block text-sm font-semibold text-slate-700">
+  Admin Name <span className="ml-0.5 text-slate-400">*</span>
+</label>
               <input
                 id="name"
                 type="text"
@@ -95,9 +162,9 @@ export default function Register() {
             </div>
 
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-slate-700">
-                Admin Email
-              </label>
+<label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-slate-700">
+  Admin Email <span className="ml-0.5 text-slate-400">*</span>
+</label>
               <input
                 id="email"
                 type="email"

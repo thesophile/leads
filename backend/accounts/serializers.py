@@ -108,14 +108,19 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True)
     company = serializers.CharField(max_length=200)
+    company_email = serializers.EmailField(write_only=True)
+    company_phone = serializers.CharField(write_only=True)
+    company_gstin = serializers.CharField(write_only=True, required=False, allow_blank=True, default='')
 
     class Meta:
         model = User
-        fields = ['company', 'name', 'email', 'phone', 'password', 'password2']
+        fields = ['company', 'company_email', 'company_phone', 'company_gstin', 'name', 'email', 'phone', 'password', 'password2']
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({'password2': 'Passwords do not match.'})
+        if not attrs.get('company_phone', '').strip():
+            raise serializers.ValidationError({'company_phone': 'Company phone number is required.'})
         return attrs
 
     def validate_company(self, value):
@@ -135,7 +140,15 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
         from .models import Company
 
         company_name = validated_data.pop('company').strip()
-        company, _ = Company.objects.get_or_create(name=company_name)
+        company_email = validated_data.pop('company_email', '')
+        company_phone = validated_data.pop('company_phone', '')
+        company_gstin = validated_data.pop('company_gstin', '') or ''
+        company, created = Company.objects.get_or_create(name=company_name)
+        if not created or not company.email:
+            company.email = company_email
+            company.phone = company_phone
+            company.gstin = company_gstin
+            company.save(update_fields=['email', 'phone', 'gstin'])
         validated_data.pop('password2')
         validated_data['role'] = company.roles.filter(code='admin').first()
         validated_data['is_staff'] = True
