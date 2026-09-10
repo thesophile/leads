@@ -157,12 +157,14 @@ export default function Login() {
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState(location.state?.notice || '')
   const { text: typed } = useTypewriter(TYPE_WORDS)
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (loading) return
     setError('')
+    setNotice('')
 
     if (!email.trim()) {
       setError('Please enter your email.')
@@ -339,6 +341,12 @@ export default function Login() {
                   <span>Remember me</span>
                 </label>
               </div>
+
+              {notice && !error && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                  {notice}
+                </div>
+              )}
 
               {error && (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">

@@ -603,7 +603,7 @@ export default function Settings() {
       // The restore rewrote the database; the stored tokens may now point at a
       // user that no longer exists, so sign out and require a fresh login.
       await logout()
-      navigate('/login')
+      navigate('/login', { state: { notice: 'Backup restored successfully. Please sign in again.' } })
     } catch (err) {
       showToast(`Failed to restore backup: ${err.message}`)
     } finally {
@@ -1276,6 +1276,9 @@ export default function Settings() {
             <p className="mt-4 text-xs leading-relaxed text-slate-600">
               This will replace all current data — leads, telecalls, quotations, orders, staff and settings — with
               the contents of the backup. This action cannot be undone.
+            </p>
+            <p className="mt-2 text-xs font-medium text-slate-500">
+              After restoring, you'll be signed out and asked to sign in again.
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
               <button
