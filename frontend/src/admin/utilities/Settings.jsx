@@ -1267,16 +1267,6 @@ export default function Settings() {
                     )}
                   </Field>
 
-                  <Field label="Role">
-                    <input
-                      type="text"
-                      value={targetStaffRole}
-                      onChange={(e) => setTargetStaffRole(e.target.value)}
-                      className={inputClass}
-                      placeholder="e.g. Telecaller"
-                    />
-                  </Field>
-
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Raw Leads Target" required>
                       <input
