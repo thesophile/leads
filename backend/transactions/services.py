@@ -924,6 +924,185 @@ def build_order_client_email(order, link, message=''):
     return email
 
 
+_CONFIRMATION_EMAIL_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<body style="margin:0; padding:0; background-color:#f1f5f9; font-family:Arial, Helvetica, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9; padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color:#ffffff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+          <tr>
+            <td style="background-color:#0f172a; padding:20px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <span style="color:#ffffff; font-size:16px; font-weight:bold;">Order Confirmed</span>
+                    <div style="color:#94a3b8; font-size:11px; margin-top:2px;">Order {order_number}</div>
+                  </td>
+                  <td align="right" style="vertical-align:middle;">
+                    {logo_html}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 28px;">
+              <p style="color:#0f172a; font-size:14px; margin:0 0 12px 0; line-height:1.5;">
+                Dear {customer},
+              </p>
+              <p style="color:#334155; font-size:13px; margin:0 0 18px 0; line-height:1.6;">
+                Thank you for accepting our proposal. We&#8217;re pleased to confirm that your
+                order has been successfully placed.
+              </p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:18px;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <div style="color:#0f172a; font-size:11px; font-weight:bold; text-transform:uppercase; margin-bottom:8px;">Order Details</div>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="width:50%; padding:4px 0;">
+                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Order Number</span>
+                          <div style="color:#0f172a; font-size:14px; font-weight:bold;">{order_number}</div>
+                        </td>
+                        <td style="width:50%; padding:4px 0;">
+                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Order Date</span>
+                          <div style="color:#0f172a; font-size:14px; font-weight:bold;">{order_date}</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="border-top:1px solid #e2e8f0; padding:8px 0 2px 0;">
+                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Total Amount</span>
+                          <div style="color:#0f172a; font-size:18px; font-weight:bold;">{order_total}</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="color:#334155; font-size:13px; margin:0 0 18px 0; line-height:1.6;">
+                Our team will now proceed with the next steps and keep you updated regarding your
+                order. Any applicable payment details or instructions will be shared separately.
+              </p>
+
+              <p style="color:#334155; font-size:13px; margin:0 0 18px 0; line-height:1.6;">
+                Thank you for choosing {company_name}. We look forward to working with you.
+              </p>
+
+              <p style="color:#334155; font-size:13px; margin:0; line-height:1.6;">
+                Best regards,<br/>
+                <strong>{company_name}</strong><br/>
+                {company_contact}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#f8fafc; border-top:1px solid #e2e8f0; padding:16px 28px;">
+              <p style="color:#64748b; font-size:11px; margin:0; line-height:1.6; text-align:center;">
+                {footer}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
+
+def build_quotation_accepted_email(quotation, order=None):
+    """Compose the order-confirmation email sent when a client accepts.
+
+    This is a courtesy confirmation only: no proposal/order-form PDF is ever
+    attached.
+    """
+    company = quotation.tenant
+    logo_html = ''
+    if company and company.logo and company.logo.name:
+        try:
+            logo_url = company.logo.url
+            logo_html = (
+                f'<img src="{logo_url}" alt="{company.name}" style="max-height:38px; '
+                f'max-width:160px; object-fit:contain;" />'
+            )
+        except Exception:
+            logo_html = ''
+
+    source = order if order is not None else quotation
+    order_number = str(getattr(source, 'id', None) or quotation.id)
+    order_date = str(getattr(source, 'date', None) or quotation.date or '')
+
+    currency = currency_label(getattr(source, 'currency', None) or quotation.currency)
+    raw_total = (
+        getattr(source, 'net_amount', None)
+        or getattr(source, 'total', None)
+        or quotation.net_amount
+        or quotation.total
+        or '0'
+    )
+    order_total = f'{currency} {raw_total}'.strip()
+
+    company_name = str(
+        getattr(company, 'name', None) or quotation.company or ''
+    ) or 'LEADS'
+
+    contact_parts = []
+    if company:
+        if company.email:
+            contact_parts.append(str(company.email))
+        if company.phone:
+            contact_parts.append(f'Ph: {company.phone}')
+        if company.website:
+            contact_parts.append(str(company.website))
+    company_contact = ' | '.join(contact_parts)
+
+    footer_parts = [company_name] + contact_parts
+    footer = ' | '.join(footer_parts) or '&mdash; LEADS'
+
+    subject = f'Order Confirmed — {order_number}'
+    html_body = _CONFIRMATION_EMAIL_TEMPLATE.format(
+        order_number=order_number,
+        logo_html=logo_html,
+        customer=quotation.customer or 'Customer',
+        order_date=order_date,
+        order_total=order_total,
+        company_name=company_name,
+        company_contact=company_contact,
+        footer=footer,
+    )
+    text_body = (
+        f'Dear {quotation.customer or "Customer"},\n\n'
+        'Thank you for accepting our proposal. We are pleased to confirm that your '
+        'order has been successfully placed.\n\n'
+        'Order Details\n'
+        f'Order Number: {order_number}\n'
+        f'Order Date: {order_date}\n'
+        f'Total Amount: {order_total}\n\n'
+        'Our team will now proceed with the next steps and keep you updated regarding '
+        'your order. Any applicable payment details or instructions will be shared '
+        'separately.\n\n'
+        f'Thank you for choosing {company_name}. We look forward to working with you.\n\n'
+        'Best regards,\n'
+        f'{company_name}\n'
+        f'{company_contact}'
+    )
+
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=None,
+        to=[quotation.email],
+        reply_to=[company.email] if company and company.email else None,
+    )
+    email.attach_alternative(html_body, 'text/html')
+    return email
+
+
 # ---------------------------------------------------------------------------
 # Client details
 # ---------------------------------------------------------------------------

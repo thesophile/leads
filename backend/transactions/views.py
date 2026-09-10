@@ -42,7 +42,12 @@ from .serializers import (
     QuotationApprovalSerializer,
     QuotationSerializer,
 )
-from .services import build_client_email, build_order_client_email, create_client_detail_from_order
+from .services import (
+    build_client_email,
+    build_order_client_email,
+    build_quotation_accepted_email,
+    create_client_detail_from_order,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -1635,6 +1640,19 @@ class ClientQuotationResponseView(APIView):
             if lead is not None and lead.status != Lead.STATUS_ORDER:
                 lead.status = Lead.STATUS_ORDER
                 lead.save(update_fields=['status', 'updated_at'])
+            # Courtesy confirmation email. No order form is attached, and a mail
+            # failure must never block the acceptance.
+            if quotation.email:
+                try:
+                    build_quotation_accepted_email(quotation, order=order).send(
+                        fail_silently=False
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        'Failed to email acceptance confirmation for quotation %s: %s',
+                        quotation.id,
+                        exc,
+                    )
             # Once any version is accepted, no other live version of the same
             # lead may be accepted later: revoke sibling links so we never end
             # up with a second order for the same deal.

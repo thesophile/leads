@@ -1795,3 +1795,63 @@ class LeadStatusAndLockTests(APITestCase):
         resp = self.client.post('/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
         self.assertEqual(resp.status_code, 200)
 
+
+class QuotationAcceptanceConfirmationTests(APITestCase):
+    """Accepting a quotation automatically emails the client a confirmation."""
+
+    def setUp(self):
+        company = make_company('ConfirmCo')
+        self.company = company
+        self.lead = make_raw_lead(company, 'Confirm Ltd', assigned_to='Confirmer')
+        self.lead.status = Lead.STATUS_QUOTATION
+        self.lead.save(update_fields=['status', 'updated_at'])
+        self.quotation = Quotation.objects.create(
+            id='Q-CONFIRM', lead_id=self.lead.id, company='Confirm Ltd',
+            tenant=company, customer='Confirm Person', email='client@confirm.com',
+            status='Sent to Client', client_status=Quotation.CLIENT_PENDING,
+            client_token='tok-confirm', mobile='9447000000',
+            total='10000', net_amount='10000', date='2026-09-10',
+        )
+
+    def test_accept_sends_confirmation_email(self):
+        import types
+        from unittest.mock import patch
+
+        sent = {}
+
+        def fake_send(fail_silently=True):
+            sent['called'] = True
+            return 1
+
+        fake_email = types.SimpleNamespace(send=fake_send)
+        with patch(
+            'transactions.views.build_quotation_accepted_email',
+            return_value=fake_email,
+        ) as builder:
+            resp = self.client.post(
+                '/api/transactions/public/quotations/tok-confirm/respond/',
+                {'decision': 'accept', 'message': ''}, format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(sent.get('called'))
+        self.assertTrue(builder.called)
+
+    def test_confirmation_email_has_no_attachment(self):
+        from transactions.services import build_quotation_accepted_email
+
+        email = build_quotation_accepted_email(self.quotation)
+        self.assertEqual(email.attachments, [])
+        self.assertIn(self.quotation.id, email.subject)
+
+    def test_decline_does_not_send_confirmation(self):
+        from unittest.mock import patch
+
+        with patch('transactions.views.build_quotation_accepted_email') as builder:
+            resp = self.client.post(
+                '/api/transactions/public/quotations/tok-confirm/respond/',
+                {'decision': 'decline', 'message': ''}, format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        builder.assert_not_called()
+
+
