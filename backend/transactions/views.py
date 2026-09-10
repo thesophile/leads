@@ -482,8 +482,13 @@ class LeadDetailView(APIView):
             can_edit = (user.has_permission('leads.edit_all')
                         or (user.has_permission('leads.edit_own') and is_own))
         else:
-            # Assigned leads are edited by the assigned staff or telecall editors.
-            can_edit = user.has_permission('telecall.edit') or lead.assigned_to == user.name
+            # Assigned leads are edited by the assigned staff while the lead is
+            # still in the assigned (telecall) stage, or by telecall editors.
+            # Once a lead leaves the assigned stage (e.g. set to "Quotation
+            # Requested"), the staff member loses control of it.
+            can_edit = user.has_permission('telecall.edit') or (
+                lead.assigned_to == user.name and lead.status == Lead.STATUS_ASSIGNED
+            )
         if not can_edit:
             return Response(
                 {'detail': 'You do not have permission to edit this lead.'},

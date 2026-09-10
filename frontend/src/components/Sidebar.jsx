@@ -83,7 +83,7 @@ const MENU_BASE = [
     id: 'utilities',
     label: 'Utilities',
     items: [
-      { id: 'settings', label: 'Settings', path: '/settings' },
+      { id: 'settings', label: 'Settings', path: '/settings', perm: 'company.view' },
       { id: 'notifications', label: 'Notifications', path: '/notifications' },
     ],
   },

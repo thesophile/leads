@@ -201,11 +201,12 @@ class LeadVisibilityTests(APITestCase):
         resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual({l['id'] for l in resp.data}, {'TC-1'})
 
-    def test_staff_sees_all_company_raw_leads(self):
-        # Raw data is public within the company for staff with view_raw_all.
+    def test_staff_sees_only_own_raw_leads(self):
+        # The default staff role no longer sees every raw lead in the company;
+        # staff only see the raw leads they added themselves.
         self.client.force_authenticate(self.shanu)
         resp = self.client.get('/api/transactions/leads/?status=raw')
-        self.assertEqual({l['id'] for l in resp.data}, {'RL-1', 'RL-2'})
+        self.assertEqual({l['id'] for l in resp.data}, {'RL-1'})
 
     def test_staff_without_view_raw_all_sees_only_own_raw_leads(self):
         self.client.force_authenticate(self.raw_less_staff)
@@ -248,6 +249,22 @@ class LeadVisibilityTests(APITestCase):
         self.assertEqual({l['id'] for l in resp.data}, {'TC-1'})
         resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual({l['id'] for l in resp.data}, set())
+
+    def test_staff_loses_control_after_quotation_requested(self):
+        # Once a staff moves a lead to 'Quotation Requested' it leaves the
+        # assigned stage and they lose the ability to update it.
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'call_status': 'Quotation Requested',
+            'remarks': 'Client asked for a quotation.',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'quotation')
+
+        blocked = self.client.patch('/api/transactions/leads/TC-1/', {
+            'remarks': 'Still mine?',
+        }, format='json')
+        self.assertEqual(blocked.status_code, 403)
 
     def test_staff_cannot_update_others_lead(self):
         # Priya cannot see (and therefore cannot edit) a lead assigned to Shanu.
@@ -423,12 +440,22 @@ class ProposalTemplateApiTests(APITestCase):
         self.assertEqual(resp.status_code, 401)
 
     def test_staff_can_create_own_template(self):
-        self.client.force_authenticate(self.staff)
+        # The default staff role cannot create templates; use a user whose
+        # role carries quotation create/edit.
+        clerk = User.objects.create_user(
+            email='clerk@tpl.com', password='x', name='Clerk T',
+            role=self.company.roles.create(
+                code='quotation_clerk', name='Quotation Clerk',
+                permissions=['quotation.create', 'quotation.edit'],
+            ),
+            company=self.company,
+        )
+        self.client.force_authenticate(clerk)
         resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'My Tpl', 'scopeHtml': '<p>x</p>',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
-        self.assertEqual(resp.data['owner'], self.staff.id)
+        self.assertEqual(resp.data['owner'], clerk.id)
 
     def test_create_template_and_list_owned_only(self):
         self.client.force_authenticate(self.manager)
@@ -664,7 +691,11 @@ class QuotationApprovalFlowTests(APITestCase):
         )
         self.staff = User.objects.create_user(
             email='staff@appr.com', password='x', name='Staff One',
-            role=company.roles.get(code='staff'), company=company,
+            role=company.roles.create(
+                code='quotation_clerk', name='Quotation Clerk',
+                permissions=['quotation.view', 'quotation.create', 'quotation.edit'],
+            ),
+            company=company,
         )
         self.lead = make_raw_lead(company, 'Approve Ltd', assigned_to='Staff One')
         self.lead.status = Lead.STATUS_QUOTATION
@@ -952,7 +983,7 @@ class QuotationApprovalFlowTests(APITestCase):
         resp = self.client.get(f'/api/transactions/quotations/{self.lead.id}/')
         self.assertEqual(resp.status_code, 404)
         # Legitimate same-company read still works.
-        self.client.force_authenticate(self.staff)
+        self.client.force_authenticate(self.approver)
         resp = self.client.get(f'/api/transactions/quotations/{self.lead.id}/')
         self.assertEqual(resp.status_code, 200)
 
