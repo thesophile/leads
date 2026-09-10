@@ -8,7 +8,7 @@ from transactions.admin import LeadAdmin
 from transactions.models import Lead
 
 from .admin import UserAdmin
-from .models import Company
+from .models import Company, Role
 from .serializers import AdminRegisterSerializer
 
 User = get_user_model()
@@ -418,3 +418,57 @@ class TokenRefreshSafetyTests(APITestCase):
             'refresh': self.refresh_token,
         }, format='json')
         self.assertEqual(resp.status_code, 401)
+
+
+class RoleDuplicateNameTests(APITestCase):
+    def setUp(self):
+        self.company = make_company('Role Co')
+        self.admin = User.objects.create_user(
+            email='admin@roleco.com', password='x', name='Role Admin',
+            role=admin_role(self.company), company=self.company,
+        )
+        self.other = Role.objects.create(
+            company=self.company, code='sales', name='Sales',
+            permissions=['leads.view'],
+        )
+
+    def test_create_with_duplicate_name_is_rejected(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/auth/roles/', {
+            'name': 'sales', 'code': 'sales2', 'permissions': [],
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('already exists', str(resp.data['detail']))
+
+    def test_create_with_same_name_different_case_is_rejected(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/auth/roles/', {
+            'name': 'SALES', 'code': 'sales2', 'permissions': [],
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_unique_name_create_succeeds(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/auth/roles/', {
+            'name': 'Telecall Team', 'code': 'telecall', 'permissions': [],
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+
+    def test_rename_to_duplicate_name_is_rejected(self):
+        self.client.force_authenticate(self.admin)
+        role = Role.objects.create(
+            company=self.company, code='telecall', name='Telecall',
+            permissions=['telecall.view'],
+        )
+        resp = self.client.patch(f'/api/auth/roles/{role.pk}/', {
+            'name': 'Sales',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('already exists', str(resp.data['detail']))
+
+    def test_renaming_to_self_name_is_allowed(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch(f'/api/auth/roles/{self.other.pk}/', {
+            'name': 'SALES',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)

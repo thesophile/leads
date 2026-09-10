@@ -234,6 +234,11 @@ class RoleListView(APIView):
                 {'detail': 'A role with this code already exists in your company.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if Role.objects.filter(company=company, name__iexact=name).exists():
+            return Response(
+                {'detail': f'name: A role named "{name}" already exists in this company.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         permissions = request.data.get('permissions', [])
         unknown = set(permissions) - set(FLAT_PERMISSIONS)
         if unknown:
@@ -281,6 +286,13 @@ class RoleDetailView(APIView):
             name = name.strip()
             if not name:
                 return Response({'detail': 'name: This field may not be blank.'}, status=status.HTTP_400_BAD_REQUEST)
+            if name.lower() != role.name.lower() and Role.objects.filter(
+                company=role.company, name__iexact=name
+            ).exclude(pk=role.pk).exists():
+                return Response(
+                    {'detail': f'name: A role named "{name}" already exists in this company.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             role.name = name
         permissions = request.data.get('permissions')
         if permissions is not None and not role.is_system:

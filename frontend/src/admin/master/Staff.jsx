@@ -872,22 +872,32 @@ function RolesEditor({
   async function saveRole() {
     setSaveError('')
     if (roleSaving) return
-    if (!roleFormName.trim()) {
+    const name = roleFormName.trim()
+    if (!name) {
       setSaveError('Role name is required.')
+      return
+    }
+    const duplicate = roles.find(
+      (r) =>
+        r.id !== (editingRole?.id ?? -1) &&
+        r.name.toLowerCase() === name.toLowerCase()
+    )
+    if (duplicate) {
+      setSaveError(`A role named "${name}" already exists in this company.`)
       return
     }
     setRoleSaving(true)
     try {
       if (isNewRole) {
         await api.post('/auth/roles/', {
-          name: roleFormName.trim(),
+          name,
           code: roleFormCode.trim(),
           permissions: roleFormPermissions,
         })
         showToast('Role created.')
       } else if (editingRole) {
         await api.patch(`/auth/roles/${editingRole.id}/`, {
-          name: roleFormName.trim(),
+          name,
           permissions: roleFormPermissions,
         })
         showToast('Role updated.')
