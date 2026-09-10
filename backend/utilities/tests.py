@@ -5,6 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
 
 from transactions.models import Lead
+from utilities.models import ActivityLog, log_activity
 
 User = get_user_model()
 
@@ -75,6 +76,81 @@ class BackupApiTests(APITestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertTrue(Lead.objects.filter(pk='RL-BAK').exists())
 
+    def test_restore_rejects_empty_file_before_flushing(self):
+        resp = self._restore('[]')
+        self.assertEqual(resp.status_code, 400)
+        self.assertTrue(Lead.objects.filter(pk='RL-BAK').exists())
+
     def test_restore_denied_for_staff(self):
         resp = self._restore('[]', as_user=self.staff)
         self.assertEqual(resp.status_code, 403)
+
+
+class ActivityLogTests(APITestCase):
+    def setUp(self):
+        self.company = make_company('Acme Activity')
+        self.admin = User.objects.create_user(
+            email='act-admin@acme.com', password='x', name='Act Admin',
+            role=self.company.roles.get(code='admin'), company=self.company,
+        )
+        self.staff = User.objects.create_user(
+            email='act-staff@acme.com', password='x', name='Act Staff',
+            role=self.company.roles.get(code='staff'), company=self.company,
+        )
+
+    def test_activity_list_scoped_and_ordered(self):
+        log_activity(self.admin, self.company, 'first', 'actor did first')
+        log_activity(self.admin, self.company, 'second', 'actor did second')
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get('/api/activity/')
+        self.assertEqual(resp.status_code, 200)
+        rows = resp.json()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]['action'], 'second')
+        self.assertEqual(rows[0]['actor'], 'Act Admin')
+
+    def test_activity_list_denied_for_staff(self):
+        log_activity(self.admin, self.company, 'first', 'actor did first')
+        self.client.force_authenticate(self.staff)
+        self.assertEqual(self.client.get('/api/activity/').status_code, 403)
+
+    def test_activity_list_honours_limit(self):
+        for i in range(5):
+            log_activity(self.admin, self.company, f'a{i}', f'summary {i}')
+        self.client.force_authenticate(self.admin)
+        rows = self.client.get('/api/activity/', {'limit': 2}).json()
+        self.assertEqual(len(rows), 2)
+
+    def test_superuser_sees_all_tenants(self):
+        other_company = make_company('Other Co')
+        other_admin = User.objects.create_user(
+            email='other@x.com', password='x', name='Other Admin',
+            role=other_company.roles.get(code='admin'), company=other_company,
+        )
+        log_activity(other_admin, other_company, 'other', 'from other company')
+        log_activity(self.admin, self.company, 'mine', 'from mine')
+        superuser = User.objects.create_superuser(email='su@x.com', password='x', name='SU')
+        self.client.force_authenticate(superuser)
+        rows = self.client.get('/api/activity/').json()
+        self.assertEqual(len(rows), 2)
+
+    def test_lead_create_logs_activity(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/transactions/leads/', {
+            'company': 'Activity Co',
+            'phone': '9876543210',
+            'city': 'Kochi',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        entries = ActivityLog.objects.filter(tenant=self.company, action='added lead')
+        self.assertEqual(entries.count(), 1)
+        self.assertIn('Activity Co', entries.first().summary)
+
+    def test_backup_export_logs_activity(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get('/api/backup/export/')
+        self.assertEqual(resp.status_code, 200)
+        entry = ActivityLog.objects.filter(
+            tenant=self.company, action='downloaded backup'
+        ).first()
+        self.assertIsNotNone(entry)

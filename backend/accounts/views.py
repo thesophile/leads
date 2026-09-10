@@ -22,6 +22,7 @@ from PIL import Image
 from .permissions import IsSuperuser, can, require_permission
 from .models import Company, Role
 from .rbac import FLAT_PERMISSIONS, PERMISSION_GROUPS
+from utilities.models import log_activity
 from .serializers import (
     AdminManageSerializer,
     AdminRegisterSerializer,
@@ -82,6 +83,14 @@ class StaffListView(APIView):
         serializer = StaffCreateSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        log_activity(
+            request.user,
+            request.user.company,
+            'added staff',
+            f'{request.user.name} added staff member {user.name}.',
+            entity_type='staff',
+            entity_id=str(user.pk),
+        )
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
@@ -138,6 +147,14 @@ class StaffDetailView(APIView):
         serializer = StaffUpdateSerializer(user, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        log_activity(
+            request.user,
+            request.user.company,
+            'updated staff',
+            f'{request.user.name} updated staff member {user.name}.',
+            entity_type='staff',
+            entity_id=str(user.pk),
+        )
         return Response(UserSerializer(user).data)
 
 
@@ -164,6 +181,14 @@ class StaffResetPasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         user.set_password(serializer.validated_data['new_password'])
         user.save(update_fields=['password'])
+        log_activity(
+            request.user,
+            request.user.company,
+            'reset password',
+            f'{request.user.name} reset the password for {user.name}.',
+            entity_type='staff',
+            entity_id=str(user.pk),
+        )
         return Response({'detail': 'Password updated successfully.'})
 
 
@@ -267,6 +292,14 @@ class RoleDetailView(APIView):
                 )
             role.permissions = sorted(set(permissions))
         role.save()
+        log_activity(
+            request.user,
+            request.user.company,
+            'updated role',
+            f'{request.user.name} updated the {role.name} role permissions.',
+            entity_type='role',
+            entity_id=str(role.pk),
+        )
         return Response(RoleSerializer(role).data)
 
     def delete(self, request, pk):
@@ -288,7 +321,16 @@ class RoleDetailView(APIView):
                 {'detail': 'This role is assigned to users and cannot be deleted.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        label = role.name
         role.delete()
+        log_activity(
+            request.user,
+            request.user.company,
+            'deleted role',
+            f'{request.user.name} deleted the {label} role.',
+            entity_type='role',
+            entity_id=str(pk),
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -463,6 +505,12 @@ class CompanyDetailView(APIView):
         serializer = CompanySerializer(company, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        log_activity(
+            request.user,
+            company,
+            'updated company settings',
+            f'{request.user.name} updated the company settings.',
+        )
         return Response(serializer.data)
 
 
@@ -587,6 +635,12 @@ class CompanyLogoUploadView(APIView):
         data = CompanySerializer(company).data
         data['status'] = 'saved'
         data['resized'] = (width, height) != LOGO_TARGET
+        log_activity(
+            request.user,
+            company,
+            'updated company logo',
+            f'{request.user.name} updated the company logo.',
+        )
         return Response(data)
 
     def delete(self, request):
@@ -600,6 +654,12 @@ class CompanyLogoUploadView(APIView):
             company.logo.delete(save=False)
             company.logo = None
             company.save(update_fields=['logo'])
+        log_activity(
+            request.user,
+            company,
+            'removed company logo',
+            f'{request.user.name} removed the company logo.',
+        )
         return Response({'detail': 'Company logo removed.', 'logo': ''})
 
 

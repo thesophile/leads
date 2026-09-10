@@ -18,7 +18,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can
 from master.models import Category, Source
-from utilities.models import Notification
+from utilities.models import Notification, log_activity
 
 from .models import (
     Attachment,
@@ -452,6 +452,14 @@ class LeadListView(APIView):
                     return duplicate_response(existing)
         if saved is None:
             raise last_error
+        log_activity(
+            request.user,
+            request.user.company,
+            'added lead',
+            f'{request.user.name} added raw lead {saved.id} - {saved.company}.',
+            entity_type='lead',
+            entity_id=saved.id,
+        )
         return Response(LeadSerializer(saved).data, status=status.HTTP_201_CREATED)
 
 
@@ -597,6 +605,33 @@ class LeadDetailView(APIView):
             if changed_fields:
                 contact_changed = True
                 sync_lead_contact_to_quotation(lead, changed_fields)
+        if 'assigned_to' in submitted and lead.assigned_to:
+            log_activity(
+                user,
+                user.company,
+                'assigned lead',
+                f'{user.name} assigned {lead.id} - {lead.company} to {lead.assigned_to}.',
+                entity_type='lead',
+                entity_id=lead.id,
+            )
+        elif 'call_status' in submitted and lead.call_status != old_call_status:
+            log_activity(
+                user,
+                user.company,
+                'updated call status',
+                f'{user.name} set {lead.company} call status to "{lead.call_status}".',
+                entity_type='lead',
+                entity_id=lead.id,
+            )
+        else:
+            log_activity(
+                user,
+                user.company,
+                'updated lead',
+                f'{user.name} updated lead {lead.id} - {lead.company}.',
+                entity_type='lead',
+                entity_id=lead.id,
+            )
         data = LeadSerializer(lead).data
         data['contactChanged'] = contact_changed
         data['wasGenerated'] = was_generated
@@ -613,7 +648,16 @@ class LeadDetailView(APIView):
                 {'detail': 'You do not have permission to delete this lead.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        label = f'{lead.id} - {lead.company}'
         lead.delete()
+        log_activity(
+            user,
+            user.company,
+            'deleted lead',
+            f'{user.name} deleted lead {label}.',
+            entity_type='lead',
+            entity_id=lead.id,
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -710,6 +754,14 @@ class QuotationView(APIView):
             contact_changed = bool(old_contact) and bool(
                 sync_contact_from_quotation(request.user, lead, quotation, old_contact)
             )
+            log_activity(
+                request.user,
+                request.user.company,
+                'created quotation version',
+                f'{request.user.name} created a new version of quotation {quotation.id} - {quotation.company}.',
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
             data = QuotationSerializer(quotation).data
             data.update({
                 'contactChanged': contact_changed,
@@ -795,10 +847,26 @@ class QuotationView(APIView):
                     entity_type='quotation',
                     entity_id=quotation.lead_id,
                 )
+            log_activity(
+                request.user,
+                request.user.company,
+                'sent for approval',
+                f'{request.user.name} sent quotation {quotation.id} - {quotation.company} for approval.',
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
             data = QuotationSerializer(quotation).data
             data.update(response_flags)
             return Response(data)
         quotation.save()
+        log_activity(
+            request.user,
+            request.user.company,
+            'created quotation' if new_row else 'updated quotation',
+            f'{request.user.name} {"created" if new_row else "updated"} quotation {quotation.id} - {quotation.company}.',
+            entity_type='quotation',
+            entity_id=quotation.lead_id,
+        )
         data = QuotationSerializer(quotation).data
         data.update(response_flags)
         return Response(data)
@@ -992,6 +1060,14 @@ class QuotationApproveView(QuotationApprovalBaseView):
             quotation.signed_by = request.user.name
             quotation.signature_ref = approval.signature_ref
             quotation.save()
+            log_activity(
+                request.user,
+                quotation.tenant,
+                'approved quotation',
+                f'{request.user.name} approved quotation {quotation.id} - {quotation.company}.',
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
             if quotation.submitted_by_id and quotation.submitted_by_id != request.user.id:
                 notify(
                     quotation.submitted_by,
@@ -1037,6 +1113,14 @@ class QuotationRejectView(QuotationApprovalBaseView):
         quotation.approver = request.user
         quotation.approver_name = request.user.name
         quotation.save()
+        log_activity(
+            request.user,
+            quotation.tenant,
+            'rejected quotation',
+            f'{request.user.name} rejected quotation {quotation.id} - {quotation.company}. Reason: {reason}',
+            entity_type='quotation',
+            entity_id=quotation.lead_id,
+        )
         if quotation.submitted_by_id and quotation.submitted_by_id != request.user.id:
             notify(
                 quotation.submitted_by,
@@ -1146,6 +1230,16 @@ class QuotationSendToClientView(APIView):
             quotation.sent_to_client_at = now
         quotation.client_status = quotation.client_status or Quotation.CLIENT_PENDING
         quotation.save()
+
+        if is_actual_send:
+            log_activity(
+                request.user,
+                quotation.tenant,
+                'sent quotation to client',
+                f'{request.user.name} sent quotation {quotation.id} - {quotation.company} to the client.',
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
 
         return Response(
             {
@@ -1468,6 +1562,13 @@ class LeadAssignView(APIView):
                 'assigned_to', 'tenant', 'status', 'call_status', 'remarks', 'updated_at',
             ])
             updated.append(lead)
+
+        log_activity(
+            request.user,
+            request.user.company,
+            'assigned leads',
+            f'{request.user.name} assigned {len(updated)} lead(s) to {", ".join(assigned_to)}.',
+        )
 
         return Response(
             {
@@ -1792,8 +1893,24 @@ class ClientDetailListCreateView(APIView):
         record = serializer.save()
         if created:
             status_code = status.HTTP_201_CREATED
+            log_activity(
+                request.user,
+                request.user.company,
+                'recorded client details',
+                f'{request.user.name} recorded client details for {record.company}.',
+                entity_type='client',
+                entity_id=record.id,
+            )
         else:
             status_code = status.HTTP_200_OK
+            log_activity(
+                request.user,
+                request.user.company,
+                'updated client details',
+                f'{request.user.name} updated client details for {record.company}.',
+                entity_type='client',
+                entity_id=record.id,
+            )
         # Only flip the linked lead to the client stage when that lead actually
         # belongs to this caller's company (never mutate another tenant's lead).
         if record.lead_id:
@@ -1841,6 +1958,14 @@ class ClientDetailDetailView(APIView):
         record = serializer.save()
         if record.lead_id:
             mark_lead_as_client(record.lead_id)
+        log_activity(
+            request.user,
+            request.user.company,
+            'updated client details',
+            f'{request.user.name} updated client details for {record.company}.',
+            entity_type='client',
+            entity_id=record.id,
+        )
         return Response(ClientDetailSerializer(record).data)
 
     def delete(self, request, pk):
@@ -1854,7 +1979,16 @@ class ClientDetailDetailView(APIView):
         record = self._get_scoped_record(request, pk)
         if record is None:
             return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        label = record.id
         record.delete()
+        log_activity(
+            request.user,
+            request.user.company,
+            'deleted client details',
+            f'{request.user.name} deleted client details {label}.',
+            entity_type='client',
+            entity_id=label,
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -1893,6 +2027,14 @@ class OrderListCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         order = serializer.save(tenant=request.user.company)
+        log_activity(
+            request.user,
+            request.user.company,
+            'created order',
+            f'{request.user.name} created order {order.id} for {order.company}.',
+            entity_type='order',
+            entity_id=order.id,
+        )
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
@@ -1937,6 +2079,23 @@ class OrderDetailView(APIView):
             # Details: create the client record and convert the lead.
             create_client_detail_from_order(order)
             mark_lead_as_client(order.lead_id)
+            log_activity(
+                request.user,
+                request.user.company,
+                'accepted order',
+                f'{request.user.name} accepted order {order.id} for {order.company}.',
+                entity_type='order',
+                entity_id=order.id,
+            )
+        else:
+            log_activity(
+                request.user,
+                request.user.company,
+                'updated order',
+                f'{request.user.name} updated order {order.id} for {order.company}.',
+                entity_type='order',
+                entity_id=order.id,
+            )
         return Response(OrderSerializer(order).data)
 
     def delete(self, request, pk):
@@ -1948,7 +2107,16 @@ class OrderDetailView(APIView):
         order = self._get_scoped_order(request, pk)
         if order is None:
             return Response({'detail': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+        label = order.id
         order.delete()
+        log_activity(
+            request.user,
+            request.user.company,
+            'deleted order',
+            f'{request.user.name} deleted order {label}.',
+            entity_type='order',
+            entity_id=label,
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

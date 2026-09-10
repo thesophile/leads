@@ -5,6 +5,8 @@ from datetime import date
 from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.core.serializers.json import Deserializer as JSONDeserializer
 from django.db.models import Q
@@ -19,7 +21,7 @@ from accounts.models import Role, User as AuthUser
 
 from accounts.permissions import can, require_permission
 
-from .models import Notification, StaffTarget
+from .models import ActivityLog, Notification, StaffTarget, log_activity
 from .serializers import (
     NotificationWriteSerializer,
     NotificationSerializer,
@@ -181,6 +183,12 @@ class StaffTargetListCreateView(APIView):
             quotation_target=data.get('quotation_target', 0),
             sales_target=data.get('sales_target', 0),
         )
+        log_activity(
+            request.user,
+            request.user.company,
+            'set target',
+            f"{request.user.name} set {target.name}'s targets for {target.month}/{target.year}.",
+        )
         return Response(StaffTargetSerializer(target).data, status=status.HTTP_201_CREATED)
 
 
@@ -212,6 +220,12 @@ class StaffTargetDetailView(APIView):
         for field, value in serializer.validated_data.items():
             setattr(target, field, value)
         target.save()
+        log_activity(
+            request.user,
+            request.user.company,
+            'updated target',
+            f"{request.user.name} updated {target.name}'s targets for {target.month}/{target.year}.",
+        )
         return Response(StaffTargetSerializer(target).data)
 
     def patch(self, request, pk):
@@ -226,7 +240,14 @@ class StaffTargetDetailView(APIView):
         target = self._get_object(request, pk)
         if target is None:
             return Response({'detail': 'Target not found.'}, status=status.HTTP_404_NOT_FOUND)
+        label = f"{target.name}'s targets for {target.month}/{target.year}"
         target.delete()
+        log_activity(
+            request.user,
+            request.user.company,
+            'deleted target',
+            f'{request.user.name} deleted {label}.',
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -270,11 +291,45 @@ class StaffTargetBulkAdjustView(APIView):
                 target.calls_target = int(round(target.calls_target * multiplier))
             target.save(update_fields=['raw_leads_target', 'calls_target', 'updated_at'])
 
+        log_activity(
+            request.user,
+            request.user.company,
+            'adjusted targets',
+            f"{request.user.name} scaled all {target_type} targets by {multiplier}x for {month}/{year}.",
+        )
         return Response(StaffTargetSerializer(queryset, many=True).data)
 
 
 BACKUP_EXCLUDED_MODELS = ['sessions.session', 'admin.logentry']
 BACKUP_MAX_BYTES = 100 * 1024 * 1024  # 100MB
+
+
+class ActivityLogListView(APIView):
+    """Recent system activity, newest first (tenant-scoped; superusers see all)."""
+
+    permission_classes = [require_permission('company.edit')]
+
+    def get(self, request):
+        queryset = ActivityLog.objects.all()
+        if not request.user.is_superuser:
+            company = getattr(request.user, 'company', None)
+            if company is None:
+                return Response([])
+            queryset = queryset.filter(tenant=company)
+        limit = _int_param(request, 'limit') or 50
+        limit = max(1, min(limit, 200))
+        return Response([
+            {
+                'id': row.id,
+                'time': row.created_at.isoformat(),
+                'actor': row.actor_name,
+                'action': row.action,
+                'summary': row.summary,
+                'entityType': row.entity_type,
+                'entityId': row.entity_id,
+            }
+            for row in queryset[:limit]
+        ])
 
 
 class BackupExportView(APIView):
@@ -287,11 +342,15 @@ class BackupExportView(APIView):
         call_command(
             'dumpdata',
             exclude=BACKUP_EXCLUDED_MODELS,
-            natural_foreign=True,
-            natural_primary=True,
             stdout=out,
         )
         data = json.loads(out.getvalue())
+        log_activity(
+            request.user,
+            getattr(request.user, 'company', None),
+            'downloaded backup',
+            f'{request.user.name} downloaded a database backup.',
+        )
         response = Response(data)
         response['Cache-Control'] = 'no-store'
         return response
@@ -352,6 +411,11 @@ class BackupRestoreView(APIView):
                 {'detail': 'Backup file is not a valid dumpdata export (expected a list).'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if not objects:
+            return Response(
+                {'detail': 'Backup file contains no data to restore.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             list(JSONDeserializer(content))
         except Exception:
@@ -369,10 +433,21 @@ class BackupRestoreView(APIView):
             self._suppress_sync_signals(suppress=True)
             try:
                 call_command('flush', interactive=False)
+                # flush re-emits post_migrate, which regenerates the content-type
+                # and permission rows. Drop those so the backup's own rows load at
+                # their original primary keys (keeps every FK / pk intact).
+                ContentType.objects.all().delete()
+                Permission.objects.all().delete()
                 call_command('loaddata', tmp.name)
             finally:
                 self._suppress_sync_signals(suppress=False)
         finally:
             os.unlink(tmp.name)
 
+        log_activity(
+            request.user,
+            getattr(request.user, 'company', None),
+            'restored backup',
+            f'{request.user.name} restored the system from a backup.',
+        )
         return Response({'detail': 'Backup restored successfully.'})

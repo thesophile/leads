@@ -221,6 +221,14 @@ const inputClass =
 
 const formatINR = (n) => '₹' + Number(n).toLocaleString('en-IN')
 
+const formatLogTime = (iso) => {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '--:--:--'
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map((n) => String(n).padStart(2, '0'))
+    .join(':')
+}
+
 const pctOf = (done, target) => (target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0)
 
 function ProgressCell({ done, target, barClass, format }) {
@@ -337,6 +345,10 @@ export default function Settings() {
   const [restoring, setRestoring] = useState(false)
   const backupInputRef = useRef(null)
 
+  const [activityLog, setActivityLog] = useState([])
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [activityError, setActivityError] = useState('')
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -386,6 +398,26 @@ export default function Settings() {
     }, 0)
     return () => clearTimeout(timer)
   }, [activeTab, selectedMonth, selectedYear])
+
+  useEffect(() => {
+    if (activeTab !== 'backup') return
+    let cancelled = false
+    ;(async () => {
+      setActivityLoading(true)
+      setActivityError('')
+      try {
+        const data = await api.get('/activity/', { params: { limit: 50 } })
+        if (!cancelled) setActivityLog(data)
+      } catch (err) {
+        if (!cancelled) setActivityError(err.message)
+      } finally {
+        if (!cancelled) setActivityLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab])
 
   function resetTargetForm() {
     setTargetStaffName('')
@@ -1212,13 +1244,28 @@ export default function Settings() {
                 </div>
               </div>
               <div className="p-5">
-                <div className="font-mono text-[10px] text-slate-500 bg-slate-50 p-4 rounded-lg border border-slate-200 max-h-52 overflow-y-auto space-y-2.5">
-                  <div>[10:14:02] Shanu VR recorded payment ₹25,000 for ORD-2026-001.</div>
-                  <div>[09:55:12] Priya Sharma updated Quotation status to Approved.</div>
-                  <div>[09:20:45] System automatic cron task resolved 2 follow-ups.</div>
-                  <div>[08:11:00] NIMISHA DAVIS created dynamic quotation QT-2026-024.</div>
-                  <div>[07:30:15] Daily target validation reports compiled.</div>
-                </div>
+                {activityLoading ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-3 text-[11px] text-slate-500">
+                    <Spinner className="h-3.5 w-3.5" />
+                    Loading activity log…
+                  </div>
+                ) : activityError ? (
+                  <div className="rounded-lg border border-red-100 bg-red-50 px-3.5 py-3 text-[11px] text-red-600">
+                    Unable to load the activity log.
+                  </div>
+                ) : activityLog.length === 0 ? (
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-3 text-[11px] text-slate-500">
+                    No activity recorded yet.
+                  </div>
+                ) : (
+                  <div className="font-mono text-[10px] text-slate-500 bg-slate-50 p-4 rounded-lg border border-slate-200 max-h-52 overflow-y-auto space-y-2.5">
+                    {activityLog.map((entry) => (
+                      <div key={entry.id}>
+                        [{formatLogTime(entry.time)}] {entry.summary}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1279,7 +1326,9 @@ export default function Settings() {
               the contents of the backup. This action cannot be undone.
             </p>
             <p className="mt-2 text-xs font-medium text-slate-500">
-              After restoring, you'll be signed out and asked to sign in again.
+              After restoring, you'll be signed out and asked to sign in again. Note: if this backup is older
+              than your account or your current password, you'll need the sign-in details that existed when the
+              backup was taken.
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
               <button

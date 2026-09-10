@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    ActivityLogListView,
     BackupExportView,
     BackupRestoreView,
     NotificationDetailView,
@@ -13,6 +14,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path('activity/', ActivityLogListView.as_view(), name='activity-list'),
     path('backup/export/', BackupExportView.as_view(), name='backup-export'),
     path('backup/restore/', BackupRestoreView.as_view(), name='backup-restore'),
     path('notifications/', NotificationListView.as_view(), name='notifications-list'),

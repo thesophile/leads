@@ -7,8 +7,20 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import can
+from utilities.models import log_activity
 
 from .models import Branch, Category, Source
+
+
+def _log(request, action, summary, entity_type='', entity_id=''):
+    log_activity(
+        request.user,
+        getattr(request.user, 'company', None),
+        action,
+        summary,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -131,6 +143,7 @@ class BranchListView(APIView):
             address=address,
             code=generate_branch_code(name),
         )
+        _log(request, 'added branch', f'{request.user.name} added branch {branch.name}.', entity_type='branch', entity_id=str(branch.pk))
         return Response(BranchSerializer(branch).data, status=status.HTTP_201_CREATED)
 
 
@@ -175,6 +188,7 @@ class BranchDetailView(APIView):
         if address is not None:
             branch.address = address.strip()
         branch.save()
+        _log(request, 'updated branch', f'{request.user.name} updated branch {branch.name}.', entity_type='branch', entity_id=str(branch.pk))
         return Response(BranchSerializer(branch).data)
 
     def delete(self, request, pk):
@@ -193,6 +207,7 @@ class BranchDetailView(APIView):
                 {'detail': 'This branch is in use and cannot be deleted.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        _log(request, 'deleted branch', f'{request.user.name} deleted branch {branch.name}.', entity_type='branch', entity_id=str(pk))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -237,6 +252,7 @@ class CategoryListView(APIView):
             name=name,
             code=generate_category_code(name, company),
         )
+        _log(request, 'added category', f'{request.user.name} added category {category.name}.', entity_type='category', entity_id=str(category.pk))
         return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
 
 
@@ -278,6 +294,7 @@ class CategoryDetailView(APIView):
                 )
             category.name = name
         category.save()
+        _log(request, 'updated category', f'{request.user.name} updated category {category.name}.', entity_type='category', entity_id=str(category.pk))
         return Response(CategorySerializer(category).data)
 
     def delete(self, request, pk):
@@ -296,6 +313,7 @@ class CategoryDetailView(APIView):
                 {'detail': 'This category is in use and cannot be deleted.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        _log(request, 'deleted category', f'{request.user.name} deleted category {category.name}.', entity_type='category', entity_id=str(pk))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -340,6 +358,7 @@ class SourceListView(APIView):
             name=name,
             code=generate_source_code(name, company),
         )
+        _log(request, 'added source', f'{request.user.name} added source {source.name}.', entity_type='source', entity_id=str(source.pk))
         return Response(SourceSerializer(source).data, status=status.HTTP_201_CREATED)
 
 
@@ -381,6 +400,7 @@ class SourceDetailView(APIView):
                 )
             source.name = name
         source.save()
+        _log(request, 'updated source', f'{request.user.name} updated source {source.name}.', entity_type='source', entity_id=str(source.pk))
         return Response(SourceSerializer(source).data)
 
     def delete(self, request, pk):
@@ -399,4 +419,5 @@ class SourceDetailView(APIView):
                 {'detail': 'This source is in use and cannot be deleted.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        _log(request, 'deleted source', f'{request.user.name} deleted source {source.name}.', entity_type='source', entity_id=str(pk))
         return Response(status=status.HTTP_204_NO_CONTENT)
