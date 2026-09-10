@@ -246,6 +246,11 @@ class RoleListView(APIView):
                 {'detail': f'Unknown permissions: {sorted(unknown)}'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if not request.user.is_superuser and set(permissions) - request.user.get_permissions():
+            return Response(
+                {'detail': 'A role cannot be given permissions you do not have yourself.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         role = Role.objects.create(
             company=company,
             code=code,
@@ -300,6 +305,11 @@ class RoleDetailView(APIView):
             if unknown:
                 return Response(
                     {'detail': f'Unknown permissions: {sorted(unknown)}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not request.user.is_superuser and set(permissions) - request.user.get_permissions():
+                return Response(
+                    {'detail': 'A role cannot be given permissions you do not have yourself.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             role.permissions = sorted(set(permissions))

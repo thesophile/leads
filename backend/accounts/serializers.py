@@ -205,6 +205,10 @@ class StaffCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'role': 'This role does not belong to your company.'})
             if role.is_system:
                 raise serializers.ValidationError({'role': 'The system admin role cannot be assigned here.'})
+            if not owner.is_superuser and set(role.permissions or []) - owner.get_permissions():
+                raise serializers.ValidationError(
+                    {'role': 'You cannot assign a role with permissions you do not have yourself.'}
+                )
         return attrs
 
     def create(self, validated_data):
@@ -259,6 +263,11 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         actor = request.user if request else None
         target = self.instance
+
+        if role is not None and actor is not None and not actor.is_superuser and set(role.permissions or []) - actor.get_permissions():
+            raise serializers.ValidationError(
+                {'role': 'You cannot assign a role with permissions you do not have yourself.'}
+            )
 
         # The company's system-admin account is protected: only the admin
         # themselves (or a platform superuser) may edit it, and never deactivate

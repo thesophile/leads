@@ -472,3 +472,85 @@ class RoleDuplicateNameTests(APITestCase):
             'name': 'SALES',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
+
+
+class RoleEscalationGuardTests(APITestCase):
+    """A role must never grant permissions the actor does not already hold.
+
+    This closes the loophole where someone with staff.manage + roles.manage
+    (or any limited role) could create a full-permission role and promote
+    themselves or others."
+    """
+
+    def setUp(self):
+        self.company = make_company('Escalation Co')
+        self.limited_role = Role.objects.create(
+            company=self.company,
+            code='limited',
+            name='Limited',
+            permissions=['leads.view', 'staff.manage', 'roles.manage'],
+        )
+        self.limited = User.objects.create_user(
+            email='limited@esco.com', password='x', name='Limited',
+            role=self.limited_role, company=self.company,
+        )
+        # A target role more powerful than ``limited`` (created via ORM so the
+        # API-side create guard is exercised separately).
+        self.power_role = Role.objects.create(
+            company=self.company,
+            code='power',
+            name='Power',
+            permissions=['leads.view', 'roles.manage', 'order.delete'],
+        )
+
+    def test_cannot_create_role_with_permissions_you_do_not_hold(self):
+        self.client.force_authenticate(self.limited)
+        resp = self.client.post('/api/auth/roles/', {
+            'name': 'Escalation', 'code': 'esc', 'permissions': ['roles.manage', 'order.delete'],
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('permissions you do not have', str(resp.data['detail']))
+
+    def test_can_create_role_with_subset_of_own_permissions(self):
+        self.client.force_authenticate(self.limited)
+        resp = self.client.post('/api/auth/roles/', {
+            'name': 'Viewer', 'code': 'viewer', 'permissions': ['leads.view'],
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+
+    def test_cannot_rename_grant_permissions_you_do_not_hold(self):
+        self.client.force_authenticate(self.limited)
+        viewer = Role.objects.create(
+            company=self.company, code='viewer', name='Viewer', permissions=['leads.view'],
+        )
+        resp = self.client.patch(f'/api/auth/roles/{viewer.pk}/', {
+            'permissions': ['leads.view', 'order.delete'],
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_cannot_assign_role_with_permissions_you_do_not_hold(self):
+        self.client.force_authenticate(self.limited)
+        resp = self.client.post('/api/auth/users/', {
+            'name': 'New Guy', 'email': 'newguy@esco.com', 'password': 'Str0ngPass!',
+            'role': self.power_role.pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_cannot_reassign_self_to_more_powerful_role(self):
+        self.client.force_authenticate(self.limited)
+        resp = self.client.patch(f'/api/auth/users/{self.limited.pk}/', {
+            'role': self.power_role.pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.limited.refresh_from_db()
+        self.assertEqual(self.limited.role_id, self.limited_role.pk)
+
+    def test_can_assign_role_that_is_subset_of_own_permissions(self):
+        self.client.force_authenticate(self.limited)
+        resp = self.client.post('/api/auth/users/', {
+            'name': 'New Guy', 'email': 'newguy@esco.com', 'password': 'Str0ngPass!',
+            'role': Role.objects.create(
+                company=self.company, code='viewer', name='Viewer', permissions=['leads.view'],
+            ).pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
