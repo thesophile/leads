@@ -600,10 +600,11 @@ export default function Settings() {
     try {
       await restoreBackup(restoreFile)
       setRestoreFile(null)
+      sessionStorage.setItem('leads_notice', 'Backup restored successfully. Please sign in again.')
       // The restore rewrote the database; the stored tokens may now point at a
       // user that no longer exists, so sign out and require a fresh login.
       await logout()
-      navigate('/login', { state: { notice: 'Backup restored successfully. Please sign in again.' } })
+      navigate('/login')
     } catch (err) {
       showToast(`Failed to restore backup: ${err.message}`)
     } finally {

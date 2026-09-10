@@ -157,7 +157,11 @@ export default function Login() {
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState(location.state?.notice || '')
+  const [notice, setNotice] = useState(() => {
+    const saved = sessionStorage.getItem('leads_notice')
+    if (saved) sessionStorage.removeItem('leads_notice')
+    return saved || location.state?.notice || ''
+  })
   const { text: typed } = useTypewriter(TYPE_WORDS)
 
   async function handleSubmit(e) {
