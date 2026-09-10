@@ -62,14 +62,9 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
-const INITIAL_STAFF_TARGETS = [
-  { id: 1, name: 'Karthika', role: 'Telecaller', rawLeadsTarget: 300, callsTarget: 800, quotationTarget: 10, salesTarget: 50000, rawLeadsDone: 245, callsDone: 680, quotationDone: 8, salesDone: 35000 },
-  { id: 2, name: 'Priya Sharma', role: 'Business Development', rawLeadsTarget: 150, callsTarget: 400, quotationTarget: 30, salesTarget: 250000, rawLeadsDone: 110, callsDone: 320, quotationDone: 24, salesDone: 190000 },
-  { id: 3, name: 'Ananya Nair', role: 'Business Development', rawLeadsTarget: 150, callsTarget: 400, quotationTarget: 30, salesTarget: 250000, rawLeadsDone: 135, callsDone: 380, quotationDone: 28, salesDone: 240000 },
-  { id: 4, name: 'Alex Joseph', role: 'Sales Lead', rawLeadsTarget: 100, callsTarget: 300, quotationTarget: 40, salesTarget: 400000, rawLeadsDone: 95, callsDone: 280, quotationDone: 38, salesDone: 380000 },
-  { id: 5, name: 'Shanu VR', role: 'Managing Director / BD', rawLeadsTarget: 100, callsTarget: 200, quotationTarget: 50, salesTarget: 500000, rawLeadsDone: 120, callsDone: 190, quotationDone: 45, salesDone: 480000 },
-  { id: 6, name: 'Bincy', role: 'Executive BD', rawLeadsTarget: 200, callsTarget: 600, quotationTarget: 25, salesTarget: 150000, rawLeadsDone: 180, callsDone: 510, quotationDone: 20, salesDone: 120000 },
-  { id: 7, name: 'Malavika', role: 'Telecaller', rawLeadsTarget: 400, callsTarget: 1000, quotationTarget: 5, salesTarget: 20000, rawLeadsDone: 390, callsDone: 920, quotationDone: 4, salesDone: 15000 },
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
 function SlidersIcon({ className = 'h-4 w-4' }) {
@@ -292,7 +287,13 @@ function Field({ label, required, children }) {
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('targets')
-  const [staffTargets, setStaffTargets] = useState(INITIAL_STAFF_TARGETS)
+  const [staffTargets, setStaffTargets] = useState([])
+  const [targetsLoading, setTargetsLoading] = useState(false)
+  const [targetsError, setTargetsError] = useState('')
+  const [availableMonths, setAvailableMonths] = useState([])
+  const now = new Date()
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
 
   const [companyName, setCompanyName] = useState('')
   const [companyEmail, setCompanyEmail] = useState('')
@@ -309,9 +310,13 @@ export default function Settings() {
   const [currency, setCurrency] = useState('INR (₹)')
   const [defaultBank, setDefaultBank] = useState('')
 
-  const [selectedStaffName, setSelectedStaffName] = useState('Karthika')
-  const [rawLeadsTarget, setRawLeadsTarget] = useState(300)
-  const [callsTarget, setCallsTarget] = useState(800)
+  const [targetStaffName, setTargetStaffName] = useState('')
+  const [targetStaffRole, setTargetStaffRole] = useState('')
+  const [targetRawLeads, setTargetRawLeads] = useState(0)
+  const [targetCalls, setTargetCalls] = useState(0)
+  const [targetQuotations, setTargetQuotations] = useState(0)
+  const [targetSales, setTargetSales] = useState(0)
+  const [savingTarget, setSavingTarget] = useState(false)
 
   const [targetDrawerOpen, setTargetDrawerOpen] = useState(false)
   const [targetDrawerVisible, setTargetDrawerVisible] = useState(false)
@@ -348,7 +353,39 @@ export default function Settings() {
     }
   }, [])
 
+  async function loadTargets(month, year) {
+    setTargetsLoading(true)
+    setTargetsError('')
+    try {
+      const data = await api.get('/staff-targets/', { params: { month, year } })
+      setStaffTargets(data?.results || [])
+      setAvailableMonths(data?.availableMonths || [])
+    } catch (err) {
+      setTargetsError(err.message)
+    } finally {
+      setTargetsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'targets') return
+    const timer = setTimeout(() => {
+      loadTargets(selectedMonth, selectedYear)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [activeTab, selectedMonth, selectedYear])
+
+  function resetTargetForm() {
+    setTargetStaffName('')
+    setTargetStaffRole('')
+    setTargetRawLeads(0)
+    setTargetCalls(0)
+    setTargetQuotations(0)
+    setTargetSales(0)
+  }
+
   function openTargetDrawer() {
+    resetTargetForm()
     setTargetDrawerVisible(true)
     requestAnimationFrame(() => setTargetDrawerOpen(true))
   }
@@ -456,32 +493,57 @@ export default function Settings() {
     }
   }
 
-  function handleUpdateTarget(e) {
+  async function handleUpdateTarget(e) {
     e.preventDefault()
-    setStaffTargets((prev) =>
-      prev.map((staff) =>
-        staff.name.toLowerCase() === selectedStaffName.toLowerCase()
-          ? {
-              ...staff,
-              rawLeadsTarget: Number(rawLeadsTarget),
-              callsTarget: Number(callsTarget),
-            }
-          : staff
-      )
-    )
-    closeTargetDrawer()
-    showToast(`Target updated for ${selectedStaffName}.`)
+    if (savingTarget) return
+    const name = targetStaffName.trim()
+    if (!name) {
+      showToast('Enter an employee name.')
+      return
+    }
+    setSavingTarget(true)
+    const body = {
+      name,
+      role: targetStaffRole.trim(),
+      month: selectedMonth,
+      year: selectedYear,
+      raw_leads_target: Number(targetRawLeads) || 0,
+      calls_target: Number(targetCalls) || 0,
+      quotation_target: Number(targetQuotations) || 0,
+      sales_target: Number(targetSales) || 0,
+    }
+    try {
+      const existing = staffTargets.find((s) => s.name.toLowerCase() === name.toLowerCase())
+      if (existing) {
+        await api.patch(`/staff-targets/${existing.id}/`, body)
+        showToast(`Target updated for ${name}.`)
+      } else {
+        await api.post('/staff-targets/', body)
+        showToast(`Target created for ${name}.`)
+      }
+      closeTargetDrawer()
+      resetTargetForm()
+      await loadTargets(selectedMonth, selectedYear)
+    } catch (err) {
+      showToast(`Failed to save target: ${err.message}`)
+    } finally {
+      setSavingTarget(false)
+    }
   }
 
-  function handleQuickSetAll(type, multiplier) {
-    setStaffTargets((prev) =>
-      prev.map((staff) => ({
-        ...staff,
-        rawLeadsTarget: type === 'raw' ? Math.round(staff.rawLeadsTarget * multiplier) : staff.rawLeadsTarget,
-        callsTarget: type === 'calls' ? Math.round(staff.callsTarget * multiplier) : staff.callsTarget,
-      }))
-    )
-    showToast(`All targets scaled by ${multiplier}x.`)
+  async function handleQuickSetAll(type, multiplier) {
+    try {
+      await api.post('/staff-targets/bulk-adjust/', {
+        type,
+        multiplier,
+        month: selectedMonth,
+        year: selectedYear,
+      })
+      showToast(`All ${type === 'raw' ? 'raw lead' : 'call'} targets scaled by ${multiplier}x.`)
+      await loadTargets(selectedMonth, selectedYear)
+    } catch (err) {
+      showToast(`Failed to adjust targets: ${err.message}`)
+    }
   }
 
   function showToast(msg) {
@@ -500,6 +562,12 @@ export default function Settings() {
     salesTarget: staffTargets.reduce((s, st) => s + st.salesTarget, 0),
     salesDone: staffTargets.reduce((s, st) => s + st.salesDone, 0),
   }
+
+  const yearOptions = availableMonths.length
+    ? [...new Set(availableMonths.map((m) => m.year))].sort((a, b) => a - b)
+    : [selectedYear]
+
+  const monthLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`
 
   return (
     <Layout>
@@ -600,8 +668,33 @@ export default function Settings() {
                 <div className="flex items-center gap-2.5">
                   <span className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-500 sm:inline-flex">
                     <CalendarIcon className="h-3.5 w-3.5" />
-                    August 2026
+                    {monthLabel}
                   </span>
+                  <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1">
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                      className="rounded-md bg-white px-1.5 py-1 text-[11px] font-semibold text-slate-600 focus:outline-none cursor-pointer"
+                    >
+                      {MONTH_NAMES.map((name, i) => (
+                        <option key={name} value={i + 1}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="rounded-md bg-white px-1 py-1 text-[11px] font-semibold text-slate-600 focus:outline-none cursor-pointer"
+                    >
+                      {yearOptions.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {targetsLoading && <Spinner className="h-4 w-4 text-slate-400" />}
                   <button
                     type="button"
                     onClick={openTargetDrawer}
@@ -612,6 +705,12 @@ export default function Settings() {
                   </button>
                 </div>
               </div>
+
+              {targetsError && (
+                <div className="border-b border-rose-100 bg-rose-50 px-5 py-3 text-[11px] font-semibold text-rose-700">
+                  {targetsError}
+                </div>
+              )}
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
@@ -625,6 +724,14 @@ export default function Settings() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
+                    {staffTargets.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-5 py-10 text-center">
+                          <p className="text-xs font-semibold text-slate-500">No targets set for {monthLabel}</p>
+                          <p className="mt-1 text-[11px] text-slate-400">Click "Set Target" to add a team member.</p>
+                        </td>
+                      </tr>
+                    )}
                     {staffTargets.map((staff) => (
                       <tr key={staff.id} className="hover:bg-slate-50/60 transition-colors">
                         <td className="px-5 py-3.5">
@@ -1121,52 +1228,88 @@ export default function Settings() {
 
               <div className="flex-1 overflow-y-auto px-5 py-4">
                 <form onSubmit={handleUpdateTarget} className="space-y-4 text-xs">
-                  <Field label="Employee">
-                    <select
-                      value={selectedStaffName}
-                      onChange={(e) => {
-                        setSelectedStaffName(e.target.value)
-                        const found = staffTargets.find((s) => s.name === e.target.value)
-                        if (found) {
-                          setRawLeadsTarget(found.rawLeadsTarget)
-                          setCallsTarget(found.callsTarget)
-                        }
-                      }}
-                      className={`${inputClass} cursor-pointer`}
-                    >
+                  <div className="rounded-xl border border-brand-100 bg-brand-50/60 px-3.5 py-2.5 text-[11px] font-semibold text-brand-700">
+                    {monthLabel}
+                  </div>
+
+                  <Field label="Employee" required>
+                    <input
+                      type="text"
+                      required
+                      list="target-member-names"
+                      value={targetStaffName}
+                      onChange={(e) => setTargetStaffName(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. Karthika"
+                    />
+                    <datalist id="target-member-names">
                       {staffTargets.map((s) => (
-                        <option key={s.name} value={s.name}>
-                          {s.name} ({s.role})
-                        </option>
+                        <option key={s.id} value={s.name} />
                       ))}
-                    </select>
+                    </datalist>
                   </Field>
 
-                  <Field label="Raw Leads Target">
+                  <Field label="Role">
                     <input
-                      type="number"
-                      required
-                      value={rawLeadsTarget}
-                      onChange={(e) => setRawLeadsTarget(e.target.value)}
-                      className={`${inputClass} font-mono`}
+                      type="text"
+                      value={targetStaffRole}
+                      onChange={(e) => setTargetStaffRole(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. Telecaller"
                     />
                   </Field>
 
-                  <Field label="Calls Target">
-                    <input
-                      type="number"
-                      required
-                      value={callsTarget}
-                      onChange={(e) => setCallsTarget(e.target.value)}
-                      className={`${inputClass} font-mono`}
-                    />
-                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Raw Leads Target" required>
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        value={targetRawLeads}
+                        onChange={(e) => setTargetRawLeads(e.target.value)}
+                        className={`${inputClass} font-mono`}
+                      />
+                    </Field>
+
+                    <Field label="Calls Target" required>
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        value={targetCalls}
+                        onChange={(e) => setTargetCalls(e.target.value)}
+                        className={`${inputClass} font-mono`}
+                      />
+                    </Field>
+
+                    <Field label="Quotation Target">
+                      <input
+                        type="number"
+                        min={0}
+                        value={targetQuotations}
+                        onChange={(e) => setTargetQuotations(e.target.value)}
+                        className={`${inputClass} font-mono`}
+                      />
+                    </Field>
+
+                    <Field label="Sales Target (₹)">
+                      <input
+                        type="number"
+                        min={0}
+                        value={targetSales}
+                        onChange={(e) => setTargetSales(e.target.value)}
+                        className={`${inputClass} font-mono`}
+                      />
+                    </Field>
+                  </div>
 
                   <button
                     type="submit"
-                    className="w-full rounded-lg bg-brand-600 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer"
+                    disabled={savingTarget}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Apply Target
+                    {savingTarget && <Spinner className="h-3.5 w-3.5" />}
+                    {savingTarget ? 'Saving…' : 'Apply Target'}
                   </button>
                 </form>
               </div>
