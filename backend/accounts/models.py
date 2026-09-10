@@ -154,11 +154,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         return ''.join(p[0].upper() for p in parts[:2]) or 'U'
 
     def get_permissions(self):
-        """Return the set of permission keys this user currently holds."""
+        """Return the set of permission keys this user currently holds.
+
+        System roles implicitly hold the full catalog; regular roles use their
+        stored permission list.
+        """
         if self.is_superuser:
             return set(FLAT_PERMISSIONS)
         if self.role_id:
-            return set(self.role.permissions or [])
+            return self.role.permission_names
         return set()
 
     def has_permission(self, key):

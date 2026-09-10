@@ -554,3 +554,43 @@ class RoleEscalationGuardTests(APITestCase):
             ).pk,
         }, format='json')
         self.assertEqual(resp.status_code, 201)
+
+
+class SystemRoleFullCatalogTests(APITestCase):
+    """System (admin) roles always hold the full catalog, in the API and when
+    evaluated, even if a stored permission was stripped or never backfilled."""
+
+    def setUp(self):
+        self.company = make_company('Full Catalog Co')
+        self.admin = User.objects.create_user(
+            email='admin@fullcat.com', password='x', name='Full Admin',
+            role=admin_role(self.company), company=self.company,
+        )
+
+    def test_admin_implicitly_holds_permissions_missing_from_stored_list(self):
+        key = 'quotation.send_without_approval'
+        role = self.admin.role
+        role.permissions = [p for p in role.permissions if p != key]
+        role.save(update_fields=['permissions'])
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.has_permission(key))
+        self.assertIn(key, self.admin.permissions)
+
+    def test_admin_serializer_reports_full_catalog(self):
+        self.client.force_authenticate(self.admin)
+        role = self.admin.role
+        role.permissions = []
+        role.save(update_fields=['permissions'])
+        self.admin.refresh_from_db()
+        resp = self.client.get('/api/auth/me/')
+        self.assertEqual(resp.status_code, 200)
+        for p in ('leads.manage_lock', 'quotation.approve', 'quotation.send_without_approval', 'roles.manage'):
+            self.assertIn(p, resp.data['permissions'])
+
+    def test_non_system_roles_use_stored_list_only(self):
+        staff = User.objects.create_user(
+            email='staff@fullcat.com', password='x', name='Staff A', company=self.company,
+        )
+        self.assertFalse(staff.has_permission('quotation.send_without_approval'))
+        self.assertFalse(staff.has_permission('quotation.approve'))
+        self.assertFalse(staff.has_permission('roles.manage'))
