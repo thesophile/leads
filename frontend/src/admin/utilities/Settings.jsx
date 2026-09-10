@@ -343,6 +343,7 @@ export default function Settings() {
   const [backupBusy, setBackupBusy] = useState(false)
   const [restoreFile, setRestoreFile] = useState(null)
   const [restoring, setRestoring] = useState(false)
+  const [restoreError, setRestoreError] = useState('')
   const backupInputRef = useRef(null)
 
   const [activityLog, setActivityLog] = useState([])
@@ -622,13 +623,17 @@ export default function Settings() {
 
   function handlePickBackup(e) {
     const file = e.target.files?.[0]
-    if (file) setRestoreFile(file)
+    if (file) {
+      setRestoreFile(file)
+      setRestoreError('')
+    }
     e.target.value = ''
   }
 
   async function handleRestoreBackup() {
     if (!restoreFile) return
     setRestoring(true)
+    setRestoreError('')
     try {
       await restoreBackup(restoreFile)
       setRestoreFile(null)
@@ -638,7 +643,8 @@ export default function Settings() {
       await logout()
       navigate('/login')
     } catch (err) {
-      showToast(`Failed to restore backup: ${err.message}`)
+      // Keep the dialog open so the error is visible right in the modal.
+      setRestoreError(err.message || 'Failed to restore backup.')
     } finally {
       setRestoring(false)
     }
@@ -1310,7 +1316,13 @@ export default function Settings() {
 
       {restoreFile && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setRestoreFile(null)} />
+          <div
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            onClick={() => {
+              setRestoreFile(null)
+              setRestoreError('')
+            }}
+          />
           <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
@@ -1330,10 +1342,18 @@ export default function Settings() {
               than your account or your current password, you'll need the sign-in details that existed when the
               backup was taken.
             </p>
+            {restoreError && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-600">
+                {restoreError}
+              </div>
+            )}
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setRestoreFile(null)}
+                onClick={() => {
+                  setRestoreFile(null)
+                  setRestoreError('')
+                }}
                 disabled={restoring}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
