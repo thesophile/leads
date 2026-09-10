@@ -5,8 +5,6 @@ from datetime import date
 from io import StringIO
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
-from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.core.serializers.json import Deserializer as JSONDeserializer
 from django.db.models import Q
@@ -300,7 +298,15 @@ class StaffTargetBulkAdjustView(APIView):
         return Response(StaffTargetSerializer(queryset, many=True).data)
 
 
-BACKUP_EXCLUDED_MODELS = ['sessions.session', 'admin.logentry']
+BACKUP_EXCLUDED_MODELS = [
+    'sessions.session',
+    'admin.logentry',
+    'contenttypes.contenttype',
+    'auth.permission',
+    'auth.group',
+    'token_blacklist.outstandingtoken',
+    'token_blacklist.blacklistedtoken',
+]
 BACKUP_MAX_BYTES = 100 * 1024 * 1024  # 100MB
 
 
@@ -342,6 +348,7 @@ class BackupExportView(APIView):
         call_command(
             'dumpdata',
             exclude=BACKUP_EXCLUDED_MODELS,
+            natural_foreign=True,
             stdout=out,
         )
         data = json.loads(out.getvalue())
@@ -418,9 +425,9 @@ class BackupRestoreView(APIView):
             )
         try:
             list(JSONDeserializer(content))
-        except Exception:
+        except Exception as exc:
             return Response(
-                {'detail': 'Backup file is not a valid dumpdata export.'},
+                {'detail': f'Backup file is not a valid dumpdata export: {exc}'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -433,11 +440,6 @@ class BackupRestoreView(APIView):
             self._suppress_sync_signals(suppress=True)
             try:
                 call_command('flush', interactive=False)
-                # flush re-emits post_migrate, which regenerates the content-type
-                # and permission rows. Drop those so the backup's own rows load at
-                # their original primary keys (keeps every FK / pk intact).
-                ContentType.objects.all().delete()
-                Permission.objects.all().delete()
                 call_command('loaddata', tmp.name)
             finally:
                 self._suppress_sync_signals(suppress=False)
