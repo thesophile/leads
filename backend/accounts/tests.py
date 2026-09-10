@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from transactions.admin import LeadAdmin
 from transactions.models import Lead
@@ -391,3 +392,29 @@ class AdminRenamePropagationTests(APITestCase):
         self.lead.refresh_from_db()
         self.assertEqual(self.lead.assigned_to, 'Husna K')
         self.assertEqual(self.lead.added_by, 'Husna K')
+
+
+class TokenRefreshSafetyTests(APITestCase):
+    """Refreshing with a token whose user no longer exists must be a 401,
+    not a 500 (e.g. after a backup restore replaced the database)."""
+
+    def setUp(self):
+        self.company = make_company('Refresh Co')
+        self.user = User.objects.create_user(
+            email='refresh@acme.com', password='x', name='Refresh User',
+            role=admin_role(self.company), company=self.company,
+        )
+        self.refresh_token = str(RefreshToken.for_user(self.user))
+
+    def test_refresh_returns_200_when_user_exists(self):
+        resp = self.client.post('/api/auth/token/refresh/', {
+            'refresh': self.refresh_token,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_refresh_returns_401_when_user_is_deleted(self):
+        self.user.delete()
+        resp = self.client.post('/api/auth/token/refresh/', {
+            'refresh': self.refresh_token,
+        }, format='json')
+        self.assertEqual(resp.status_code, 401)

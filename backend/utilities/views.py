@@ -1,11 +1,21 @@
+import json
+import os
+import tempfile
 from datetime import date
+from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
+from django.core.serializers.json import Deserializer as JSONDeserializer
 from django.db.models import Q
+from django.db.models.signals import post_save, pre_save
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from accounts import signals as account_signals
+from accounts.models import Role, User as AuthUser
 
 from accounts.permissions import can, require_permission
 
@@ -261,3 +271,108 @@ class StaffTargetBulkAdjustView(APIView):
             target.save(update_fields=['raw_leads_target', 'calls_target', 'updated_at'])
 
         return Response(StaffTargetSerializer(queryset, many=True).data)
+
+
+BACKUP_EXCLUDED_MODELS = ['sessions.session', 'admin.logentry']
+BACKUP_MAX_BYTES = 100 * 1024 * 1024  # 100MB
+
+
+class BackupExportView(APIView):
+    """Download a full data snapshot (dumpdata JSON) of every table."""
+
+    permission_classes = [require_permission('company.edit')]
+
+    def get(self, request):
+        out = StringIO()
+        call_command(
+            'dumpdata',
+            exclude=BACKUP_EXCLUDED_MODELS,
+            natural_foreign=True,
+            natural_primary=True,
+            stdout=out,
+        )
+        data = json.loads(out.getvalue())
+        response = Response(data)
+        response['Cache-Control'] = 'no-store'
+        return response
+
+
+class BackupRestoreView(APIView):
+    """Replace all current data with the contents of an uploaded dumpdata file.
+
+    The file is validated (JSON + dumpdata shape) *before* the database is
+    touched. On success the existing rows are flushed and the backup is loaded.
+    """
+
+    permission_classes = [require_permission('company.edit')]
+    max_bytes = BACKUP_MAX_BYTES
+
+    def _suppress_sync_signals(self, suppress):
+        receivers = [
+            (pre_save, account_signals.capture_old_name, AuthUser),
+            (post_save, account_signals.keep_staff_profile_in_sync, AuthUser),
+            (post_save, account_signals.keep_staff_role_label_in_sync, Role),
+        ]
+        for signal, receiver, sender in receivers:
+            if suppress:
+                signal.disconnect(receiver=receiver, sender=sender)
+            else:
+                signal.connect(receiver=receiver, sender=sender)
+
+    def post(self, request):
+        upload = request.FILES.get('file')
+        if upload is None:
+            return Response(
+                {'detail': 'Please attach a backup file to restore.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if upload.size > self.max_bytes:
+            return Response(
+                {'detail': 'Backup file exceeds the 100MB size limit.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            content = upload.read().decode('utf-8')
+        except UnicodeDecodeError:
+            return Response(
+                {'detail': 'Backup file must be valid UTF-8 JSON.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            objects = json.loads(content)
+        except json.JSONDecodeError:
+            return Response(
+                {'detail': 'Backup file is not valid JSON.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(objects, list):
+            return Response(
+                {'detail': 'Backup file is not a valid dumpdata export (expected a list).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            list(JSONDeserializer(content))
+        except Exception:
+            return Response(
+                {'detail': 'Backup file is not a valid dumpdata export.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tmp = tempfile.NamedTemporaryFile(
+            mode='w', suffix='.json', delete=False, encoding='utf-8',
+        )
+        try:
+            tmp.write(content)
+            tmp.close()
+            self._suppress_sync_signals(suppress=True)
+            try:
+                call_command('flush', interactive=False)
+                call_command('loaddata', tmp.name)
+            finally:
+                self._suppress_sync_signals(suppress=False)
+        finally:
+            os.unlink(tmp.name)
+
+        return Response({'detail': 'Backup restored successfully.'})

@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Spinner from '../../components/Spinner'
+import { downloadBackup, restoreBackup } from '../../utils/backup'
+import { useAuth } from '../../context/auth-context'
 
 const LOGO_TARGET_WIDTH = 400
 const LOGO_TARGET_HEIGHT = 160
@@ -286,6 +289,8 @@ function Field({ label, required, children }) {
 }
 
 export default function Settings() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
   const [activeTab, setActiveTab] = useState('targets')
   const [staffTargets, setStaffTargets] = useState([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -326,6 +331,11 @@ export default function Settings() {
   const [savingGeneral, setSavingGeneral] = useState(false)
   const [savingTemplates, setSavingTemplates] = useState(false)
   const [removingLogo, setRemovingLogo] = useState(false)
+
+  const [backupBusy, setBackupBusy] = useState(false)
+  const [restoreFile, setRestoreFile] = useState(null)
+  const [restoring, setRestoring] = useState(false)
+  const backupInputRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -564,6 +574,41 @@ export default function Settings() {
     setTimeout(() => {
       setToastMessage('')
     }, 2500)
+  }
+
+  async function handleDownloadBackup() {
+    setBackupBusy(true)
+    try {
+      const count = await downloadBackup()
+      showToast(`Database backup downloaded (${count} records).`)
+    } catch (err) {
+      showToast(`Failed to download backup: ${err.message}`)
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  function handlePickBackup(e) {
+    const file = e.target.files?.[0]
+    if (file) setRestoreFile(file)
+    e.target.value = ''
+  }
+
+  async function handleRestoreBackup() {
+    if (!restoreFile) return
+    setRestoring(true)
+    try {
+      await restoreBackup(restoreFile)
+      setRestoreFile(null)
+      // The restore rewrote the database; the stored tokens may now point at a
+      // user that no longer exists, so sign out and require a fresh login.
+      await logout()
+      navigate('/login')
+    } catch (err) {
+      showToast(`Failed to restore backup: ${err.message}`)
+    } finally {
+      setRestoring(false)
+    }
   }
 
   const totals = {
@@ -1124,24 +1169,33 @@ export default function Settings() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
-                    onClick={() => showToast('Database backup downloaded.')}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-slate-900 py-2.5 font-semibold text-white hover:bg-slate-800 transition cursor-pointer"
+                    onClick={handleDownloadBackup}
+                    disabled={backupBusy}
+                    className="flex items-center justify-center gap-2 rounded-lg bg-slate-900 py-2.5 font-semibold text-white hover:bg-slate-800 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <DownloadIcon className="h-3.5 w-3.5" />
-                    Download SQL Backup
+                    {backupBusy ? <Spinner className="h-3.5 w-3.5" /> : <DownloadIcon className="h-3.5 w-3.5" />}
+                    {backupBusy ? 'Preparing…' : 'Download Backup'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => showToast('Configuration exported.')}
-                    className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 py-2.5 font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                    onClick={() => backupInputRef.current?.click()}
+                    disabled={restoring}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 py-2.5 font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <DownloadIcon className="h-3.5 w-3.5" />
-                    Export JSON Config
+                    <UploadIcon className="h-3.5 w-3.5" />
+                    Import Backup
                   </button>
+                  <input
+                    ref={backupInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    className="hidden"
+                    onChange={handlePickBackup}
+                  />
                 </div>
                 <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-[11px] text-slate-500">
                   <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />
-                  Last automatic backup: Today, 06:00 AM
+                  Importing replaces all current data in the system.
                 </div>
               </div>
             </div>
@@ -1200,6 +1254,46 @@ export default function Settings() {
               >
                 {logoUploading && <Spinner className="h-3.5 w-3.5" />}
                 {logoUploading ? 'Uploading…' : `Auto-Resize to ${logoWarning.required_width}×${logoWarning.required_height}px`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restoreFile && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setRestoreFile(null)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <DatabaseIcon className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Restore backup?</h2>
+                <p className="mt-0.5 truncate text-[11px] text-slate-500">File: {restoreFile.name}</p>
+              </div>
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-slate-600">
+              This will replace all current data — leads, telecalls, quotations, orders, staff and settings — with
+              the contents of the backup. This action cannot be undone.
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setRestoreFile(null)}
+                disabled={restoring}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreBackup}
+                disabled={restoring}
+                className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {restoring && <Spinner className="h-3.5 w-3.5" />}
+                {restoring ? 'Restoring…' : 'Restore Backup'}
               </button>
             </div>
           </div>

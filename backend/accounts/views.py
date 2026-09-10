@@ -12,7 +12,11 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 from PIL import Image
 
 from .permissions import IsSuperuser, can, require_permission
@@ -676,3 +680,34 @@ class PasswordResetConfirmView(APIView):
         user.set_password(serializer.validated_data['new_password'])
         user.save(update_fields=['password'])
         return Response({'detail': 'Password has been reset. You can now sign in.'})
+
+
+class SafeTokenRefreshSerializer(TokenRefreshSerializer):
+    """TokenRefreshSerializer that treats a missing user as a clean 401.
+
+    SimpleJWT's default implementation does an unguarded ``User.objects.get``
+    which raises ``User.DoesNotExist`` (a 500) when the refreshed token belongs
+    to a user row that no longer exists (e.g. after a backup restore wiped and
+    reloaded the DB). We resolve the account up front and fail with the same
+    "no active account" error used elsewhere.
+    """
+
+    def validate(self, attrs):
+        refresh = self.token_class(attrs['refresh'])
+        user_id = refresh.payload.get(api_settings.USER_ID_CLAIM, None)
+        if user_id:
+            user = get_user_model().objects.filter(
+                **{api_settings.USER_ID_FIELD: user_id}
+            ).first()
+            if user is None or not api_settings.USER_AUTHENTICATION_RULE(user):
+                raise AuthenticationFailed(
+                    self.error_messages['no_active_account'],
+                    code='no_active_account',
+                )
+        return super().validate(attrs)
+
+
+class SafeTokenRefreshView(TokenRefreshView):
+    """Refresh endpoint that never 500s on a deleted account."""
+
+    serializer_class = SafeTokenRefreshSerializer
