@@ -644,6 +644,7 @@ export default function Settings() {
       navigate('/login')
     } catch (err) {
       // Keep the dialog open so the error is visible right in the modal.
+      console.error('Backup restore failed:', err.data?.technical || err.message)
       setRestoreError(err.message || 'Failed to restore backup.')
     } finally {
       setRestoring(false)

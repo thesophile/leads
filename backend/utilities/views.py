@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 import tempfile
 from datetime import date
 from io import StringIO
 
+from django.apps import apps
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.core.serializers.json import Deserializer as JSONDeserializer
 from django.db.models import Q
@@ -26,6 +29,57 @@ from .serializers import (
     StaffTargetSerializer,
     StaffTargetWriteSerializer,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _model_is_registered(label):
+    if not isinstance(label, str):
+        return False
+    app_label, _, model = label.partition('.')
+    return bool(
+        model
+        and app_label in apps.app_configs
+        and model in apps.all_models.get(app_label, {})
+    )
+
+
+def _contenttype_natural_refs(objects):
+    """Every 2-string list value that points at a registered app (content types)."""
+    refs = set()
+    for obj in objects:
+        fields = obj.get('fields') if isinstance(obj, dict) else None
+        if not isinstance(fields, dict):
+            continue
+        for value in fields.values():
+            if (
+                isinstance(value, (list, tuple))
+                and len(value) == 2
+                and all(isinstance(v, str) for v in value)
+                and value[0] in apps.app_configs
+            ):
+                refs.add((value[0], value[1]))
+    return refs
+
+
+def _ensure_content_types(objects):
+    """Create content types referenced by the backup that the live DB lacks.
+
+    Returns the ids of rows created here (legacy references only, e.g. a model
+    removed by a migration). They are removed again after a successful load.
+    """
+    created = []
+    for app_label, model in sorted(_contenttype_natural_refs(objects)):
+        ct, was_created = ContentType.objects.get_or_create(
+            app_label=app_label, model=model,
+        )
+        if was_created:
+            created.append(ct.pk)
+    return created
+
+
+def _cleanup_content_types(ids):
+    ContentType.objects.filter(id__in=ids).delete()
 
 
 class NotificationListView(APIView):
@@ -423,13 +477,42 @@ class BackupRestoreView(APIView):
                 {'detail': 'Backup file contains no data to restore.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        def invalid_backup(exc):
+            logger.warning('Backup restore rejected (%s): %s', request.user.email, exc)
+            return Response(
+                {
+                    'detail': (
+                        'This backup file cannot be restored. It appears to be from an older or '
+                        'incompatible version of the app. Download a fresh backup and try again.'
+                    ),
+                    'technical': str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        synthesized = []
         try:
             list(JSONDeserializer(content))
         except Exception as exc:
-            return Response(
-                {'detail': f'Backup file is not a valid dumpdata export: {exc}'},
-                status=status.HTTP_400_BAD_REQUEST,
+            structurally_ok = all(
+                isinstance(o, dict)
+                and isinstance(o.get('model'), str)
+                and _model_is_registered(o['model'])
+                and isinstance(o.get('fields'), dict)
+                for o in objects
             )
+            if not structurally_ok:
+                return invalid_backup(exc)
+            # Legacy backups may reference content types that no longer exist
+            # (e.g. a model removed by a migration). Create the missing ones and
+            # re-validate before touching the database.
+            synth_for_validation = _ensure_content_types(objects)
+            try:
+                list(JSONDeserializer(content))
+            except Exception as exc2:
+                _cleanup_content_types(synth_for_validation)
+                return invalid_backup(exc2)
 
         tmp = tempfile.NamedTemporaryFile(
             mode='w', suffix='.json', delete=False, encoding='utf-8',
@@ -440,11 +523,17 @@ class BackupRestoreView(APIView):
             self._suppress_sync_signals(suppress=True)
             try:
                 call_command('flush', interactive=False)
+                # flush wiped every content-type row; recreate the ones the file
+                # references so loaddata can resolve its foreign keys.
+                synthesized = _ensure_content_types(objects)
                 call_command('loaddata', tmp.name)
             finally:
                 self._suppress_sync_signals(suppress=False)
         finally:
             os.unlink(tmp.name)
+
+        if synthesized:
+            _cleanup_content_types(synthesized)
 
         log_activity(
             request.user,

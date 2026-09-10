@@ -2,7 +2,8 @@ import json
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from rest_framework.test import APITestCase
+from django.test import TransactionTestCase
+from rest_framework.test import APIClient, APITestCase
 
 from transactions.models import Lead
 from utilities.models import ActivityLog, log_activity
@@ -15,8 +16,12 @@ def make_company(name):
     return Company.objects.get_or_create(name=name)[0]
 
 
-class BackupApiTests(APITestCase):
+class BackupApiTests(TransactionTestCase):
+    """Restore runs ``flush``/``loaddata`` which need real autocommit, so these
+    tests must not be wrapped in a per-test transaction."""
+
     def setUp(self):
+        self.client = APIClient()
         self.company = make_company('Acme Backup')
         self.admin = User.objects.create_user(
             email='backup-admin@acme.com', password='x', name='Backup Admin',
@@ -84,6 +89,37 @@ class BackupApiTests(APITestCase):
     def test_restore_denied_for_staff(self):
         resp = self._restore('[]', as_user=self.staff)
         self.assertEqual(resp.status_code, 403)
+
+    def test_restore_accepts_legacy_missing_content_type(self):
+        content = self._export(self.admin)
+        self.assertEqual(content.status_code, 200)
+        payload = content.json()
+        payload.append({
+            'model': 'auth.permission',
+            'pk': None,
+            'fields': {
+                'name': 'Manage TelecallLead (legacy)',
+                'content_type': ['transactions', 'telecalllead'],
+                'codename': 'change_telecalllead',
+            },
+        })
+        resp = self._restore(json.dumps(payload))
+        self.assertEqual(resp.status_code, 200)
+        from django.contrib.auth.models import Permission
+        from django.contrib.contenttypes.models import ContentType
+        self.assertFalse(ContentType.objects.filter(app_label='transactions', model='telecalllead').exists())
+        self.assertFalse(Permission.objects.filter(codename='change_telecalllead').exists())
+        self.assertTrue(Lead.objects.filter(pk='RL-BAK').exists())
+
+    def test_restore_invalid_file_returns_short_message_plus_technical(self):
+        resp = self._restore('[{"model": "missing.pizza", "fields": {}}]')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['detail'], (
+            'This backup file cannot be restored. It appears to be from an older or '
+            'incompatible version of the app. Download a fresh backup and try again.'
+        ))
+        self.assertIsInstance(resp.data.get('technical'), str)
+        self.assertIn('missing.pizza', resp.data['technical'])
 
 
 class ActivityLogTests(APITestCase):
