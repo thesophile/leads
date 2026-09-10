@@ -58,12 +58,12 @@ class StaffTargetWriteSerializer(serializers.ModelSerializer):
         return value
 
     def validate_month(self, value):
-        if not 1 <= (value or 1) <= 12:
+        if not 1 <= value <= 12:
             raise serializers.ValidationError('Month must be between 1 and 12.')
         return value
 
     def validate_year(self, value):
-        if not 2000 <= (value or 2000) <= 2200:
+        if not 2000 <= value <= 2200:
             raise serializers.ValidationError('Year is out of range.')
         return value
 

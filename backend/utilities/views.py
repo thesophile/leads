@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import tempfile
 from datetime import date
@@ -271,6 +272,19 @@ class StaffTargetDetailView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         for field, value in serializer.validated_data.items():
             setattr(target, field, value)
+        month = target.month
+        year = target.year
+        name = target.name
+        if StaffTarget.objects.filter(
+            tenant=target.tenant,
+            name__iexact=name,
+            month=month,
+            year=year,
+        ).exclude(pk=target.pk).exists():
+            return Response(
+                {'name': ['This employee already has targets for this month.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         target.save()
         log_activity(
             request.user,
@@ -322,6 +336,11 @@ class StaffTargetBulkAdjustView(APIView):
                 {'multiplier': 'A numeric multiplier is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if not math.isfinite(multiplier) or not 0 < multiplier <= 10000:
+            return Response(
+                {'multiplier': 'Multiplier must be a finite number between 0 and 10000.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         today = date.today()
         try:
             month = int(request.data.get('month')) if request.data.get('month') else today.month
@@ -336,11 +355,15 @@ class StaffTargetBulkAdjustView(APIView):
             StaffTarget.objects.filter(month=month, year=year),
             request.user,
         )
+        # Signed 32-bit IntegerField ceiling; clamp so no row can overflow.
+        int_max = 2_147_483_647
         for target in queryset:
             if target_type == 'raw':
-                target.raw_leads_target = int(round(target.raw_leads_target * multiplier))
+                value = int(round(target.raw_leads_target * multiplier))
+                target.raw_leads_target = max(0, min(value, int_max))
             else:
-                target.calls_target = int(round(target.calls_target * multiplier))
+                value = int(round(target.calls_target * multiplier))
+                target.calls_target = max(0, min(value, int_max))
             target.save(update_fields=['raw_leads_target', 'calls_target', 'updated_at'])
 
         log_activity(

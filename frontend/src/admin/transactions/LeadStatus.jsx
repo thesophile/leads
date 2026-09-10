@@ -89,8 +89,8 @@ export default function LeadStatus() {
       const matchesStage = selectedStage === 'All Stages' || lead.stage === selectedStage
       const matchesSearch =
         lead.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.phone.includes(searchQuery) ||
+        (lead.contact || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (lead.phone || '').includes(searchQuery) ||
         lead.id.toLowerCase().includes(searchQuery.toLowerCase())
       return matchesStage && matchesSearch
     })

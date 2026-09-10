@@ -190,3 +190,85 @@ class ActivityLogTests(APITestCase):
             tenant=self.company, action='downloaded backup'
         ).first()
         self.assertIsNotNone(entry)
+
+
+class StaffTargetBugRegressionTests(APITestCase):
+    """Regression coverage for issues found in today's build."""
+
+    def setUp(self):
+        self.company = make_company('Target Bug Co')
+        self.admin = User.objects.create_user(
+            email='target@bug.com', password='x', name='Target Bug',
+            role=self.company.roles.get(code='admin'), company=self.company,
+        )
+        from utilities.models import StaffTarget
+        self.StaffTarget = StaffTarget
+        self.client.force_authenticate(self.admin)
+
+    def test_month_zero_is_rejected_without_crashing(self):
+        resp = self.client.post('/api/staff-targets/', {
+            'name': 'Zero Month', 'month': 0, 'year': 2026,
+            'raw_leads_target': 5,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_rename_to_duplicate_name_is_rejected_cleanly(self):
+        from utilities.models import StaffTarget
+        StaffTarget.objects.create(
+            tenant=self.company, name='Alice', month=9, year=2026,
+        )
+        dup = StaffTarget.objects.create(
+            tenant=self.company, name='Bob', month=9, year=2026,
+        )
+        resp = self.client.patch(f'/api/staff-targets/{dup.id}/', {
+            'name': 'Alice',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_rename_to_case_only_duplicate_is_rejected(self):
+        # The list view dedups case-insensitively, so a rename to another case
+        # of an existing name must not create a duplicate row.
+        from utilities.models import StaffTarget
+        StaffTarget.objects.create(
+            tenant=self.company, name='alice', month=9, year=2026,
+        )
+        dup = StaffTarget.objects.create(
+            tenant=self.company, name='Bob', month=9, year=2026,
+        )
+        resp = self.client.patch(f'/api/staff-targets/{dup.id}/', {
+            'name': 'ALICE',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_bulk_adjust_rejects_nan_without_crashing(self):
+        from utilities.models import StaffTarget
+        StaffTarget.objects.create(
+            tenant=self.company, name='Nan Target', month=9, year=2026,
+            calls_target=10,
+        )
+        resp = self.client.post('/api/staff-targets/bulk-adjust/', {
+            'type': 'calls', 'multiplier': 'nan', 'month': 9, 'year': 2026,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_bulk_adjust_rejects_infinite_multiplier(self):
+        from utilities.models import StaffTarget
+        StaffTarget.objects.create(
+            tenant=self.company, name='Inf Target', month=9, year=2026,
+            calls_target=10,
+        )
+        resp = self.client.post('/api/staff-targets/bulk-adjust/', {
+            'type': 'calls', 'multiplier': 'inf', 'month': 9, 'year': 2026,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_bulk_adjust_rejects_out_of_range_multiplier(self):
+        from utilities.models import StaffTarget
+        StaffTarget.objects.create(
+            tenant=self.company, name='Huge Target', month=9, year=2026,
+            calls_target=10,
+        )
+        resp = self.client.post('/api/staff-targets/bulk-adjust/', {
+            'type': 'calls', 'multiplier': '1e20', 'month': 9, 'year': 2026,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)

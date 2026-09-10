@@ -344,7 +344,7 @@ export default function Telecall() {
       const refreshed = { ...activeLead, isLocked: updated.isLocked, lockedBy: updated.lockedBy }
       setActiveLead(refreshed)
       await refreshData()
-      setNotice(activeLead.isLocked ? 'Lead locked.' : 'Lead unlocked.')
+      setNotice(refreshed.isLocked ? 'Lead locked.' : 'Lead unlocked.')
       setTimeout(() => setNotice(''), 2500)
     } catch (err) {
       setError(err.message)
@@ -377,10 +377,10 @@ export default function Telecall() {
       // 4. Search query
       const matchesSearch =
         item.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.phone.includes(searchQuery) ||
-        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.city.toLowerCase().includes(searchQuery.toLowerCase())
+        (item.contact || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.phone || '').includes(searchQuery) ||
+        (item.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.city || '').toLowerCase().includes(searchQuery.toLowerCase())
 
       return matchesCaller && matchesStatus && matchesPriority && matchesSearch
     })
