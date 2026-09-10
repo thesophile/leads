@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.contrib.auth import get_user_model
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -86,6 +87,30 @@ def _available_months(user):
     ]
 
 
+def _employee_options(user):
+    """Deduplicated dropdown of team members: names already tracked in target
+    rows (any month) plus company user accounts."""
+    employees = []
+    seen = set()
+
+    rows = _target_scope_filter(StaffTarget.objects.all(), user).order_by('name')
+    for row in rows:
+        key = row.name.lower()
+        if key not in seen:
+            seen.add(key)
+            employees.append({'name': row.name, 'role': row.role})
+
+    company = user.company if not user.is_superuser else getattr(user, 'company', None)
+    if company is not None:
+        for account in get_user_model().objects.filter(company=company).exclude(is_superuser=True).order_by('name'):
+            key = account.name.lower()
+            if key not in seen:
+                seen.add(key)
+                employees.append({'name': account.name, 'role': account.role.name if account.role_id else ''})
+
+    return employees
+
+
 class StaffTargetListCreateView(APIView):
     """Read monthly staff targets (view) or add a new member's targets (edit)."""
 
@@ -105,6 +130,7 @@ class StaffTargetListCreateView(APIView):
             'month': month,
             'year': year,
             'availableMonths': _available_months(request.user),
+            'employees': _employee_options(request.user),
             'results': StaffTargetSerializer(queryset, many=True).data,
         })
 

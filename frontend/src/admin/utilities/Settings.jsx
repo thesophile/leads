@@ -291,6 +291,7 @@ export default function Settings() {
   const [targetsLoading, setTargetsLoading] = useState(false)
   const [targetsError, setTargetsError] = useState('')
   const [availableMonths, setAvailableMonths] = useState([])
+  const [employees, setEmployees] = useState([])
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
@@ -360,6 +361,7 @@ export default function Settings() {
       const data = await api.get('/staff-targets/', { params: { month, year } })
       setStaffTargets(data?.results || [])
       setAvailableMonths(data?.availableMonths || [])
+      setEmployees(data?.employees || [])
     } catch (err) {
       setTargetsError(err.message)
     } finally {
@@ -382,6 +384,17 @@ export default function Settings() {
     setTargetCalls(0)
     setTargetQuotations(0)
     setTargetSales(0)
+  }
+
+  function handleSelectEmployee(name) {
+    setTargetStaffName(name)
+    const employee = employees.find((e) => e.name === name)
+    const existing = staffTargets.find((s) => s.name.toLowerCase() === name.toLowerCase())
+    setTargetStaffRole(existing?.role ?? employee?.role ?? '')
+    setTargetRawLeads(existing?.rawLeadsTarget ?? 0)
+    setTargetCalls(existing?.callsTarget ?? 0)
+    setTargetQuotations(existing?.quotationTarget ?? 0)
+    setTargetSales(existing?.salesTarget ?? 0)
   }
 
   function openTargetDrawer() {
@@ -1233,20 +1246,25 @@ export default function Settings() {
                   </div>
 
                   <Field label="Employee" required>
-                    <input
-                      type="text"
+                    <select
                       required
-                      list="target-member-names"
                       value={targetStaffName}
-                      onChange={(e) => setTargetStaffName(e.target.value)}
-                      className={inputClass}
-                      placeholder="e.g. Karthika"
-                    />
-                    <datalist id="target-member-names">
-                      {staffTargets.map((s) => (
-                        <option key={s.id} value={s.name} />
+                      onChange={(e) => handleSelectEmployee(e.target.value)}
+                      className={`${inputClass} cursor-pointer`}
+                    >
+                      <option value="">Select employee…</option>
+                      {employees.map((em) => (
+                        <option key={em.name} value={em.name}>
+                          {em.name}
+                          {em.role ? ` (${em.role})` : ''}
+                        </option>
                       ))}
-                    </datalist>
+                    </select>
+                    {employees.length === 0 && (
+                      <p className="mt-1.5 text-[11px] text-slate-400">
+                        No team members yet. Add staff from Staff &amp; Roles first.
+                      </p>
+                    )}
                   </Field>
 
                   <Field label="Role">
@@ -1305,7 +1323,7 @@ export default function Settings() {
 
                   <button
                     type="submit"
-                    disabled={savingTarget}
+                    disabled={savingTarget || !targetStaffName}
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {savingTarget && <Spinner className="h-3.5 w-3.5" />}
