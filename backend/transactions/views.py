@@ -100,6 +100,11 @@ NOT_GENERATED_STATUSES = {'', 'Not Sent', 'Quotation Requested'}
 # new version via "Edit as New Version".
 LOCKED_STATUSES = {'Approved', 'Sent to Client', 'Accepted', 'Declined'}
 
+# Statuses a user with ``quotation.send_without_approval`` may bypass approval
+# for. "Quotation Requested" is excluded (no proposal row yet) and "Accepted"
+# has already moved on to the order pipeline.
+BYPASS_APPROVAL_SEND_STATUSES = {'Not Sent', 'Pending Approval', 'Rejected', 'Declined'}
+
 CONTACT_EDITABLE_CAMEL = ('customer', 'company', 'mobile', 'email', 'category', 'city', 'source')
 
 
@@ -1352,7 +1357,11 @@ class QuotationSendToClientView(APIView):
             same_company = quotation.tenant is not None and quotation.tenant == request.user.company
             if not lead_in_scope and not same_company:
                 return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
-        if quotation.status not in ('Approved', 'Sent to Client'):
+        bypassing_approval = quotation.status not in ('Approved', 'Sent to Client')
+        if bypassing_approval and not (
+            can(request.user, 'quotation.send_without_approval')
+            and quotation.status in BYPASS_APPROVAL_SEND_STATUSES
+        ):
             return Response(
                 {'detail': 'Only approved quotations can be sent to the client.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1418,18 +1427,30 @@ class QuotationSendToClientView(APIView):
             if quotation.status != 'Sent to Client':
                 quotation.status = 'Sent to Client'
             quotation.sent_to_client_at = now
+            if bypassing_approval:
+                quotation.approvals.all().delete()
         quotation.client_status = quotation.client_status or Quotation.CLIENT_PENDING
         quotation.save()
 
         if is_actual_send:
-            log_activity(
-                request.user,
-                quotation.tenant,
-                'sent quotation to client',
-                f'{request.user.name} sent quotation {quotation.id} - {quotation.company} to the client.',
-                entity_type='quotation',
-                entity_id=quotation.lead_id,
-            )
+            if bypassing_approval:
+                log_activity(
+                    request.user,
+                    quotation.tenant,
+                    'sent quotation without approval',
+                    f'{request.user.name} sent quotation {quotation.id} - {quotation.company} to the client without approval.',
+                    entity_type='quotation',
+                    entity_id=quotation.lead_id,
+                )
+            else:
+                log_activity(
+                    request.user,
+                    quotation.tenant,
+                    'sent quotation to client',
+                    f'{request.user.name} sent quotation {quotation.id} - {quotation.company} to the client.',
+                    entity_type='quotation',
+                    entity_id=quotation.lead_id,
+                )
 
         return Response(
             {

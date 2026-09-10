@@ -40,6 +40,7 @@ PERMISSION_GROUPS = [
             ('quotation.create', 'Create quotations'),
             ('quotation.edit', 'Edit quotations'),
             ('quotation.send', 'Send quotations'),
+            ('quotation.send_without_approval', 'Send quotations without approval'),
             ('quotation.approve', 'Approve / reject quotations'),
         ],
     },

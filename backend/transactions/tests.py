@@ -999,6 +999,95 @@ class QuotationApprovalFlowTests(APITestCase):
         self.assertTrue(Quotation.objects.filter(lead_id=self.lead.id).exists())
 
 
+class QuotationSendWithoutApprovalTests(APITestCase):
+    """Users with ``quotation.send_without_approval`` may send a proposal to the
+    client without running it through the approval flow."""
+
+    def setUp(self):
+        company = make_company('BypassCo')
+        self.company = company
+        self.bypasser = User.objects.create_user(
+            email='bypass@co.com', password='x', name='Bypass One',
+            role=company.roles.create(
+                code='bypasser', name='Bypasser',
+                permissions=[
+                    'quotation.view', 'quotation.create', 'quotation.edit',
+                    'quotation.send', 'quotation.send_without_approval',
+                ],
+            ),
+            company=company,
+        )
+        self.sender = User.objects.create_user(
+            email='sender@co.com', password='x', name='Sender One',
+            role=company.roles.create(
+                code='sender', name='Sender',
+                permissions=[
+                    'quotation.view', 'quotation.create', 'quotation.edit',
+                    'quotation.send',
+                ],
+            ),
+            company=company,
+        )
+        self.approver = User.objects.create_user(
+            email='approver@co.com', password='x', name='Approver One',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.lead = make_raw_lead(company, 'Bypass Ltd', assigned_to='Bypass One')
+        self.lead.status = Lead.STATUS_QUOTATION
+        self.lead.save(update_fields=['status', 'updated_at'])
+        self.quote = Quotation.objects.create(
+            id=self.lead.id, lead_id=self.lead.id, company=self.lead.company,
+            tenant=company, staff='Bypass One', email='client@bypass.co',
+            status='Not Sent',
+        )
+        self.send_url = f'/api/transactions/quotations/{self.quote.id}/send-to-client/'
+
+    def _send_email(self, user):
+        import types
+
+        def fake_send(fail_silently=True):
+            return 1
+
+        fake_email = types.SimpleNamespace(send=fake_send)
+        self.client.force_authenticate(user)
+        with patch('transactions.views.build_client_email', return_value=fake_email):
+            return self.client.post(
+                self.send_url,
+                {'channels': ['email'], 'origin': 'https://app.test'},
+                format='json',
+            )
+
+    def test_without_permission_cannot_send_draft(self):
+        resp = self._send_email(self.sender)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(Quotation.objects.get(id=self.quote.id).status, 'Not Sent')
+
+    def test_bypass_permission_sends_draft_without_approval(self):
+        resp = self._send_email(self.bypasser)
+        self.assertEqual(resp.status_code, 200)
+        quote = Quotation.objects.get(id=self.quote.id)
+        self.assertEqual(quote.status, 'Sent to Client')
+        self.assertIsNotNone(quote.sent_to_client_at)
+        self.assertTrue(quote.client_token)
+        self.assertEqual(QuotationApproval.objects.filter(quotation=quote).count(), 0)
+
+    def test_bypass_clears_pending_approvals(self):
+        QuotationApproval.objects.create(quotation=self.quote, user=self.approver)
+        self.quote.status = 'Pending Approval'
+        self.quote.save(update_fields=['status'])
+        resp = self._send_email(self.bypasser)
+        self.assertEqual(resp.status_code, 200)
+        quote = Quotation.objects.get(id=self.quote.id)
+        self.assertEqual(quote.status, 'Sent to Client')
+        self.assertEqual(QuotationApproval.objects.filter(quotation=quote).count(), 0)
+
+    def test_quotation_requested_cannot_be_sent(self):
+        self.quote.status = 'Quotation Requested'
+        self.quote.save(update_fields=['status'])
+        resp = self._send_email(self.bypasser)
+        self.assertEqual(resp.status_code, 400)
+
+
 class ContactEditSyncTests(APITestCase):
     """Company/contact details stay in sync and audited from any screen."""
 
