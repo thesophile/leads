@@ -136,6 +136,10 @@ class Lead(models.Model):
     next_follow_up_date = models.CharField(max_length=30, blank=True)
     next_follow_up_time = models.CharField(max_length=30, blank=True)
     has_follow_up = models.BooleanField(default=False)
+    # A locked lead can only be reassigned by an admin (leads.manage_lock).
+    is_locked = models.BooleanField(default=False)
+    locked_by = models.CharField(max_length=120, blank=True)
+    locked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

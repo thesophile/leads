@@ -328,6 +328,95 @@ def scoped_queryset(user, status_filter='all'):
     return qs
 
 
+def my_leads_queryset(user):
+    """Return the leads owned by ``user`` across every pipeline stage.
+
+    A user's leads are the raw/assigned/quotation/order/client rows they added
+    (``added_by``) or were given to work on (``assigned_to``). Used by the
+    read-only Lead Status screen.
+    """
+    qs = Lead.objects.all()
+    if not user.is_superuser:
+        qs = qs.filter(
+            Q(tenant=user.company, assigned_to=user.name)
+            | Q(tenant=user.company, added_by=user.name)
+            | Q(tenant__isnull=True, assigned_to=user.name)
+            | Q(tenant__isnull=True, added_by=user.name)
+        )
+    return qs
+
+
+def lead_status_payload(lead, quotations, orders, client_details):
+    """Build a compact, human-readable pipeline status for a lead."""
+    stage_labels = {
+        Lead.STATUS_RAW: 'Raw',
+        Lead.STATUS_ASSIGNED: 'Tele Call',
+        Lead.STATUS_QUOTATION: 'Quotation',
+        Lead.STATUS_ORDER: 'Order',
+        Lead.STATUS_CLIENT: 'Converted',
+    }
+    detail = ''
+    if lead.status == Lead.STATUS_ASSIGNED:
+        detail = lead.call_status or 'Pending Call'
+        if lead.has_follow_up and lead.next_follow_up_date:
+            detail = f'{detail} · Follow-up {lead.next_follow_up_date}'
+    elif lead.status == Lead.STATUS_QUOTATION:
+        quote = quotations.get(lead.id)
+        if quote is not None:
+            if quote.client_status == Quotation.CLIENT_ACCEPTED:
+                detail = 'Client accepted the quotation'
+            elif quote.client_status == Quotation.CLIENT_DECLINED:
+                detail = 'Client declined the quotation'
+            elif quote.status == 'Approved':
+                detail = 'Quotation approved'
+            elif quote.status == 'Rejected':
+                detail = 'Quotation rejected'
+            elif quote.status == 'Pending Approval':
+                detail = 'Awaiting approval'
+            elif quote.sent_to_client_at:
+                detail = 'Quotation sent to client'
+            else:
+                detail = 'Quotation created'
+    elif lead.status == Lead.STATUS_ORDER:
+        order = orders.get(lead.id)
+        if order is not None:
+            if order.client_status == Order.CLIENT_ACCEPTED:
+                detail = 'Order accepted by client'
+            elif order.client_status == Order.CLIENT_DECLINED:
+                detail = 'Order declined by client'
+            elif order.sent_to_client_at:
+                detail = 'Order sent to client'
+            else:
+                detail = f'Order received ({order.status or "Pending"})'
+    elif lead.status == Lead.STATUS_CLIENT:
+        client = client_details.get(lead.id)
+        detail = client.status if client is not None else 'Client'
+    return {
+        'id': lead.id,
+        'company': lead.company,
+        'contact': lead.contact,
+        'phone': lead.phone,
+        'stage': lead.status,
+        'stageLabel': stage_labels.get(lead.status, lead.status),
+        'detail': detail,
+        'assignedTo': lead.assigned_to,
+        'addedBy': lead.added_by,
+        'callStatus': lead.call_status,
+        'priority': lead.priority,
+        'isLocked': lead.is_locked,
+        'lockedBy': lead.locked_by,
+        'displayDate': lead.display_date,
+        'updatedAt': lead.updated_at.isoformat() if lead.updated_at else '',
+    }
+
+
+def can_manage_lead_lock(user, lead):
+    """Admins (``leads.manage_lock``) and the assigned staff may lock/unlock."""
+    if user.is_superuser or user.has_permission('leads.manage_lock'):
+        return True
+    return lead.assigned_to == user.name
+
+
 def format_display_date(value):
     return value.strftime('%d %b %Y') if value else ''
 
@@ -539,6 +628,12 @@ class LeadDetailView(APIView):
                     {'detail': 'You do not have permission to reassign leads.'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+            # A locked lead may only be reassigned by an admin (or superuser).
+            if lead.is_locked and not can_manage_lead_lock(user, lead):
+                return Response(
+                    {'detail': 'This lead is locked and cannot be reassigned.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         if 'category' in submitted and lead.category and not Category.objects.filter(
             company=user.company, name=lead.category
         ).exists():
@@ -664,6 +759,91 @@ class LeadDetailView(APIView):
             entity_id=lead.id,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LeadStatusView(APIView):
+    """Read-only pipeline status of the current user's own leads."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'leads.view', 'telecall.view'):
+            return Response(
+                {'detail': 'You do not have permission to view your leads.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        leads = list(my_leads_queryset(request.user).order_by('-updated_at'))
+        lead_ids = [lead.id for lead in leads]
+        quotations = {}
+        for quote in Quotation.objects.filter(lead_id__in=lead_ids).order_by('-version_no', '-created_at'):
+            quotations.setdefault(quote.lead_id, quote)
+        orders = {order.lead_id: order for order in Order.objects.filter(lead_id__in=lead_ids)}
+        client_details = {
+            detail.lead_id: detail
+            for detail in ClientDetail.objects.filter(lead_id__in=lead_ids)
+        }
+        return Response([
+            lead_status_payload(lead, quotations, orders, client_details)
+            for lead in leads
+        ])
+
+
+class LeadLockView(APIView):
+    """Lock a lead so only admins can reassign it."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        lead = scoped_queryset(request.user).filter(pk=pk).first()
+        if lead is None:
+            return Response({'detail': 'Lead not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_lead_lock(request.user, lead):
+            return Response(
+                {'detail': 'Only the staff assigned to this lead or an admin can lock it.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        lead.is_locked = True
+        lead.locked_by = request.user.name
+        lead.locked_at = timezone.now()
+        lead.save(update_fields=['is_locked', 'locked_by', 'locked_at', 'updated_at'])
+        log_activity(
+            request.user,
+            request.user.company,
+            'locked lead',
+            f'{request.user.name} locked lead {lead.id} - {lead.company}.',
+            entity_type='lead',
+            entity_id=lead.id,
+        )
+        return Response(LeadSerializer(lead).data)
+
+
+class LeadUnlockView(APIView):
+    """Unlock a lead (assigned staff or admin only)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        lead = scoped_queryset(request.user).filter(pk=pk).first()
+        if lead is None:
+            return Response({'detail': 'Lead not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_lead_lock(request.user, lead):
+            return Response(
+                {'detail': 'Only the staff assigned to this lead or an admin can unlock it.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        lead.is_locked = False
+        lead.locked_by = ''
+        lead.locked_at = None
+        lead.save(update_fields=['is_locked', 'locked_by', 'locked_at', 'updated_at'])
+        log_activity(
+            request.user,
+            request.user.company,
+            'unlocked lead',
+            f'{request.user.name} unlocked lead {lead.id} - {lead.company}.',
+            entity_type='lead',
+            entity_id=lead.id,
+        )
+        return Response(LeadSerializer(lead).data)
 
 
 class QuotationView(APIView):
@@ -1516,10 +1696,15 @@ class LeadAssignView(APIView):
                 lead_ids_raw = [lead_ids_raw]
         lead_ids = [str(i).strip() for i in (lead_ids_raw or []) if str(i).strip()]
 
+        # Locked leads are only assignable by an admin (leads.manage_lock).
+        can_assign_locked = request.user.is_superuser or request.user.has_permission('leads.manage_lock')
+
         if lead_ids:
             base = scoped_queryset(request.user, Lead.STATUS_RAW).filter(
                 assigned_to='', pk__in=lead_ids
             )
+            if not can_assign_locked:
+                base = base.filter(is_locked=False)
             found = set(base.values_list('pk', flat=True))
             if len(found) < len(lead_ids):
                 missing = [i for i in lead_ids if i not in found]
@@ -1540,6 +1725,8 @@ class LeadAssignView(APIView):
                 count = 1
 
             queryset = scoped_queryset(request.user, Lead.STATUS_RAW).filter(assigned_to='')
+            if not can_assign_locked:
+                queryset = queryset.filter(is_locked=False)
             if category and category != 'All Categories':
                 queryset = queryset.filter(category=category)
             if from_date:

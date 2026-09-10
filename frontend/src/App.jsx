@@ -13,6 +13,7 @@ import Branch from './admin/master/Branch'
 import Staff from './admin/master/Staff'
 import RawData from './admin/transactions/RawData'
 import Telecall from './admin/transactions/Telecall'
+import LeadStatus from './admin/transactions/LeadStatus'
 import Managequotation from './admin/transactions/Managequotation'
 import ProposalPreview from './admin/transactions/ProposalPreview'
 import ClientQuotation from './admin/transactions/ClientQuotation'
@@ -53,6 +54,7 @@ function App() {
         <Route path="/staff" element={guard(<Staff />, { perm: 'staff.manage' })} />
         <Route path="/raw-leads" element={guard(<RawData />, { perm: 'leads.view' })} />
         <Route path="/tele-calling" element={guard(<Telecall />, { perm: 'telecall.view' })} />
+        <Route path="/lead-status" element={guard(<LeadStatus />, { perm: 'leads.view' })} />
         <Route path="/quotations" element={guard(<Managequotation />, { perm: 'quotation.view' })} />
         <Route path="/quotations/preview/:id" element={guard(<ProposalPreview />, { perm: 'quotation.view' })} />
         <Route path="/orders" element={guard(<ManageOrder />, { perm: 'order.view' })} />

@@ -1672,3 +1672,126 @@ class QuotationWedgeRegressionTests(APITestCase):
         self.assertEqual(Order.objects.filter(lead_id=self.lead.id).count(), 1)
         self.assertEqual(order1.id, order2.id)
 
+
+class LeadStatusAndLockTests(APITestCase):
+    """Lead Status (my leads) and the locking feature."""
+
+    def setUp(self):
+        company = make_company('StatusCo')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@status.com', password='x', name='Manager S',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.admin = User.objects.create_user(
+            email='admin@status.com', password='x', name='Admin S',
+            role=company.roles.get(code='admin'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@status.com', password='x', name='Staff S',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.other = User.objects.create_user(
+            email='other@status.com', password='x', name='Other S',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        Lead.objects.filter(tenant__isnull=True).delete()
+        self.raw = Lead.objects.create(
+            id='ST-RAW', company='Raw Co', added_by='Staff S', tenant=company,
+        )
+        self.asgn = Lead.objects.create(
+            id='ST-ASGN', company='Asgn Co', assigned_to='Staff S',
+            tenant=company, status=Lead.STATUS_ASSIGNED,
+        )
+        self.quote = Lead.objects.create(
+            id='ST-QTN', company='Quote Co', assigned_to='Staff S',
+            tenant=company, status=Lead.STATUS_QUOTATION,
+        )
+        Quotation.objects.create(
+            id='ST-QTN', lead_id='ST-QTN', company='Quote Co',
+            tenant=company, staff='Staff S', status='Approved',
+        )
+        self.other_asgn = Lead.objects.create(
+            id='ST-OTH', company='Other Co', assigned_to='Other S',
+            tenant=company, status=Lead.STATUS_ASSIGNED,
+        )
+
+    def test_staff_my_leads_lists_own_leads_across_stages(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.get('/api/transactions/leads/my/')
+        self.assertEqual(resp.status_code, 200)
+        ids = {item['id'] for item in resp.data}
+        self.assertEqual(ids, {'ST-RAW', 'ST-ASGN', 'ST-QTN'})
+        by_id = {item['id']: item for item in resp.data}
+        self.assertEqual(by_id['ST-QTN']['stageLabel'], 'Quotation')
+        self.assertEqual(by_id['ST-QTN']['detail'], 'Quotation approved')
+        self.assertEqual(by_id['ST-ASGN']['stageLabel'], 'Tele Call')
+
+    def test_staff_my_leads_excludes_others_leads(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.get('/api/transactions/leads/my/')
+        ids = {item['id'] for item in resp.data}
+        self.assertNotIn('ST-OTH', ids)
+
+    def test_staff_locks_assigned_lead(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['isLocked'])
+        lead = Lead.objects.get(id='ST-ASGN')
+        self.assertTrue(lead.is_locked)
+        self.assertEqual(lead.locked_by, 'Staff S')
+
+    def test_manager_cannot_reassign_locked_lead(self):
+        self.staff_lock_lead()
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch('/api/transactions/leads/ST-ASGN/', {
+            'assigned_to': 'Other S',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(Lead.objects.get(id='ST-ASGN').assigned_to, 'Staff S')
+
+    def test_admin_can_reassign_locked_lead(self):
+        self.staff_lock_lead()
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch('/api/transactions/leads/ST-ASGN/', {
+            'assigned_to': 'Other S',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Lead.objects.get(id='ST-ASGN').assigned_to, 'Other S')
+
+    def test_manager_cannot_unlock(self):
+        self.staff_lock_lead()
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/unlock/', {}, format='json')
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(Lead.objects.get(id='ST-ASGN').is_locked)
+
+    def test_owner_can_unlock(self):
+        self.staff_lock_lead()
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/unlock/', {}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['isLocked'])
+        # After unlock, a manager can reassign again.
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch('/api/transactions/leads/ST-ASGN/', {
+            'assigned_to': 'Other S',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_staff_cannot_lock_lead_not_assigned_to_them(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post('/api/transactions/leads/ST-OTH/lock/', {}, format='json')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_manager_cannot_lock_others_lead(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+    def staff_lock_lead(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
+        self.assertEqual(resp.status_code, 200)
+

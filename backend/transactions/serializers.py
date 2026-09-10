@@ -338,6 +338,8 @@ class LeadSerializer(serializers.ModelSerializer):
     nextFollowUpDate = serializers.CharField(source='next_follow_up_date', required=False, allow_blank=True)
     nextFollowUpTime = serializers.CharField(source='next_follow_up_time', required=False, allow_blank=True)
     hasFollowUp = serializers.BooleanField(source='has_follow_up', required=False)
+    isLocked = serializers.BooleanField(source='is_locked', read_only=True)
+    lockedBy = serializers.CharField(source='locked_by', read_only=True)
 
     class Meta:
         model = Lead
@@ -362,6 +364,8 @@ class LeadSerializer(serializers.ModelSerializer):
             'nextFollowUpDate',
             'nextFollowUpTime',
             'hasFollowUp',
+            'isLocked',
+            'lockedBy',
             'history',
             'contactHistory',
             'quotations',

@@ -64,6 +64,7 @@ const MENU_BASE = [
     items: [
       { id: 'raw-data', label: 'Raw Data', path: '/raw-leads', perm: 'leads.view' },
       { id: 'tele-call', label: 'Tele Call', path: '/tele-calling', perm: 'telecall.view' },
+      { id: 'lead-status', label: 'Lead Status', path: '/lead-status', perm: 'leads.view' },
       { id: 'quotations', label: 'Manage Quotation', path: '/quotations', perm: 'quotation.view' },
       { id: 'orders', label: 'Manage Order', path: '/orders', perm: 'order.view' },
       { id: 'client-details', label: 'Client Details', path: '/client-details', perm: 'client.view' },

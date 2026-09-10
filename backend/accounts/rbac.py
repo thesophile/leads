@@ -19,6 +19,7 @@ PERMISSION_GROUPS = [
             ('leads.delete', 'Delete own leads'),
             ('leads.delete_all', 'Delete any company lead'),
             ('leads.assign', 'Assign leads to staff'),
+            ('leads.manage_lock', 'Reassign / unlock locked leads'),
         ],
     },
     {
