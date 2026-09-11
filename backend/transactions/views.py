@@ -333,15 +333,15 @@ def company_prefix(company):
 
 
 def generate_lead_id(company):
-    """A proposal reference like ABC-2026-482913 (prefix-year-random)."""
+    """A proposal reference like ABC-2026-6963 (prefix-year-random)."""
     prefix = company_prefix(company)
     year = date.today().year
     existing = set(Lead.objects.values_list('id', flat=True))
     for _ in range(200):
-        candidate = f'{prefix}-{year}-{random.randint(100000, 999999)}'
+        candidate = f'{prefix}-{year}-{random.randint(1000, 9999)}'
         if candidate not in existing:
             return candidate
-    return f'{prefix}-{year}-{random.randint(1000000, 9999999)}'
+    return f'{prefix}-{year}-{random.randint(10000, 99999)}'
 
 
 def scoped_queryset(user, status_filter='all'):
