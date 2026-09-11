@@ -84,15 +84,15 @@ function GeMBadge() {
 // NPM Generated Barcode Component
 function BarcodeVisual({ code = '' }) {
   return (
-    <div className="flex flex-col items-end overflow-hidden">
+    <div className="flex w-[190px] flex-col items-end overflow-hidden [&_svg]:h-auto [&_svg]:w-full">
       <Barcode
         value={code.replace(/\s+/g, '')}
-        width={1.85}
-        height={32}
+        width={1.2}
+        height={26}
         format="CODE128"
         displayValue={true}
         font="monospace"
-        fontSize={12}
+        fontSize={11}
         textMargin={2}
         margin={0}
         background="transparent"
