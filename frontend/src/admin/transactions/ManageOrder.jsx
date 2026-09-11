@@ -107,6 +107,13 @@ function CloseIcon() {
   )
 }
 
+const todayStr = () => {
+  const now = new Date()
+  const dd = String(now.getDate()).padStart(2, '0')
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  return `${dd}-${mm}-${now.getFullYear()}`
+}
+
 export default function ManageOrder() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -136,9 +143,9 @@ export default function ManageOrder() {
   const [companyName, setCompanyName] = useState('')
   const [mobileNum, setMobileNum] = useState('')
   const [categoryName, setCategoryName] = useState('Dynamic Website')
-  const [orderDate, setOrderDate] = useState('12-12-2024')
-  const [proposalDate, setProposalDate] = useState('25-06-2026')
-  const [proposalNo, setProposalNo] = useState('P2026-0004')
+  const [orderDate, setOrderDate] = useState(todayStr)
+  const [proposalDate, setProposalDate] = useState(todayStr)
+  const [proposalNo, setProposalNo] = useState(() => `P${new Date().getFullYear()}-0001`)
 
   const [orderSummaryHtml, setOrderSummaryHtml] = useState('')
   const [orderInDetailsHtml, setOrderInDetailsHtml] = useState('')
@@ -229,6 +236,20 @@ export default function ManageOrder() {
     })()
   }, [loadOrders])
 
+  function nextOrderNumber() {
+    const year = new Date().getFullYear()
+    const prefix = `P${year}-`
+    let maxSeq = 0
+    for (const o of ordersList) {
+      const id = String(o.id || '')
+      if (id.startsWith(prefix)) {
+        const seq = id.slice(prefix.length).match(/^\d+$/)
+        if (seq) maxSeq = Math.max(maxSeq, parseInt(seq[0], 10))
+      }
+    }
+    return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`
+  }
+
   function handleViewOrder(order) {
     navigate(`/orders/preview/${order.id}`, { state: { order } })
   }
@@ -246,6 +267,7 @@ export default function ManageOrder() {
   }
 
   function handleOpenOrderModal(order = null) {
+    setSelectedTemplateId('')
     if (order) {
       setEditingOrderId(order.id)
       setBdm(order.bdm || 'Husna')
@@ -254,9 +276,9 @@ export default function ManageOrder() {
       setCompanyName(order.company || '')
       setMobileNum(order.mobile || '')
       setCategoryName(order.category || 'Dynamic Website')
-      setOrderDate(order.date || '12-12-2024')
-      setProposalDate(order.proposalDate || '25-06-2026')
-      setProposalNo(order.proposalNo || 'P2026-0004')
+      setOrderDate(order.date || todayStr())
+      setProposalDate(order.proposalDate || todayStr())
+      setProposalNo(order.proposalNo || nextOrderNumber())
       setOrderSummaryHtml(order.scope || order.orderSummaryHtml || '')
       setOrderInDetailsHtml(order.details || order.orderInDetailsHtml || '')
       setTotalVal(order.total || '50,000')
@@ -272,9 +294,9 @@ export default function ManageOrder() {
       setCompanyName('')
       setMobileNum('')
       setCategoryName('Dynamic Website')
-      setOrderDate('Today')
-      setProposalDate('Today')
-      setProposalNo(`P2026-${String(ordersList.length + 1).padStart(4, '0')}`)
+      setOrderDate(todayStr())
+      setProposalDate(todayStr())
+      setProposalNo(nextOrderNumber())
       const defaultTpl = PROPOSAL_TEMPLATES[0]
       setOrderSummaryHtml(defaultTpl?.scopeHtml || '')
       setOrderInDetailsHtml(defaultTpl?.detailHtml || '')
@@ -303,7 +325,9 @@ export default function ManageOrder() {
             bdm,
             proposalBy,
             staff: proposalBy,
+            proposalNo,
             proposalDate,
+            date: orderDate,
             total: totalVal,
             discount: discountVal,
             netAmount: netVal,
@@ -319,15 +343,15 @@ export default function ManageOrder() {
       } else {
         // Create new
         const newOrder = {
-          id: `P${new Date().getFullYear()}-${String(ordersList.length + 1).padStart(4, '0')}`,
+          id: proposalNo,
           leadId: `TC-${Date.now().toString().slice(-3)}`,
           proposalNo,
           proposalDate,
           customer: customerPerson || 'New Client',
           company: companyName || 'Enterprise Client',
-          mobile: mobileNum || '9800000000',
-          email: 'info@client.com',
-          city: 'Kerala',
+          mobile: mobileNum || '',
+          email: '',
+          city: '',
           bdm,
           proposalBy,
           staff: proposalBy,
@@ -881,13 +905,43 @@ export default function ManageOrder() {
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Proposal Number &amp; Date
+                    Order Date
+                  </label>
+                  <input
+                    type="text"
+                    value={orderDate}
+                    onChange={(e) => setOrderDate(e.target.value)}
+                    placeholder="DD-MM-YYYY"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Proposal Number | Proposal Date */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Proposal Number
                   </label>
                   <input
                     type="text"
                     value={proposalNo}
                     onChange={(e) => setProposalNo(e.target.value)}
+                    placeholder="P2026-0001"
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 font-mono focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Proposal Date
+                  </label>
+                  <input
+                    type="text"
+                    value={proposalDate}
+                    onChange={(e) => setProposalDate(e.target.value)}
+                    placeholder="DD-MM-YYYY"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
               </div>
