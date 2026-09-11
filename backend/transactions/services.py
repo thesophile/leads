@@ -978,8 +978,8 @@ _CONFIRMATION_EMAIL_TEMPLATE = """
                           <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Agreed Value</span>
                           <div style="color:#0f172a; font-size:18px; font-weight:bold;">{order_total}</div>
                         </td>
-                        <td style="border-top:1px solid #e2e8f0; padding:8px 0 2px 0; vertical-align:middle; text-align:right;">
-                          <span style="background-color:#16a34a; color:#ffffff; font-size:11px; font-weight:bold; text-transform:uppercase; padding:4px 12px; border-radius:999px; letter-spacing:0.5px;">Approved</span>
+                        <td style="border-top:1px solid #e2e8f0; padding:16px 0 2px 0; vertical-align:middle; text-align:left;">
+                          <span style="background-color:#16a34a; color:#ffffff; font-size:12px; font-weight:bold; text-transform:uppercase; padding:8px 16px; border-radius:999px; letter-spacing:0.5px; display:inline-block;">Approved</span>
                         </td>
                       </tr>
                     </table>
