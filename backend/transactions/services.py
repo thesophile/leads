@@ -19,6 +19,10 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
+from reportlab.graphics import renderPDF
+from reportlab.graphics.barcode import code128
+from reportlab.graphics.barcode.qr import QrCodeWidget
+from reportlab.graphics.shapes import Drawing
 from reportlab.platypus import (
     Image,
     Paragraph,
@@ -377,212 +381,449 @@ def render_quotation_pdf(quotation):
         return None
 
 
+def _frontend_public_asset(name):
+    """Best-effort path to a static asset shipped in the frontend public dir."""
+    try:
+        from pathlib import Path
+
+        candidate = Path(settings.BASE_DIR).parent / 'frontend' / 'public' / name
+        if candidate.exists():
+            return str(candidate)
+    except Exception:  # pragma: no cover - defensive
+        pass
+    return ''
+
+
+def _draw_asset(canvas, path, x, y, height, center=False):
+    """Draw an image at ``height`` preserving aspect ratio (bottom-left anchor).
+
+    Logos are resampled to a sensible resolution first so the PDF/email
+    attachment never carries a multi-megabyte source PNG.
+    """
+    if not path:
+        return
+    try:
+        from io import BytesIO
+
+        from PIL import Image as PILImage
+
+        from reportlab.lib.utils import ImageReader
+
+        source = PILImage.open(path)
+        has_alpha = source.mode in ('RGBA', 'LA', 'P')
+        if source.mode not in ('RGBA', 'RGB', 'L'):
+            source = source.convert('RGBA' if has_alpha else 'RGB')
+        source.thumbnail((420, 420))
+        buffer = BytesIO()
+        source.save(buffer, format='PNG' if has_alpha else 'JPEG', quality=85)
+        reader = ImageReader(BytesIO(buffer.getvalue()))
+        native_width, native_height = reader.getSize()
+        draw_width = height * (native_width / (native_height or 1))
+        if center:
+            x = x - draw_width / 2
+        canvas.drawImage(
+            reader, x, y, width=draw_width, height=height,
+            preserveAspectRatio=True, anchor='sw', mask='auto',
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning('Could not draw image %s: %s', path, exc)
+
+
+def _qr_drawing(value, size):
+    """A reportlab ``Drawing`` holding a QR code rendered at ``size`` points."""
+    qr = QrCodeWidget(value or 'NO-LINK')
+    bounds = qr.getBounds()
+    qr_width = (bounds[2] - bounds[0]) or 1
+    qr_height = (bounds[3] - bounds[1]) or 1
+    drawing = Drawing(size, size, transform=[size / qr_width, 0, 0, size / qr_height, 0, 0])
+    drawing.add(qr)
+    return drawing
+
+
+def _order_client_link(order):
+    """Full client link for the order's QR code (falls back to a path)."""
+    token = getattr(order, 'client_token', '') or ''
+    if not token:
+        return ''
+    base = (getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
+    return f'{base}/order/{token}' if base else f'/order/{token}'
+
+
+def _draw_order_header(canvas, order):
+    """Draw the branded order-form header on a PDF page."""
+    page_width, page_height = A4
+    left = 10 * mm
+    right = page_width - 10 * mm
+    top = page_height - 10 * mm
+
+    canvas.saveState()
+
+    # Left: Programers logo with the order barcode underneath.
+    logo_bottom = top - 8.5 * mm
+    _draw_asset(canvas, _frontend_public_asset('programers-logo-BLACCK.png'), left, logo_bottom, 8.5 * mm)
+    barcode_value = ''.join(ch for ch in str(order.id) if ch.isdigit()) or str(order.id)
+    barcode_value = barcode_value[:14]
+    if barcode_value:
+        try:
+            barcode = code128.Code128(
+                barcode_value, barHeight=7.5 * mm, barWidth=0.82,
+                humanReadable=True, fontSize=7,
+            )
+            barcode.drawOn(canvas, left, logo_bottom - 11 * mm)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning('Could not draw order barcode: %s', exc)
+
+    # Center: ORDER FORM title and GeM logo.
+    canvas.setFillColor(colors.black)
+    canvas.setFont('Helvetica-Bold', 20)
+    canvas.drawCentredString(page_width / 2, top - 7 * mm, 'ORDER FORM')
+    _draw_asset(
+        canvas, _frontend_public_asset('GeM.png'),
+        page_width / 2, top - 20 * mm, 9 * mm, center=True,
+    )
+
+    # Right: order # / order date boxes and the client QR code.
+    qr_size = 15 * mm
+    qr_x = right - qr_size
+    box_width = 26 * mm
+    box_height = 4.8 * mm
+    box_x = qr_x - 3 * mm - box_width
+
+    def label_box(text, y):
+        canvas.setFillColor(colors.black)
+        canvas.rect(box_x, y, box_width, box_height, stroke=0, fill=1)
+        canvas.setFillColor(colors.white)
+        canvas.setFont('Helvetica-Bold', 6.5)
+        canvas.drawCentredString(box_x + box_width / 2, y + 1.5 * mm, text)
+        canvas.setFillColor(colors.black)
+
+    label_box('ORDER #', top - 5 * mm)
+    canvas.setFont('Helvetica-Bold', 9)
+    canvas.drawCentredString(box_x + box_width / 2, top - 10 * mm, str(order.id))
+    label_box('ORDER DATE', top - 15 * mm)
+    canvas.setFont('Helvetica-Bold', 9)
+    canvas.drawCentredString(box_x + box_width / 2, top - 20 * mm, str(order.date or ''))
+
+    try:
+        renderPDF.draw(_qr_drawing(_order_client_link(order), qr_size), canvas, qr_x, top - qr_size)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning('Could not draw order QR code: %s', exc)
+
+    header_bottom = top - 36 * mm
+    canvas.setStrokeColor(colors.black)
+    canvas.setLineWidth(1.2)
+    canvas.line(left, header_bottom, right, header_bottom)
+    canvas.restoreState()
+
+
+def _draw_order_footer(canvas):
+    """Draw the shared order-form footer on a PDF page."""
+    page_width, _ = A4
+    left = 10 * mm
+    right = page_width - 10 * mm
+    canvas.saveState()
+    canvas.setStrokeColor(colors.black)
+    canvas.setLineWidth(0.6)
+    base = 13 * mm
+    canvas.line(left, base + 6 * mm, right, base + 6 * mm)
+    canvas.setFillColor(colors.HexColor('#334155'))
+    canvas.setFont('Helvetica', 6.8)
+    canvas.drawCentredString(
+        page_width / 2, base + 3 * mm,
+        '4th Floor, Park House ,Round North, Thrissur, Kerala, India - 680 001 | '
+        'info@programers.in, www.programers.in | Ph: 9447151442, 9495951442, 9446451442',
+    )
+    canvas.setFont('Helvetica', 6.3)
+    canvas.setFillColor(colors.HexColor('#64748b'))
+    canvas.drawCentredString(page_width / 2, base, 'Purchase authorization request')
+    canvas.restoreState()
+
+
 def render_order_pdf(order):
-    """Return the order form as a PDF ``bytes`` payload (or ``None``)."""
+    """Return the official order form as a PDF ``bytes`` payload (or ``None``).
+
+    Mirrors the on-screen order form document (``OrderFormDocument``): same
+    header with logo/barcode/QR, section boxes, financial banner, signature
+    block and footer, so the emailed attachment, the downloaded PDF and the
+    shared web page all show the same order form.
+    """
     try:
         buf = io.BytesIO()
+        content_width = 190 * mm
         doc = SimpleDocTemplate(
             buf,
             pagesize=A4,
-            leftMargin=14 * mm,
-            rightMargin=14 * mm,
-            topMargin=14 * mm,
-            bottomMargin=16 * mm,
+            leftMargin=10 * mm,
+            rightMargin=10 * mm,
+            topMargin=44 * mm,
+            bottomMargin=18 * mm,
             title=f'{order.id} - {order.company}',
             author='LEADS',
         )
-        pdf_styles = _PdfStyles()
+
+        styles = {
+            'body': ParagraphStyle(
+                'o-body', fontName='Helvetica', fontSize=9, leading=12.5,
+                textColor=colors.HexColor('#1e293b'),
+            ),
+            'body_small': ParagraphStyle(
+                'o-body-sm', fontName='Helvetica', fontSize=8.5, leading=12,
+                textColor=colors.HexColor('#334155'),
+            ),
+            'name': ParagraphStyle(
+                'o-name', fontName='Helvetica-Bold', fontSize=11, leading=13,
+                textColor=colors.black,
+            ),
+            'mono': ParagraphStyle(
+                'o-mono', fontName='Courier-Bold', fontSize=9.5, leading=12,
+                textColor=colors.HexColor('#334155'),
+            ),
+            'small': ParagraphStyle(
+                'o-small', fontName='Helvetica', fontSize=9, leading=11.5,
+                textColor=colors.HexColor('#475569'),
+            ),
+            'italic': ParagraphStyle(
+                'o-italic', fontName='Helvetica-Oblique', fontSize=8, leading=10.5,
+                textColor=colors.HexColor('#475569'), alignment=TA_CENTER,
+            ),
+            'fin': ParagraphStyle(
+                'o-fin', fontName='Helvetica-Bold', fontSize=9.5, leading=12,
+                textColor=colors.black,
+            ),
+            'fin_small': ParagraphStyle(
+                'o-fin-sm', fontName='Helvetica-Bold', fontSize=8.5, leading=12,
+                textColor=colors.HexColor('#334155'),
+            ),
+            'fin_net': ParagraphStyle(
+                'o-fin-net', fontName='Helvetica-Bold', fontSize=9.5, leading=12,
+                textColor=colors.white,
+            ),
+            'fin_note': ParagraphStyle(
+                'o-fin-note', fontName='Helvetica-Bold', fontSize=6.8, leading=9,
+                textColor=colors.black, alignment=TA_CENTER,
+            ),
+            'sig_company': ParagraphStyle(
+                'o-sig-co', fontName='Helvetica-Bold', fontSize=9.5, leading=12,
+                textColor=colors.HexColor('#1e293b'),
+            ),
+            'sig_note': ParagraphStyle(
+                'o-sig-note', fontName='Helvetica', fontSize=7.5, leading=10,
+                textColor=colors.HexColor('#94a3b8'),
+            ),
+        }
+
+        def section_box(title, flowables, width):
+            title_style = ParagraphStyle(
+                'o-sec', fontName='Helvetica-Bold', fontSize=9, leading=11,
+                textColor=colors.white, alignment=TA_CENTER,
+            )
+            body = list(flowables) or [Paragraph('&nbsp;', styles['body'])]
+            table = Table(
+                [[Paragraph(title, title_style)], [body]],
+                colWidths=[width],
+                repeatRows=1,
+            )
+            table.setStyle(
+                TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.black),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                    ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+                    ('TOPPADDING', (0, 0), (-1, 0), 2.5),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 2.5),
+                    ('TOPPADDING', (0, 1), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ])
+            )
+            return table
+
+        def financial_box(width):
+            note = Paragraph(
+                'All Amt In | No Additional Service Or Items | E&amp;O',
+                styles['fin_note'],
+            )
+            total = Paragraph(
+                f'<b>Total:</b> <font face="Courier-Bold">{order.total or "—"}</font>',
+                styles['fin'],
+            )
+            discount = Paragraph(
+                f'(Discount: <font face="Courier-Bold">{order.discount or "0"}</font>)',
+                styles['fin_small'],
+            )
+            net = Paragraph(
+                f'<b>Net:</b> <font face="Courier-Bold">'
+                f'{order.net_amount or order.total or "—"}</font>',
+                styles['fin_net'],
+            )
+            row = Table(
+                [[total, discount, net]],
+                colWidths=[width * 0.36, width * 0.30, width * 0.34],
+            )
+            row.setStyle(
+                TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('BACKGROUND', (2, 0), (2, 0), colors.black),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ])
+            )
+            outer = Table([[note], [row]], colWidths=[width])
+            outer.setStyle(
+                TableStyle([
+                    ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
+                    ('LINEBELOW', (0, 0), (0, 0), 0.4, colors.HexColor('#cbd5e1')),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ])
+            )
+            return outer
+
+        def signature_box(width):
+            cell_width = width * 5 / 12 - 1 * mm
+            qr_width = width * 2 / 12 - 1 * mm
+            approved = section_box('APPROVED BY', [
+                Paragraph('Programers International', styles['sig_company']),
+                Spacer(1, 7 * mm),
+                Paragraph('Authorised Signatory &#183; Signature &amp; date', styles['sig_note']),
+            ], cell_width)
+            accepted = section_box('ACCEPTED BY', [
+                Paragraph(order.company or 'Client', styles['sig_company']),
+                Spacer(1, 7 * mm),
+                Paragraph("Client's Authorised Signatory &#183; Signature &amp; date", styles['sig_note']),
+            ], cell_width)
+            qr = _qr_drawing(_order_client_link(order), min(qr_width, 20 * mm))
+            outer = Table(
+                [[approved, accepted, qr]],
+                colWidths=[cell_width + 1 * mm, cell_width + 1 * mm, qr_width + 1 * mm],
+            )
+            outer.setStyle(
+                TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('ALIGN', (2, 0), (2, 0), 'CENTER'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 1 * mm),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ])
+            )
+            return outer
+
         company = order.tenant
         elements = []
 
-        header_data = [
-            [
-                Paragraph(
-                    f'<font color="#0f172a"><b>{order.id}</b></font>',
-                    pdf_styles.mono,
-                ),
-                '',
-            ],
-            [
-                Paragraph(
-                    f'<b>{order.company}</b><br/>'
-                    f'{order.customer} &nbsp;|&nbsp; {order.mobile or "—"}',
-                    pdf_styles.value,
-                ),
-                '',
-            ],
+        # Metadata grid: customer / order / project details.
+        col_width = (content_width - 2 * 3 * mm) / 3
+        meta = Table(
+            [[
+                section_box('CUSTOMER DETAILS', [
+                    Paragraph(order.customer or '&nbsp;', styles['name']),
+                    Paragraph(order.mobile or '&nbsp;', styles['mono']),
+                    Paragraph(order.city or '&nbsp;', styles['small']),
+                ], col_width),
+                section_box('ORDER DETAILS', [
+                    Paragraph(order.company or '&nbsp;', styles['name']),
+                    Paragraph(
+                        'Proposal Date: '
+                        f'<font face="Courier-Bold">{order.proposal_date or "—"}</font>',
+                        styles['small'],
+                    ),
+                ], col_width),
+                section_box('PROJECT DETAILS', [
+                    Paragraph(f'BDO / BDM: <b>{order.bdm or "—"}</b>', styles['small']),
+                    Paragraph(
+                        f'Proposal #: <font face="Courier-Bold">{order.proposal_no or "—"}</font>',
+                        styles['small'],
+                    ),
+                    Paragraph(f'Proposal By: {order.proposal_by or "—"}', styles['small']),
+                ], col_width),
+            ]],
+            colWidths=[col_width + 3 * mm, col_width + 3 * mm, col_width],
+        )
+        meta.setStyle(
+            TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3 * mm),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ])
+        )
+        elements.append(meta)
+        elements.append(Spacer(1, 3 * mm))
+        elements.append(Paragraph(
+            'This Proposal form is issued in connection with the proposed project, and confirms '
+            'our intent to proceed with the implementation as per the agreed terms and conditions.',
+            styles['italic'],
+        ))
+        elements.append(Spacer(1, 3 * mm))
+
+        # Page 1 middle: Order Summary + financial (left) and Terms (right).
+        left_width = content_width * 7 / 12 - 1 * mm
+        right_width = content_width * 5 / 12 - 1 * mm
+        summary_markup = html_to_pdf_markup(order.scope)
+        terms_summary_markup = html_to_pdf_markup(
+            getattr(company, 'terms_summary_html', '') if company else ''
+        )
+        left_column = [
+            section_box('ORDER SUMMARY', [Paragraph(summary_markup, styles['body'])], left_width),
+            Spacer(1, 2 * mm),
+            financial_box(left_width),
         ]
-        logo = None
-        if company and company.logo and company.logo.name:
-            try:
-                from pathlib import Path
-
-                logo_path = Path(settings.MEDIA_ROOT) / company.logo.name
-                with open(str(logo_path), 'rb') as handle:
-                    img = Image(handle)
-                ratio = img.imageWidth / (img.imageHeight or 1)
-                height = 26 * mm
-                img.drawHeight = height
-                img.drawWidth = min(58 * mm, height * ratio)
-                header_data[0][1] = img
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning('Could not embed company logo in PDF: %s', exc)
-
-        header = Table(header_data, colWidths=[92 * mm, 70 * mm])
-        header.setStyle(
-            TableStyle(
-                [
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 2),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                    ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-                ]
-            )
+        right_column = section_box(
+            'TERMS &amp; CONDITIONS',
+            [Paragraph(terms_summary_markup or '&nbsp;', styles['body_small'])],
+            right_width,
         )
-        elements.append(header)
-
-        elements.append(
-            Paragraph(
-                'ORDER FORM',
-                ParagraphStyle(
-                    'pagetitle',
-                    parent=pdf_styles.title,
-                    alignment=TA_CENTER,
-                    spaceBefore=6,
-                ),
-            )
+        middle = Table(
+            [[left_column, right_column]],
+            colWidths=[left_width + 1 * mm, right_width + 1 * mm],
         )
-        elements.append(
-            Paragraph(
-                'Official Order Confirmation',
-                ParagraphStyle(
-                    'pagesub',
-                    parent=pdf_styles.subtitle,
-                    alignment=TA_CENTER,
-                    spaceAfter=8,
-                ),
-            )
+        middle.setStyle(
+            TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 1 * mm),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ])
         )
+        elements.append(middle)
+        elements.append(Spacer(1, 3 * mm))
 
-        detail_rows = [
-            ('Order #', order.id, 'Date', order.date or '—'),
-            ('Proposal #', order.proposal_no or '—', 'Category', order.category or '—'),
-            ('Prepared By', order.proposal_by or '—', 'BDM', order.bdm or '—'),
-            ('City', order.city or '—', 'Status', order.status or '—'),
-        ]
-        cells = []
-        for label, value, label2, value2 in detail_rows:
-            cells.append(
-                [
-                    Paragraph(label.upper(), pdf_styles.label),
-                    Paragraph(str(value or '—'), pdf_styles.value),
-                    Paragraph(label2.upper(), pdf_styles.label),
-                    Paragraph(str(value2 or '—'), pdf_styles.value),
-                ]
-            )
-        detail = Table(cells, colWidths=[34 * mm, 44 * mm, 34 * mm, 50 * mm])
-        detail.setStyle(
-            TableStyle(
-                [
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-                    ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-                    ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                    ('TOPPADDING', (0, 0), (-1, -1), 5),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                ]
-            )
-        )
-        elements.append(detail)
+        # Signature block.
+        elements.append(signature_box(content_width))
+        elements.append(Spacer(1, 5 * mm))
 
-        financial = Table(
-            [
-                [
-                    Paragraph(
-                        f'<b>Total:</b>  {order.total or "—"}',
-                        pdf_styles.money,
-                    ),
-                    Paragraph(
-                        f'<b>Discount:</b>  {order.discount or "0"}',
-                        pdf_styles.money,
-                    ),
-                    Paragraph(
-                        f'<b>Net:</b>  {order.net_amount or order.total or "—"}',
-                        pdf_styles.money,
-                    ),
-                ]
-            ],
-            colWidths=[47 * mm, 47 * mm, 68 * mm],
-        )
-        financial.setStyle(
-            TableStyle(
-                [
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f1f5f9')),
-                    ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-                    ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
-                    ('TOPPADDING', (0, 0), (-1, -1), 7),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                ]
-            )
-        )
-        elements.append(Spacer(1, 8))
-        elements.append(financial)
-
-        scope_markup = html_to_pdf_markup(order.scope)
-        if scope_markup:
-            elements.append(Paragraph('ORDER SUMMARY', pdf_styles.section))
-            elements.append(Paragraph(scope_markup, pdf_styles.body))
-
+        # Order in details.
         details_markup = html_to_pdf_markup(order.details)
-        if details_markup:
-            elements.append(Paragraph('ORDER IN DETAILS', pdf_styles.section))
-            elements.append(Paragraph(details_markup, pdf_styles.body))
+        elements.append(section_box(
+            'ORDER IN DETAILS',
+            [Paragraph(details_markup or '&nbsp;', styles['body'])],
+            content_width,
+        ))
+        elements.append(Spacer(1, 5 * mm))
 
+        # Detailed terms & conditions.
         company_terms_markup = html_to_pdf_markup(
-            (getattr(company, 'terms_full_html', '') or getattr(company, 'terms_summary_html', '')) or ''
+            (getattr(company, 'terms_full_html', '') if company else '')
         )
-        if company_terms_markup:
-            elements.append(Paragraph('TERMS &amp; CONDITIONS', pdf_styles.section))
-            elements.append(Paragraph(company_terms_markup, pdf_styles.body))
+        elements.append(section_box(
+            'DETAILED TERMS &amp; CONDITIONS',
+            [Paragraph(company_terms_markup or '&nbsp;', styles['body_small'])],
+            content_width,
+        ))
 
-        footer_parts = []
-        if company:
-            if company.name:
-                footer_parts.append(company.name)
-            if company.address:
-                footer_parts.append(company.address)
-            if company.email:
-                footer_parts.append(company.email)
-            if company.website:
-                footer_parts.append(company.website)
-            if company.phone:
-                footer_parts.append(f'Ph: {company.phone}')
-        footer_text = ' | '.join(footer_parts) or '— LEADS'
-        elements.append(Spacer(1, 14))
-        elements.append(
-            Table(
-                [[Paragraph(footer_text, pdf_styles.footer)]],
-                colWidths=[182 * mm],
-                style=TableStyle(
-                    [
-                        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-                        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-                        ('TOPPADDING', (0, 0), (-1, -1), 6),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                    ]
-                ),
-            )
-        )
+        def _on_page(canvas, _doc):
+            _draw_order_header(canvas, order)
+            _draw_order_footer(canvas)
 
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_on_page, onLaterPages=_on_page)
         return buf.getvalue()
     except Exception as exc:  # pragma: no cover - PDF must never break the action
         logger.warning('Failed to render order PDF for %s: %s', order.id, exc)

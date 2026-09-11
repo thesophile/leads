@@ -139,6 +139,13 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
+# Public base URL of the frontend, used to build client-facing links (e.g. the
+# QR code on the order form PDF). Falls back to the first CORS origin.
+FRONTEND_URL = (
+    os.environ.get('FRONTEND_URL', '').rstrip('/')
+    or (CORS_ALLOWED_ORIGINS[0] if CORS_ALLOWED_ORIGINS else '')
+)
+
 # DRF + JWT
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
