@@ -961,10 +961,7 @@ _CONFIRMATION_EMAIL_TEMPLATE = """
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:18px;">
                 <tr>
                   <td style="padding:14px 18px;">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                      <span style="color:#0f172a; font-size:11px; font-weight:bold; text-transform:uppercase;">Engagement Summary</span>
-                      <span style="background-color:#16a34a; color:#ffffff; font-size:11px; font-weight:bold; text-transform:uppercase; padding:4px 12px; border-radius:999px; letter-spacing:0.5px;">Approved</span>
-                    </div>
+                    <div style="color:#0f172a; font-size:11px; font-weight:bold; text-transform:uppercase; margin-bottom:10px;">Engagement Summary</div>
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td style="width:50%; padding:4px 0;">
@@ -977,9 +974,12 @@ _CONFIRMATION_EMAIL_TEMPLATE = """
                         </td>
                       </tr>
                       <tr>
-                        <td colspan="2" style="border-top:1px solid #e2e8f0; padding:8px 0 2px 0;">
+                        <td style="border-top:1px solid #e2e8f0; padding:8px 0 2px 0;">
                           <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Agreed Value</span>
                           <div style="color:#0f172a; font-size:18px; font-weight:bold;">{order_total}</div>
+                        </td>
+                        <td style="border-top:1px solid #e2e8f0; padding:8px 0 2px 0; vertical-align:middle; text-align:right;">
+                          <span style="background-color:#16a34a; color:#ffffff; font-size:11px; font-weight:bold; text-transform:uppercase; padding:4px 12px; border-radius:999px; letter-spacing:0.5px;">Approved</span>
                         </td>
                       </tr>
                     </table>
@@ -1026,7 +1026,7 @@ _CONFIRMATION_EMAIL_TEMPLATE = """
 
               <p style="color:#334155; font-size:13px; margin:0; line-height:1.6;">
                 Warm regards,<br/>
-                For <strong>{company_name}</strong><br/><br/>
+                For <strong>{company_name}</strong><br/>
                 Authorised Signatory<br/>
                 {company_signature_contact}
               </p>
@@ -1157,7 +1157,7 @@ def build_quotation_accepted_email(quotation, order=None):
         'to reach out to us.\n\n'
         f'Thank you once again for your trust in {company_name}!\n\n'
         'Warm regards,\n'
-        f'For {company_name}\n\n'
+        f'For {company_name}\n'
         'Authorised Signatory\n'
         f'{company_signature_contact}'
     )
