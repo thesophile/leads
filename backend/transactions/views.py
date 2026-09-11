@@ -2269,6 +2269,187 @@ class ClientDetailDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+def _get_client_detail_by_token(token):
+    return ClientDetail.objects.filter(client_token=str(token or '')).first()
+
+
+def _public_client_detail_payload(record):
+    """Safe summary of a client detail for the public document-upload page."""
+    tenant = record.tenant
+    logo_url = ''
+    if tenant and tenant.logo and tenant.logo.name:
+        try:
+            logo_url = tenant.logo.url
+        except Exception:
+            logo_url = ''
+    return {
+        'id': record.id,
+        'orderNo': record.order_no,
+        'company': record.company,
+        'clientName': record.client_name,
+        'mobile': record.mobile,
+        'email': record.email,
+        'category': record.category,
+        'collectedBy': record.collected_by,
+        'status': record.status,
+        'companyName': tenant.name if tenant else '',
+        'companyLogo': logo_url,
+        'companyEmail': tenant.email if tenant else '',
+        'companyPhone': tenant.phone if tenant else '',
+        'companyAddress': tenant.address if tenant else '',
+        'attachments': AttachmentSerializer(record.attachments.all(), many=True).data,
+    }
+
+
+class ClientDetailSendToClientView(APIView):
+    """Generate (or reuse) the client's document-upload link.
+
+    The link is valid for 30 days and lets the client upload their own
+    documents against this record. Generating the link never changes the
+    record's status.
+    """
+
+    permission_classes = [IsAuthenticated]
+    CLIENT_TOKEN_DAYS = 30
+
+    def post(self, request, pk):
+        if not (request.user.is_superuser or can(request.user, 'client.edit')):
+            return Response(
+                {'detail': 'You do not have permission to share client details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = scoped_client_details(request.user).filter(pk=pk).first()
+        if record is None:
+            return Response(
+                {'detail': 'Client detail not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        now = timezone.now()
+        needs_token = not record.client_token or (
+            record.client_token_expires_at and record.client_token_expires_at < now
+        )
+        if needs_token:
+            record.client_token = secrets.token_urlsafe(32)
+            record.client_token_expires_at = now + timedelta(days=self.CLIENT_TOKEN_DAYS)
+            record.client_token_updated_at = now
+            record.save(
+                update_fields=[
+                    'client_token',
+                    'client_token_expires_at',
+                    'client_token_updated_at',
+                ]
+            )
+
+        origin = (request.data.get('origin') or '').strip().rstrip('/')
+        path = f'/client-upload/{record.client_token}'
+        link = f'{origin}{path}' if origin else path
+
+        return Response(
+            {
+                'link': link,
+                'mobile': record.mobile,
+                'email': record.email,
+                'company': record.company,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PublicClientDetailDetailView(APIView):
+    """Public, unauthenticated read of a client-detail upload page."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        record = _get_client_detail_by_token(token)
+        if record is None:
+            return Response(
+                {'detail': 'This upload link is not valid.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if record.client_token_expires_at and record.client_token_expires_at < timezone.now():
+            return Response(
+                {'detail': 'This upload link has expired. Please request a fresh one.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(_public_client_detail_payload(record))
+
+
+class PublicClientDetailAttachmentView(APIView):
+    """Public upload of documents onto a client detail by signed link."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        record = _get_client_detail_by_token(token)
+        if record is None:
+            return Response(
+                {'detail': 'This upload link is not valid.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if record.client_token_expires_at and record.client_token_expires_at < timezone.now():
+            return Response(
+                {'detail': 'This upload link has expired. Please request a fresh one.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        uploaded = request.FILES.get('file')
+        if uploaded is None:
+            return Response(
+                {'detail': 'Please attach a file to upload.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        mime = (uploaded.content_type or '').lower()
+        if mime != 'application/pdf' and not mime.startswith(ATTACHMENT_ALLOWED_TYPE_PREFIXES):
+            return Response(
+                {'detail': 'Only PDF, image and audio files can be uploaded.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if uploaded.size > ATTACHMENT_MAX_BYTES:
+            return Response(
+                {'detail': f'File exceeds the {ATTACHMENT_MAX_BYTES // (1024 * 1024)} MB upload limit.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        label = str(request.data.get('type') or '').strip() or guess_attachment_type(mime)
+        attachment = Attachment(
+            client_detail=record,
+            type=label,
+            name=uploaded.name,
+            mime=mime,
+            size=format_attachment_size(uploaded.size),
+        )
+        attachment.file.save(uploaded.name, uploaded, save=False)
+        attachment.url = attachment.file.url
+        attachment.save()
+        self._notify_staff(record, attachment)
+        return Response(
+            AttachmentSerializer(attachment).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @staticmethod
+    def _notify_staff(record, attachment):
+        """In-app notification to the tenant's staff who can view client details."""
+        users = User.objects.filter(is_active=True)
+        if record.tenant_id:
+            users = users.filter(company_id=record.tenant_id)
+        else:
+            users = users.filter(is_superuser=True)
+        for user in users:
+            if user.has_permission('client.view') and getattr(user, 'pk', None):
+                notify(
+                    user,
+                    'Client Upload',
+                    'Client uploaded a document',
+                    f'{record.company} ({record.order_no}) uploaded "{attachment.name}".',
+                    url='/client-details',
+                    entity_type='client',
+                    entity_id=record.id,
+                )
+
+
 class OrderListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 

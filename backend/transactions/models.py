@@ -433,6 +433,11 @@ class ClientDetail(models.Model):
     collected_by = models.CharField(max_length=120, blank=True)
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=50, default=STATUS_PENDING)
+    # Client-facing link used to collect documents: the client opens the link
+    # and uploads their own attachments without any account.
+    client_token = models.CharField(max_length=64, blank=True)
+    client_token_expires_at = models.DateTimeField(null=True, blank=True)
+    client_token_updated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

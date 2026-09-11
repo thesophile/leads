@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -121,6 +121,27 @@ function TrashIcon({ className = 'h-3.5 w-3.5' }) {
   )
 }
 
+function ShareIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  )
+}
+
+function CopyIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+}
+
 function CloseIcon() {
   return (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -230,6 +251,14 @@ export default function ClientDetails() {
   const [saving, setSaving] = useState(false)
   const [deletingAttachment, setDeletingAttachment] = useState(null)
   const [statusSavingId, setStatusSavingId] = useState(null)
+
+  const cardRef = useRef(null)
+  const menuRef = useRef(null)
+  const [shareMenu, setShareMenu] = useState(null)
+  const [menuOffset, setMenuOffset] = useState(null)
+  const [shareLink, setShareLink] = useState('')
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
 
   const { dirty, reset } = useDirty(
     modalOpen,
@@ -480,6 +509,69 @@ export default function ClientDetails() {
     if (att.url) window.open(att.url, '_blank', 'noopener,noreferrer')
   }
 
+  async function handleShareClick(e, rec) {
+    e.stopPropagation()
+    if (shareLoading) return
+    const cardRect = cardRef.current ? cardRef.current.getBoundingClientRect() : { left: 0, top: 0 }
+    const btnRect = e.currentTarget.getBoundingClientRect()
+    setShareMenu({ id: rec.id, name: rec.clientName || rec.company })
+    setMenuOffset({ x: btnRect.left - cardRect.left + btnRect.width, y: btnRect.top - cardRect.top })
+    setShareLink('')
+    setShareCopied(false)
+    setShareLoading(true)
+    try {
+      const data = await api.post(
+        `/transactions/client-details/${encodeURIComponent(rec.id)}/send-to-client/`,
+        { channels: ['copy'], origin: window.location.origin }
+      )
+      setShareLink(data.link)
+    } catch (err) {
+      setToastMessage(`✗ ${err.message || 'Could not generate share link.'}`)
+      setTimeout(() => setToastMessage(''), 3000)
+      setShareMenu(null)
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
+  useLayoutEffect(() => {
+    if (!shareMenu || !menuOffset || !menuRef.current) return
+    const w = menuRef.current.offsetWidth
+    const h = menuRef.current.offsetHeight
+    const pad = 8
+    let left = menuOffset.x
+    let top = menuOffset.y
+    if (cardRef.current) {
+      const cardRect = cardRef.current.getBoundingClientRect()
+      if (cardRect.left + left + w > window.innerWidth - pad) {
+        left = window.innerWidth - pad - cardRect.left - w
+      }
+      if (cardRect.top + top + h > window.innerHeight - pad) {
+        top = menuOffset.y - h - 12
+      }
+    }
+    menuRef.current.style.left = `${left}px`
+    menuRef.current.style.top = `${top + 12}px`
+  }, [shareMenu, menuOffset, shareLoading])
+
+  function closeShareMenu() {
+    setShareMenu(null)
+    setMenuOffset(null)
+  }
+
+  async function handleCopyShareLink() {
+    if (!shareLink) return
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      setShareCopied(true)
+      setToastMessage('✓ Upload link copied to clipboard.')
+      setTimeout(() => setToastMessage(''), 2500)
+    } catch {
+      setToastMessage(`Could not copy automatically. Link: ${shareLink}`)
+      setTimeout(() => setToastMessage(''), 4000)
+    }
+  }
+
   const editableRecord = editingId ? records.find((r) => r.id === editingId) : null
 
   return (
@@ -562,7 +654,7 @@ export default function ClientDetails() {
         </div>
 
         {/* Table Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div ref={cardRef} className="relative rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="flex items-center gap-1.5">
@@ -697,7 +789,16 @@ export default function ClientDetails() {
                         </select>
                       </td>
                       <td className="py-0.5 pr-3 text-center">
-                        <div className="flex items-center justify-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => handleShareClick(e, rec)}
+                            disabled={shareLoading}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer disabled:opacity-50"
+                            title="Share upload link"
+                          >
+                            <ShareIcon className="h-3.5 w-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -723,6 +824,79 @@ export default function ClientDetails() {
               </tbody>
             </table>
           </div>
+
+          {/* Share Link Popover (anchored to the card so it scrolls with the page) */}
+          {shareMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-30"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closeShareMenu()
+                }}
+              />
+              <div
+                ref={menuRef}
+                style={{ position: 'absolute', zIndex: 40 }}
+                className="w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-xl ring-1 ring-slate-950/5 animate-in fade-in zoom-in-95 duration-100 text-left"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                      <ShareIcon className="h-3.5 w-3.5" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Share upload link</p>
+                      <p className="text-[10px] text-slate-500 truncate max-w-[200px]" title={shareMenu.name}>
+                        {shareMenu.name}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeShareMenu}
+                    className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+                    aria-label="Close"
+                  >
+                    <CloseIcon className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="mt-2.5 text-[10px] leading-relaxed text-slate-500">
+                  Share this link with {shareMenu.name} to let them upload their documents
+                  (SRS, business cards, voice clips) themselves.
+                </p>
+                <div className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-2">
+                  {shareLoading ? (
+                    <span className="text-[11px] text-slate-400">Generating link…</span>
+                  ) : (
+                    <span className="block break-all font-mono text-[11px] leading-relaxed text-slate-700">
+                      {shareLink || 'Loading…'}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    disabled={!shareLink || shareLoading}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <CopyIcon className="h-3.5 w-3.5" />
+                    {shareCopied ? 'Copied!' : 'Copy link'}
+                  </button>
+                  <a
+                    href={shareLink ? `https://wa.me/?text=${encodeURIComponent(`Please upload your documents using this link:\n${shareLink}`)}` : undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer ${shareLink ? '' : 'pointer-events-none opacity-50'}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

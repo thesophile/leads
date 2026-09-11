@@ -18,6 +18,7 @@ import Managequotation from './admin/transactions/Managequotation'
 import ProposalPreview from './admin/transactions/ProposalPreview'
 import ClientQuotation from './admin/transactions/ClientQuotation'
 import ClientOrder from './admin/transactions/ClientOrder'
+import ClientUpload from './admin/transactions/ClientUpload'
 import ManageOrder from './admin/transactions/ManageOrder'
 import OrderPreview from './admin/transactions/OrderPreview'
 import ClientDetails from './admin/transactions/ClientDetails'
@@ -44,6 +45,7 @@ function App() {
         {/* Public client-facing pages (no authentication) */}
         <Route path="/quotation/:token" element={<ClientQuotation />} />
         <Route path="/order/:token" element={<ClientOrder />} />
+        <Route path="/client-upload/:token" element={<ClientUpload />} />
 
         {/* Protected app routes */}
         <Route path="/change-password" element={guard(<ChangePassword />)} />
