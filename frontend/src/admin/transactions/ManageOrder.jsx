@@ -114,6 +114,17 @@ const todayStr = () => {
   return `${dd}-${mm}-${now.getFullYear()}`
 }
 
+const moneyToNumber = (str) => {
+  const cleaned = String(str || '').replace(/[^\d.-]/g, '')
+  if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === '-.') return NaN
+  return Number(cleaned)
+}
+
+const formatMoney = (n) =>
+  Number.isFinite(n)
+    ? n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : ''
+
 export default function ManageOrder() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -130,6 +141,7 @@ export default function ManageOrder() {
   const menuRef = useRef(null)
   const cardRef = useRef(null)
   const [toastMessage, setToastMessage] = useState('')
+  const [toastType, setToastType] = useState('success')
   const [sendClientOpen, setSendClientOpen] = useState(false)
 
   // Modal State for Order Form Editor
@@ -158,6 +170,7 @@ export default function ManageOrder() {
   const [discardOpen, setDiscardOpen] = useState(false)
   const [savingOrder, setSavingOrder] = useState(false)
   const [statusPending, setStatusPending] = useState(null)
+  const statusGuardRef = useRef(false)
 
   const { dirty, reset } = useDirty(
     orderModalOpen,
@@ -241,10 +254,12 @@ export default function ManageOrder() {
     const prefix = `P${year}-`
     let maxSeq = 0
     for (const o of ordersList) {
-      const id = String(o.id || '')
-      if (id.startsWith(prefix)) {
-        const seq = id.slice(prefix.length).match(/^\d+$/)
-        if (seq) maxSeq = Math.max(maxSeq, parseInt(seq[0], 10))
+      for (const id of [o.id, o.proposalNo]) {
+        const s = String(id || '')
+        if (s.startsWith(prefix)) {
+          const seq = s.slice(prefix.length).match(/^\d+$/)
+          if (seq) maxSeq = Math.max(maxSeq, parseInt(seq[0], 10))
+        }
       }
     }
     return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`
@@ -263,7 +278,22 @@ export default function ManageOrder() {
       setCategoryName(tpl.category)
       setTotalVal(tpl.defaultTotal)
       setDiscountVal(tpl.defaultDiscount)
+      setNetVal(formatMoney(moneyToNumber(tpl.defaultTotal) - moneyToNumber(tpl.defaultDiscount)))
     }
+  }
+
+  function handleTotalChange(v) {
+    setTotalVal(v)
+    const t = moneyToNumber(v)
+    const d = moneyToNumber(discountVal)
+    if (Number.isFinite(t) && Number.isFinite(d)) setNetVal(formatMoney(t - d))
+  }
+
+  function handleDiscountChange(v) {
+    setDiscountVal(v)
+    const t = moneyToNumber(totalVal)
+    const d = moneyToNumber(v)
+    if (Number.isFinite(t) && Number.isFinite(d)) setNetVal(formatMoney(t - d))
   }
 
   function handleOpenOrderModal(order = null) {
@@ -278,7 +308,7 @@ export default function ManageOrder() {
       setCategoryName(order.category || 'Dynamic Website')
       setOrderDate(order.date || todayStr())
       setProposalDate(order.proposalDate || todayStr())
-      setProposalNo(order.proposalNo || nextOrderNumber())
+      setProposalNo(order.proposalNo || order.id || nextOrderNumber())
       setOrderSummaryHtml(order.scope || order.orderSummaryHtml || '')
       setOrderInDetailsHtml(order.details || order.orderInDetailsHtml || '')
       setTotalVal(order.total || '50,000')
@@ -302,7 +332,11 @@ export default function ManageOrder() {
       setOrderInDetailsHtml(defaultTpl?.detailHtml || '')
       setTotalVal(defaultTpl?.defaultTotal || '50,000')
       setDiscountVal(defaultTpl?.defaultDiscount || '5,000')
-      setNetVal('45,000.00')
+      setNetVal(
+        defaultTpl
+          ? formatMoney(moneyToNumber(defaultTpl.defaultTotal) - moneyToNumber(defaultTpl.defaultDiscount))
+          : '40,000.00'
+      )
       setRemarksVal('')
     }
     setOrderModalOpen(true)
@@ -386,7 +420,8 @@ export default function ManageOrder() {
   async function handleUpdateOrderStatus(orderId, nextStatus, e) {
     e.stopPropagation()
     setOpenDropdownId(null)
-    if (statusPending) return
+    if (statusPending || statusGuardRef.current) return
+    statusGuardRef.current = true
     setStatusPending(orderId)
     try {
       const updated = await api.put(
@@ -399,8 +434,9 @@ export default function ManageOrder() {
       const label = nextStatus === 'Sent to Client' ? 'Sent' : 'Not Sent'
       showToast(`Order ${orderId} marked as ${label}.`)
     } catch (err) {
-      showToast(err.message || 'Could not update order status.')
+      showToast(err.message || 'Could not update order status.', 'error')
     } finally {
+      statusGuardRef.current = false
       setStatusPending(null)
     }
   }
@@ -411,7 +447,8 @@ export default function ManageOrder() {
     )
   }
 
-  function showToast(msg) {
+  function showToast(msg, type = 'success') {
+    setToastType(type)
     setToastMessage(msg)
     setTimeout(() => {
       setToastMessage('')
@@ -463,13 +500,38 @@ export default function ManageOrder() {
     <Layout>
       <div className="space-y-4">
         {toastMessage && (
-          <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+          <div
+            className={`fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border px-4 py-3 shadow-lg ${
+              toastType === 'error'
+                ? 'border-rose-200 bg-rose-50'
+                : 'border-slate-200 bg-white'
+            }`}
+          >
+            <span
+              className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                toastType === 'error'
+                  ? 'bg-rose-100 text-rose-600'
+                  : 'bg-emerald-100 text-emerald-600'
+              }`}
+            >
+              {toastType === 'error' ? (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
             </span>
-            <span className="text-xs font-semibold text-slate-800">{toastMessage}</span>
+            <span
+              className={`text-xs font-semibold ${
+                toastType === 'error' ? 'text-rose-700' : 'text-slate-800'
+              }`}
+            >
+              {toastMessage}
+            </span>
           </div>
         )}
 
@@ -793,7 +855,7 @@ export default function ManageOrder() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
           onClick={(e) => {
-            if (e.target === e.currentTarget && !dirty) setOrderModalOpen(false)
+            if (e.target === e.currentTarget) requestClose()
           }}
         >
           <div className="w-full max-w-3xl my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
@@ -992,7 +1054,7 @@ export default function ManageOrder() {
                   <input
                     type="text"
                     value={totalVal}
-                    onChange={(e) => setTotalVal(e.target.value)}
+                    onChange={(e) => handleTotalChange(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
@@ -1004,7 +1066,7 @@ export default function ManageOrder() {
                   <input
                     type="text"
                     value={discountVal}
-                    onChange={(e) => setDiscountVal(e.target.value)}
+                    onChange={(e) => handleDiscountChange(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
@@ -1037,7 +1099,13 @@ export default function ManageOrder() {
               </div>
 
               {submitMessage && (
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
+                <div
+                  className={`rounded-lg border p-2.5 text-xs font-bold text-center animate-in fade-in ${
+                    submitMessage.startsWith('✗')
+                      ? 'bg-rose-50 border-rose-200 text-rose-700'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  }`}
+                >
                   {submitMessage}
                 </div>
               )}
