@@ -1826,7 +1826,10 @@ export default function Managequotation() {
                           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition cursor-pointer"
                         >
                           <SendIcon className="h-3.5 w-3.5 text-amber-600" />
-                          <span>Send to Client (No Approval)</span>
+                          <span className="flex flex-col leading-tight">
+                            <span>Send to Client</span>
+                            <span>(No Approval)</span>
+                          </span>
                         </button>
                       )}
 
