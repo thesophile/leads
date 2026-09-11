@@ -35,6 +35,43 @@ const QUILL_FORMATS = [
 
 const SCOPE_MAX_CHARS = 1000
 
+const BLOCKED_PREFIXES = new Set([
+  'ASS', 'BIT', 'CUM', 'DAM', 'DIC', 'FAG', 'FUC', 'GAY', 'JAP',
+  'KYS', 'PIS', 'SEX', 'SHI', 'SLU', 'TIT', 'WTF', 'NIG', 'COK',
+  'CLT', 'CNT', 'DIK', 'DYK', 'HOM', 'JIZ', 'KOT', 'PNS', 'PSY',
+  'TWA', 'VAG', 'WAN', 'WNG',
+])
+
+function companyPrefix(company) {
+  const letters = String(company || '')
+    .toUpperCase()
+    .split('')
+    .filter((c) => /[A-Z]/.test(c))
+  if (letters.length < 3) {
+    const raw = String(company || '')
+      .toUpperCase()
+      .split('')
+      .filter((c) => /[A-Z0-9]/.test(c))
+      .concat(['X', 'X', 'X'])
+    return raw.slice(0, 3).join('')
+  }
+  const primary = letters.slice(0, 3).join('')
+  if (!BLOCKED_PREFIXES.has(primary)) return primary
+  for (let start = 1; start <= letters.length - 3; start++) {
+    const alt = letters.slice(start, start + 3).join('')
+    if (!BLOCKED_PREFIXES.has(alt)) return alt
+  }
+  for (const a of letters) {
+    for (const b of letters) {
+      for (const c of letters) {
+        const alt = a + b + c
+        if (!BLOCKED_PREFIXES.has(alt)) return alt
+      }
+    }
+  }
+  return primary
+}
+
 const stripHtmlText = (html) =>
   String(html || '')
     .replace(/<[^>]*>/g, ' ')
@@ -1106,10 +1143,10 @@ export default function Managequotation() {
       )
     } else {
       // Create new
-      nextApprovalId = `QT-2026-${String(quotationsList.length + 1).padStart(3, '0')}`
+      nextApprovalId = `${companyPrefix(companyName)}-${new Date().getFullYear()}-${String(quotationsList.length + 1).padStart(3, '0')}`
       const newProposal = {
         id: nextApprovalId,
-        leadId: `LEAD-${String(leadIdSeqRef.current++).padStart(4, '0')}`,
+        leadId: `${companyPrefix(companyName)}-${new Date().getFullYear()}-${String(leadIdSeqRef.current++).padStart(4, '0')}`,
         customer: customerPerson,
         company: companyName,
         mobile: mobileNum,

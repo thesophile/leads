@@ -295,13 +295,53 @@ def assignment_name_set(user):
     )
 
 
-def generate_lead_id():
+BLOCKED_PREFIXES = {
+    # 3-letter prefixes that could read as offensive/inappropriate.
+    'ASS', 'BIT', 'CUM', 'DAM', 'DIC', 'FAG', 'FUC', 'GAY', 'JAP',
+    'KYS', 'PIS', 'SEX', 'SHI', 'SLU', 'TIT', 'WTF', 'NIG', 'COK',
+    'CLT', 'CNT', 'DIK', 'DYK', 'HOM', 'JIZ', 'KOT', 'PNS', 'PSY',
+    'TWA', 'VAG', 'WAN', 'WNG',
+}
+
+
+def company_prefix(company):
+    """Derive a 3-letter uppercase prefix from a customer company name.
+
+    Falls back to other letter combinations (and finally to the raw
+    characters) when the natural abbreviation is blocked or too short,
+    so the reference never contains an offensive prefix.
+    """
+    letters = [c for c in (company or '').upper() if c.isalpha()]
+    if len(letters) < 3:
+        raw = [c for c in (company or '').upper() if c.isalnum()]
+        letters = (raw + ['X', 'X', 'X'])[:3]
+    primary = ''.join(letters[:3])
+    if primary not in BLOCKED_PREFIXES:
+        return primary
+    # Blocked: try later triples of the name, then any non-blocked triple.
+    for start in range(1, len(letters) - 2):
+        alt = ''.join(letters[start:start + 3])
+        if alt not in BLOCKED_PREFIXES:
+            return alt
+    for a in letters:
+        for b in letters:
+            for c in letters:
+                alt = a + b + c
+                if alt not in BLOCKED_PREFIXES:
+                    return alt
+    return primary
+
+
+def generate_lead_id(company):
+    """A proposal reference like ABC-2026-482913 (prefix-year-random)."""
+    prefix = company_prefix(company)
+    year = date.today().year
     existing = set(Lead.objects.values_list('id', flat=True))
     for _ in range(200):
-        candidate = f'LEAD-{random.randint(100000, 999999)}'
+        candidate = f'{prefix}-{year}-{random.randint(100000, 999999)}'
         if candidate not in existing:
             return candidate
-    return f'LEAD-{random.randint(1000000, 9999999)}'
+    return f'{prefix}-{year}-{random.randint(1000000, 9999999)}'
 
 
 def scoped_queryset(user, status_filter='all'):
@@ -527,7 +567,7 @@ class LeadListView(APIView):
         for _ in range(5):
             try:
                 saved = Lead.objects.create(
-                    id=generate_lead_id(),
+                    id=generate_lead_id(company),
                     company=company,
                     tenant=request.user.company,
                     contact=request.data.get('contact', '').strip(),
