@@ -44,9 +44,9 @@ export default function LeadStatus() {
   const loadLeads = useCallback(async () => {
     try {
       const data = await api.get('/transactions/leads/my/')
-      setLeads(data)
+      setLeads(Array.isArray(data) ? data : [])
     } catch {
-      setLeads([])
+      // Keep any previously loaded leads on a failed refresh.
     } finally {
       setIsLoading(false)
     }

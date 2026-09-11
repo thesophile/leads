@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer,
@@ -159,28 +159,28 @@ export default function Dashboard() {
     return { groupBy: 'daily', start: toISODate(start), end: toISODate(end) }
   }, [period, customFrom, customTo])
 
+  const requestIdRef = useRef(0)
+
   const loadDashboard = useCallback(async () => {
+    const requestId = ++requestIdRef.current
     try {
       const data = await api.get('/transactions/dashboard/stats/', {
         params: { group_by: resolved.groupBy, start_date: resolved.start, end_date: resolved.end },
       })
+      if (requestId !== requestIdRef.current) return
       setStats(data || EMPTY)
     } catch (err) {
+      if (requestId !== requestIdRef.current) return
       setError(err?.message || 'Failed to load dashboard data.')
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
   }, [resolved])
 
   useEffect(() => {
-    let cancelled = false
     ;(async () => {
-      if (cancelled) return
       await loadDashboard()
     })()
-    return () => {
-      cancelled = true
-    }
   }, [loadDashboard])
 
   const [refreshing, setRefreshing] = useState(false)

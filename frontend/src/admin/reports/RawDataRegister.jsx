@@ -43,13 +43,16 @@ export default function RawDataRegister() {
   const [searchQuery, setSearchQuery] = useState('')
 
   // Load the real raw leads (status=raw) and the category options.
+  // Categories are loaded independently so a leads failure does not hide them.
   const loadRegister = useCallback(async () => {
+    api
+      .get('/master/categories/')
+      .then((categories) => {
+        if (categories) setCategoryOptions(categories)
+      })
+      .catch(() => {})
     try {
-      const [data, categories] = await Promise.all([
-        api.get('/transactions/leads/?status=raw'),
-        api.get('/master/categories/').catch(() => null),
-      ])
-      if (categories) setCategoryOptions(categories)
+      const data = await api.get('/transactions/leads/?status=raw')
       setRegisterRows((Array.isArray(data) ? data : []).map(leadToRow))
     } catch (err) {
       setError(err.message)

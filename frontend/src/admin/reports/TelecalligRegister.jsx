@@ -53,13 +53,18 @@ export default function TelecalligRegister() {
   const [searchQuery, setSearchQuery] = useState('')
 
   // Load every lead in the telecalling pipeline plus category options.
+  // Categories are loaded independently so a leads failure does not hide them.
   const loadRegister = useCallback(async () => {
+    api
+      .get('/master/categories/')
+      .then((categories) => {
+        if (categories) setCategoryOptions(categories)
+      })
+      .catch(() => {})
     try {
-      const [categories, ...results] = await Promise.all([
-        api.get('/master/categories/').catch(() => null),
-        ...LEAD_STATUSES.map((s) => api.get(`/transactions/leads/?status=${s}`)),
-      ])
-      if (categories) setCategoryOptions(categories)
+      const results = await Promise.all(
+        LEAD_STATUSES.map((s) => api.get(`/transactions/leads/?status=${s}`))
+      )
       const rows = []
       results.forEach((data) => {
         ;(Array.isArray(data) ? data : []).forEach((item) => rows.push(leadToRow(item)))

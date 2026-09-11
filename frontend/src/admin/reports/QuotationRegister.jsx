@@ -47,13 +47,16 @@ export default function QuotationRegister() {
   const [searchQuery, setSearchQuery] = useState('')
 
   // Load the real quotation-stage leads (status=quotation) and category options.
+  // Categories are loaded independently so a leads failure does not hide them.
   const loadRegister = useCallback(async () => {
+    api
+      .get('/master/categories/')
+      .then((categories) => {
+        if (categories) setCategoryOptions(categories)
+      })
+      .catch(() => {})
     try {
-      const [data, categories] = await Promise.all([
-        api.get('/transactions/leads/?status=quotation'),
-        api.get('/master/categories/').catch(() => null),
-      ])
-      if (categories) setCategoryOptions(categories)
+      const data = await api.get('/transactions/leads/?status=quotation')
       setRegisterRows((Array.isArray(data) ? data : []).map(leadToRow))
     } catch (err) {
       setError(err.message)

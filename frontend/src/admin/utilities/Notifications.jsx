@@ -130,7 +130,7 @@ const [refreshing, setRefreshing] = useState(false)
       const data = await api.get('/notifications/')
       setNotifications(Array.isArray(data) ? data : [])
     } catch {
-      setNotifications([])
+      // Keep any previously loaded notifications on a failed refresh.
     } finally {
       setLoading(false)
     }
