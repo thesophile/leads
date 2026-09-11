@@ -1003,7 +1003,7 @@ export default function ManageOrder() {
                   className="flex items-center gap-1.5 rounded-lg bg-slate-950 px-5 py-2 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer shadow-xs active:scale-98 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {savingOrder && <Spinner className="h-3.5 w-3.5" />}
-                  {savingOrder ? 'Saving…' : 'Save &amp; Generate Order Form'}
+                  {savingOrder ? 'Saving…' : 'Save'}
                 </button>
               </div>
             </form>
