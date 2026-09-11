@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
@@ -11,6 +11,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
 import SendToClientModal from './SendToClientModal'
 import Spinner from '../../components/Spinner'
+import RefreshButton from '../../components/RefreshButton'
 
 // Initial dataset of approved orders ready for execution
 const STAFF_LIST = [
@@ -211,25 +212,22 @@ export default function ManageOrder() {
     menuRef.current.style.top = `${top}px`
   }, [openDropdownId, menuOffset])
 
-  useEffect(() => {
-    let active = true
-    api
-      .get('/transactions/orders/')
-      .then((data) => {
-        if (!active) return
-        setOrdersList(Array.isArray(data) ? data : [])
-      })
-      .catch((err) => {
-        if (!active) return
-        setLoadError(err.message || 'Could not load orders.')
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
+  const loadOrders = useCallback(async () => {
+    try {
+      const data = await api.get('/transactions/orders/')
+      setOrdersList(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setLoadError(err.message || 'Could not load orders.')
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      await loadOrders()
+    })()
+  }, [loadOrders])
 
   function handleViewOrder(order) {
     navigate(`/orders/preview/${order.id}`, { state: { order } })
@@ -465,6 +463,7 @@ export default function ManageOrder() {
 
           {/* Quick Metrics & Create Button */}
           <div className="flex flex-wrap items-center gap-3">
+            <RefreshButton onClick={() => { setLoading(true); setLoadError(''); loadOrders() }} loading={loading} compact className="self-center mr-1" />
             <div className="flex items-center gap-1.5">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Total</span>

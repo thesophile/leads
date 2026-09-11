@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
+import RefreshButton from '../../components/RefreshButton'
 
 function toDmyDate(value) {
   if (!value) return ''
@@ -51,53 +52,31 @@ export default function TelecalligRegister() {
   const [location, setLocation] = useState('All Locations')
   const [searchQuery, setSearchQuery] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchCategories() {
-      try {
-        const data = await api.get('/master/categories/')
-        if (!cancelled) setCategoryOptions(data)
-      } catch {
-        // Report filters can fall back to an empty category list.
-      }
-    }
-
-    fetchCategories()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // Load every lead in the telecalling pipeline from the database.
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchTelecallLeads() {
-      setIsLoading(true)
-      setError('')
-      try {
-        const results = await Promise.all(
-          LEAD_STATUSES.map((s) => api.get(`/transactions/leads/?status=${s}`))
-        )
-        if (cancelled) return
-        const rows = []
-        results.forEach((data) => {
-          ;(Array.isArray(data) ? data : []).forEach((item) => rows.push(leadToRow(item)))
-        })
-        setRegisterRows(rows)
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    fetchTelecallLeads()
-    return () => {
-      cancelled = true
+  // Load every lead in the telecalling pipeline plus category options.
+  const loadRegister = useCallback(async () => {
+    try {
+      const [categories, ...results] = await Promise.all([
+        api.get('/master/categories/').catch(() => null),
+        ...LEAD_STATUSES.map((s) => api.get(`/transactions/leads/?status=${s}`)),
+      ])
+      if (categories) setCategoryOptions(categories)
+      const rows = []
+      results.forEach((data) => {
+        ;(Array.isArray(data) ? data : []).forEach((item) => rows.push(leadToRow(item)))
+      })
+      setRegisterRows(rows)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      await loadRegister()
+    })()
+  }, [loadRegister])
 
   // Staff, location and status choices are derived from the actual records so
   // the filters always match what the current user is allowed to see.
@@ -234,6 +213,7 @@ export default function TelecalligRegister() {
 
             {/* Right: Export PDF Button + Search Box */}
             <div className="flex items-center gap-2">
+              <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadRegister() }} loading={isLoading} />
               <button
                 type="button"
                 onClick={exportPdf}

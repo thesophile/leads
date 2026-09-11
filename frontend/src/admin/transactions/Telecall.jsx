@@ -4,6 +4,7 @@ import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import { localISO } from '../../utils/date'
+import RefreshButton from '../../components/RefreshButton'
 
 const STATUSES = [
   'All Status',
@@ -407,6 +408,7 @@ export default function Telecall() {
 
           {/* Quick Metrics (Only for Qualified / Assessed Leads) */}
           <div className="flex items-center gap-1.5">
+            <RefreshButton onClick={refreshData} loading={isLoading} compact className="mr-1" />
             <div className="rounded-lg border border-red-200/80 bg-red-50/60 px-2.5 py-1.5" title="Qualified Hot Leads">
               <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">Hot</span>
               <span className="text-xs font-bold text-red-700 ml-1">

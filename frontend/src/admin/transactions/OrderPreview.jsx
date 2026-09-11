@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { useAuth } from '../../context/auth-context'
@@ -6,6 +6,7 @@ import { can } from '../../utils/permissions'
 import { api } from '../../api/client'
 import SendToClientModal from './SendToClientModal'
 import OrderFormDocument from './OrderFormDocument'
+import RefreshButton from '../../components/RefreshButton'
 import { clientOrderLink, orderBarcodeValue } from './orderFormDocumentUtils'
 
 function mapOrder(o) {
@@ -50,28 +51,31 @@ export default function OrderPreview() {
     location.state?.order ? mapOrder(location.state.order) : null
   )
   const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.order)
+  const [refreshing, setRefreshing] = useState(false)
   const [notFound, setNotFound] = useState(false)
+
+  // Load the real order by its id from the backend.
+  const loadOrder = useCallback(async () => {
+    if (!params.id) return
+    try {
+      const data = await api.get(`/transactions/orders/${encodeURIComponent(params.id)}/`)
+      setOrderData(data ? mapOrder(data) : null)
+      if (!data) setNotFound(true)
+    } catch {
+      setNotFound(true)
+    } finally {
+      setLoadingQuote(false)
+    }
+  }, [params.id])
 
   // If we arrived without navigation state (refresh, direct link, notification
   // click), load the real order by its id from the backend.
   useEffect(() => {
-    if (orderData || !params.id) return
-    let cancelled = false
+    if (orderData) return
     ;(async () => {
-      try {
-        const data = await api.get(`/transactions/orders/${encodeURIComponent(params.id)}/`)
-        if (!cancelled) setOrderData(data ? mapOrder(data) : null)
-        if (!cancelled && !data) setNotFound(true)
-      } catch {
-        if (!cancelled) setNotFound(true)
-      } finally {
-        if (!cancelled) setLoadingQuote(false)
-      }
+      await loadOrder()
     })()
-    return () => {
-      cancelled = true
-    }
-  }, [params.id, orderData])
+  }, [orderData, loadOrder])
 
   const [sendClientOpen, setSendClientOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -167,6 +171,7 @@ export default function OrderPreview() {
           </div>
 
           <div className="flex items-center gap-2">
+            <RefreshButton onClick={async () => { setRefreshing(true); setNotFound(false); try { await loadOrder() } finally { setRefreshing(false) } }} loading={refreshing} compact />
             <button
               type="button"
               onClick={handleDownloadPdf}

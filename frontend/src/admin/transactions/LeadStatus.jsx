@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import Layout from '../../Layout/Layout'
 import { can } from '../../utils/permissions'
 import Spinner from '../../components/Spinner'
+import RefreshButton from '../../components/RefreshButton'
 
 const STAGE_STYLES = {
   raw: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -40,23 +41,22 @@ export default function LeadStatus() {
   const [toastMessage, setToastMessage] = useState('')
   const [busyId, setBusyId] = useState(null)
 
-  useEffect(() => {
-    let cancelled = false
-    api
-      .get('/transactions/leads/my/')
-      .then((data) => {
-        if (!cancelled) setLeads(data)
-      })
-      .catch(() => {
-        if (!cancelled) setLeads([])
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => {
-      cancelled = true
+  const loadLeads = useCallback(async () => {
+    try {
+      const data = await api.get('/transactions/leads/my/')
+      setLeads(data)
+    } catch {
+      setLeads([])
+    } finally {
+      setIsLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      await loadLeads()
+    })()
+  }, [loadLeads])
 
   function showToast(msg) {
     setToastMessage(msg)
@@ -113,6 +113,7 @@ export default function LeadStatus() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <RefreshButton onClick={() => { setIsLoading(true); loadLeads() }} loading={isLoading} compact />
             <select
               value={selectedStage}
               onChange={(e) => setSelectedStage(e.target.value)}

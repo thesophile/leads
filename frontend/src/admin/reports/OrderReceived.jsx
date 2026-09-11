@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
+import RefreshButton from '../../components/RefreshButton'
 
 function PackageIcon({ className = 'h-4 w-4' }) {
   return (
@@ -108,37 +109,31 @@ export default function OrderReceived() {
   const [selectedOrder, setSelectedOrder] = useState(null)
 
   // Load the real orders + their client-detail records from the database.
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchOrders() {
-      setIsLoading(true)
-      setError('')
-      try {
-        const [orders, clientDetails] = await Promise.all([
-          api.get('/transactions/orders/'),
-          api.get('/transactions/client-details/'),
-        ])
-        if (cancelled) return
-        const detailMap = new Map()
-        ;(Array.isArray(clientDetails) ? clientDetails : []).forEach((cd) => {
-          if (cd.orderNo && !detailMap.has(cd.orderNo)) detailMap.set(cd.orderNo, cd)
-        })
-        setRegisterRows(
-          (Array.isArray(orders) ? orders : []).map((o) => orderToRow(o, detailMap))
-        )
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    fetchOrders()
-    return () => {
-      cancelled = true
+  const loadOrders = useCallback(async () => {
+    try {
+      const [orders, clientDetails] = await Promise.all([
+        api.get('/transactions/orders/'),
+        api.get('/transactions/client-details/'),
+      ])
+      const detailMap = new Map()
+      ;(Array.isArray(clientDetails) ? clientDetails : []).forEach((cd) => {
+        if (cd.orderNo && !detailMap.has(cd.orderNo)) detailMap.set(cd.orderNo, cd)
+      })
+      setRegisterRows(
+        (Array.isArray(orders) ? orders : []).map((o) => orderToRow(o, detailMap))
+      )
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      await loadOrders()
+    })()
+  }, [loadOrders])
 
   // Staff choices are derived from the actual records so the filters always
   // match what the current user is allowed to see.
@@ -330,6 +325,7 @@ export default function OrderReceived() {
 
             {/* Right: Actions */}
             <div className="flex items-center gap-2 flex-wrap">
+              <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadOrders() }} loading={isLoading} />
               <button
                 type="button"
                 onClick={exportPdf}

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
@@ -8,6 +8,7 @@ import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
+import RefreshButton from '../../components/RefreshButton'
 
 function wrappableHtml(html) {
   return String(html || '').replace(/&nbsp;/gi, ' ')
@@ -288,6 +289,7 @@ export default function ProposalPreview() {
   const [company, setCompany] = useState({})
   const [proposal, setProposal] = useState(() => location.state?.proposal || null)
   const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.proposal)
+  const [refreshing, setRefreshing] = useState(false)
   const [notFound, setNotFound] = useState(false)
 
   // Send-for-approval
@@ -305,6 +307,21 @@ export default function ProposalPreview() {
   const [actionError, setActionError] = useState('')
   const [actionNote, setActionNote] = useState('')
   const [approveNotice, setApproveNotice] = useState('')
+
+  const refreshProposal = useCallback(async () => {
+    if (!params.id) return
+    setRefreshing(true)
+    setNotFound(false)
+    try {
+      const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
+      if (data) setProposal(data)
+      else setNotFound(true)
+    } catch {
+      setNotFound(true)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [params.id])
 
   useEffect(() => {
     let cancelled = false
@@ -612,6 +629,7 @@ const approvedByRef = useRef(null)
           </div>
 
           <div className="flex items-center gap-2">
+            <RefreshButton onClick={refreshProposal} loading={refreshing} compact />
             {approveNotice && (
               <span className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-700">
                 {approveNotice}

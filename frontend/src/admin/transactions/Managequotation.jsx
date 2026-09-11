@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
@@ -9,6 +9,7 @@ import { useAuth } from '../../context/auth-context'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
+import RefreshButton from '../../components/RefreshButton'
 import useDirty from '../../utils/useDirty'
 
 const QUILL_MODULES = {
@@ -384,34 +385,29 @@ export default function Managequotation() {
   const cardRef = useRef(null)
   const templateDropdownRef = useRef(null)
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchData() {
-      try {
-        const data = await api.get('/transactions/leads/?status=quotation')
-        if (!cancelled) {
-          setQuotationsList(
-            data.flatMap((lead) => {
-              const versions = Array.isArray(lead.quotations) && lead.quotations.length
-                ? lead.quotations
-                : [null]
-              return versions.map((q) => mapLeadToQuotation(lead, q))
-            })
-          )
-        }
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    fetchData()
-    return () => {
-      cancelled = true
+  const loadQuotations = useCallback(async () => {
+    try {
+      const data = await api.get('/transactions/leads/?status=quotation')
+      setQuotationsList(
+        data.flatMap((lead) => {
+          const versions = Array.isArray(lead.quotations) && lead.quotations.length
+            ? lead.quotations
+            : [null]
+          return versions.map((q) => mapLeadToQuotation(lead, q))
+        })
+      )
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      await loadQuotations()
+    })()
+  }, [loadQuotations])
 
   useEffect(() => {
     let cancelled = false
@@ -1435,6 +1431,7 @@ export default function Managequotation() {
 
           {/* Action Buttons & Status Metrics */}
           <div className="flex flex-wrap items-center gap-2.5">
+            <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadQuotations() }} loading={isLoading} compact className="self-center" />
 
             {/* Quick Metrics */}
             <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">

@@ -4,6 +4,7 @@ import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import Spinner from '../../components/Spinner'
+import RefreshButton from '../../components/RefreshButton'
 
 function PlusCircleIcon() {
   return (
@@ -349,7 +350,8 @@ export default function Sources() {
               </div>
 
               {/* Search Box */}
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
+                <RefreshButton onClick={refreshData} loading={isLoading} compact title="Refresh sources" />
                 <div className="relative flex-1 sm:w-64">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
                     <SearchIcon />

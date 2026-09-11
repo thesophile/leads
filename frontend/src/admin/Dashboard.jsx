@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer,
@@ -17,6 +17,7 @@ import {
 } from 'recharts'
 import Layout from '../Layout/Layout'
 import { api } from '../api/client'
+import RefreshButton from '../components/RefreshButton'
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#ffffff',
@@ -158,25 +159,41 @@ export default function Dashboard() {
     return { groupBy: 'daily', start: toISODate(start), end: toISODate(end) }
   }, [period, customFrom, customTo])
 
-  useEffect(() => {
-    let cancelled = false
-    api
-      .get('/transactions/dashboard/stats/', {
+  const loadDashboard = useCallback(async () => {
+    try {
+      const data = await api.get('/transactions/dashboard/stats/', {
         params: { group_by: resolved.groupBy, start_date: resolved.start, end_date: resolved.end },
       })
-      .then((data) => {
-        if (!cancelled) setStats(data || EMPTY)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err?.message || 'Failed to load dashboard data.')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+      setStats(data || EMPTY)
+    } catch (err) {
+      setError(err?.message || 'Failed to load dashboard data.')
+    } finally {
+      setLoading(false)
+    }
+  }, [resolved])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (cancelled) return
+      await loadDashboard()
+    })()
     return () => {
       cancelled = true
     }
-  }, [resolved])
+  }, [loadDashboard])
+
+  const [refreshing, setRefreshing] = useState(false)
+
+  const refreshDashboard = useCallback(async () => {
+    setRefreshing(true)
+    setError('')
+    try {
+      await loadDashboard()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [loadDashboard])
 
   const kpiDefs = useMemo(
     () => [
@@ -244,6 +261,7 @@ export default function Dashboard() {
 
           {/* Date range dropdown */}
           <div className="flex items-center gap-2">
+            <RefreshButton onClick={refreshDashboard} loading={refreshing} compact />
             {period === 'custom' && (
               <div className="flex items-center gap-1.5">
                 <input

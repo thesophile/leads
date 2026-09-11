@@ -4,6 +4,7 @@ import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import PasswordInput from '../../components/PasswordInput'
 import Spinner from '../../components/Spinner'
+import RefreshButton from '../../components/RefreshButton'
 
 function PlusCircleIcon() {
   return (
@@ -525,17 +526,20 @@ export default function Admins() {
                   Admins <span className="text-xs font-medium text-slate-400">({filteredAdmins.length})</span>
                 </h2>
               </div>
-              <div className="relative sm:w-64">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
-                  <SearchIcon />
-                </span>
-                <input
-                  type="text"
-                  placeholder="Search admins..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
+              <div className="flex items-center gap-2">
+                <RefreshButton onClick={refreshData} loading={loading} compact title="Refresh admins" />
+                <div className="relative sm:w-64">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search admins..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
               </div>
             </div>
 

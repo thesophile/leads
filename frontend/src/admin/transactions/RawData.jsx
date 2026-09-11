@@ -5,6 +5,7 @@ import Layout from '../../Layout/Layout'
 import { can } from '../../utils/permissions'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
+import RefreshButton from '../../components/RefreshButton'
 import useDirty from '../../utils/useDirty'
 
 function PlusIcon() {
@@ -848,6 +849,7 @@ async function handleBulkImport(e) {
 
           {/* Action Buttons: Import Excel/CSV + Add Raw Data */}
           <div className="flex items-center gap-2.5">
+            <RefreshButton onClick={refreshData} loading={isLoading} />
             {/* Import Excel / CSV Button */}
             <button
               type="button"

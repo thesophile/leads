@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
+import RefreshButton from '../../components/RefreshButton'
 import useDirty from '../../utils/useDirty'
 import { localISO } from '../../utils/date'
 import { api } from '../../api/client'
@@ -297,25 +298,10 @@ export default function ClientDetails() {
 
   // Load real client detail records from the backend.
   useEffect(() => {
-    let active = true
-    api
-      .get('/transactions/client-details/')
-      .then((data) => {
-        if (!active) return
-        setRecords(Array.isArray(data) ? data : [])
-        setLoadError('')
-      })
-      .catch((err) => {
-        if (!active) return
-        setLoadError(err.message || 'Could not load client details.')
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [])
+    ;(async () => {
+      await loadRecords()
+    })()
+  }, [loadRecords])
 
   const filteredRecords = useMemo(() => {
     const activeTabDef = TAB_RAIL.find((t) => t.id === activeTab)
@@ -589,6 +575,7 @@ export default function ClientDetails() {
           </div>
 
           <div className="flex items-center gap-2">
+            <RefreshButton onClick={() => { setLoading(true); setLoadError(''); loadRecords() }} loading={loading} />
             <button
               type="button"
               onClick={openAddModal}

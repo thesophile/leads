@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
+import RefreshButton from '../../components/RefreshButton'
 
 function toDmyDate(value) {
   if (!value) return ''
@@ -41,46 +42,27 @@ export default function RawDataRegister() {
   const [location, setLocation] = useState('All Locations')
   const [searchQuery, setSearchQuery] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchCategories() {
-      try {
-        const data = await api.get('/master/categories/')
-        if (!cancelled) setCategoryOptions(data)
-      } catch {
-        // Report filters can fall back to an empty category list.
-      }
-    }
-
-    fetchCategories()
-    return () => {
-      cancelled = true
+  // Load the real raw leads (status=raw) and the category options.
+  const loadRegister = useCallback(async () => {
+    try {
+      const [data, categories] = await Promise.all([
+        api.get('/transactions/leads/?status=raw'),
+        api.get('/master/categories/').catch(() => null),
+      ])
+      if (categories) setCategoryOptions(categories)
+      setRegisterRows((Array.isArray(data) ? data : []).map(leadToRow))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 
-  // Load the real raw leads (status=raw) from the database.
   useEffect(() => {
-    let cancelled = false
-
-    async function fetchRawLeads() {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await api.get('/transactions/leads/?status=raw')
-        if (!cancelled) setRegisterRows((Array.isArray(data) ? data : []).map(leadToRow))
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    fetchRawLeads()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    ;(async () => {
+      await loadRegister()
+    })()
+  }, [loadRegister])
 
   // Staff and location choices are derived from the actual records so the
   // filters always match what the current user is allowed to see.
@@ -197,6 +179,7 @@ export default function RawDataRegister() {
 
             {/* Right: Export PDF Button + Search Box */}
             <div className="flex items-center gap-2">
+              <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadRegister() }} loading={isLoading} />
               <button
                 type="button"
                 onClick={exportPdf}

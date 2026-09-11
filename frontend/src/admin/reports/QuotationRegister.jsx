@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
+import RefreshButton from '../../components/RefreshButton'
 
 function toDmyDate(value) {
   if (!value) return ''
@@ -45,46 +46,27 @@ export default function QuotationRegister() {
   const [location, setLocation] = useState('All Locations')
   const [searchQuery, setSearchQuery] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchCategories() {
-      try {
-        const data = await api.get('/master/categories/')
-        if (!cancelled) setCategoryOptions(data)
-      } catch {
-        // Report filters can fall back to an empty category list.
-      }
-    }
-
-    fetchCategories()
-    return () => {
-      cancelled = true
+  // Load the real quotation-stage leads (status=quotation) and category options.
+  const loadRegister = useCallback(async () => {
+    try {
+      const [data, categories] = await Promise.all([
+        api.get('/transactions/leads/?status=quotation'),
+        api.get('/master/categories/').catch(() => null),
+      ])
+      if (categories) setCategoryOptions(categories)
+      setRegisterRows((Array.isArray(data) ? data : []).map(leadToRow))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 
-  // Load the real quotation-stage leads (status=quotation) from the database.
   useEffect(() => {
-    let cancelled = false
-
-    async function fetchQuotationLeads() {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await api.get('/transactions/leads/?status=quotation')
-        if (!cancelled) setRegisterRows((Array.isArray(data) ? data : []).map(leadToRow))
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    fetchQuotationLeads()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    ;(async () => {
+      await loadRegister()
+    })()
+  }, [loadRegister])
 
   // Staff and location choices are derived from the actual records so the
   // filters always match what the current user is allowed to see.
@@ -210,6 +192,7 @@ export default function QuotationRegister() {
 
             {/* Right: Export PDF Button + Search Box */}
             <div className="flex items-center gap-2">
+              <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadRegister() }} loading={isLoading} />
               <button
                 type="button"
                 onClick={exportPdf}

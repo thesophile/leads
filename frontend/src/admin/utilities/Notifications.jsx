@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import Spinner from '../../components/Spinner'
+import RefreshButton from '../../components/RefreshButton'
 
 const EMPTY = []
 
@@ -122,23 +123,33 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true)
 const [markingAll, setMarkingAll] = useState(false)
 const [markingIds, setMarkingIds] = useState([])
+const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const data = await api.get('/notifications/')
-        if (!cancelled) setNotifications(Array.isArray(data) ? data : [])
-      } catch {
-        if (!cancelled) setNotifications([])
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
+  const loadNotifications = useCallback(async () => {
+    try {
+      const data = await api.get('/notifications/')
+      setNotifications(Array.isArray(data) ? data : [])
+    } catch {
+      setNotifications([])
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      await loadNotifications()
+    })()
+  }, [loadNotifications])
+
+  const refreshNotifications = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await loadNotifications()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [loadNotifications])
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications])
 
@@ -196,15 +207,18 @@ const [markingIds, setMarkingIds] = useState([])
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={markAllRead}
-            disabled={unreadCount === 0 || markingAll || markingIds.length > 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {markingAll ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon />}
-            {markingAll ? 'Marking…' : 'Mark all as read'}
-          </button>
+          <div className="flex items-center gap-2">
+            <RefreshButton onClick={refreshNotifications} loading={refreshing} />
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={unreadCount === 0 || markingAll || markingIds.length > 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {markingAll ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon />}
+              {markingAll ? 'Marking…' : 'Mark all as read'}
+            </button>
+          </div>
         </div>
 
         <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200/60">
