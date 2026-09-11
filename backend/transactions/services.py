@@ -937,8 +937,8 @@ _CONFIRMATION_EMAIL_TEMPLATE = """
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td style="vertical-align:middle;">
-                    <span style="color:#ffffff; font-size:16px; font-weight:bold;">Order Confirmed</span>
-                    <div style="color:#94a3b8; font-size:11px; margin-top:2px;">Order {order_number}</div>
+                    <span style="color:#ffffff; font-size:16px; font-weight:bold;">Proposal Accepted</span>
+                    <div style="color:#94a3b8; font-size:11px; margin-top:2px;">Ref {ref_no}</div>
                   </td>
                   <td align="right" style="vertical-align:middle;">
                     {logo_html}
@@ -950,31 +950,35 @@ _CONFIRMATION_EMAIL_TEMPLATE = """
           <tr>
             <td style="padding:24px 28px;">
               <p style="color:#0f172a; font-size:14px; margin:0 0 12px 0; line-height:1.5;">
-                Dear {customer},
+                {greeting}
               </p>
               <p style="color:#334155; font-size:13px; margin:0 0 18px 0; line-height:1.6;">
-                Thank you for accepting our proposal. We&#8217;re pleased to confirm that your
-                order has been successfully placed.
+                Thank you for accepting our proposal. We are excited about the opportunity
+                to partner with your team and look forward to delivering exceptional results
+                for this engagement.
               </p>
 
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:18px;">
                 <tr>
                   <td style="padding:14px 18px;">
-                    <div style="color:#0f172a; font-size:11px; font-weight:bold; text-transform:uppercase; margin-bottom:8px;">Order Details</div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                      <span style="color:#0f172a; font-size:11px; font-weight:bold; text-transform:uppercase;">Engagement Summary</span>
+                      <span style="background-color:#16a34a; color:#ffffff; font-size:11px; font-weight:bold; text-transform:uppercase; padding:4px 12px; border-radius:999px; letter-spacing:0.5px;">Approved</span>
+                    </div>
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td style="width:50%; padding:4px 0;">
-                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Order Number</span>
-                          <div style="color:#0f172a; font-size:14px; font-weight:bold;">{order_number}</div>
+                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Project / Proposal Ref</span>
+                          <div style="color:#0f172a; font-size:14px; font-weight:bold;">{ref_no}</div>
                         </td>
                         <td style="width:50%; padding:4px 0;">
-                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Order Date</span>
-                          <div style="color:#0f172a; font-size:14px; font-weight:bold;">{order_date}</div>
+                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Confirmation Date</span>
+                          <div style="color:#0f172a; font-size:14px; font-weight:bold;">{confirmation_date}</div>
                         </td>
                       </tr>
                       <tr>
                         <td colspan="2" style="border-top:1px solid #e2e8f0; padding:8px 0 2px 0;">
-                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Total Amount</span>
+                          <span style="color:#64748b; font-size:10px; text-transform:uppercase;">Agreed Value</span>
                           <div style="color:#0f172a; font-size:18px; font-weight:bold;">{order_total}</div>
                         </td>
                       </tr>
@@ -983,19 +987,48 @@ _CONFIRMATION_EMAIL_TEMPLATE = """
                 </tr>
               </table>
 
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:18px;">
+                <tr>
+                  <td>
+                    <div style="color:#0f172a; font-size:12px; font-weight:bold; margin:0 0 10px 0;">Next Steps</div>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="vertical-align:top; width:22px;">
+                          <span style="color:#16a34a; font-size:14px; font-weight:bold;">&#8226;</span>
+                        </td>
+                        <td style="padding:0 0 12px 6px;">
+                          <span style="color:#0f172a; font-size:13px; font-weight:bold;">Invoice &amp; Payment Schedule:</span>
+                          <span style="color:#334155; font-size:13px; line-height:1.6;"> Our finance team will share the formal invoice along with the milestone payment schedule shortly.</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="vertical-align:top; width:22px;">
+                          <span style="color:#16a34a; font-size:14px; font-weight:bold;">&#8226;</span>
+                        </td>
+                        <td style="padding:0 0 0 6px;">
+                          <span style="color:#0f172a; font-size:13px; font-weight:bold;">Project Onboarding:</span>
+                          <span style="color:#334155; font-size:13px; line-height:1.6;"> Our dedicated project lead will connect with you within 24&#8211;48 hours to schedule the initial kickoff meeting and finalize the delivery roadmap.</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
               <p style="color:#334155; font-size:13px; margin:0 0 18px 0; line-height:1.6;">
-                Our team will now proceed with the next steps and keep you updated regarding your
-                order. Any applicable payment details or instructions will be shared separately.
+                If you have any immediate queries or require further details, please feel
+                free to reach out to us.
               </p>
 
               <p style="color:#334155; font-size:13px; margin:0 0 18px 0; line-height:1.6;">
-                Thank you for choosing {company_name}. We look forward to working with you.
+                Thank you once again for your trust in {company_name}!
               </p>
 
               <p style="color:#334155; font-size:13px; margin:0; line-height:1.6;">
-                Best regards,<br/>
-                <strong>{company_name}</strong><br/>
-                {company_contact}
+                Warm regards,<br/>
+                For <strong>{company_name}</strong><br/><br/>
+                Authorised Signatory<br/>
+                {company_signature_contact}
               </p>
             </td>
           </tr>
@@ -1034,8 +1067,7 @@ def build_quotation_accepted_email(quotation, order=None):
             logo_html = ''
 
     source = order if order is not None else quotation
-    order_number = str(getattr(source, 'id', None) or quotation.id)
-    order_date = str(getattr(source, 'date', None) or quotation.date or '')
+    ref_no = str(getattr(order, 'proposal_no', None) or source.id or quotation.id)
 
     currency = currency_label(getattr(source, 'currency', None) or quotation.currency)
     raw_total = (
@@ -1046,6 +1078,28 @@ def build_quotation_accepted_email(quotation, order=None):
         or '0'
     )
     order_total = f'{currency} {raw_total}'.strip()
+
+    confirmation_date = ''
+    if getattr(quotation, 'client_responded_at', None):
+        try:
+            confirmation_date = quotation.client_responded_at.strftime('%d-%b-%Y')
+        except (AttributeError, ValueError):
+            confirmation_date = ''
+    if not confirmation_date:
+        confirmation_date = str(getattr(source, 'date', None) or quotation.date or '')
+
+    customer = str(quotation.customer or '').strip()
+    client_company = str(
+        getattr(source, 'company', None) or quotation.company or ''
+    ).strip()
+    if customer:
+        greeting = f'Dear {customer},'
+    elif client_company:
+        greeting = f'Dear {client_company} Team,'
+    else:
+        greeting = 'Dear Sir/Madam,'
+    if not client_company:
+        client_company = quotation.id or 'Proposal'
 
     company_name = str(
         getattr(company, 'name', None) or quotation.company or ''
@@ -1061,35 +1115,51 @@ def build_quotation_accepted_email(quotation, order=None):
             contact_parts.append(str(company.website))
     company_contact = ' | '.join(contact_parts)
 
+    signature_parts = []
+    if company:
+        if company.email:
+            signature_parts.append(str(company.email))
+        if company.phone:
+            signature_parts.append(str(company.phone))
+    company_signature_contact = ' | '.join(signature_parts)
+
     footer_parts = [company_name] + contact_parts
     footer = ' | '.join(footer_parts) or '&mdash; LEADS'
 
-    subject = f'Order Confirmed — {order_number}'
+    subject = f'Confirmation of Proposal Acceptance {client_company} – Ref: {ref_no}'
     html_body = _CONFIRMATION_EMAIL_TEMPLATE.format(
-        order_number=order_number,
+        ref_no=ref_no,
         logo_html=logo_html,
-        customer=quotation.customer or 'Customer',
-        order_date=order_date,
+        greeting=greeting,
+        confirmation_date=confirmation_date,
         order_total=order_total,
         company_name=company_name,
-        company_contact=company_contact,
+        company_signature_contact=company_signature_contact,
         footer=footer,
     )
     text_body = (
-        f'Dear {quotation.customer or "Customer"},\n\n'
-        'Thank you for accepting our proposal. We are pleased to confirm that your '
-        'order has been successfully placed.\n\n'
-        'Order Details\n'
-        f'Order Number: {order_number}\n'
-        f'Order Date: {order_date}\n'
-        f'Total Amount: {order_total}\n\n'
-        'Our team will now proceed with the next steps and keep you updated regarding '
-        'your order. Any applicable payment details or instructions will be shared '
-        'separately.\n\n'
-        f'Thank you for choosing {company_name}. We look forward to working with you.\n\n'
-        'Best regards,\n'
-        f'{company_name}\n'
-        f'{company_contact}'
+        f'{greeting}\n\n'
+        'Thank you for accepting our proposal. We are excited about the opportunity to '
+        'partner with your team and look forward to delivering exceptional results for '
+        'this engagement.\n\n'
+        'Engagement Summary\n'
+        f'Project / Proposal Ref: {ref_no}\n'
+        f'Confirmation Date: {confirmation_date}\n'
+        f'Agreed Value: {order_total}\n'
+        'Status: APPROVED\n\n'
+        'Next Steps\n'
+        '- Invoice & Payment Schedule: Our finance team will share the formal invoice '
+        'along with the milestone payment schedule shortly.\n'
+        '- Project Onboarding: Our dedicated project lead will connect with you within '
+        '24-48 hours to schedule the initial kickoff meeting and finalize the delivery '
+        'roadmap.\n\n'
+        'If you have any immediate queries or require further details, please feel free '
+        'to reach out to us.\n\n'
+        f'Thank you once again for your trust in {company_name}!\n\n'
+        'Warm regards,\n'
+        f'For {company_name}\n\n'
+        'Authorised Signatory\n'
+        f'{company_signature_contact}'
     )
 
     email = EmailMultiAlternatives(
