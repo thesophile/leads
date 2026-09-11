@@ -142,7 +142,7 @@ QUOTE_STATUSES = ['Not Sent', 'Pending Approval', 'Approved', 'Sent to Client', 
 QUOTE_WEIGHTS = [30, 25, 20, 15, 10]
 CALL_STATUSES = [
     'Interested', 'Follow Up', 'Considering', 'Not Reachable',
-    'Busy', 'Not Interested', 'For Future', 'Quotation Requested',
+    'Busy', 'Not Interested', 'For Future',
 ]
 CLIENT_STATUSES = [
     ClientDetail.STATUS_PENDING,
