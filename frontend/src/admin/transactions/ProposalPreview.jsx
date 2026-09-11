@@ -407,6 +407,7 @@ export default function ProposalPreview() {
         discount: p.discount || '',
         net: p.netAmount || '',
         termsHtml: p.companyTerms || '',
+        termsConditions: p.termsConditions || '',
         proposalSummaryHtml: p.proposalScope || '',
         proposalInDetailsHtml: p.termsConditions || '',
         status: p.status || '',
@@ -426,18 +427,18 @@ export default function ProposalPreview() {
     return null
   }, [proposal])
 
-  const isSent = proposalData.status === 'Pending Approval'
+  const isSent = proposalData?.status === 'Pending Approval'
 
-  const myApproval = (proposalData.approvals || []).find(
+  const myApproval = (proposalData?.approvals || []).find(
     (a) => user != null && Number(a.user) === Number(user.id)
   ) || null
   const canApproveNow =
     canApprove &&
-    proposalData.status === 'Pending Approval' &&
+    proposalData?.status === 'Pending Approval' &&
     myApproval &&
     myApproval.status === 'Pending'
 
-  const approvals = proposalData.approvals || []
+  const approvals = proposalData?.approvals || []
   const approvalsApproved = approvalCountBy(approvals, 'Approved')
 
 const approvedByRef = useRef(null)
@@ -737,11 +738,19 @@ const approvedByRef = useRef(null)
                       className="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
                       style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
-                      {proposalData.termsConditions.map((t, idx) => (
-                        <div key={idx}>
-                          <span className="font-bold text-slate-900">{t.title}</span> {t.content}
-                        </div>
-                      ))}
+                      {Array.isArray(proposalData.termsConditions) ? (
+                        proposalData.termsConditions.map((t, idx) => (
+                          <div key={idx}>
+                            <span className="font-bold text-slate-900">{t.title}</span> {t.content}
+                          </div>
+                        ))
+                      ) : (
+                        proposalData.termsConditions ? (
+                          <div
+                            dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.termsConditions) }}
+                          />
+                        ) : null
+                      )}
                     </div>
                   )}
                   {termsPaged.part2Html ? (
