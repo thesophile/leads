@@ -26,8 +26,8 @@ const STAFF_LIST = [
 
 const STATUS_LIST = [
   'All Status',
-  'Pending',
-  'Sent to Client',
+  'Sent',
+  'Not Sent',
 ]
 
 const QUILL_MODULES = {
@@ -374,7 +374,7 @@ export default function ManageOrder() {
       setOrdersList((prev) =>
         prev.map((item) => (item.id === orderId ? { ...item, ...updated } : item))
       )
-      const label = nextStatus === 'Pending' ? 'Pending (Not Sent)' : nextStatus
+      const label = nextStatus === 'Sent to Client' ? 'Sent' : 'Not Sent'
       showToast(`Order ${orderId} marked as ${label}.`)
     } catch (err) {
       showToast(err.message || 'Could not update order status.')
@@ -409,7 +409,11 @@ export default function ManageOrder() {
         selectedStaff === 'All Staff' || item.staff === selectedStaff || item.bdm === selectedStaff || item.proposalBy === selectedStaff
 
       const matchesStatus =
-        selectedStatus === 'All Status' || item.status === selectedStatus
+        selectedStatus === 'All Status'
+          ? true
+          : selectedStatus === 'Sent'
+            ? item.status === 'Sent to Client'
+            : item.status !== 'Sent to Client'
 
       const matchesSearch =
         item.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -424,8 +428,8 @@ export default function ManageOrder() {
 
   // Metric counts
   const totalOrdersCount = activeOrders.length
-  const pendingCount = useMemo(
-    () => activeOrders.filter((o) => o.status === 'Pending').length,
+  const notSentCount = useMemo(
+    () => activeOrders.filter((o) => o.status !== 'Sent to Client').length,
     [activeOrders]
   )
   const sentCount = useMemo(
@@ -467,8 +471,8 @@ export default function ManageOrder() {
                 <span className="text-xs font-bold text-slate-900 ml-1">{totalOrdersCount}</span>
               </div>
               <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Pending</span>
-                <span className="text-xs font-bold text-amber-700 ml-1">{pendingCount}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Not Sent</span>
+                <span className="text-xs font-bold text-amber-700 ml-1">{notSentCount}</span>
               </div>
               <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Sent</span>
@@ -614,23 +618,19 @@ export default function ManageOrder() {
                         <td className="py-1 pr-3">
                           <span
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold ${
-                              order.status === 'Pending'
-                                ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                : order.status === 'Sent to Client'
-                                ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                                : 'border-slate-200 bg-slate-50 text-slate-700'
+                              order.status === 'Sent to Client'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-amber-200 bg-amber-50 text-amber-700'
                             }`}
                           >
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${
-                                order.status === 'Pending'
-                                  ? 'bg-amber-500'
-                                  : order.status === 'Sent to Client'
-                                  ? 'bg-indigo-500'
-                                  : 'bg-slate-400'
+                                order.status === 'Sent to Client'
+                                  ? 'bg-emerald-500'
+                                  : 'bg-amber-500'
                               }`}
                             />
-                            <span>{order.status === 'Pending' ? 'Pending (Not Sent)' : order.status}</span>
+                            <span>{order.status === 'Sent to Client' ? 'Sent' : 'Not Sent'}</span>
                           </span>
                         </td>
 
@@ -722,18 +722,43 @@ export default function ManageOrder() {
 
               <div className="my-1 border-t border-slate-100" />
 
-              <button
-                type="button"
-                onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Pending', e)}
-                disabled={statusPending !== null}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {statusPending === activeMenuOrder.id ? (
-                  <Spinner className="h-3 w-3" />
-                ) : (
-                  <span>Mark as Pending (Not Sent)</span>
-                )}
-              </button>
+              {activeMenuOrder.status === 'Sent to Client' ? (
+                <button
+                  type="button"
+                  onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Pending', e)}
+                  disabled={statusPending !== null}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {statusPending === activeMenuOrder.id ? (
+                    <Spinner className="h-3 w-3" />
+                  ) : (
+                    <>
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                          statusPending === activeMenuOrder.id ? '' : 'bg-amber-500'
+                        }`}
+                      />
+                      <span>Mark as Not Sent</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Sent to Client', e)}
+                  disabled={statusPending !== null}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {statusPending === activeMenuOrder.id ? (
+                    <Spinner className="h-3 w-3" />
+                  ) : (
+                    <>
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                      <span>Mark as Sent</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
             </>
           )}
