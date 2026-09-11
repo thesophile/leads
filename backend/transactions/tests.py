@@ -1321,7 +1321,7 @@ class OrderSendToClientTests(APITestCase):
         self.assertEqual(order.status, 'Sent to Client')
         self.assertTrue(order.client_token)
 
-    def test_public_page_and_response_flow(self):
+    def test_public_page_is_read_only(self):
         self.client.force_authenticate(self.manager)
         self.client.post(self.send_url, {'channels': ['copy'], 'origin': 'https://app.test'}, format='json')
         token = Order.objects.get(id=self.order.id).client_token
@@ -1336,47 +1336,85 @@ class OrderSendToClientTests(APITestCase):
             self.assertEqual(detail.data['id'], self.order.id)
             self.assertEqual(detail.data['clientStatus'], 'Pending')
 
-        # Accept the order.
+        # The order form is shared for reference only: the client never accepts
+        # it again, so no respond endpoint exists.
         self.client.force_authenticate(None)
         resp = self.client.post(
             f'/api/transactions/public/orders/{token}/respond/',
             {'decision': 'accept', 'message': 'Looks good, proceed'},
             format='json',
         )
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['clientStatus'], 'Accepted')
-        self.assertEqual(resp.data['status'], 'Accepted')
-        order = Order.objects.get(id=self.order.id)
-        self.assertEqual(order.status, 'Accepted')
-        self.assertEqual(order.client_message, 'Looks good, proceed')
-        self.assertIsNotNone(order.client_responded_at)
-        # Token is revoked: link is gone and re-respond is blocked.
-        self.assertEqual(order.client_token, '')
-
-        self.client.force_authenticate(None)
-        resp = self.client.post(
-            f'/api/transactions/public/orders/{token}/respond/',
-            {'decision': 'accept', 'message': ''},
-            format='json',
-        )
-        # The single-use link is revoked: it no longer resolves.
-        self.assertEqual(resp.status_code, 404)
-        self.client.force_authenticate(None)
-        resp = self.client.get(f'/api/transactions/public/orders/{token}/')
         self.assertEqual(resp.status_code, 404)
 
-    def test_public_response_can_decline(self):
+    def test_order_pdf_download(self):
         self.client.force_authenticate(self.manager)
-        self.client.post(self.send_url, {'channels': ['whatsapp'], 'origin': 'https://app.test'}, format='json')
+        resp = self.client.get(f'/api/transactions/orders/{self.order.id}/pdf/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertIn('attachment', resp['Content-Disposition'])
+        self.assertTrue(len(resp.content) > 0)
+
+    def test_public_order_pdf_download(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post(self.send_url, {'channels': ['copy'], 'origin': 'https://app.test'}, format='json')
         token = Order.objects.get(id=self.order.id).client_token
         self.client.force_authenticate(None)
+        resp = self.client.get(f'/api/transactions/public/orders/{token}/pdf/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+
+    def test_email_with_additional_recipients_and_cc(self):
+        self.client.force_authenticate(self.manager)
+        sent = {}
+
+        import types
+
+        def fake_send(fail_silently=True):
+            sent['called'] = True
+            return 1
+
+        fake_email = types.SimpleNamespace(send=fake_send)
+        with patch('transactions.views.build_order_client_email', return_value=fake_email) as builder:
+            resp = self.client.post(
+                self.send_url,
+                {
+                    'channels': ['email'],
+                    'origin': 'https://app.test',
+                    'recipients': ['client@order.com', 'finance@order.com'],
+                    'cc': ['manager@order.com'],
+                },
+                format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(sent.get('called'))
+        self.assertEqual(builder.call_args.kwargs['recipients'], ['client@order.com', 'finance@order.com'])
+        self.assertEqual(builder.call_args.kwargs['cc'], ['manager@order.com'])
+
+    def test_email_works_without_client_address_when_recipient_given(self):
+        Order.objects.filter(id=self.order.id).update(email='')
+        self.client.force_authenticate(self.manager)
         resp = self.client.post(
-            f'/api/transactions/public/orders/{token}/respond/',
-            {'decision': 'decline', 'message': ''},
+            self.send_url,
+            {
+                'channels': ['email'],
+                'origin': 'https://app.test',
+                'recipients': ['other@example.com'],
+            },
             format='json',
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(Order.objects.get(id=self.order.id).status, 'Rejected')
+        self.assertEqual(resp.data['email_sent'], True)
+        self.assertEqual(Order.objects.get(id=self.order.id).status, 'Sent to Client')
+
+    def test_email_requires_recipient_when_no_client_address(self):
+        Order.objects.filter(id=self.order.id).update(email='')
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            self.send_url,
+            {'channels': ['email'], 'origin': 'https://app.test'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
 
     def test_invalid_and_expired_links_are_rejected(self):
         from datetime import timedelta
@@ -1422,48 +1460,19 @@ class ClientDetailFlowTests(APITestCase):
             proposal_by='Staff CD', staff='Staff CD', status='Pending',
         )
 
-    def test_client_accept_creates_client_detail_and_moves_lead(self):
-        self.order.client_token = 'abc123'
-        self.order.status = 'Sent to Client'
-        self.order.save()
-        resp = self.client.post(
-            '/api/transactions/public/orders/abc123/respond/',
-            {'decision': 'accept'}, format='json',
-        )
-        self.assertEqual(resp.status_code, 200)
-        record = ClientDetail.objects.filter(order_no=self.order.id).first()
-        self.assertIsNotNone(record)
-        self.assertEqual(record.company, 'Client Co')
-        self.assertEqual(record.client_name, 'Client Person')
-        self.assertEqual(record.status, 'Details Pending')
-        self.assertEqual(record.tenant, self.company)
-        self.lead.refresh_from_db()
-        self.assertEqual(self.lead.status, Lead.STATUS_CLIENT)
-
-    def test_client_decline_does_not_create_client_detail(self):
-        self.order.client_token = 'abc456'
-        self.order.status = 'Sent to Client'
-        self.order.save()
-        self.client.post(
-            '/api/transactions/public/orders/abc456/respond/',
-            {'decision': 'decline'}, format='json',
-        )
-        self.assertFalse(ClientDetail.objects.filter(order_no=self.order.id).exists())
-        self.lead.refresh_from_db()
-        self.assertEqual(self.lead.status, Lead.STATUS_ORDER)
-
-    def test_admin_mark_accepted_creates_client_detail(self):
-        self.client.force_authenticate(self.manager)
-        resp = self.client.put(
-            f'/api/transactions/orders/{self.order.id}/',
-            {'status': 'Accepted'}, format='json',
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['status'], 'Accepted')
-        record = ClientDetail.objects.filter(order_no=self.order.id).first()
-        self.assertIsNotNone(record)
-        self.lead.refresh_from_db()
-        self.assertEqual(self.lead.status, Lead.STATUS_CLIENT)
+    def test_client_detail_auto_created_from_order_is_idempotent(self):
+        # The ClientDetail row is created automatically when a quotation is
+        # accepted (asserted in QuotationAcceptanceConfirmationTests). It never
+        # depends on a separate order "accept" step.
+        from transactions.services import create_client_detail_from_order
+        first = create_client_detail_from_order(self.order)
+        self.assertIsNotNone(first)
+        self.assertEqual(first.company, 'Client Co')
+        self.assertEqual(first.client_name, 'Client Person')
+        self.assertEqual(first.status, 'Details Pending')
+        second = create_client_detail_from_order(self.order)
+        self.assertEqual(second.id, first.id)
+        self.assertEqual(ClientDetail.objects.filter(order_no=self.order.id).count(), 1)
 
     def test_client_details_list_is_scoped(self):
         other = make_company('OtherClientCo')
@@ -1924,6 +1933,28 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(sent.get('called'))
         self.assertTrue(builder.called)
+
+    def test_accept_creates_order_and_client_detail(self):
+        from unittest.mock import patch
+
+        self.client.force_authenticate(None)
+        with patch('transactions.views.build_quotation_accepted_email') as builder:
+            resp = self.client.post(
+                '/api/transactions/public/quotations/tok-confirm/respond/',
+                {'decision': 'accept', 'message': ''}, format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        order = Order.objects.filter(lead_id=self.lead.id).first()
+        self.assertIsNotNone(order)
+        self.assertEqual(order.email, 'client@confirm.com')
+        # The confirmed deal is recorded in Client Details immediately; no
+        # separate order "accept" step is required.
+        record = ClientDetail.objects.filter(order_no=order.id).first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.company, 'Confirm Ltd')
+        self.assertEqual(record.client_name, 'Confirm Person')
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, Lead.STATUS_ORDER)
 
     def test_confirmation_email_has_no_attachment(self):
         from transactions.services import build_quotation_accepted_email

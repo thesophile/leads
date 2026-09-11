@@ -170,4 +170,31 @@ export const api = {
   put: (path, body, opts) => request(path, { ...opts, method: 'PUT', body }),
   patch: (path, body, opts) => request(path, { ...opts, method: 'PATCH', body }),
   del: (path, opts) => request(path, { ...opts, method: 'DELETE' }),
+  download: async (path, fallbackName = 'download') => {
+    const url = path.startsWith('http') ? path : `${API_BASE}${path}`
+    const { access } = getStoredTokens()
+    const headers = access ? { Authorization: `Bearer ${access}` } : {}
+    const res = await fetch(url, { headers })
+    if (!res.ok) {
+      let message = `Request failed (${res.status})`
+      try {
+        message = extractMessage(await res.json()) || message
+      } catch {
+        // keep the default message for non-JSON failures
+      }
+      throw new ApiError(message, res.status)
+    }
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const disposition = res.headers.get('Content-Disposition') || ''
+    const fileMatch = disposition.match(/filename="?([^";]+)"?/i)
+    link.href = objectUrl
+    link.download = fileMatch ? fileMatch[1] : fallbackName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(objectUrl)
+    return true
+  },
 }

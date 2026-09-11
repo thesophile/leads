@@ -28,7 +28,6 @@ const STATUS_LIST = [
   'All Status',
   'Pending',
   'Sent to Client',
-  'Rejected',
 ]
 
 const QUILL_MODULES = {
@@ -151,7 +150,6 @@ export default function ManageOrder() {
   const [discardOpen, setDiscardOpen] = useState(false)
   const [savingOrder, setSavingOrder] = useState(false)
   const [statusPending, setStatusPending] = useState(null)
-  const [markingAccepted, setMarkingAccepted] = useState(false)
 
   const { dirty, reset } = useDirty(
     orderModalOpen,
@@ -366,7 +364,7 @@ export default function ManageOrder() {
   async function handleUpdateOrderStatus(orderId, nextStatus, e) {
     e.stopPropagation()
     setOpenDropdownId(null)
-    if (statusPending || markingAccepted) return
+    if (statusPending) return
     setStatusPending(orderId)
     try {
       const updated = await api.put(
@@ -382,26 +380,6 @@ export default function ManageOrder() {
       showToast(err.message || 'Could not update order status.')
     } finally {
       setStatusPending(null)
-    }
-  }
-
-  async function handleMarkAccepted(order) {
-    if (statusPending || markingAccepted) return
-    setOpenDropdownId(null)
-    setMarkingAccepted(true)
-    try {
-      const updated = await api.put(
-        `/transactions/orders/${encodeURIComponent(order.id)}/`,
-        { status: 'Accepted' }
-      )
-      setOrdersList((prev) =>
-        prev.map((item) => (item.id === order.id ? { ...item, ...updated } : item))
-      )
-      navigate('/client-details', { state: { order: { ...order, ...updated } } })
-    } catch (err) {
-      showToast(err.message || 'Could not mark order as accepted.')
-    } finally {
-      setMarkingAccepted(false)
     }
   }
 
@@ -454,10 +432,6 @@ export default function ManageOrder() {
     () => activeOrders.filter((o) => o.status === 'Sent to Client').length,
     [activeOrders]
   )
-  const rejectedCount = useMemo(
-    () => activeOrders.filter((o) => o.status === 'Rejected').length,
-    [activeOrders]
-  )
 
   return (
     <Layout>
@@ -480,7 +454,8 @@ export default function ManageOrder() {
               Manage Orders
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Generate official Order Forms, send to client and track acceptance.
+              Generate official Order Forms and share them with the client or team by email,
+              link or WhatsApp.
             </p>
           </div>
 
@@ -498,10 +473,6 @@ export default function ManageOrder() {
               <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Sent</span>
                 <span className="text-xs font-bold text-indigo-700 ml-1">{sentCount}</span>
-              </div>
-              <div className="rounded-xl border border-red-200/80 bg-red-50/60 px-2.5 py-1.5 text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">Rejected</span>
-                <span className="text-xs font-bold text-red-700 ml-1">{rejectedCount}</span>
               </div>
             </div>
           </div>
@@ -647,9 +618,7 @@ export default function ManageOrder() {
                                 ? 'border-amber-200 bg-amber-50 text-amber-700'
                                 : order.status === 'Sent to Client'
                                 ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                                : order.status === 'Accepted'
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : 'border-red-200 bg-red-50 text-red-700'
+                                : 'border-slate-200 bg-slate-50 text-slate-700'
                             }`}
                           >
                             <span
@@ -658,9 +627,7 @@ export default function ManageOrder() {
                                   ? 'bg-amber-500'
                                   : order.status === 'Sent to Client'
                                   ? 'bg-indigo-500'
-                                  : order.status === 'Accepted'
-                                  ? 'bg-emerald-500'
-                                  : 'bg-red-500'
+                                  : 'bg-slate-400'
                               }`}
                             />
                             <span>{order.status === 'Pending' ? 'Pending (Not Sent)' : order.status}</span>
@@ -749,7 +716,7 @@ export default function ManageOrder() {
                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
                 >
                   <SendIcon className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>Send to Client</span>
+                  <span>Share Order Form</span>
                 </button>
               )}
 
@@ -758,43 +725,13 @@ export default function ManageOrder() {
               <button
                 type="button"
                 onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Pending', e)}
-                disabled={statusPending !== null || markingAccepted}
+                disabled={statusPending !== null}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {statusPending === activeMenuOrder.id ? (
                   <Spinner className="h-3 w-3" />
                 ) : (
                   <span>Mark as Pending (Not Sent)</span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setOpenDropdownId(null)
-                  handleMarkAccepted(activeMenuOrder)
-                }}
-                disabled={statusPending !== null || markingAccepted}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {markingAccepted ? (
-                  <Spinner className="h-3 w-3" />
-                ) : (
-                  <span>Mark Accepted</span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => handleUpdateOrderStatus(activeMenuOrder.id, 'Rejected', e)}
-                disabled={statusPending !== null || markingAccepted}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {statusPending === activeMenuOrder.id ? (
-                  <Spinner className="h-3 w-3" />
-                ) : (
-                  <span>Mark Rejected</span>
                 )}
               </button>
             </div>

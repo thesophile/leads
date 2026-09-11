@@ -38,21 +38,10 @@ function mapOrder(o) {
     termsSummaryHtml: o.termsSummaryHtml || '',
     legalTermsHtml: o.termsFullHtml || '',
     status: o.status || 'Pending',
-    clientStatus: o.clientStatus || '',
-    clientRespondedAt: o.clientRespondedAt || '',
     clientToken: o.clientToken || '',
     currency: o.currency || '',
     clientLink: clientOrderLink(o.clientToken),
     orderBarcode: orderBarcodeValue(o.id),
-  }
-}
-
-function formatStamp(iso) {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toISOString().replace('T', ' ').replace('Z', '')
-  } catch {
-    return iso
   }
 }
 
@@ -211,21 +200,15 @@ function PageFooter() {
   )
 }
 
-function SignatureCell({ title, statusTone, badge, company, stamp, children }) {
+function SignatureCell({ title, company, children }) {
   return (
     <div className="col-span-5 rounded-md border border-black bg-white p-2">
       <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
         {title}
       </div>
       <div className="mt-1 text-[11px]">
-        <p className={`font-bold flex items-center gap-1 ${statusTone}`}>
-          {badge}
-        </p>
         {company ? (
           <p className="text-slate-800 font-semibold mt-0.5">{company}</p>
-        ) : null}
-        {stamp ? (
-          <p className="text-slate-500 text-[9.5px] font-mono mt-0.5">{stamp}</p>
         ) : null}
         {children}
       </div>
@@ -234,41 +217,15 @@ function SignatureCell({ title, statusTone, badge, company, stamp, children }) {
 }
 
 function SignatureBlock({ order }) {
-  const accepted = order.clientStatus === 'Accepted'
-  const declined = order.clientStatus === 'Declined'
-  const decided = accepted || declined
-  const respondedStamp = order.clientRespondedAt
-    ? `Date: ${formatStamp(order.clientRespondedAt)}`
-    : ''
   return (
     <div className="grid grid-cols-12 gap-2">
-      <SignatureCell
-        title="Approved By"
-        statusTone={decided ? 'text-emerald-700' : 'text-slate-400'}
-        badge={decided ? <><span>Signed &amp; recorded</span><span className="text-sm">✔</span></> : <span>Awaiting signature</span>}
-        company={decided ? 'Programers International' : ''}
-        stamp={decided ? respondedStamp : ''}
-      >
-        {!decided && (
-          <p className="text-slate-400 text-[9.5px] mt-0.5">
-            Signature is recorded once the client responds to this order form.
-          </p>
-        )}
+      <SignatureCell title="Approved By" company="Programers International">
+        <p className="text-slate-400 text-[9.5px] mt-3">Authorised Signatory &middot; Signature &amp; date</p>
       </SignatureCell>
 
-      <SignatureCell
-        title="Accepted By"
-        statusTone={accepted ? 'text-emerald-700' : declined ? 'text-rose-600' : 'text-slate-400'}
-        badge={
-          accepted
-            ? <><span>Signature valid</span><span className="text-sm">✔</span></>
-            : declined
-              ? <span>Client declined this order</span>
-              : <span>Awaiting client acceptance</span>
-        }
-        company={accepted || declined ? order.customerCompany : ''}
-        stamp={decided ? respondedStamp : ''}
-      />
+      <SignatureCell title="Accepted By" company={order.customerCompany || 'Client'}>
+        <p className="text-slate-400 text-[9.5px] mt-3">Client&rsquo;s Authorised Signatory &middot; Signature &amp; date</p>
+      </SignatureCell>
 
       <div className="col-span-2 flex items-center justify-center rounded-md border border-black bg-white p-1">
         <div className="h-[72px] w-[72px]">
@@ -315,12 +272,29 @@ export default function OrderPreview() {
 
   const [sendClientOpen, setSendClientOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
+  const [downloading, setDownloading] = useState(false)
 
   function showToast(msg) {
     setToastMessage(msg)
     setTimeout(() => {
       setToastMessage('')
     }, 3000)
+  }
+
+  async function handleDownloadPdf() {
+    if (downloading) return
+    setDownloading(true)
+    try {
+      await api.download(
+        `/transactions/orders/${encodeURIComponent(orderData.id)}/pdf/`,
+        `${orderData.id}.pdf`
+      )
+      showToast('✓ Order form PDF downloaded.')
+    } catch (err) {
+      showToast(err.message || 'Could not download the PDF.')
+    } finally {
+      setDownloading(false)
+    }
   }
 
   const sendTarget = {
@@ -405,6 +379,15 @@ export default function OrderPreview() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-100 transition cursor-pointer active:scale-95 disabled:opacity-60"
+            >
+              <span>⬇</span>
+              <span>{downloading ? 'Preparing…' : 'Download PDF'}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => window.print()}
               className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition cursor-pointer active:scale-95"
             >
@@ -419,7 +402,7 @@ export default function OrderPreview() {
                 className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-95"
               >
                 <span>📤</span>
-                <span>Send to Client</span>
+                <span>Share Order Form</span>
               </button>
             )}
           </div>
@@ -533,42 +516,9 @@ export default function OrderPreview() {
                 </div>
               </div>
 
-              {/* Bottom 2-Box Row: Approved By | Accepted By */}
-              <div ref={approvedRowRef} className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                <SignatureCell
-                  title="Approved By"
-                  statusTone={orderData.clientStatus ? 'text-emerald-700' : 'text-slate-400'}
-                  badge={
-                    orderData.clientStatus
-                      ? <><span>Signed &amp; recorded</span><span className="text-sm">✔</span></>
-                      : <span>Awaiting signature</span>
-                  }
-                  company={orderData.clientStatus ? 'Programers International' : ''}
-                  stamp={orderData.clientRespondedAt ? `Date: ${formatStamp(orderData.clientRespondedAt)}` : ''}
-                />
-                <SignatureCell
-                  title="Accepted By"
-                  statusTone={
-                    orderData.clientStatus === 'Accepted'
-                      ? 'text-emerald-700'
-                      : orderData.clientStatus === 'Declined'
-                        ? 'text-rose-600'
-                        : 'text-slate-400'
-                  }
-                  badge={
-                    orderData.clientStatus === 'Accepted'
-                      ? <><span>Signature valid</span><span className="text-sm">✔</span></>
-                      : orderData.clientStatus === 'Declined'
-                        ? <span>Client declined this order</span>
-                        : <span>Awaiting client acceptance</span>
-                  }
-                  company={
-                    orderData.clientStatus === 'Accepted' || orderData.clientStatus === 'Declined'
-                      ? orderData.customerCompany
-                      : ''
-                  }
-                  stamp={orderData.clientRespondedAt ? `Date: ${formatStamp(orderData.clientRespondedAt)}` : ''}
-                />
+              {/* Bottom Signature Row */}
+              <div ref={approvedRowRef} className="mt-2 text-[11px]">
+                <SignatureBlock order={orderData} />
               </div>
             </div>
 

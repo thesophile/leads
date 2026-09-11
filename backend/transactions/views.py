@@ -10,6 +10,7 @@ from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import Count, Max, Q
 from django.db.models.functions import TruncDay, TruncMonth, TruncYear
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -47,6 +48,7 @@ from .services import (
     build_order_client_email,
     build_quotation_accepted_email,
     create_client_detail_from_order,
+    render_order_pdf,
 )
 
 User = get_user_model()
@@ -1697,6 +1699,10 @@ class ClientQuotationResponseView(APIView):
         if accepted:
             # Auto-create the Order form and move the lead to the Order stage.
             order = create_order_from_quotation(quotation)
+            # The deal is confirmed at this point: record it in Client Details
+            # immediately so the order form in Manage Orders is only ever shared,
+            # never used to ask the client for a second acceptance.
+            create_client_detail_from_order(order)
             lead = Lead.objects.filter(id=quotation.lead_id).first()
             if lead is not None and lead.status != Lead.STATUS_ORDER:
                 lead.status = Lead.STATUS_ORDER
@@ -2412,6 +2418,20 @@ class OrderSendToClientView(APIView):
     CLIENT_TOKEN_DAYS = 30
     ALLOWED_CHANNELS = ('email', 'whatsapp', 'copy')
 
+    @staticmethod
+    def _clean_addresses(raw):
+        """Normalize a recipients/cc payload into a de-duplicated email list."""
+        if isinstance(raw, str):
+            raw = raw.replace(';', ',').split(',')
+        if not isinstance(raw, (list, tuple)):
+            return []
+        cleaned = []
+        for value in raw:
+            address = str(value or '').strip()
+            if address and '@' in address and address not in cleaned:
+                cleaned.append(address)
+        return cleaned
+
     def post(self, request, pk):
         if not (request.user.is_superuser or can(request.user, 'order.edit')):
             return Response(
@@ -2435,9 +2455,11 @@ class OrderSendToClientView(APIView):
                 {'detail': 'Please select at least one way to send the order.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if 'email' in channels and not order.email:
+        recipients = self._clean_addresses(request.data.get('recipients'))
+        cc = self._clean_addresses(request.data.get('cc'))
+        if 'email' in channels and not recipients and not order.email:
             return Response(
-                {'detail': 'This order has no client email address to send to.'},
+                {'detail': 'Add at least one recipient email address to send to.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if 'whatsapp' in channels and not order.mobile:
@@ -2467,6 +2489,8 @@ class OrderSendToClientView(APIView):
                     order,
                     link,
                     message=(request.data.get('message') or '').strip(),
+                    recipients=recipients,
+                    cc=cc,
                 )
                 email_sent = email.send(fail_silently=False) > 0
             except Exception as exc:  # email failure is reported, never blocks the action
@@ -2491,11 +2515,41 @@ class OrderSendToClientView(APIView):
                 'mobile': order.mobile,
                 'email': order.email,
                 'channels': channels,
+                'recipients': recipients,
+                'cc': cc,
                 'email_sent': email_sent,
                 'email_error': email_error,
             },
             status=status.HTTP_200_OK,
         )
+
+
+class OrderPdfView(APIView):
+    """Download the official order form as a server-generated PDF."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not can(request.user, 'order.view'):
+            return Response(
+                {'detail': 'You do not have permission to view orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        order = scoped_orders(request.user).filter(pk=pk).first()
+        if order is None and not request.user.is_superuser:
+            order = Order.objects.filter(pk=pk, tenant=request.user.company).first()
+        if order is None:
+            return Response({'detail': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+        pdf = render_order_pdf(order)
+        if not pdf:
+            return Response(
+                {'detail': 'Could not generate the order form PDF.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        response = HttpResponse(pdf, content_type='application/pdf')
+        filename = str(order.id).replace('"', '') or 'order'
+        response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
+        return response
 
 
 def public_order_payload(order):
@@ -2561,6 +2615,36 @@ class ClientOrderDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(public_order_payload(order))
+
+
+class ClientOrderPdfView(APIView):
+    """Public, unauthenticated PDF download for a signed order link."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        order = _get_order_by_client_token(token)
+        if order is None:
+            return Response(
+                {'detail': 'This order link is not valid.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if order.client_token_expires_at and order.client_token_expires_at < timezone.now():
+            return Response(
+                {'detail': 'This order link has expired. Please request a fresh one.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        pdf = render_order_pdf(order)
+        if not pdf:
+            return Response(
+                {'detail': 'Could not generate the order form PDF.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        response = HttpResponse(pdf, content_type='application/pdf')
+        filename = str(order.id).replace('"', '') or 'order'
+        response['Content-Disposition'] = f'inline; filename="{filename}.pdf"'
+        return response
 
 
 class DashboardStatsView(APIView):
@@ -2787,73 +2871,3 @@ class DashboardStatsView(APIView):
         return key.strftime('%d %b %Y')
 
 
-class ClientOrderResponseView(APIView):
-    """Public, unauthenticated single-use accept/decline with comments."""
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
-    def post(self, request, token):
-        order = _get_order_by_client_token(token)
-        if order is None:
-            return Response(
-                {'detail': 'This order link is not valid.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if order.client_token_expires_at and order.client_token_expires_at < timezone.now():
-            return Response(
-                {'detail': 'This order link has expired. Please request a fresh one.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if order.client_status != Order.CLIENT_PENDING:
-            return Response(
-                {'detail': 'You have already responded to this order.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        decision = str(request.data.get('decision') or '').strip().lower()
-        accepted = decision in ('accepted', 'accept', 'yes')
-        declined = decision in ('declined', 'decline', 'reject', 'no')
-        if not accepted and not declined:
-            return Response(
-                {'detail': 'Please choose to accept or decline the order.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        message = str(request.data.get('message') or '').strip()
-        verb = 'accepted' if accepted else 'declined'
-        order.client_status = Order.CLIENT_ACCEPTED if accepted else Order.CLIENT_DECLINED
-        order.status = 'Accepted' if accepted else 'Rejected'
-        order.client_message = message
-        order.client_responded_at = timezone.now()
-        # Single-use: revoke the token once a decision is recorded.
-        order.client_token = ''
-        order.client_token_expires_at = None
-        order.save()
-        if accepted:
-            # An accepted order moves out of Manage Orders and into Client
-            # Details: create the client record and convert the lead.
-            create_client_detail_from_order(order)
-            mark_lead_as_client(order.lead_id)
-
-        staff_member = None
-        # Resolve the staff member within this order's own company so an
-        # employee with the same name in another tenant is never notified.
-        company_filter = {'company': order.tenant_id} if order.tenant_id else {}
-        if order.proposal_by:
-            staff_member = User.objects.filter(name__iexact=order.proposal_by, **company_filter).first()
-        if staff_member is None and order.staff:
-            staff_member = User.objects.filter(name__iexact=order.staff, **company_filter).first()
-        if staff_member is not None:
-            notify(
-                staff_member,
-                'Client',
-                f'Client {verb} the order',
-                (
-                    f'{order.id} - {order.company} was {verb} by the client'
-                    + (f'. Comment: {message}' if message else '.')
-                ),
-                url=order_url(order),
-                entity_type='order',
-                entity_id=order.id,
-            )
-
-        return Response(public_order_payload(order))

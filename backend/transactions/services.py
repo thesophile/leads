@@ -602,6 +602,30 @@ def _strip_html(html):
     return text
 
 
+def _email_button(href, label):
+    """Neutral (outline) button cell used in the client email template."""
+    return (
+        '<td align="center" style="padding:4px;">'
+        '<table role="presentation" cellspacing="0" cellpadding="0"><tr>'
+        '<td style="border-radius:6px; border:1px solid #cbd5e1; background-color:#ffffff;">'
+        f'<a href="{href}" style="display:inline-block; padding:12px 26px; color:#0f172a; '
+        f'font-size:13px; font-weight:bold; text-decoration:none;">{label}</a>'
+        '</td></tr></table></td>'
+    )
+
+
+def _email_solid_button(href, label, color):
+    """Filled button cell (Accept / Decline) used in the client email template."""
+    return (
+        '<td align="center" style="padding:4px;">'
+        '<table role="presentation" cellspacing="0" cellpadding="0"><tr>'
+        f'<td style="border-radius:6px; background-color:{color};">'
+        f'<a href="{href}" style="display:inline-block; padding:12px 26px; color:#ffffff; '
+        f'font-size:13px; font-weight:bold; text-decoration:none;">{label}</a>'
+        '</td></tr></table></td>'
+    )
+
+
 _CLIENT_EMAIL_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -669,38 +693,12 @@ _CLIENT_EMAIL_TEMPLATE = """
 
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:18px;">
                 <tr>
-                  <td align="center" style="padding:4px;">
-                    <table role="presentation" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td style="border-radius:6px; background-color:#10b981;">
-                          <a href="{accept_url}" style="display:inline-block; padding:12px 26px; color:#ffffff; font-size:13px; font-weight:bold; text-decoration:none;">Accept</a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                  <td align="center" style="padding:4px;">
-                    <table role="presentation" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td style="border-radius:6px; background-color:#f43f5e;">
-                          <a href="{decline_url}" style="display:inline-block; padding:12px 26px; color:#ffffff; font-size:13px; font-weight:bold; text-decoration:none;">Decline</a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                  <td align="center" style="padding:4px;">
-                    <table role="presentation" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td style="border-radius:6px; border:1px solid #cbd5e1; background-color:#ffffff;">
-                          <a href="{view_url}" style="display:inline-block; padding:12px 26px; color:#0f172a; font-size:13px; font-weight:bold; text-decoration:none;">View in site</a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
+                  {decision_buttons}
                 </tr>
               </table>
 
               <p style="color:#64748b; font-size:11px; margin:0; line-height:1.5;">
-                This link is unique to you and will work for one response. Please do not share it further.
+                {link_note}
               </p>
             </td>
           </tr>
@@ -793,9 +791,12 @@ def build_client_email(quotation, link, message=''):
         discount=discount,
         net=net,
         scope_html=scope_html,
-        accept_url=f'{link}?action=accept',
-        decline_url=f'{link}?action=decline',
-        view_url=link,
+        decision_buttons=(
+            _email_solid_button(f'{link}?action=accept', 'Accept', '#10b981')
+            + _email_solid_button(f'{link}?action=decline', 'Decline', '#f43f5e')
+            + _email_button(link, 'View in site')
+        ),
+        link_note='This link is unique to you and will work for one response. Please do not share it further.',
         footer=footer,
     )
     text_body = (
@@ -822,8 +823,14 @@ def build_client_email(quotation, link, message=''):
     return email
 
 
-def build_order_client_email(order, link, message=''):
-    """Compose the one-time signed order email (HTML + text + PDF)."""
+def build_order_client_email(order, link, message='', recipients=None, cc=None):
+    """Compose the order share email (HTML + text + PDF).
+
+    The order form is shared for reference only: it is not an approval request,
+    so no Accept/Decline buttons are included. ``recipients`` overrides the
+    default client recipient when the caller wants to send the form to other
+    people as well.
+    """
     company = order.tenant
     logo_html = ''
     if company and company.logo and company.logo.name:
@@ -887,34 +894,38 @@ def build_order_client_email(order, link, message=''):
             f'attached the full order form document to this email for your reference.'
         ),
         decision_instruction=(
-            'You can review the full details and share your decision online. To accept this '
-            'order, tap <strong>Accept</strong>; to decline it, tap <strong>Decline</strong>.'
+            'You can review the full order form online using the button below. A PDF copy '
+            'is also attached to this email for your records.'
         ),
         greeting_note=greeting_note,
         total=total,
         discount=discount,
         net=net,
         scope_html=scope_html,
-        accept_url=f'{link}?action=accept',
-        decline_url=f'{link}?action=decline',
-        view_url=link,
+        decision_buttons=_email_button(link, 'View order form'),
+        link_note='This link lets you view the order form online at any time.',
         footer=footer,
     )
     text_body = (
         f'Dear {order.customer},\n\n'
         f'Please find our order form {order.id} for {order.company}.\n\n'
         f'Total: {total}\nDiscount: {discount}\nNet: {net}\n\n'
-        f'Accept: {link}?action=accept\n'
-        f'Decline: {link}?action=decline\n'
-        f'View in site: {link}\n\n'
+        f'View order form: {link}\n'
+        f'A PDF copy is attached to this email.\n\n'
         f'— {footer}'
     )
+
+    to_addresses = [address for address in (recipients or []) if address]
+    if not to_addresses and order.email:
+        to_addresses = [order.email]
+    cc_addresses = [address for address in (cc or []) if address]
 
     email = EmailMultiAlternatives(
         subject=subject,
         body=text_body,
         from_email=None,
-        to=[order.email],
+        to=to_addresses,
+        cc=cc_addresses or None,
         reply_to=[company.email] if company and company.email else None,
     )
     email.attach_alternative(html_body, 'text/html')
