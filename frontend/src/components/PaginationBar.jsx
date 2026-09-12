@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 function ChevronIcon({ direction = 'right', className = 'h-3.5 w-3.5' }) {
   return (
     <svg
@@ -28,6 +30,20 @@ function getPageItems(current, total) {
 }
 
 export default function PaginationBar({ page, totalPages, count, pageSize = 25, onChange, className = '' }) {
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'ArrowRight' && page < totalPages) {
+        e.preventDefault()
+        onChange(page + 1)
+      } else if (e.key === 'ArrowLeft' && page > 1) {
+        e.preventDefault()
+        onChange(page - 1)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [page, totalPages, onChange])
+
   if (!count) return null
   const start = (page - 1) * pageSize + 1
   const end = Math.min(page * pageSize, count)
@@ -45,7 +61,7 @@ export default function PaginationBar({ page, totalPages, count, pageSize = 25, 
           disabled={page <= 1}
           onClick={() => onChange(page - 1)}
           aria-label="Previous page"
-          title="Previous page"
+          title="Previous page (Left arrow key)"
           className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
         >
           <ChevronIcon direction="left" />
@@ -76,7 +92,7 @@ export default function PaginationBar({ page, totalPages, count, pageSize = 25, 
           disabled={page >= totalPages}
           onClick={() => onChange(page + 1)}
           aria-label="Next page"
-          title="Next page"
+          title="Next page (Right arrow key)"
           className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
         >
           <ChevronIcon direction="right" />
