@@ -13,6 +13,7 @@ Run with --dry-run to see what would change without writing anything.
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection, connections
+from django.db.models import Q
 
 from accounts.models import Company
 from transactions.models import Lead
@@ -76,7 +77,8 @@ class Command(BaseCommand):
 
         target = (
             Lead.objects
-            .filter(id__in=list(owner_by_id), added_by='', tenant=company)
+            .filter(Q(tenant=company) | Q(tenant__isnull=True), added_by='')
+            .filter(id__in=list(owner_by_id))
         )
         # Only the empty-added_by leads that actually exist get an owner.
         existing = set(target.values_list('id', flat=True))
