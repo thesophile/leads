@@ -381,21 +381,24 @@ def scoped_queryset(user, status_filter='all'):
 
 
 def my_leads_queryset(user):
-    """Return the leads owned by ``user`` across every pipeline stage.
+    """Return the leads visible to ``user`` across every pipeline stage.
 
-    A user's leads are the raw/assigned/quotation/order/client rows they added
-    (``added_by``) or were given to work on (``assigned_to``). Used by the
+    Managers (``leads.view_all``) see their company's records; staff see the
+    leads assigned to them plus the organisation-wide raw pool (raw leads have
+    no single owner after the legacy import, so they are shared). Used by the
     read-only Lead Status screen.
     """
     qs = Lead.objects.all()
-    if not user.is_superuser:
-        qs = qs.filter(
-            Q(tenant=user.company, assigned_to=user.name)
-            | Q(tenant=user.company, added_by=user.name)
-            | Q(tenant__isnull=True, assigned_to=user.name)
-            | Q(tenant__isnull=True, added_by=user.name)
-        )
-    return qs
+    if user.is_superuser:
+        return qs
+    if user.has_permission('leads.view_all'):
+        return qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+    return qs.filter(
+        Q(tenant=user.company, assigned_to=user.name)
+        | Q(tenant__isnull=True, assigned_to=user.name)
+        | Q(tenant=user.company, status=Lead.STATUS_RAW)
+        | Q(tenant__isnull=True, status=Lead.STATUS_RAW)
+    )
 
 
 def lead_status_payload(lead, quotations, orders, client_details):

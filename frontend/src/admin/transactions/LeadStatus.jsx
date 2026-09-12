@@ -143,7 +143,7 @@ export default function LeadStatus() {
         ) : filteredLeads.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-16 text-center">
             <p className="text-sm font-semibold text-slate-600">No leads found</p>
-            <p className="text-xs text-slate-400">Lead will show here once added by you or assigned to you.</p>
+            <p className="text-xs text-slate-400">Leads will show here once added, assigned to you, or available in your team's shared raw pool.</p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">

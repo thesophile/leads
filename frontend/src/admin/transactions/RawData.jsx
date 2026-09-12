@@ -285,7 +285,7 @@ export default function RawData() {
   const [assignableStaff, setAssignableStaff] = useState([])
   const employeeNames = isManager ? assignableStaff.map((s) => s.name) : []
   const staffOptions = isManager
-    ? ['All Employees', ...employeeNames]
+    ? ['All Employees', 'Owner-less', ...employeeNames]
     : ['My entries', 'All Employees']
   const [categoryOptions, setCategoryOptions] = useState([])
   const [sourceOptions, setSourceOptions] = useState([])
@@ -751,6 +751,7 @@ async function handleBulkImport(e) {
       const matchesStaff =
         selectedStaff === 'All Employees' ||
         (selectedStaff === 'My entries' && l.addedBy === user?.name) ||
+        (selectedStaff === 'Owner-less' && !l.addedBy) ||
         l.addedBy === selectedStaff
 
       // 2. Source Filter
