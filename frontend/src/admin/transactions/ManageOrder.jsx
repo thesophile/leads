@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useLayoutEffect, useEffect, useCallback } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
@@ -12,6 +12,8 @@ import useDirty from '../../utils/useDirty'
 import SendToClientModal from './SendToClientModal'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
+import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 
 // Initial dataset of approved orders ready for execution
 const STAFF_LIST = [
@@ -130,7 +132,6 @@ export default function ManageOrder() {
   const { user } = useAuth()
   const canSendToClient = !!user && (can(user, 'order.edit') || user.is_superuser)
   const [ordersList, setOrdersList] = useState([])
-  const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
@@ -143,6 +144,35 @@ export default function ManageOrder() {
   const [toastMessage, setToastMessage] = useState('')
   const [toastType, setToastType] = useState('success')
   const [sendClientOpen, setSendClientOpen] = useState(false)
+
+  const searchDebounced = useDebouncedValue(searchQuery)
+
+  const listParams = useMemo(
+    () => ({
+      exclude_status: 'Accepted',
+      ...(selectedStaff !== 'All Staff' ? { staff: selectedStaff } : {}),
+      ...(selectedStatus !== 'All Status'
+        ? { status: selectedStatus === 'Sent' ? 'Sent to Client' : 'Not Sent' }
+        : {}),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [selectedStaff, selectedStatus, searchDebounced]
+  )
+
+  const {
+    count,
+    counts: listCounts,
+    loading,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({
+    url: '/transactions/orders/',
+    params: listParams,
+    onData: (orderRows) => setOrdersList(orderRows),
+    onError: (msg) => setLoadError(msg || 'Could not load orders.'),
+  })
 
   // Modal State for Order Form Editor
   const [orderModalOpen, setOrderModalOpen] = useState(false)
@@ -231,23 +261,6 @@ export default function ManageOrder() {
     menuRef.current.style.left = `${left}px`
     menuRef.current.style.top = `${top}px`
   }, [openDropdownId, menuOffset])
-
-  const loadOrders = useCallback(async () => {
-    try {
-      const data = await api.get('/transactions/orders/')
-      setOrdersList(Array.isArray(data) ? data : [])
-    } catch (err) {
-      setLoadError(err.message || 'Could not load orders.')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    ;(async () => {
-      await loadOrders()
-    })()
-  }, [loadOrders])
 
   function nextOrderNumber() {
     const year = new Date().getFullYear()
@@ -455,46 +468,14 @@ export default function ManageOrder() {
     }, 2500)
   }
 
-  // Filtered dataset
-  // Accepted orders have moved to Client Details, so they no longer appear here.
-  const activeOrders = useMemo(
-    () => ordersList.filter((o) => o.status !== 'Accepted'),
-    [ordersList]
-  )
+  // Filtered dataset: the server already excludes Accepted orders and applies
+  // the staff / status / search filters, so the page rows are rendered as-is.
+  const filteredOrders = ordersList
 
-  const filteredOrders = useMemo(() => {
-    return activeOrders.filter((item) => {
-      const matchesStaff =
-        selectedStaff === 'All Staff' || item.staff === selectedStaff || item.bdm === selectedStaff || item.proposalBy === selectedStaff
-
-      const matchesStatus =
-        selectedStatus === 'All Status'
-          ? true
-          : selectedStatus === 'Sent'
-            ? item.status === 'Sent to Client'
-            : item.status !== 'Sent to Client'
-
-      const matchesSearch =
-        item.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.mobile.includes(searchQuery) ||
-        item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.proposalNo.toLowerCase().includes(searchQuery.toLowerCase())
-
-      return matchesStaff && matchesStatus && matchesSearch
-    })
-  }, [activeOrders, selectedStaff, selectedStatus, searchQuery])
-
-  // Metric counts
-  const totalOrdersCount = activeOrders.length
-  const notSentCount = useMemo(
-    () => activeOrders.filter((o) => o.status !== 'Sent to Client').length,
-    [activeOrders]
-  )
-  const sentCount = useMemo(
-    () => activeOrders.filter((o) => o.status === 'Sent to Client').length,
-    [activeOrders]
-  )
+  // Metric counts come from the server-side envelope (over the active set).
+  const totalOrdersCount = listCounts.total ?? count
+  const notSentCount = listCounts.not_sent ?? 0
+  const sentCount = listCounts.sent ?? 0
 
   return (
     <Layout>
@@ -549,7 +530,7 @@ export default function ManageOrder() {
 
           {/* Quick Metrics & Create Button */}
           <div className="flex flex-wrap items-center gap-3">
-            <RefreshButton onClick={() => { setLoading(true); setLoadError(''); loadOrders() }} loading={loading} compact className="self-center mr-1" />
+            <RefreshButton onClick={() => { setLoadError(''); refetch() }} loading={loading} compact className="self-center mr-1" />
             <div className="flex items-center gap-1.5">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Total</span>
@@ -748,6 +729,14 @@ export default function ManageOrder() {
               </tbody>
             </table>
           </div>
+
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            count={count}
+            pageSize={100}
+            onChange={setPage}
+          />
 
           {/* Floating Action Popover (anchored to the card so it scrolls with the page) */}
           {openDropdownId && activeMenuOrder && (

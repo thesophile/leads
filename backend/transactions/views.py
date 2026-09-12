@@ -2,13 +2,14 @@ import hashlib
 import json
 import logging
 import random
+import re
 import secrets
 from datetime import date, datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db import IntegrityError
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max, Q, OuterRef, Subquery
 from django.db.models.functions import TruncDay, TruncMonth, TruncYear
 from django.http import HttpResponse
 from django.utils import timezone
@@ -497,7 +498,7 @@ def find_duplicate_lead(user, company):
     queryset = Lead.objects.all()
     if not user.is_superuser:
         queryset = queryset.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
-    return queryset.filter(company__iexact=company).only(
+    return queryset.filter(company_key=str(company or '').strip().lower()).only(
         'id', 'company', 'contact', 'phone', 'category', 'city', 'added_by',
         'display_date', 'date', 'status',
     ).first()
@@ -517,6 +518,127 @@ def duplicate_response(existing):
     )
 
 
+PAGE_SIZE_DEFAULT = 100
+PAGE_SIZE_MAX = 500
+
+
+def page_params(request):
+    """Return ``(page, page_size)`` from the request, clamped to sane bounds."""
+    try:
+        page = max(1, int(request.query_params.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        page_size = int(request.query_params.get('page_size', PAGE_SIZE_DEFAULT))
+    except (TypeError, ValueError):
+        page_size = PAGE_SIZE_DEFAULT
+    page_size = min(max(1, page_size), PAGE_SIZE_MAX)
+    return page, page_size
+
+
+def paginated_queryset(queryset, request):
+    """Slice ``queryset`` by page/page_size and return (page_qs, envelope)."""
+    page, page_size = page_params(request)
+    count = queryset.count()
+    start = (page - 1) * page_size
+    sliced = queryset[start:start + page_size]
+    return sliced, {
+        'count': count,
+        'page': page,
+        'page_size': page_size,
+    }
+
+
+def none_value(value):
+    """Map the ``__none__`` query-param convention back to an empty string."""
+    if value is not None and value in ('__none__', '__empty__'):
+        return ''
+    return value
+
+
+def apply_lead_search(queryset, search):
+    """Free-text search across the lead columns shown in tables/registers."""
+    if not search:
+        return queryset
+    return queryset.filter(
+        Q(company__icontains=search)
+        | Q(contact__icontains=search)
+        | Q(phone__icontains=search)
+        | Q(id__icontains=search)
+        | Q(category__icontains=search)
+        | Q(source__icontains=search)
+        | Q(city__icontains=search)
+    )
+
+
+def filter_leads_by_params(queryset, params):
+    """Apply the shared lead-list query params (search / dropdowns / dates)."""
+    queryset = apply_lead_search(queryset, (params.get('search') or '').strip())
+    for field in ('added_by', 'assigned_to', 'source', 'category',
+                  'call_status', 'priority'):
+        value = none_value(params.get(field))
+        if value:
+            queryset = queryset.filter(**{field: value})
+    date_from = params.get('date_from')
+    if date_from:
+        queryset = queryset.filter(date__gte=date_from)
+    date_to = params.get('date_to')
+    if date_to:
+        queryset = queryset.filter(date__lte=date_to)
+    return queryset
+
+
+def register_lead_status(lead):
+    """The register column value for a lead's current pipeline position."""
+    if lead.status == Lead.STATUS_QUOTATION:
+        return 'Quotation Requested'
+    if lead.status in (Lead.STATUS_ORDER, Lead.STATUS_CLIENT):
+        return 'Converted'
+    return lead.call_status or 'Pending Call'
+
+
+def register_lead_row(lead):
+    """Compact row shape used by the printable registers (one per lead)."""
+    iso = lead.date.isoformat() if lead.date else ''
+    return {
+        'id': lead.id,
+        'date': iso,
+        'rawDate': iso,
+        'lastCallDate': lead.last_call_date,
+        'company': lead.company,
+        'number': lead.phone,
+        'phone': lead.phone,
+        'email': lead.email,
+        'contact': lead.contact,
+        'location': lead.city,
+        'staff': lead.assigned_to if lead.status != Lead.STATUS_RAW else lead.added_by,
+        'category': lead.category,
+        'source': lead.source,
+        'status': register_lead_status(lead),
+        'callStatus': lead.call_status,
+        'priority': lead.priority,
+        'assignedTo': lead.assigned_to,
+        'addedBy': lead.added_by,
+    }
+
+
+def to_iso_order_date(value):
+    """Normalize free-text order dates into 'YYYY-MM-DD' (mirrors the frontend)."""
+    if not value:
+        return ''
+    text = str(value).strip()
+    match = re.match(r'^(\d{4})-(\d{2})-(\d{2})', text)
+    if match:
+        return '{0}-{1}-{2}'.format(*match.groups())
+    match = re.match(r'^(\d{2})-(\d{2})-(\d{4})', text)
+    if match:
+        return '{0}-{1}-{2}'.format(match.group(3), match.group(2), match.group(1))
+    match = re.match(r'^(\d{2})/(\d{2})/(\d{4})', text)
+    if match:
+        return '{0}-{1}-{2}'.format(match.group(3), match.group(2), match.group(1))
+    return ''
+
+
 class LeadListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -527,15 +649,26 @@ class LeadListView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         status_filter = request.query_params.get('status') or 'raw'
-        leads = scoped_queryset(request.user, status_filter).order_by('-created_at')
-        leads = leads.prefetch_related('history', 'contact_history')
+        leads = scoped_queryset(request.user, status_filter)
+        leads = filter_leads_by_params(leads, request.query_params)
+        leads = leads.order_by('-created_at')
+        page_leads, envelope = paginated_queryset(leads, request)
+        page_leads = page_leads.prefetch_related('history', 'contact_history')
+        lead_ids = list(page_leads.values_list('id', flat=True))
         quotations = {}
-        lead_ids = leads.values_list('id', flat=True)
-        for quotation in Quotation.objects.filter(lead_id__in=lead_ids).order_by('version_no'):
-            quotations.setdefault(quotation.lead_id, []).append(quotation)
-        return Response(
-            LeadSerializer(leads, many=True, context={'quotations': quotations}).data
+        quotation_qs = (
+            Quotation.objects.filter(lead_id__in=lead_ids)
+            .prefetch_related('approvals')
+            .order_by('version_no')
         )
+        for quotation in quotation_qs:
+            quotations.setdefault(quotation.lead_id, []).append(quotation)
+        envelope['results'] = LeadSerializer(
+            page_leads,
+            many=True,
+            context={'quotations': quotations},
+        ).data
+        return Response(envelope)
 
     def post(self, request):
         if not can(request.user, 'leads.create'):
@@ -827,7 +960,21 @@ class LeadStatusView(APIView):
                 {'detail': 'You do not have permission to view your leads.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        leads = list(my_leads_queryset(request.user).order_by('-updated_at'))
+        qs = my_leads_queryset(request.user)
+        stage = request.query_params.get('stage') or 'all'
+        if stage and stage != 'all':
+            qs = qs.filter(status=stage)
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(
+                Q(company__icontains=search)
+                | Q(contact__icontains=search)
+                | Q(phone__icontains=search)
+                | Q(id__icontains=search)
+            )
+        qs = qs.order_by('-updated_at')
+        page_leads, envelope = paginated_queryset(qs, request)
+        leads = list(page_leads)
         lead_ids = [lead.id for lead in leads]
         quotations = {}
         for quote in Quotation.objects.filter(lead_id__in=lead_ids).order_by('-version_no', '-created_at'):
@@ -837,10 +984,331 @@ class LeadStatusView(APIView):
             detail.lead_id: detail
             for detail in ClientDetail.objects.filter(lead_id__in=lead_ids)
         }
-        return Response([
+        envelope['results'] = [
             lead_status_payload(lead, quotations, orders, client_details)
             for lead in leads
-        ])
+        ]
+        return Response(envelope)
+
+
+class LeadMetaView(APIView):
+    """Dropdown facets + aggregate counts for a lead list (used for badges,
+    KPI cards and filter pickers without shipping every row to the browser)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'leads.view', 'telecall.view'):
+            return Response(
+                {'detail': 'You do not have permission to view leads.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        status_filter = request.query_params.get('status') or 'all'
+        qs = scoped_queryset(request.user, status_filter)
+        qs = filter_leads_by_params(qs, request.query_params)
+
+        def distinct(field):
+            return sorted(
+                v
+                for v in (qs.exclude(**{f'{field}': ''})
+                          .order_by(field)
+                          .values_list(field, flat=True)
+                          .distinct())
+                if v
+            )
+
+        facets = {
+            'added_by': distinct('added_by'),
+            'assigned_to': distinct('assigned_to'),
+            'sources': distinct('source'),
+            'cities': distinct('city'),
+            'categories': distinct('category'),
+            'call_statuses': distinct('call_status'),
+            'priorities': distinct('priority'),
+        }
+        priority_counts = {
+            str(row['priority']): row['n']
+            for row in qs.exclude(priority='').values('priority').annotate(n=Count('id')).order_by()
+        }
+        call_status_counts = {
+            str(row['call_status']): row['n']
+            for row in qs.values('call_status').annotate(n=Count('id')).order_by()
+        }
+        counts = {
+            'total': qs.count(),
+            'by_priority': priority_counts,
+            'by_call_status': call_status_counts,
+            'unassigned': qs.filter(assigned_to='').count(),
+        }
+        return Response({'facets': facets, 'counts': counts})
+
+
+class LeadRegisterView(APIView):
+    """Paginated printable-register rows, one per lead, with matching facets.
+
+    ``statuses`` is a comma-separated list (default ``raw``) so the Telecalling
+    register can page across the whole live pipeline in a single request.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'leads.view', 'telecall.view'):
+            return Response(
+                {'detail': 'You do not have permission to view the register.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        raw_statuses = (request.query_params.get('statuses') or 'raw').split(',')
+        status_list = [s for s in raw_statuses if s in dict(Lead.STATUS_CHOICES)]
+        qs = my_leads_queryset(request.user)
+        if status_list:
+            qs = qs.filter(status__in=status_list)
+
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(
+                Q(company__icontains=search)
+                | Q(contact__icontains=search)
+                | Q(phone__icontains=search)
+                | Q(id__icontains=search)
+                | Q(category__icontains=search)
+                | Q(city__icontains=search)
+                | Q(added_by__icontains=search)
+                | Q(assigned_to__icontains=search)
+                | Q(call_status__icontains=search)
+            )
+        staff = none_value(request.query_params.get('staff'))
+        if staff:
+            qs = qs.filter(Q(added_by=staff) | Q(assigned_to=staff))
+        category = request.query_params.get('category')
+        if category:
+            qs = qs.filter(category__iexact=category)
+        city = request.query_params.get('city')
+        if city:
+            qs = qs.filter(city__iexact=city)
+        date_from = request.query_params.get('date_from')
+        if date_from:
+            qs = qs.filter(date__gte=date_from)
+        date_to = request.query_params.get('date_to')
+        if date_to:
+            qs = qs.filter(date__lte=date_to)
+        status_filter = request.query_params.get('status')
+        if status_filter and status_filter != 'All Status':
+            if status_filter == 'Quotation Requested':
+                qs = qs.filter(status=Lead.STATUS_QUOTATION)
+            elif status_filter == 'Converted':
+                qs = qs.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT])
+            else:
+                qs = qs.filter(call_status=status_filter)
+
+        def distinct(field):
+            return sorted(
+                v
+                for v in (qs.exclude(**{f'{field}': ''})
+                          .order_by(field)
+                          .values_list(field, flat=True)
+                          .distinct())
+                if v
+            )
+
+        statuses = set(qs.exclude(call_status='')
+                       .values_list('call_status', flat=True)
+                       .distinct())
+        if qs.filter(status=Lead.STATUS_QUOTATION).exists():
+            statuses.add('Quotation Requested')
+        if qs.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).exists():
+            statuses.add('Converted')
+        facets = {
+            'staff': sorted(set(distinct('assigned_to')) | set(distinct('added_by'))),
+            'locations': distinct('city'),
+            'categories': distinct('category'),
+            'statuses': sorted(statuses),
+        }
+
+        qs = qs.order_by('-created_at')
+        page_leads, envelope = paginated_queryset(qs, request)
+        envelope['results'] = [register_lead_row(lead) for lead in page_leads]
+        envelope['facets'] = facets
+        return Response(envelope)
+
+
+class QuotationRowsView(APIView):
+    """Paginated quotation-stage rows, one per proposal version (plus a
+    synthetic 'Quotation Requested' row for leads without a proposal yet).
+
+    The row shape mirrors the Manage Quotation screen's flattened lead view so
+    the frontend keeps rendering the same row model, but the rows are built,
+    filtered and counted in the database.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'quotation.view'):
+            return Response(
+                {'detail': 'You do not have permission to view quotations.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        scoped_leads = scoped_queryset(request.user, Lead.STATUS_QUOTATION)
+        base_quotes = Quotation.objects.filter(lead_id__in=scoped_leads.values('id'))
+
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            base_quotes = base_quotes.filter(
+                Q(customer__icontains=search)
+                | Q(company__icontains=search)
+                | Q(mobile__icontains=search)
+                | Q(staff__icontains=search)
+                | Q(id__icontains=search)
+            )
+        staff_filter = request.query_params.get('staff')
+        if staff_filter:
+            base_quotes = base_quotes.filter(Q(staff=staff_filter) | Q(bdm=staff_filter))
+        status_filter = request.query_params.get('status')
+        quotes_for_page = base_quotes
+        if status_filter and status_filter != 'Quotation Requested':
+            quotes_for_page = base_quotes.filter(status=status_filter)
+
+        quoted_lead_ids = set(base_quotes.values_list('lead_id', flat=True))
+        lead_scope = scoped_queryset(request.user, Lead.STATUS_QUOTATION)
+        lead_scope = apply_lead_search(lead_scope, search)
+        synthetic_all = scoped_queryset(request.user, Lead.STATUS_QUOTATION) \
+            .exclude(id__in=quoted_lead_ids)
+        if status_filter and status_filter != 'Quotation Requested':
+            synthetic_for_page = False  # filtered out; never matches a proposal status
+        else:
+            synthetic_for_page = lead_scope.exclude(id__in=quoted_lead_ids)
+
+        counts = {
+            'Quotation Requested': synthetic_all.count(),
+            'Not Sent': base_quotes.filter(status='Not Sent').count(),
+            'Pending Approval': base_quotes.filter(status='Pending Approval').count(),
+            'Approved': base_quotes.filter(status='Approved').count(),
+            'Rejected': base_quotes.filter(status='Rejected').count(),
+            'Sent to Client': base_quotes.filter(status='Sent to Client').count(),
+            'Accepted': base_quotes.filter(status='Accepted').count(),
+            'Declined': base_quotes.filter(status='Declined').count(),
+        }
+
+        quote_created = Lead.objects.filter(id=OuterRef('lead_id')).values('created_at')[:1]
+        quotes_ordered = (
+            quotes_for_page
+            .annotate(lead_created_at=Subquery(quote_created))
+            .order_by('-lead_created_at', 'version_no')
+            .prefetch_related('approvals')
+        )
+
+        page, page_size = page_params(request)
+        total_quotes = quotes_ordered.count()
+        if synthetic_for_page is False:
+            synthetic_count = 0
+        else:
+            synthetic_count = synthetic_for_page.count()
+        count = total_quotes + synthetic_count
+        start = (page - 1) * page_size
+
+        results = []
+        if start < total_quotes:
+            quote_page = list(quotes_ordered[start:start + page_size])
+            lead_ids = [q.lead_id for q in quote_page]
+            leads = Lead.objects.filter(id__in=lead_ids).prefetch_related('contact_history')
+            lead_map = {lead.id: lead for lead in leads}
+            for q in quote_page:
+                results.append(self._row_from_quotation(lead_map.get(q.lead_id), q))
+        if len(results) < page_size and synthetic_count:
+            needed = page_size - len(results)
+            syn_start = max(0, start - total_quotes)
+            for lead in synthetic_for_page[syn_start:syn_start + needed]:
+                results.append(self._row_from_lead(lead))
+
+        return Response({
+            'count': count,
+            'page': page,
+            'page_size': page_size,
+            'counts': counts,
+            'results': results,
+        })
+
+    @staticmethod
+    def _lead_history(lead):
+        return [
+            {
+                'id': h.id,
+                'field': h.field,
+                'fromValue': h.from_value,
+                'toValue': h.to_value,
+                'changedBy': h.changed_by,
+                'changedAt': h.changed_at.isoformat() if h.changed_at else '',
+                'stage': h.stage,
+            }
+            for h in (lead.contact_history.all() if lead else [])
+        ]
+
+    def _row_from_quotation(self, lead, quotation):
+        data = QuotationSerializer(quotation).data
+        data['hasProposal'] = True
+        data['leadId'] = data.get('leadId') or (lead.id if lead else '')
+        data['submittedByName'] = ''
+        if lead is not None:
+            data['customer'] = data['customer'] or lead.contact
+            data['company'] = data['company'] or lead.company
+            data['mobile'] = data['mobile'] or lead.phone
+            data['email'] = data['email'] or lead.email
+            data['category'] = data['category'] or lead.category
+            data['city'] = data['city'] or lead.city
+            data['bdm'] = data['bdm'] or lead.assigned_to
+            data['qtnBy'] = data['qtnBy'] or lead.added_by
+            data['staff'] = data['staff'] or (lead.assigned_to or lead.added_by)
+            data['source'] = data['source'] or lead.source
+            data['remarks'] = data['remarks'] or lead.remarks
+        data['date'] = data['date'] or (
+            (lead.display_date or lead.date) if lead else ''
+        )
+        data['contactHistory'] = self._lead_history(lead)
+        return data
+
+    def _row_from_lead(self, lead):
+        return {
+            'id': lead.id,
+            'leadId': lead.id,
+            'versionNo': 1,
+            'customer': lead.contact,
+            'company': lead.company,
+            'mobile': lead.phone,
+            'email': lead.email,
+            'category': lead.category,
+            'city': lead.city,
+            'bdm': lead.assigned_to,
+            'qtnBy': lead.added_by,
+            'staff': lead.assigned_to or lead.added_by,
+            'date': lead.display_date or lead.date or '',
+            'revisionNo': '',
+            'status': 'Quotation Requested',
+            'total': '',
+            'discount': '',
+            'netAmount': '',
+            'currency': 'INR (₹)',
+            'source': lead.source,
+            'proposalScope': '',
+            'termsConditions': '',
+            'companyTerms': '',
+            'hasProposal': False,
+            'approverName': '',
+            'submittedBy': None,
+            'submittedByName': '',
+            'signedBy': '',
+            'signatureRef': '',
+            'approvedAt': None,
+            'rejectedAt': None,
+            'rejectionReason': '',
+            'approvals': [],
+            'approvalsTotal': 0,
+            'approvalsApproved': 0,
+            'remarks': lead.remarks,
+            'clientStatus': 'Pending',
+            'clientMessage': '',
+            'contactHistory': self._lead_history(lead),
+        }
 
 
 class LeadLockView(APIView):
@@ -2124,9 +2592,42 @@ class ClientDetailListCreateView(APIView):
                 {'detail': 'You do not have permission to view client details.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        records = scoped_client_details(request.user).order_by('-created_at')
-        records = records.prefetch_related('attachments')
-        return Response(ClientDetailSerializer(records, many=True).data)
+        qs = scoped_client_details(request.user)
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(
+                Q(client_name__icontains=search)
+                | Q(company__icontains=search)
+                | Q(order_no__icontains=search)
+                | Q(mobile__icontains=search)
+                | Q(collected_by__icontains=search)
+                | Q(category__icontains=search)
+            )
+        collected_by = request.query_params.get('collected_by')
+        if collected_by:
+            qs = qs.filter(collected_by=collected_by)
+        status_counts = {
+            str(row['status']): row['n']
+            for row in qs.values('status').annotate(n=Count('id')).order_by()
+        }
+        status_counts.setdefault('Details Pending', 0)
+        status_counts.setdefault('Details Complete', 0)
+        status_counts.setdefault('Completed', 0)
+        status_counts.setdefault('Paid', 0)
+        tab = request.query_params.get('tab') or 'all'
+        if tab == 'active':
+            qs = qs.filter(status__in=['Details Pending', 'In Progress'])
+        elif tab == 'completed':
+            qs = qs.filter(status__in=['Details Complete', 'Completed', 'Paid'])
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        qs = qs.order_by('-created_at').select_related('tenant')
+        page_records, envelope = paginated_queryset(qs, request)
+        page_records = page_records.prefetch_related('attachments')
+        envelope['results'] = ClientDetailSerializer(page_records, many=True).data
+        envelope['counts'] = {'by_status': status_counts, 'total': sum(status_counts.values())}
+        return Response(envelope)
 
     def post(self, request):
         if not can(request.user, 'client.create', 'client.edit'):
@@ -2453,6 +2954,113 @@ class PublicClientDetailAttachmentView(APIView):
                 )
 
 
+ORDER_COLLECTED_STATUSES = ['Details Complete', 'Completed', 'Paid']
+
+
+def order_details_status(client_detail):
+    if client_detail is not None and client_detail.status in ORDER_COLLECTED_STATUSES:
+        return 'Collected'
+    return 'Pending'
+
+
+class OrderRegisterView(APIView):
+    """Paginated printable Order Received register rows, joining each order to
+    its client-detail record server-side. Mirrors the frontend `orderToRow`."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'order.view', 'client.view'):
+            return Response(
+                {'detail': 'You do not have permission to view the register.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = scoped_orders(request.user)
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(
+                Q(customer__icontains=search)
+                | Q(company__icontains=search)
+                | Q(mobile__icontains=search)
+                | Q(id__icontains=search)
+                | Q(proposal_no__icontains=search)
+            )
+        staff = request.query_params.get('staff')
+        if staff:
+            qs = qs.filter(Q(staff=staff) | Q(bdm=staff) | Q(proposal_by=staff))
+        category = request.query_params.get('category')
+        if category:
+            qs = qs.filter(category__iexact=category)
+        date_from = request.query_params.get('date_from')
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        date_to = request.query_params.get('date_to')
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
+        def distinct(field):
+            return sorted(
+                v
+                for v in (qs.exclude(**{f'{field}': ''})
+                          .order_by(field)
+                          .values_list(field, flat=True)
+                          .distinct())
+                if v
+            )
+
+        facets = {
+            'staff': sorted(set(distinct('staff'))
+                            | set(distinct('bdm'))
+                            | set(distinct('proposal_by'))),
+            'categories': distinct('category'),
+        }
+
+        cd_status = (
+            ClientDetail.objects.filter(order_no=OuterRef('id')).values('status')[:1]
+        )
+        qs = qs.annotate(cd_status_raw=Subquery(cd_status))
+        details_filter = request.query_params.get('details_status')
+        if details_filter == 'Collected':
+            qs = qs.filter(cd_status_raw__in=ORDER_COLLECTED_STATUSES)
+        elif details_filter == 'Pending':
+            qs = qs.exclude(cd_status_raw__in=ORDER_COLLECTED_STATUSES)
+
+        total = qs.count()
+        collected = qs.filter(cd_status_raw__in=ORDER_COLLECTED_STATUSES).count()
+
+        qs = qs.order_by('-created_at').select_related('tenant')
+        page_orders, envelope = paginated_queryset(qs, request)
+        order_ids = [order.id for order in page_orders]
+        client_details = {
+            cd.order_no: cd
+            for cd in scoped_client_details(request.user).filter(order_no__in=order_ids)
+        }
+        envelope['results'] = [
+            {
+                'id': order.id,
+                'orderNo': order.id,
+                'leadId': order.lead_id,
+                'date': order.date,
+                'rawDate': to_iso_order_date(order.date),
+                'company': order.company,
+                'customer': order.customer
+                or (client_details[order.id].client_name if order.id in client_details else ''),
+                'mobile': order.mobile,
+                'email': order.email,
+                'location': order.city,
+                'staff': order.staff,
+                'bdm': order.bdm,
+                'category': order.category,
+                'detailsStatus': order_details_status(client_details.get(order.id)),
+                'remarks': order.remarks,
+            }
+            for order in page_orders
+        ]
+        envelope['facets'] = facets
+        envelope['counts'] = {'total': total, 'collected': collected, 'pending': total - collected}
+        return Response(envelope)
+
+
 class OrderListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -2462,8 +3070,40 @@ class OrderListCreateView(APIView):
                 {'detail': 'You do not have permission to view orders.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        orders = scoped_orders(request.user).order_by('-created_at')
-        return Response(OrderSerializer(orders, many=True).data)
+        qs = scoped_orders(request.user)
+        exclude_status = request.query_params.get('exclude_status')
+        if exclude_status and exclude_status != 'Accepted':
+            qs = qs.exclude(status=exclude_status)
+        elif exclude_status == 'Accepted':
+            # Manage Orders only shows active (non-accepted) orders.
+            qs = qs.exclude(status='Accepted')
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(
+                Q(customer__icontains=search)
+                | Q(company__icontains=search)
+                | Q(mobile__icontains=search)
+                | Q(id__icontains=search)
+                | Q(proposal_no__icontains=search)
+            )
+        staff = request.query_params.get('staff')
+        if staff:
+            qs = qs.filter(Q(staff=staff) | Q(bdm=staff) | Q(proposal_by=staff))
+        counts = {
+            'total': qs.count(),
+            'not_sent': qs.exclude(status='Sent to Client').count(),
+            'sent': qs.filter(status='Sent to Client').count(),
+        }
+        status_filter = request.query_params.get('status')
+        if status_filter and status_filter != 'Sent to Client':
+            qs = qs.exclude(status='Sent to Client')
+        elif status_filter == 'Sent to Client':
+            qs = qs.filter(status='Sent to Client')
+        qs = qs.order_by('-created_at').select_related('tenant')
+        page_orders, envelope = paginated_queryset(qs, request)
+        envelope['results'] = OrderSerializer(page_orders, many=True).data
+        envelope['counts'] = counts
+        return Response(envelope)
 
     def post(self, request):
         if not can(request.user, 'order.create'):

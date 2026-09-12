@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
+import usePagedList, { useDebouncedValue, fetchAllPaged } from '../../utils/usePagedList'
 
 function toDmyDate(value) {
   if (!value) return ''
@@ -11,12 +13,7 @@ function toDmyDate(value) {
   return String(value)
 }
 
-function sameText(a, b) {
-  return String(a || '').toLowerCase() === String(b || '').toLowerCase()
-}
-
 // Live telecalling pipeline stages (everything past Raw Data).
-const LEAD_STATUSES = ['assigned', 'quotation', 'order', 'client']
 
 // Map a lead returned by the backend into the register row shape. The status
 // column reflects the call outcome the lead currently sits at in the pipeline.
@@ -41,9 +38,6 @@ function leadToRow(item) {
 
 export default function TelecalligRegister() {
   const [categoryOptions, setCategoryOptions] = useState([])
-  const [registerRows, setRegisterRows] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
@@ -54,51 +48,66 @@ export default function TelecalligRegister() {
 
   // Load every lead in the telecalling pipeline plus category options.
   // Categories are loaded independently so a leads failure does not hide them.
-  const loadRegister = useCallback(async () => {
+  useEffect(() => {
     api
       .get('/master/categories/')
       .then((categories) => {
         if (categories) setCategoryOptions(categories)
       })
       .catch(() => {})
-    try {
-      const results = await Promise.all(
-        LEAD_STATUSES.map((s) => api.get(`/transactions/leads/?status=${s}`))
-      )
-      const rows = []
-      results.forEach((data) => {
-        ;(Array.isArray(data) ? data : []).forEach((item) => rows.push(leadToRow(item)))
-      })
-      setRegisterRows(rows)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsLoading(false)
-    }
   }, [])
 
-  useEffect(() => {
-    ;(async () => {
-      await loadRegister()
-    })()
-  }, [loadRegister])
+  const searchDebounced = useDebouncedValue(searchQuery)
 
-  // Staff, location and status choices are derived from the actual records so
-  // the filters always match what the current user is allowed to see.
+  const listParams = useMemo(
+    () => ({
+      statuses: 'assigned,quotation,order,client',
+      ...(fromDate ? { date_from: fromDate } : {}),
+      ...(toDate ? { date_to: toDate } : {}),
+      ...(category !== 'All Category' ? { category } : {}),
+      ...(staff !== 'All Staff' ? { staff } : {}),
+      ...(status !== 'All Status' ? { status } : {}),
+      ...(location !== 'All Locations' ? { city: location } : {}),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [fromDate, toDate, category, staff, status, location, searchDebounced]
+  )
+
+  const {
+    rows,
+    count,
+    facets,
+    loading: isLoading,
+    error,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({ url: '/transactions/leads/register/', params: listParams })
+
+  const registerRows = useMemo(() => rows.map(leadToRow), [rows])
+
+  // Staff, location and status choices come from the server-side facets.
   const staffOptions = useMemo(() => {
-    const names = [...new Set(registerRows.map((r) => r.staff).filter(Boolean))]
+    const names = Array.isArray(facets?.staff) && facets.staff.length
+      ? facets.staff
+      : [...new Set(registerRows.map((r) => r.staff).filter(Boolean))]
     return ['All Staff', ...names.sort((a, b) => a.localeCompare(b))]
-  }, [registerRows])
+  }, [facets, registerRows])
 
   const locationOptions = useMemo(() => {
-    const places = [...new Set(registerRows.map((r) => r.location).filter(Boolean))]
+    const places = Array.isArray(facets?.locations) && facets.locations.length
+      ? facets.locations
+      : [...new Set(registerRows.map((r) => r.location).filter(Boolean))]
     return ['All Locations', ...places.sort((a, b) => a.localeCompare(b))]
-  }, [registerRows])
+  }, [facets, registerRows])
 
   const statusOptions = useMemo(() => {
-    const values = [...new Set(registerRows.map((r) => r.status).filter(Boolean))]
+    const values = Array.isArray(facets?.statuses) && facets.statuses.length
+      ? facets.statuses
+      : [...new Set(registerRows.map((r) => r.status).filter(Boolean))]
     return ['All Status', ...values.sort((a, b) => a.localeCompare(b))]
-  }, [registerRows])
+  }, [facets, registerRows])
 
   const [isExporting, setIsExporting] = useState(false)
 
@@ -121,58 +130,28 @@ export default function TelecalligRegister() {
     setSearchQuery('')
   }
 
-  // Filters apply live as the user changes them — no Apply button needed.
-  const filteredData = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    return registerRows.filter((item) => {
-      // Date filter
-      if (fromDate && item.rawDate < fromDate) return false
-      if (toDate && item.rawDate > toDate) return false
-
-      // Category filter
-      if (category !== 'All Category' && !sameText(item.category, category)) return false
-
-      // Staff filter
-      if (staff !== 'All Staff' && !sameText(item.staff, staff)) return false
-
-      // Status filter
-      if (status !== 'All Status' && !sameText(item.status, status)) return false
-
-      // Location filter
-      if (location !== 'All Locations' && !sameText(item.location, location)) return false
-
-      // Search query
-      if (q) {
-        return (
-          item.company.toLowerCase().includes(q) ||
-          item.number.toLowerCase().includes(q) ||
-          item.location.toLowerCase().includes(q) ||
-          item.staff.toLowerCase().includes(q) ||
-          item.status.toLowerCase().includes(q)
-        )
-      }
-
-      return true
-    })
-  }, [registerRows, fromDate, toDate, category, staff, status, location, searchQuery])
+  // The server already applies the filters above.
+  const filteredData = registerRows
 
   async function exportPdf() {
     if (isExporting) return
     setIsExporting(true)
     try {
+      const all = await fetchAllPaged('/transactions/leads/register/', listParams)
+      const rows = all.map(leadToRow).map((r) => [
+        r.date,
+        r.lastCallDate,
+        r.company,
+        r.number,
+        r.location,
+        r.staff,
+        r.status,
+      ])
       await exportRegisterPdf({
         title: 'TELECALLING REGISTER',
         fileNamePrefix: 'Telecalling_Register',
         columns: ['Date', 'Last Called', 'Company', 'Number', 'Location', 'Staff', 'Status'],
-        rows: filteredData.map((r) => [
-          r.date,
-          r.lastCallDate,
-          r.company,
-          r.number,
-          r.location,
-          r.staff,
-          r.status,
-        ]),
+        rows,
         filters: {
           Category: category !== 'All Category' ? category : '',
           Staff: staff !== 'All Staff' ? staff : '',
@@ -218,7 +197,7 @@ export default function TelecalligRegister() {
 
             {/* Right: Export PDF Button + Search Box */}
             <div className="flex items-center gap-2">
-              <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadRegister() }} loading={isLoading} />
+              <RefreshButton onClick={refetch} loading={isLoading} />
               <button
                 type="button"
                 onClick={exportPdf}
@@ -383,7 +362,7 @@ export default function TelecalligRegister() {
             <div className="text-right">
               <h1 className="text-sm font-black uppercase tracking-wider">Telecalling Register</h1>
               <p className="text-[9px] text-slate-600 font-mono">
-                Printed: {new Date().toLocaleDateString('en-GB')} | Records: {filteredData.length}
+                Printed: {new Date().toLocaleDateString('en-GB')} | Records: {count}
               </p>
             </div>
           </div>
@@ -487,9 +466,18 @@ export default function TelecalligRegister() {
 
           {/* Footer stats */}
           <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-500 print:text-black">
-            <span>Showing <strong>{filteredData.length}</strong> total records</span>
+            <span>Showing <strong>{count}</strong> total records</span>
             <span className="font-mono text-[10px]">PROGRAMERS INTERNATIONAL &bull; REGISTER AUDIT</span>
           </div>
+
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            count={count}
+            pageSize={100}
+            onChange={setPage}
+            className="print:hidden"
+          />
         </div>
       </div>
     </Layout>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useLayoutEffect, useEffect, useCallback } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
@@ -10,7 +10,9 @@ import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
+import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 
 const QUILL_MODULES = {
   toolbar: [
@@ -138,51 +140,6 @@ function normalizeRichText(html) {
     .replace(/&#x27;/gi, "'")
     .replace(/\s+/g, ' ')
     .trim()
-}
-
-function mapLeadToQuotation(lead, q) {
-  const quotation = q || lead.quotation
-  return {
-    id: quotation?.id || lead.id,
-    leadId: lead.id,
-    versionNo: quotation?.versionNo || 1,
-    customer: quotation?.customer || lead.contact || '',
-    company: quotation?.company || lead.company || '',
-    mobile: quotation?.mobile || lead.phone || '',
-    email: quotation?.email || lead.email || '',
-    category: quotation?.category || lead.category || '',
-    city: quotation?.city || lead.city || '',
-    bdm: quotation?.bdm || lead.assignedTo || '',
-    qtnBy: quotation?.qtnBy || lead.addedBy || '',
-    staff: quotation?.staff || lead.assignedTo || lead.addedBy || '',
-    date: quotation?.date || lead.displayDate || lead.date || '',
-    revisionNo: quotation?.revisionNo || '',
-    status: quotation ? quotation.status || 'Not Sent' : 'Quotation Requested',
-    total: quotation?.total || '',
-    discount: quotation?.discount || '',
-    netAmount: quotation?.netAmount || '',
-    currency: quotation?.currency || 'INR (₹)',
-    source: quotation?.source || lead.source || '',
-    proposalScope: quotation?.proposalScope || '',
-    termsConditions: quotation?.termsConditions || '',
-    companyTerms: quotation?.companyTerms || '',
-    hasProposal: !!quotation,
-    approverName: quotation?.approverName || '',
-    submittedBy: quotation?.submittedBy || null,
-    submittedByName: quotation?.submittedByName || '',
-    signedBy: quotation?.signedBy || '',
-    signatureRef: quotation?.signatureRef || '',
-    approvedAt: quotation?.approvedAt || '',
-    rejectedAt: quotation?.rejectedAt || '',
-    rejectionReason: quotation?.rejectionReason || '',
-    approvals: quotation?.approvals || [],
-    approvalsTotal: quotation?.approvalsTotal || 0,
-    approvalsApproved: quotation?.approvalsApproved || 0,
-    remarks: quotation?.remarks || lead.remarks || '',
-    clientStatus: quotation?.clientStatus || 'Pending',
-    clientMessage: quotation?.clientMessage || '',
-    contactHistory: lead.contactHistory || [],
-  }
 }
 
 const STAFF_LIST = [
@@ -368,7 +325,6 @@ export default function Managequotation() {
   const canSendToClient = !!user && (can(user, 'quotation.send') || user.is_superuser)
   const canSendWithoutApproval = !!user && (can(user, 'quotation.send_without_approval') || user.is_superuser)
   const [quotationsList, setQuotationsList] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
   const [staffOptions, setStaffOptions] = useState(STAFF_LIST)
@@ -385,29 +341,31 @@ export default function Managequotation() {
   const cardRef = useRef(null)
   const templateDropdownRef = useRef(null)
 
-  const loadQuotations = useCallback(async () => {
-    try {
-      const data = await api.get('/transactions/leads/?status=quotation')
-      setQuotationsList(
-        data.flatMap((lead) => {
-          const versions = Array.isArray(lead.quotations) && lead.quotations.length
-            ? lead.quotations
-            : [null]
-          return versions.map((q) => mapLeadToQuotation(lead, q))
-        })
-      )
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const searchDebounced = useDebouncedValue(searchQuery)
 
-  useEffect(() => {
-    ;(async () => {
-      await loadQuotations()
-    })()
-  }, [loadQuotations])
+  const listParams = useMemo(
+    () => ({
+      ...(selectedStaff !== 'All Staff' ? { staff: selectedStaff } : {}),
+      ...(selectedStatus !== 'All Status' ? { status: selectedStatus } : {}),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [selectedStaff, selectedStatus, searchDebounced]
+  )
+
+  const {
+    count,
+    counts: statusCounts,
+    loading: isLoading,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({
+    url: '/transactions/quotations/rows/',
+    params: listParams,
+    onData: (pageRows) => setQuotationsList(pageRows),
+    onError: (msg) => setError(msg),
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -927,47 +885,15 @@ export default function Managequotation() {
     }
   }
 
-  // Filtered dataset
-  const filteredQuotations = useMemo(() => {
-    return quotationsList.filter((item) => {
-      const matchesStaff =
-        selectedStaff === 'All Staff' || item.staff === selectedStaff || item.bdm === selectedStaff
+  // The server already applies staff / status / search filters; rows render as-is.
+  const filteredQuotations = quotationsList
 
-      const matchesStatus =
-        selectedStatus === 'All Status' || item.status === selectedStatus
-
-      const matchesSearch =
-        item.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.mobile.includes(searchQuery) ||
-        item.staff.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.id.toLowerCase().includes(searchQuery.toLowerCase())
-
-      return matchesStaff && matchesStatus && matchesSearch
-    })
-  }, [quotationsList, selectedStaff, selectedStatus, searchQuery])
-
-  // Status Metrics
-  const notSentCount = useMemo(
-    () => quotationsList.filter((q) => q.status === 'Not Sent').length,
-    [quotationsList]
-  )
-  const quotationRequestedCount = useMemo(
-    () => quotationsList.filter((q) => q.status === 'Quotation Requested').length,
-    [quotationsList]
-  )
-  const pendingApprovalCount = useMemo(
-    () => quotationsList.filter((q) => q.status === 'Pending Approval').length,
-    [quotationsList]
-  )
-  const approvedCount = useMemo(
-    () => quotationsList.filter((q) => q.status === 'Approved').length,
-    [quotationsList]
-  )
-  const rejectedCount = useMemo(
-    () => quotationsList.filter((q) => q.status === 'Rejected').length,
-    [quotationsList]
-  )
+  // Status Metrics come from the server-side row counts so they stay exact.
+  const notSentCount = statusCounts['Not Sent'] || 0
+  const quotationRequestedCount = statusCounts['Quotation Requested'] || 0
+  const pendingApprovalCount = statusCounts['Pending Approval'] || 0
+  const approvedCount = statusCounts['Approved'] || 0
+  const rejectedCount = statusCounts['Rejected'] || 0
 
   // Open "New Proposal" Modal
   function applyDraftToForm(draft) {
@@ -1431,7 +1357,7 @@ export default function Managequotation() {
 
           {/* Action Buttons & Status Metrics */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadQuotations() }} loading={isLoading} compact className="self-center" />
+            <RefreshButton onClick={() => { setError(''); refetch() }} loading={isLoading} compact className="self-center" />
 
             {/* Quick Metrics */}
             <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
@@ -1705,33 +1631,13 @@ export default function Managequotation() {
             </table>
           </div>
 
-          {/* Static Pagination Footer */}
-          <div className="flex flex-col gap-2 items-start sm:flex-row sm:items-center sm:justify-between pt-3 mt-3 border-t border-slate-100 text-[11px]">
-            <span className="text-slate-400 font-medium">
-              Showing 1 to {filteredQuotations.length} of {filteredQuotations.length} entries
-            </span>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 transition-colors font-medium cursor-pointer"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                className="w-6 h-6 flex items-center justify-center rounded-md bg-brand-50 text-brand-600 font-bold border border-brand-200/60"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 transition-colors font-medium cursor-pointer"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            count={count}
+            pageSize={100}
+            onChange={setPage}
+          />
 
           {/* Floating Action Popover (anchored to the card so it scrolls with the page) */}
           {openDropdownId && activeMenuQuote && (

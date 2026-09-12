@@ -104,7 +104,7 @@ class AssignLeadsToStaffTests(APITestCase):
         }, format='json')
         resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(len(resp.data), 5)
+        self.assertEqual(len(resp.data['results']), 5)
 
     def test_assign_with_no_matching_leads_returns_clear_error(self):
         self.client.force_authenticate(self.manager)
@@ -192,36 +192,36 @@ class LeadVisibilityTests(APITestCase):
         self.client.force_authenticate(self.manager)
         resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual({l['id'] for l in resp.data}, {'TC-1'})
-        self.assertIn('assignedTo', resp.data[0])
-        self.assertIn('callStatus', resp.data[0])
+        self.assertEqual({l['id'] for l in resp.data['results']}, {'TC-1'})
+        self.assertIn('assignedTo', resp.data['results'][0])
+        self.assertIn('callStatus', resp.data['results'][0])
 
     def test_staff_only_sees_own_assigned_leads(self):
         self.client.force_authenticate(self.shanu)
         resp = self.client.get('/api/transactions/leads/?status=assigned')
-        self.assertEqual({l['id'] for l in resp.data}, {'TC-1'})
+        self.assertEqual({l['id'] for l in resp.data['results']}, {'TC-1'})
 
     def test_staff_sees_only_own_raw_leads(self):
         # The default staff role no longer sees every raw lead in the company;
         # staff only see the raw leads they added themselves.
         self.client.force_authenticate(self.shanu)
         resp = self.client.get('/api/transactions/leads/?status=raw')
-        self.assertEqual({l['id'] for l in resp.data}, {'RL-1'})
+        self.assertEqual({l['id'] for l in resp.data['results']}, {'RL-1'})
 
     def test_staff_without_view_raw_all_sees_only_own_raw_leads(self):
         self.client.force_authenticate(self.raw_less_staff)
         resp = self.client.get('/api/transactions/leads/?status=raw')
-        self.assertEqual({l['id'] for l in resp.data}, set())
+        self.assertEqual({l['id'] for l in resp.data['results']}, set())
 
     def test_staff_without_view_raw_all_sees_only_own_assigned_leads(self):
         self.client.force_authenticate(self.raw_less_staff)
         resp = self.client.get('/api/transactions/leads/?status=assigned')
-        self.assertEqual(resp.data, [])
+        self.assertEqual(resp.data['results'], [])
 
     def test_other_staff_sees_nothing(self):
         self.client.force_authenticate(self.priya)
         resp = self.client.get('/api/transactions/leads/?status=assigned')
-        self.assertEqual(resp.data, [])
+        self.assertEqual(resp.data['results'], [])
 
     def test_staff_can_update_own_lead(self):
         self.client.force_authenticate(self.shanu)
@@ -246,9 +246,9 @@ class LeadVisibilityTests(APITestCase):
 
         self.client.force_authenticate(self.manager)
         resp = self.client.get('/api/transactions/leads/?status=quotation')
-        self.assertEqual({l['id'] for l in resp.data}, {'TC-1'})
+        self.assertEqual({l['id'] for l in resp.data['results']}, {'TC-1'})
         resp = self.client.get('/api/transactions/leads/?status=assigned')
-        self.assertEqual({l['id'] for l in resp.data}, set())
+        self.assertEqual({l['id'] for l in resp.data['results']}, set())
 
     def test_staff_loses_control_after_quotation_requested(self):
         # Once a staff moves a lead to 'Quotation Requested' it leaves the
@@ -1229,7 +1229,7 @@ class ContactEditSyncTests(APITestCase):
         }, format='json')
         resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual(resp.status_code, 200)
-        row = next(l for l in resp.data if l['id'] == 'RL-SYNC')
+        row = next(l for l in resp.data['results'] if l['id'] == 'RL-SYNC')
         self.assertEqual(row['contactHistory'][0]['field'], 'phone')
         self.assertEqual(row['contactHistory'][0]['toValue'], '444')
 
@@ -1485,7 +1485,7 @@ class ClientDetailFlowTests(APITestCase):
         self.client.force_authenticate(self.manager)
         resp = self.client.get('/api/transactions/client-details/')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual({r['orderNo'] for r in resp.data}, {self.order.id})
+        self.assertEqual({r['orderNo'] for r in resp.data['results']}, {self.order.id})
 
     def test_create_upserts_by_order_no(self):
         from transactions.services import create_client_detail_from_order
@@ -1701,7 +1701,7 @@ class ClientDetailTenantIsolationTests(APITestCase):
 
         self.client.force_authenticate(self.mgr_a)
         list_a = self.client.get('/api/transactions/client-details/')
-        self.assertEqual([r['id'] for r in list_a.data], [first_id])
+        self.assertEqual([r['id'] for r in list_a.data['results']], [first_id])
 
     def test_upsert_only_updates_own_company_record(self):
         self.client.force_authenticate(self.mgr_a)
@@ -1818,9 +1818,9 @@ class LeadStatusAndLockTests(APITestCase):
         self.client.force_authenticate(self.staff)
         resp = self.client.get('/api/transactions/leads/my/')
         self.assertEqual(resp.status_code, 200)
-        ids = {item['id'] for item in resp.data}
+        ids = {item['id'] for item in resp.data['results']}
         self.assertEqual(ids, {'ST-RAW', 'ST-ASGN', 'ST-QTN'})
-        by_id = {item['id']: item for item in resp.data}
+        by_id = {item['id']: item for item in resp.data['results']}
         self.assertEqual(by_id['ST-QTN']['stageLabel'], 'Quotation')
         self.assertEqual(by_id['ST-QTN']['detail'], 'Quotation approved')
         self.assertEqual(by_id['ST-ASGN']['stageLabel'], 'Tele Call')
@@ -1828,7 +1828,7 @@ class LeadStatusAndLockTests(APITestCase):
     def test_staff_my_leads_excludes_others_leads(self):
         self.client.force_authenticate(self.staff)
         resp = self.client.get('/api/transactions/leads/my/')
-        ids = {item['id'] for item in resp.data}
+        ids = {item['id'] for item in resp.data['results']}
         self.assertNotIn('ST-OTH', ids)
 
     def test_staff_locks_assigned_lead(self):
@@ -1973,5 +1973,119 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
             )
         self.assertEqual(resp.status_code, 200)
         builder.assert_not_called()
+
+
+class PaginationAndFilterTests(APITestCase):
+    """Server-side pagination (100/page) with database-side filtering."""
+
+    def setUp(self):
+        company = make_company('Paged Co')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@page.com', password='x', name='Manager P',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        Lead.objects.filter(tenant__isnull=True).delete()
+        for i in range(120):
+            Lead.objects.create(
+                id=f'PG-{i:03d}', company=f'Paged Lead {i}', contact='Person',
+                phone=f'98{i:05d}', category='Hospital', source='Google Search',
+                city='Kochi', added_by='Manager P', tenant=company, status='raw',
+                date='2026-01-01',
+            )
+
+    def test_first_page_returns_100_rows_and_total_count(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/leads/?status=raw')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 120)
+        self.assertEqual(resp.data['page'], 1)
+        self.assertEqual(resp.data['page_size'], 100)
+        self.assertEqual(len(resp.data['results']), 100)
+
+    def test_second_page_returns_the_remaining_rows(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/leads/?status=raw&page=2')
+        self.assertEqual(len(resp.data['results']), 20)
+        self.assertEqual(resp.data['count'], 120)
+        ids = {row['id'] for row in resp.data['results']}
+        self.assertTrue(ids.isdisjoint({
+            row['id'] for row in (
+                self.client.get('/api/transactions/leads/?status=raw&page=1').data['results']
+            )
+        }))
+
+    def test_search_filter_is_applied_server_side(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/leads/?status=raw&search=Paged%20Lead%201')
+        self.assertEqual(resp.data['count'], 31)
+        self.assertTrue(all(
+            'Paged Lead 1' in row['company'] for row in resp.data['results']
+        ))
+
+    def test_scoped_staff_filter_is_applied_server_side(self):
+        other = make_company('Other Paged Co')
+        Lead.objects.create(
+            id='PG-OTHER', company='Foreign Lead', added_by='Someone Else',
+            tenant=other, status='raw',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get(
+            '/api/transactions/leads/?status=raw&added_by=Manager%20P'
+        )
+        self.assertEqual(resp.data['count'], 120)
+
+    def test_leads_meta_returns_facets_and_counts(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/leads/meta/?status=raw')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['counts']['total'], 120)
+        self.assertIn('Kochi', resp.data['facets']['cities'])
+        self.assertIn('Manager P', resp.data['facets']['added_by'])
+
+    def test_quotation_rows_are_paginated(self):
+        self.client.force_authenticate(self.manager)
+        Lead.objects.filter(status='raw').update(status='quotation')
+        # Turn 105 of the leads into quotation-records leads.
+        lead_page = Lead.objects.filter(status='quotation')[:105]
+        for lead in lead_page:
+            Quotation.objects.create(
+                id=lead.id, lead_id=lead.id, company=lead.company,
+                tenant=lead.tenant, staff='Manager P', status='Not Sent',
+            )
+        # 105 leads with proposals + 15 leads without one.
+        resp = self.client.get('/api/transactions/quotations/rows/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 120)
+        self.assertEqual(resp.data['counts']['Not Sent'], 105)
+        self.assertEqual(resp.data['counts']['Quotation Requested'], 15)
+        self.assertEqual(len(resp.data['results']), 100)
+        self.assertTrue(resp.data['results'][0]['hasProposal'])
+
+    def test_order_register_pages(self):
+        self.client.force_authenticate(self.manager)
+        for i in range(120):
+            Order.objects.create(
+                id=f'ORD-{i:03d}', company=f'Order Co {i}',
+                tenant=self.company,
+            )
+        resp = self.client.get('/api/transactions/orders/register/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 120)
+        self.assertEqual(len(resp.data['results']), 100)
+        self.assertEqual(resp.data['counts']['total'], 120)
+
+    def test_orders_list_supports_exclude_status(self):
+        self.client.force_authenticate(self.manager)
+        for i in range(5):
+            Order.objects.create(
+                id=f'EX-{i}', company=f'Ex Co {i}', tenant=self.company,
+                status='Accepted' if i == 0 else 'Pending',
+            )
+        resp = self.client.get('/api/transactions/orders/?exclude_status=Accepted')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 4)
+        self.assertEqual(resp.data['counts']['total'], 4)
+        self.assertFalse(any(o['status'] == 'Accepted' for o in resp.data['results']))
 
 

@@ -151,6 +151,19 @@ class Lead(models.Model):
                 name='uniq_lead_tenant_company_key',
             ),
         ]
+        indexes = [
+            models.Index(fields=['status', 'tenant', 'created_at'], name='lead_status_ten_created'),
+            models.Index(fields=['status', 'tenant', 'assigned_to'], name='lead_status_ten_assigned'),
+            models.Index(fields=['status', 'tenant', 'added_by'], name='lead_status_ten_addedby'),
+            models.Index(fields=['status', 'tenant', 'date'], name='lead_status_ten_date'),
+            models.Index(fields=['tenant', 'created_at'], name='lead_tenant_created'),
+            models.Index(fields=['updated_at'], name='lead_updated_at'),
+            models.Index(fields=['source'], name='lead_source_idx'),
+            models.Index(fields=['category'], name='lead_category_idx'),
+            models.Index(fields=['call_status'], name='lead_call_status_idx'),
+            models.Index(fields=['priority'], name='lead_priority_idx'),
+            models.Index(fields=['has_follow_up'], name='lead_has_follow_up_idx'),
+        ]
     def __str__(self):
         return f'{self.id} - {self.company}'
 
@@ -395,6 +408,11 @@ class Order(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['tenant', 'created_at'], name='order_tenant_created'),
+            models.Index(fields=['status', 'created_at'], name='order_status_created'),
+            models.Index(fields=['lead_id'], name='order_lead_id_idx'),
+        ]
 
     def __str__(self):
         return f'{self.id} - {self.company}'
@@ -443,6 +461,12 @@ class ClientDetail(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['tenant', 'created_at'], name='clientdetail_tenant_created'),
+            models.Index(fields=['status'], name='clientdetail_status_idx'),
+            models.Index(fields=['lead_id'], name='clientdetail_lead_id_idx'),
+            models.Index(fields=['order_no'], name='clientdetail_order_no_idx'),
+        ]
 
     def __str__(self):
         return f'{self.id} - {self.company}'

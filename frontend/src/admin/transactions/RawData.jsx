@@ -6,7 +6,9 @@ import { can } from '../../utils/permissions'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
+import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 
 function PlusIcon() {
   return (
@@ -25,6 +27,27 @@ function shiftDays(offset) {
   const d = new Date()
   d.setDate(d.getDate() + offset)
   return toISODate(d)
+}
+
+// Map the Raw Data date picker choices to server-side date query params.
+function rawDateParams(dateFilterType, startDate, endDate) {
+  if (dateFilterType === 'Today') {
+    const t = toISODate(new Date())
+    return { date_from: t, date_to: t }
+  }
+  if (dateFilterType === 'Yesterday') return { date_from: shiftDays(-1), date_to: shiftDays(-1) }
+  if (dateFilterType === 'Last 7 Days') return { date_from: shiftDays(-6) }
+  if (dateFilterType === 'This Month') {
+    const now = new Date()
+    return { date_from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01` }
+  }
+  if (dateFilterType === 'Custom') {
+    return {
+      ...(startDate ? { date_from: startDate } : {}),
+      ...(endDate ? { date_to: endDate } : {}),
+    }
+  }
+  return {}
 }
 
 function shortDate(value) {
@@ -255,8 +278,6 @@ export default function RawData() {
   const { user } = useAuth()
   const isManager = can(user, 'leads.view_all')
   const defaultStaffFilter = isManager ? 'All Employees' : 'My entries'
-  const [rawDataList, setRawDataList] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [selectedStaff, setSelectedStaff] = useState(defaultStaffFilter)
@@ -349,25 +370,34 @@ export default function RawData() {
     else setImportModalOpen(false)
   }
 
-  useEffect(() => {
-    let cancelled = false
+  const searchDebounced = useDebouncedValue(searchQuery)
 
-    async function fetchData() {
-      try {
-        const data = await api.get('/transactions/leads/?status=raw')
-        if (!cancelled) setRawDataList(data)
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
+  const listParams = useMemo(
+    () => ({
+      status: 'raw',
+      ...(selectedStaff !== 'All Employees' && selectedStaff !== 'My entries'
+        ? { added_by: selectedStaff === 'Owner-less' ? '__none__' : selectedStaff }
+        : {}),
+      ...(selectedSource !== 'All Sources' ? { source: selectedSource } : {}),
+      ...rawDateParams(dateFilterType, startDate, endDate),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [selectedStaff, selectedSource, dateFilterType, startDate, endDate, searchDebounced]
+  )
 
-    fetchData()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const {
+    rows: rawDataList,
+    count: totalCount,
+    loading: isLoading,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({
+    url: '/transactions/leads/',
+    params: listParams,
+    onError: (msg) => setError(msg),
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -430,17 +460,9 @@ export default function RawData() {
     setTimeout(() => setToast(''), 3000)
   }
 
-  async function refreshData() {
-    setIsLoading(true)
+  function refreshData() {
     setError('')
-    try {
-      const data = await api.get('/transactions/leads/?status=raw')
-      setRawDataList(data)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsLoading(false)
-    }
+    refetch()
   }
 
   // Drawer Form State - pure contact intake
@@ -718,17 +740,31 @@ async function handleBulkImport(e) {
       setIsSaving(false)
     }
   }
-  const totalUnassignedCount = useMemo(() => {
-    return rawDataList.filter((l) => {
-      if (assignCategory !== 'All Categories' && l.category !== assignCategory) return false
-      if (assignFromDate && !(l.date && l.date >= assignFromDate)) return false
-      if (assignToDate && !(l.date && l.date <= assignToDate)) return false
-      return true
-    }).length
-  }, [rawDataList, assignCategory, assignFromDate, assignToDate])
-  const assignCountToUse = Math.min(assignCount, totalUnassignedCount)
+  const [assignMeta, setAssignMeta] = useState(0)
+  useEffect(() => {
+    if (!assignModalOpen) return
+    let cancelled = false
+    const metaParams = {
+      status: 'raw',
+      ...(assignCategory !== 'All Categories' ? { category: assignCategory } : {}),
+      ...(assignFromDate ? { date_from: assignFromDate } : {}),
+      ...(assignToDate ? { date_to: assignToDate } : {}),
+      page_size: 1,
+    }
+    api
+      .get('/transactions/leads/', { params: metaParams })
+      .then((data) => {
+        if (!cancelled) setAssignMeta(data?.count ?? 0)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [assignModalOpen, assignCategory, assignFromDate, assignToDate])
 
-  // Filtered Leads based on search, staff, source, and date range
+  const assignCountToUse = Math.min(assignCount, assignMeta)
+
+  // Date filter value labels for the dropdown options.
   const dateFilterValues = (() => {
     const now = new Date()
     const yesterday = new Date()
@@ -744,48 +780,6 @@ async function handleBulkImport(e) {
       monthLabel: now.toLocaleDateString('en-IN', { month: 'long' }),
     }
   })()
-
-  const filteredData = useMemo(() => {
-    return rawDataList.filter((l) => {
-      // 1. Staff Filter
-      const matchesStaff =
-        selectedStaff === 'All Employees' ||
-        (selectedStaff === 'My entries' && l.addedBy === user?.name) ||
-        (selectedStaff === 'Owner-less' && !l.addedBy) ||
-        l.addedBy === selectedStaff
-
-      // 2. Source Filter
-      const matchesSource =
-        selectedSource === 'All Sources' || l.source === selectedSource
-
-      // 3. Search query filter
-      const matchesSearch =
-        l.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.phone.includes(searchQuery) ||
-        l.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (l.source && l.source.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        l.city.toLowerCase().includes(searchQuery.toLowerCase())
-
-      // 4. Date Filter
-      let matchesDate = true
-      if (dateFilterType === 'Today') {
-        matchesDate = l.date === dateFilterValues.todayISO
-      } else if (dateFilterType === 'Yesterday') {
-        matchesDate = l.date === dateFilterValues.yesterdayISO
-      } else if (dateFilterType === 'Last 7 Days') {
-        matchesDate = l.date >= dateFilterValues.last7ISO
-      } else if (dateFilterType === 'This Month') {
-        matchesDate = l.date.startsWith(dateFilterValues.monthStart.slice(0, 7))
-      } else if (dateFilterType === 'Custom') {
-        if (startDate && l.date < startDate) matchesDate = false
-        if (endDate && l.date > endDate) matchesDate = false
-      }
-
-      return matchesStaff && matchesSource && matchesSearch && matchesDate
-    })
-  }, [rawDataList, selectedStaff, selectedSource, searchQuery, dateFilterType, startDate, endDate, user?.name, dateFilterValues])
 
   function toggleSelectLead(id) {
     setSelectedIds((prev) => {
@@ -840,7 +834,7 @@ async function handleBulkImport(e) {
                 Raw Data
               </h1>
               <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-600 border border-brand-200/60">
-                {rawDataList.length}
+                {totalCount}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -1138,8 +1132,8 @@ async function handleBulkImport(e) {
                       Loading raw data...
                     </td>
                   </tr>
-                ) : filteredData.length > 0 ? (
-                  filteredData.map((item) => (
+                ) : rawDataList.length > 0 ? (
+                  rawDataList.map((item) => (
                     <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
                       {/* Select Checkbox */}
                       <td className="py-0.5 pr-2">
@@ -1233,33 +1227,13 @@ async function handleBulkImport(e) {
             </table>
           </div>
 
-          {/* Static Pagination Footer */}
-          <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-[11px]">
-            <span className="text-slate-400 font-medium">
-              Showing 1 to {filteredData.length} of {filteredData.length} entries
-            </span>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 transition-colors font-medium cursor-pointer"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                className="w-6 h-6 flex items-center justify-center rounded-md bg-brand-50 text-brand-600 font-bold border border-brand-200/60"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 transition-colors font-medium cursor-pointer"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            count={totalCount}
+            pageSize={100}
+            onChange={setPage}
+          />
         </div>
       </div>
 
@@ -1454,7 +1428,7 @@ async function handleBulkImport(e) {
                     </span>
                     <div className="flex items-center gap-1.5">
                       {[25, 50, 100, 200].map((preset) => {
-                        const disabled = preset > totalUnassignedCount
+                        const disabled = preset > assignMeta
                         return (
                           <button
                             key={preset}
@@ -1483,7 +1457,7 @@ async function handleBulkImport(e) {
                     <input
                       type="number"
                       min="1"
-                      max={totalUnassignedCount || 100}
+                      max={assignMeta || 100}
                       value={assignCountToUse}
                       onChange={(e) => setAssignCount(Number(e.target.value))}
                       className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-bold text-slate-800 focus:border-brand-500 focus:outline-none"
@@ -1496,7 +1470,7 @@ async function handleBulkImport(e) {
               <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 flex items-center justify-between text-xs">
                 <span className="text-slate-600">
                   Ready to assign <strong className="text-slate-900">{assignCountToUse}</strong> leads out of{' '}
-                  <strong className="text-brand-600">{totalUnassignedCount}</strong> unassigned records matching filters.
+                  <strong className="text-brand-600">{assignMeta}</strong> unassigned records matching filters.
                 </span>
               </div>
 

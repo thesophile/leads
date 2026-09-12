@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
-import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
+import usePagedList, { useDebouncedValue, fetchAllPaged } from '../../utils/usePagedList'
 
 function PackageIcon({ className = 'h-4 w-4' }) {
   return (
@@ -45,60 +46,9 @@ function CloseIcon({ className = 'h-4 w-4' }) {
   )
 }
 
-function sameText(a, b) {
-  return String(a || '').toLowerCase() === String(b || '').toLowerCase()
-}
-
-// Best-effort parse of free-text order dates into a comparable ISO string.
-function toIsoDate(value) {
-  if (!value) return ''
-  const text = String(value).trim()
-  const a = /^(\d{4})-(\d{2})-(\d{2})/.exec(text)
-  if (a) return a[0]
-  const d = /^(\d{2})-(\d{2})-(\d{4})/.exec(text)
-  if (d) return `${d[3]}-${d[2]}-${d[1]}`
-  const s = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(text)
-  if (s) return `${s[3]}-${s[2]}-${s[1]}`
-  return ''
-}
-
-// Client-detail status -> register "Collected"/"Pending" summary.
-function detailsStatusOf(clientDetail) {
-  const status = clientDetail?.status || ''
-  if (['Details Complete', 'Completed', 'Paid'].includes(status)) return 'Collected'
-  return 'Pending'
-}
-
-// Map an order returned by the backend (merged with its client-detail record)
-// into the register row shape.
-function orderToRow(order, detailMap) {
-  const iso = toIsoDate(order.date)
-  const cd = detailMap.get(order.id)
-  return {
-    id: order.id,
-    orderNo: order.id || '',
-    leadId: order.leadId || '',
-    date: order.date || '',
-    rawDate: iso,
-    company: order.company || '',
-    customer: order.customer || cd?.clientName || '',
-    mobile: order.mobile || '',
-    email: order.email || '',
-    location: order.city || '',
-    staff: order.staff || '',
-    bdm: order.bdm || '',
-    category: order.category || '',
-    detailsStatus: detailsStatusOf(cd),
-    remarks: order.remarks || '',
-  }
-}
-
 export default function OrderReceived() {
   const navigate = useNavigate()
 
-  const [registerRows, setRegisterRows] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
@@ -108,44 +58,49 @@ export default function OrderReceived() {
 
   const [selectedOrder, setSelectedOrder] = useState(null)
 
-  // Load the real orders + their client-detail records from the database.
-  const loadOrders = useCallback(async () => {
-    try {
-      const [orders, clientDetails] = await Promise.all([
-        api.get('/transactions/orders/'),
-        api.get('/transactions/client-details/'),
-      ])
-      const detailMap = new Map()
-      ;(Array.isArray(clientDetails) ? clientDetails : []).forEach((cd) => {
-        if (cd.orderNo && !detailMap.has(cd.orderNo)) detailMap.set(cd.orderNo, cd)
-      })
-      setRegisterRows(
-        (Array.isArray(orders) ? orders : []).map((o) => orderToRow(o, detailMap))
-      )
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const searchDebounced = useDebouncedValue(searchQuery)
 
-  useEffect(() => {
-    ;(async () => {
-      await loadOrders()
-    })()
-  }, [loadOrders])
+  const listParams = useMemo(
+    () => ({
+      ...(fromDate ? { date_from: fromDate } : {}),
+      ...(toDate ? { date_to: toDate } : {}),
+      ...(category !== 'All Category' ? { category } : {}),
+      ...(staff !== 'All Staff' ? { staff } : {}),
+      ...(detailsStatus !== 'All Details' ? { details_status: detailsStatus } : {}),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [fromDate, toDate, category, staff, detailsStatus, searchDebounced]
+  )
 
-  // Staff choices are derived from the actual records so the filters always
-  // match what the current user is allowed to see.
+  const {
+    rows,
+    count,
+    counts,
+    facets,
+    loading: isLoading,
+    error,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({ url: '/transactions/orders/register/', params: listParams })
+
+  const filteredData = rows
+
+  // Staff and category choices come from the server-side facets.
   const staffOptions = useMemo(() => {
-    const names = [...new Set(registerRows.map((r) => r.staff).filter(Boolean))]
+    const names = Array.isArray(facets?.staff) && facets.staff.length
+      ? facets.staff
+      : [...new Set(rows.map((r) => r.staff).filter(Boolean))]
     return ['All Staff', ...names.sort((a, b) => a.localeCompare(b))]
-  }, [registerRows])
+  }, [facets, rows])
 
   const categoryOptions = useMemo(() => {
-    const values = [...new Set(registerRows.map((r) => r.category).filter(Boolean))]
+    const values = Array.isArray(facets?.categories) && facets.categories.length
+      ? facets.categories
+      : [...new Set(rows.map((r) => r.category).filter(Boolean))]
     return ['All Category', ...values.sort((a, b) => a.localeCompare(b))]
-  }, [registerRows])
+  }, [facets, rows])
 
   const [isExporting, setIsExporting] = useState(false)
 
@@ -166,64 +121,33 @@ export default function OrderReceived() {
     setSearchQuery('')
   }
 
-  // Filters apply live as the user changes them — no Apply button needed.
-  const filteredData = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    return registerRows.filter((item) => {
-      // Date filter
-      if (fromDate && item.rawDate < fromDate) return false
-      if (toDate && item.rawDate > toDate) return false
-
-      // Category filter
-      if (category !== 'All Category' && !sameText(item.category, category)) return false
-
-      // Staff filter
-      if (staff !== 'All Staff' && !sameText(item.staff, staff)) return false
-
-      // Client details status filter
-      if (detailsStatus !== 'All Details' && !sameText(item.detailsStatus, detailsStatus)) return false
-
-      // Search query
-      if (q) {
-        return (
-          item.orderNo.toLowerCase().includes(q) ||
-          item.company.toLowerCase().includes(q) ||
-          item.customer.toLowerCase().includes(q) ||
-          item.mobile.toLowerCase().includes(q) ||
-          item.location.toLowerCase().includes(q) ||
-          item.staff.toLowerCase().includes(q) ||
-          item.category.toLowerCase().includes(q)
-        )
-      }
-
-      return true
-    })
-  }, [registerRows, fromDate, toDate, category, staff, detailsStatus, searchQuery])
-
-  const totalConvertedCount = filteredData.length
-  const pendingDetailsCount = filteredData.filter((i) => i.detailsStatus === 'Pending').length
-  const collectedDetailsCount = filteredData.filter((i) => i.detailsStatus === 'Collected').length
+  // KPI cards use the server-side counts over the full filtered dataset.
+  const totalConvertedCount = counts.total ?? count
+  const pendingDetailsCount = counts.pending ?? 0
+  const collectedDetailsCount = counts.collected ?? 0
 
   async function exportPdf() {
     if (isExporting) return
     setIsExporting(true)
     try {
+      const all = await fetchAllPaged('/transactions/orders/register/', listParams)
+      const rowsForPdf = all.map((r) => [
+        r.orderNo,
+        r.date,
+        r.company,
+        r.customer,
+        r.mobile,
+        r.location,
+        r.staff,
+        r.bdm,
+        r.category,
+        r.detailsStatus,
+      ])
       await exportRegisterPdf({
         title: 'CONVERTED CLIENTS REGISTER',
         fileNamePrefix: 'Converted_Clients_Register',
         columns: ['Order No', 'Date', 'Company', 'Customer', 'Phone', 'Location', 'Staff', 'BDM', 'Category', 'Client Details'],
-        rows: filteredData.map((r) => [
-          r.orderNo,
-          r.date,
-          r.company,
-          r.customer,
-          r.mobile,
-          r.location,
-          r.staff,
-          r.bdm,
-          r.category,
-          r.detailsStatus,
-        ]),
+        rows: rowsForPdf,
         filters: {
           Category: category !== 'All Category' ? category : '',
           Staff: staff !== 'All Staff' ? staff : '',
@@ -249,7 +173,8 @@ export default function OrderReceived() {
     }
   }
 
-  function handleExportCSV() {
+  async function handleExportCSV() {
+    const all = await fetchAllPaged('/transactions/orders/register/', listParams)
     const headers = [
       'Sl No',
       'Order No',
@@ -263,7 +188,7 @@ export default function OrderReceived() {
       'Client Details',
     ]
 
-    const rows = filteredData.map((o, idx) => [
+    const rows = all.map((o, idx) => [
       idx + 1,
       `"${o.orderNo}"`,
       `"${o.date}"`,
@@ -325,7 +250,7 @@ export default function OrderReceived() {
 
             {/* Right: Actions */}
             <div className="flex items-center gap-2 flex-wrap">
-              <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadOrders() }} loading={isLoading} />
+              <RefreshButton onClick={refetch} loading={isLoading} />
               <button
                 type="button"
                 onClick={exportPdf}
@@ -593,12 +518,20 @@ export default function OrderReceived() {
           </div>
 
           {/* Pagination & Footer summary */}
-          <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between text-xs text-slate-500">
+          <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between text-xs text-slate-500 print:hidden">
             <div>
               Showing{' '}
-              <span className="font-semibold text-slate-800">{filteredData.length}</span>{' '}
+              <span className="font-semibold text-slate-800">{totalConvertedCount}</span>{' '}
               converted clients
             </div>
+
+            <PaginationBar
+              page={page}
+              totalPages={totalPages}
+              count={count}
+              pageSize={100}
+              onChange={setPage}
+            />
 
             <div className="font-mono text-[10px]">PROGRAMERS INTERNATIONAL &bull; REGISTER AUDIT</div>
           </div>

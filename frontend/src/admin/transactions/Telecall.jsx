@@ -5,6 +5,8 @@ import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import { localISO } from '../../utils/date'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
+import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 
 const STATUSES = [
   'All Status',
@@ -104,39 +106,12 @@ function LockIcon({ className = 'h-3.5 w-3.5' }) {
 
 export default function Telecall() {
   const { user } = useAuth()
-  const [telecallList, setTelecallList] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
   const canViewAll = !!user && (can(user, 'leads.view_all') || user.is_superuser)
   const canAssign = !!user && (can(user, 'leads.assign') || user.is_superuser)
   const isLockAdmin = !!user && (can(user, 'leads.manage_lock') || user.is_superuser)
   const canLockLead = (lead) => !!lead && (isLockAdmin || lead.assignedTo === user?.name)
-
-  const callerOptions = useMemo(
-    () => [...new Set(telecallList.map((l) => l.assignedTo).filter(Boolean))],
-    [telecallList]
-  )
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchData() {
-      try {
-        const data = await api.get('/transactions/leads/?status=assigned')
-        if (!cancelled) setTelecallList(data)
-      } catch (err) {
-        if (!cancelled) setError(err.message)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    fetchData()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const [categoryOptions, setCategoryOptions] = useState([])
   const [sourceOptions, setSourceOptions] = useState([])
@@ -177,23 +152,61 @@ export default function Telecall() {
     }
   }, [])
 
-  async function refreshData() {
-    setIsLoading(true)
+  function refreshData() {
     setError('')
-    try {
-      const data = await api.get('/transactions/leads/?status=assigned')
-      setTelecallList(data)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsLoading(false)
-    }
+    refetch()
   }
 
   const [selectedCaller, setSelectedCaller] = useState('All Callers')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [selectedPriority, setSelectedPriority] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
+
+  const searchDebounced = useDebouncedValue(searchQuery)
+
+  const listParams = useMemo(
+    () => ({
+      status: 'assigned',
+      ...(canViewAll && selectedCaller !== 'All Callers' ? { assigned_to: selectedCaller } : {}),
+      ...(selectedStatus !== 'All Status' ? { call_status: selectedStatus } : {}),
+      ...(selectedPriority !== 'All' ? { priority: selectedPriority } : {}),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [canViewAll, selectedCaller, selectedStatus, selectedPriority, searchDebounced]
+  )
+
+  const {
+    rows: telecallList,
+    count,
+    loading: isLoading,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({
+    url: '/transactions/leads/',
+    params: listParams,
+    onError: (msg) => setError(msg),
+  })
+
+  const [meta, setMeta] = useState({ facets: {}, counts: {} })
+  useEffect(() => {
+    let cancelled = false
+    api
+      .get('/transactions/leads/meta/', { params: { status: 'assigned' } })
+      .then((data) => {
+        if (!cancelled) setMeta(data || { facets: {}, counts: {} })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const callerOptions = useMemo(
+    () => (Array.isArray(meta.facets?.assigned_to) ? meta.facets.assigned_to : []),
+    [meta]
+  )
 
   // Drawer State for Call Logging & Assessment
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -240,21 +253,12 @@ export default function Telecall() {
     }, 300)
   }
 
-  // Lead counts & KPI metrics. The Telecall list only contains assigned
-  // (status=assigned) leads, so all rows carry an assignee.
-  const totalAssignedCount = telecallList.length
-  const hotLeadsCount = useMemo(
-    () => telecallList.filter((l) => l.priority === 'Hot').length,
-    [telecallList]
-  )
-  const warmLeadsCount = useMemo(
-    () => telecallList.filter((l) => l.priority === 'Warm').length,
-    [telecallList]
-  )
-  const coldLeadsCount = useMemo(
-    () => telecallList.filter((l) => l.priority === 'Cold').length,
-    [telecallList]
-  )
+  // Lead counts & KPIs come from the server-side meta feed so they stay exact
+  // even when only one page of rows is loaded.
+  const totalAssignedCount = meta.counts?.total ?? count
+  const hotLeadsCount = meta.counts?.by_priority?.Hot || 0
+  const warmLeadsCount = meta.counts?.by_priority?.Warm || 0
+  const coldLeadsCount = meta.counts?.by_priority?.Cold || 0
 
   function openDrawer() {
     setDrawerVisible(true)
@@ -354,38 +358,9 @@ export default function Telecall() {
     }
   }
 
-  // Filtered Telecall leads
-  const filteredLeads = useMemo(() => {
-    return telecallList.filter((item) => {
-      // 1. Caller filter
-      const matchesCaller =
-        selectedCaller === 'All Callers' || item.assignedTo === selectedCaller
-
-      // 2. Status filter
-      const matchesStatus =
-        selectedStatus === 'All Status' || item.callStatus === selectedStatus
-
-      // 3. Priority filter
-      let matchesPriority = true
-      if (selectedPriority === 'Hot') {
-        matchesPriority = item.priority === 'Hot'
-      } else if (selectedPriority === 'Warm') {
-        matchesPriority = item.priority === 'Warm'
-      } else if (selectedPriority === 'Cold') {
-        matchesPriority = item.priority === 'Cold'
-      }
-
-      // 4. Search query
-      const matchesSearch =
-        item.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.contact || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.phone || '').includes(searchQuery) ||
-        (item.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.city || '').toLowerCase().includes(searchQuery.toLowerCase())
-
-      return matchesCaller && matchesStatus && matchesPriority && matchesSearch
-    })
-  }, [telecallList, selectedCaller, selectedStatus, selectedPriority, searchQuery])
+  // The server already applies caller / status / priority / search filters;
+  // the page rows are rendered as-is.
+  const filteredLeads = telecallList
 
   return (
     <Layout>
@@ -720,33 +695,13 @@ export default function Telecall() {
             </table>
           </div>
 
-          {/* Static Pagination Footer */}
-          <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-[11px]">
-            <span className="text-slate-400 font-medium">
-              Showing 1 to {filteredLeads.length} of {filteredLeads.length} entries
-            </span>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 transition-colors font-medium cursor-pointer"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                className="w-6 h-6 flex items-center justify-center rounded-md bg-brand-50 text-brand-600 font-bold border border-brand-200/60"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 transition-colors font-medium cursor-pointer"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            count={count}
+            pageSize={100}
+            onChange={setPage}
+          />
         </div>
       </div>
 

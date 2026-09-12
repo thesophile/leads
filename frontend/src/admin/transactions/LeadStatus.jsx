@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import Layout from '../../Layout/Layout'
 import { can } from '../../utils/permissions'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
+import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 
 const STAGE_STYLES = {
   raw: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -35,28 +37,33 @@ function UnlockIcon({ className = 'h-4 w-4' }) {
 export default function LeadStatus() {
   const { user } = useAuth()
   const [leads, setLeads] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStage, setSelectedStage] = useState('All Stages')
   const [toastMessage, setToastMessage] = useState('')
   const [busyId, setBusyId] = useState(null)
 
-  const loadLeads = useCallback(async () => {
-    try {
-      const data = await api.get('/transactions/leads/my/')
-      setLeads(Array.isArray(data) ? data : [])
-    } catch {
-      // Keep any previously loaded leads on a failed refresh.
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const searchDebounced = useDebouncedValue(searchQuery)
 
-  useEffect(() => {
-    ;(async () => {
-      await loadLeads()
-    })()
-  }, [loadLeads])
+  const listParams = useMemo(
+    () => ({
+      ...(selectedStage !== 'All Stages' ? { stage: selectedStage } : {}),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [selectedStage, searchDebounced]
+  )
+
+  const {
+    count,
+    loading: isLoading,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({
+    url: '/transactions/leads/my/',
+    params: listParams,
+    onData: (pageRows) => setLeads(pageRows),
+  })
 
   function showToast(msg) {
     setToastMessage(msg)
@@ -84,17 +91,7 @@ export default function LeadStatus() {
     }
   }
 
-  const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      const matchesStage = selectedStage === 'All Stages' || lead.stage === selectedStage
-      const matchesSearch =
-        lead.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (lead.contact || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (lead.phone || '').includes(searchQuery) ||
-        lead.id.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchesStage && matchesSearch
-    })
-  }, [leads, selectedStage, searchQuery])
+  const filteredLeads = leads
 
   return (
     <Layout>
@@ -113,7 +110,7 @@ export default function LeadStatus() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <RefreshButton onClick={() => { setIsLoading(true); loadLeads() }} loading={isLoading} compact />
+            <RefreshButton onClick={refetch} loading={isLoading} compact />
             <select
               value={selectedStage}
               onChange={(e) => setSelectedStage(e.target.value)}
@@ -211,6 +208,14 @@ export default function LeadStatus() {
                 })}
               </tbody>
             </table>
+
+            <PaginationBar
+              page={page}
+              totalPages={totalPages}
+              count={count}
+              pageSize={100}
+              onChange={setPage}
+            />
           </div>
         )}
       </div>

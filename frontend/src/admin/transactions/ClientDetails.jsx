@@ -1,11 +1,13 @@
-import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
 import { localISO } from '../../utils/date'
+import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 import { api } from '../../api/client'
 
 const ATTACHMENT_TYPES = ['SRS Document', 'Business Card', 'Voice Clip', 'Other']
@@ -218,7 +220,6 @@ export default function ClientDetails() {
   const prefilledOrder = location.state?.order
 
   const [records, setRecords] = useState([])
-  const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
@@ -284,54 +285,42 @@ export default function ClientDetails() {
     }
   }, [location.state])
 
-  const loadRecords = useCallback(async () => {
-    try {
-      const data = await api.get('/transactions/client-details/')
-      setRecords(Array.isArray(data) ? data : [])
+  const searchDebounced = useDebouncedValue(searchQuery)
+
+  const listParams = useMemo(
+    () => ({
+      tab: activeTab,
+      ...(selectedStaff !== 'All Staff' ? { collected_by: selectedStaff } : {}),
+      ...(selectedStatus !== 'All Status' ? { status: selectedStatus } : {}),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [activeTab, selectedStaff, selectedStatus, searchDebounced]
+  )
+
+  const {
+    count,
+    counts: listCounts,
+    loading,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({
+    url: '/transactions/client-details/',
+    params: listParams,
+    onData: (pageRows) => {
       setLoadError('')
-    } catch (err) {
-      setLoadError(err.message || 'Could not load client details.')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+      setRecords(pageRows)
+    },
+    onError: (msg) => setLoadError(msg || 'Could not load client details.'),
+  })
 
-  // Load real client detail records from the backend.
-  useEffect(() => {
-    ;(async () => {
-      await loadRecords()
-    })()
-  }, [loadRecords])
+  const filteredRecords = records
 
-  const filteredRecords = useMemo(() => {
-    const activeTabDef = TAB_RAIL.find((t) => t.id === activeTab)
-    return records.filter((rec) => {
-      if (activeTabDef && activeTabDef.statuses && !activeTabDef.statuses.includes(rec.status)) {
-        return false
-      }
-      const matchesStaff = selectedStaff === 'All Staff' || rec.collectedBy === selectedStaff
-      const matchesStatus = selectedStatus === 'All Status' || rec.status === selectedStatus
-
-      let matchesSearch = true
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        matchesSearch =
-          rec.clientName.toLowerCase().includes(q) ||
-          rec.company.toLowerCase().includes(q) ||
-          rec.orderNo.toLowerCase().includes(q) ||
-          rec.mobile.includes(q) ||
-          rec.collectedBy.toLowerCase().includes(q) ||
-          rec.category.toLowerCase().includes(q)
-      }
-
-      return matchesStaff && matchesStatus && matchesSearch
-    })
-  }, [records, selectedStaff, selectedStatus, searchQuery, activeTab])
-
-  const totalCount = records.length
+  const totalCount = listCounts.total ?? count
   const statusCounts = STATUS_VALUES.map((status) => ({
     status,
-    count: records.filter((r) => r.status === status).length,
+    count: listCounts.by_status?.[status] || 0,
   }))
 
   function openAddModal() {
@@ -423,7 +412,7 @@ export default function ClientDetails() {
       for (const att of newAttachments) {
         await uploadAttachment(record.id, att.file, att.type)
       }
-      await loadRecords()
+      refetch()
       setToastMessage(editingId ? '✓ Client details updated!' : '✓ Client details collected!')
     } catch (err) {
       setToastMessage(`✗ ${err.message || 'Could not save client details.'}`)
@@ -575,7 +564,7 @@ export default function ClientDetails() {
           </div>
 
           <div className="flex items-center gap-2">
-            <RefreshButton onClick={() => { setLoading(true); setLoadError(''); loadRecords() }} loading={loading} />
+            <RefreshButton onClick={() => { setLoadError(''); refetch() }} loading={loading} />
             <button
               type="button"
               onClick={openAddModal}
@@ -811,6 +800,14 @@ export default function ClientDetails() {
               </tbody>
             </table>
           </div>
+
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            count={count}
+            pageSize={100}
+            onChange={setPage}
+          />
 
           {/* Share Link Popover (anchored to the card so it scrolls with the page) */}
           {shareMenu && (

@@ -247,7 +247,10 @@ class QuotationSerializer(serializers.ModelSerializer):
         return obj.approvals.count()
 
     def get_approvalsApproved(self, obj):
-        return obj.approvals.filter(status=QuotationApproval.STATUS_APPROVED).count()
+        return sum(
+            1 for a in obj.approvals.all()
+            if a.status == QuotationApproval.STATUS_APPROVED
+        )
 
     def get_clientRespondedAt(self, obj):
         return self._iso(obj.client_responded_at)

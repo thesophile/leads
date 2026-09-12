@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
+import usePagedList, { useDebouncedValue, fetchAllPaged } from '../../utils/usePagedList'
 
 function toDmyDate(value) {
   if (!value) return ''
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value))
   if (m) return `${m[3]}-${m[2]}-${m[1]}`
   return String(value)
-}
-
-function sameText(a, b) {
-  return String(a || '').toLowerCase() === String(b || '').toLowerCase()
 }
 
 // Map a raw lead returned by the backend into the row shape the register renders.
@@ -32,9 +30,6 @@ function leadToRow(item) {
 
 export default function RawDataRegister() {
   const [categoryOptions, setCategoryOptions] = useState([])
-  const [registerRows, setRegisterRows] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
@@ -44,40 +39,59 @@ export default function RawDataRegister() {
 
   // Load the real raw leads (status=raw) and the category options.
   // Categories are loaded independently so a leads failure does not hide them.
-  const loadRegister = useCallback(async () => {
+  useEffect(() => {
     api
       .get('/master/categories/')
       .then((categories) => {
         if (categories) setCategoryOptions(categories)
       })
       .catch(() => {})
-    try {
-      const data = await api.get('/transactions/leads/?status=raw')
-      setRegisterRows((Array.isArray(data) ? data : []).map(leadToRow))
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsLoading(false)
-    }
   }, [])
 
-  useEffect(() => {
-    ;(async () => {
-      await loadRegister()
-    })()
-  }, [loadRegister])
+  const searchDebounced = useDebouncedValue(searchQuery)
 
-  // Staff and location choices are derived from the actual records so the
-  // filters always match what the current user is allowed to see.
+  const listParams = useMemo(
+    () => ({
+      statuses: 'raw',
+      ...(fromDate ? { date_from: fromDate } : {}),
+      ...(toDate ? { date_to: toDate } : {}),
+      ...(category !== 'All Category' ? { category } : {}),
+      ...(staff !== 'All Staff' ? { staff } : {}),
+      ...(location !== 'All Locations' ? { city: location } : {}),
+      ...(searchDebounced ? { search: searchDebounced } : {}),
+    }),
+    [fromDate, toDate, category, staff, location, searchDebounced]
+  )
+
+  const {
+    rows,
+    count,
+    facets,
+    loading: isLoading,
+    error,
+    page,
+    totalPages,
+    setPage,
+    refetch,
+  } = usePagedList({ url: '/transactions/leads/register/', params: listParams })
+
+  const registerRows = useMemo(() => rows.map(leadToRow), [rows])
+
+  // Staff and location choices come from the server-side facets so they stay
+  // complete even though the table only shows one page.
   const staffOptions = useMemo(() => {
-    const names = [...new Set(registerRows.map((r) => r.staff).filter(Boolean))]
+    const names = Array.isArray(facets?.staff) && facets.staff.length
+      ? facets.staff
+      : [...new Set(registerRows.map((r) => r.staff).filter(Boolean))]
     return ['All Staff', ...names.sort((a, b) => a.localeCompare(b))]
-  }, [registerRows])
+  }, [facets, registerRows])
 
   const locationOptions = useMemo(() => {
-    const places = [...new Set(registerRows.map((r) => r.location).filter(Boolean))]
+    const places = Array.isArray(facets?.locations) && facets.locations.length
+      ? facets.locations
+      : [...new Set(registerRows.map((r) => r.location).filter(Boolean))]
     return ['All Locations', ...places.sort((a, b) => a.localeCompare(b))]
-  }, [registerRows])
+  }, [facets, registerRows])
 
   const [isExporting, setIsExporting] = useState(false)
 
@@ -98,48 +112,22 @@ export default function RawDataRegister() {
     setSearchQuery('')
   }
 
-  // Filters apply live as the user changes them — no Apply button needed.
-  const filteredData = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    return registerRows.filter((item) => {
-      // Date filter
-      if (fromDate && item.rawDate < fromDate) return false
-      if (toDate && item.rawDate > toDate) return false
-
-      // Category filter
-      if (category !== 'All Category' && !sameText(item.category, category)) return false
-
-      // Staff filter
-      if (staff !== 'All Staff' && !sameText(item.staff, staff)) return false
-
-      // Location filter
-      if (location !== 'All Locations' && !sameText(item.location, location)) return false
-
-      // Search query
-      if (q) {
-        return (
-          item.company.toLowerCase().includes(q) ||
-          item.number.toLowerCase().includes(q) ||
-          item.location.toLowerCase().includes(q) ||
-          item.staff.toLowerCase().includes(q) ||
-          item.category.toLowerCase().includes(q)
-        )
-      }
-
-      return true
-    })
-  }, [registerRows, fromDate, toDate, category, staff, location, searchQuery])
+  // The server already applies all the filters above, so the page rows are
+  // the filtered dataset.
+  const filteredData = registerRows
 
   // Build a properly paginated A4 PDF of the register and download it.
   async function exportPdf() {
     if (isExporting) return
     setIsExporting(true)
     try {
+      const all = await fetchAllPaged('/transactions/leads/register/', listParams)
+      const rows = all.map(leadToRow).map((r) => [r.date, r.company, r.number, r.location, r.staff])
       await exportRegisterPdf({
         title: 'RAW DATA REGISTER',
         fileNamePrefix: 'Raw_Data_Register',
         columns: ['Date', 'Company', 'Number', 'Location', 'Staff'],
-        rows: filteredData.map((r) => [r.date, r.company, r.number, r.location, r.staff]),
+        rows,
         filters: {
           Category: category !== 'All Category' ? category : '',
           Staff: staff !== 'All Staff' ? staff : '',
@@ -182,7 +170,7 @@ export default function RawDataRegister() {
 
             {/* Right: Export PDF Button + Search Box */}
             <div className="flex items-center gap-2">
-              <RefreshButton onClick={() => { setIsLoading(true); setError(''); loadRegister() }} loading={isLoading} />
+              <RefreshButton onClick={refetch} loading={isLoading} />
               <button
                 type="button"
                 onClick={exportPdf}
@@ -330,7 +318,7 @@ export default function RawDataRegister() {
             <div className="text-right">
               <h1 className="text-sm font-black uppercase tracking-wider">Raw Data Register</h1>
               <p className="text-[9px] text-slate-600 font-mono">
-                Printed: {new Date().toLocaleDateString('en-GB')} | Records: {filteredData.length}
+                Printed: {new Date().toLocaleDateString('en-GB')} | Records: {count}
               </p>
             </div>
           </div>
@@ -410,9 +398,18 @@ export default function RawDataRegister() {
 
           {/* Footer stats */}
           <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-500 print:text-black">
-            <span>Showing <strong>{filteredData.length}</strong> total records</span>
+            <span>Showing <strong>{count}</strong> total records</span>
             <span className="font-mono text-[10px]">PROGRAMERS INTERNATIONAL &bull; REGISTER AUDIT</span>
           </div>
+
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            count={count}
+            pageSize={100}
+            onChange={setPage}
+            className="print:hidden"
+          />
         </div>
       </div>
     </Layout>
