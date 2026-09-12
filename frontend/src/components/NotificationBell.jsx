@@ -19,7 +19,7 @@ export default function NotificationBell({ asButtonClassName = '' }) {
     let cancelled = false
     async function load() {
       try {
-        const data = await api.get('/notifications/unread-count/')
+        const data = await api.get('/notifications/unread-count/', { cache: false })
         if (!cancelled && data && typeof data.count === 'number') setCount(data.count)
       } catch {
         // ignore

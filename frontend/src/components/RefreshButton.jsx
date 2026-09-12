@@ -1,3 +1,5 @@
+import { clearResponseCache } from '../api/client'
+
 function RefreshGlyph({ className = 'h-4 w-4' }) {
   return (
     <svg
@@ -30,7 +32,7 @@ export default function RefreshButton({
     return (
       <button
         type="button"
-        onClick={onClick}
+        onClick={() => { clearResponseCache(); onClick() }}
         disabled={isDisabled}
         title={title}
         aria-label={label}
@@ -44,7 +46,7 @@ export default function RefreshButton({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => { clearResponseCache(); onClick() }}
       disabled={isDisabled}
       title={title}
       className={`flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 hover:text-slate-900 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
