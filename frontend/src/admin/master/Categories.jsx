@@ -5,6 +5,7 @@ import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
+import PaginationBar from '../../components/PaginationBar'
 
 function PlusCircleIcon() {
   return (
@@ -446,48 +447,13 @@ export default function Categories() {
               </table>
             </div>
 
-            {/* Pagination Footer */}
-            <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-[11px]">
-              <span className="text-slate-400 font-medium">
-                Showing{' '}
-                {filteredCategories.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{' '}
-                {Math.min(currentPage * pageSize, filteredCategories.length)} of{' '}
-                {filteredCategories.length} entries
-              </span>
-
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors font-medium cursor-pointer"
-                >
-                  Previous
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                  <button
-                    key={pageNum}
-                    type="button"
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-6 h-6 flex items-center justify-center rounded-md font-semibold transition-colors ${
-                      currentPage === pageNum
-                        ? 'bg-brand-50 text-brand-600 font-bold border border-brand-200/60'
-                        : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-2 py-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors font-medium cursor-pointer"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+            <PaginationBar
+              page={currentPage}
+              totalPages={totalPages}
+              count={filteredCategories.length}
+              pageSize={pageSize}
+              onChange={setCurrentPage}
+            />
           </div>
         </div>
       </div>
