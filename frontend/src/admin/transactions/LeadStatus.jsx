@@ -213,7 +213,7 @@ export default function LeadStatus() {
               page={page}
               totalPages={totalPages}
               count={count}
-              pageSize={50}
+              pageSize={25}
               onChange={setPage}
             />
           </div>

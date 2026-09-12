@@ -120,7 +120,7 @@ export default function Branch() {
   const [deleteModalId, setDeleteModalId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const pageSize = 50
+  const pageSize = 25
 
   useEffect(() => {
     let cancelled = false

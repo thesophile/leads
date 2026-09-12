@@ -529,7 +529,7 @@ export default function OrderReceived() {
               page={page}
               totalPages={totalPages}
               count={count}
-              pageSize={50}
+              pageSize={25}
               onChange={setPage}
             />
 

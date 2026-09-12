@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 
-const DEFAULT_PAGE_SIZE = 50
+const DEFAULT_PAGE_SIZE = 25
 
 export function useDebouncedValue(value, delay = 300) {
   const [debounced, setDebounced] = useState(value)
@@ -15,7 +15,7 @@ export function useDebouncedValue(value, delay = 300) {
 /**
  * Fetch every page of a paginated endpoint (for PDF exports / full-set reads).
  * ``params`` should exclude ``page`` / ``page_size``; pages are walked with the
- * same 50-row page size the app uses.
+ * same 25-row page size the app uses.
  */
 export async function fetchAllPaged(url, params = {}, pageSize = DEFAULT_PAGE_SIZE) {
   const collected = []
@@ -31,7 +31,7 @@ export async function fetchAllPaged(url, params = {}, pageSize = DEFAULT_PAGE_SI
 }
 
 /**
- * Fetch one 50-row page from a paginated API endpoint, refetching whenever
+ * Fetch one 25-row page from a paginated API endpoint, refetching whenever
  * the (serialized) `params` or the current `page` change. Exposes the DRF-style
  * envelope (`{count, page, page_size, results}`) plus any `counts` / `facets`
  * the endpoint returns for KPI cards and filter pickers.

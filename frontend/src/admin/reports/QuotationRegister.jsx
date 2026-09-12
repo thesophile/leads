@@ -427,7 +427,7 @@ export default function QuotationRegister() {
             page={page}
             totalPages={totalPages}
             count={count}
-            pageSize={50}
+            pageSize={25}
             onChange={setPage}
             className="print:hidden"
           />

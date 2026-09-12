@@ -1635,7 +1635,7 @@ export default function Managequotation() {
             page={page}
             totalPages={totalPages}
             count={count}
-            pageSize={50}
+            pageSize={25}
             onChange={setPage}
           />
 
