@@ -693,19 +693,7 @@ export default function ClientDetails() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-300">
-                {loading ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
-                      Loading client details...
-                    </td>
-                  </tr>
-                ) : loadError ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-rose-500">
-                      {loadError}
-                    </td>
-                  </tr>
-                ) : filteredRecords.length > 0 ? (
+                {filteredRecords.length > 0 ? (
                   filteredRecords.map((rec) => (
                     <tr key={rec.id} onClick={() => openViewModal(rec)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
                       <td className="py-0.5 pr-3 font-mono font-bold text-slate-950">{rec.orderNo}</td>
@@ -790,6 +778,18 @@ export default function ClientDetails() {
                       </td>
                     </tr>
                   ))
+                ) : loading ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                      Loading client details...
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-xs text-rose-500">
+                      {loadError}
+                    </td>
+                  </tr>
                 ) : (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-xs text-slate-400">

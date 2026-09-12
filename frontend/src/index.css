@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Table refresh — the active screen's table fades out to blank and fades back
+   in smoothly via the `leads:refresh-out` / `leads:refresh-in` events. */
+main table {
+  transition: opacity 180ms ease-in-out;
+}
+main table.refresh-fading {
+  opacity: 0;
+}
+
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 

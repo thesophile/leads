@@ -627,19 +627,7 @@ export default function ManageOrder() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
-                      Loading orders...
-                    </td>
-                  </tr>
-                ) : loadError ? (
-                  <tr>
-                    <td colSpan={9} className="py-8 text-center text-xs text-rose-500">
-                      {loadError}
-                    </td>
-                  </tr>
-                ) : filteredOrders.length > 0 ? (
+                {filteredOrders.length > 0 ? (
                   filteredOrders.map((order) => {
                     return (
                       <tr key={order.id} onClick={(e) => handleToggleMenu(e, order.id, order)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
@@ -719,6 +707,18 @@ export default function ManageOrder() {
                       </tr>
                     )
                   })
+                ) : loading ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
+                      Loading orders...
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-xs text-rose-500">
+                      {loadError}
+                    </td>
+                  </tr>
                 ) : (
                   <tr>
                     <td colSpan={9} className="py-8 text-center text-xs text-slate-400">

@@ -431,19 +431,7 @@ export default function OrderReceived() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400">
-                      Loading converted clients register…
-                    </td>
-                  </tr>
-                ) : filteredData.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400">
-                      No converted client records match the selected filter criteria.
-                    </td>
-                  </tr>
-                ) : (
+                {filteredData.length > 0 ? (
                   filteredData.map((order, idx) => (
                     <tr
                       key={order.id}
@@ -512,6 +500,18 @@ export default function OrderReceived() {
                       </td>
                     </tr>
                   ))
+                ) : isLoading ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-400">
+                      Loading converted clients register…
+                    </td>
+                  </tr>
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-400">
+                      No converted client records match the selected filter criteria.
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>

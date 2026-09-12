@@ -105,6 +105,7 @@ export default function usePagedList({
     totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
     setPage,
     refetch: () => {
+      setLoading(true)
       skipCacheRef.current = true
       setNonce((n) => n + 1)
     },

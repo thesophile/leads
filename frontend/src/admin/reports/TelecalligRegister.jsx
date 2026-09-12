@@ -407,13 +407,7 @@ export default function TelecalligRegister() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 print:divide-slate-200">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
-                      Loading telecalling register…
-                    </td>
-                  </tr>
-                ) : filteredData.length > 0 ? (
+                {filteredData.length > 0 ? (
                   filteredData.map((row) => (
                     <tr key={row.id} className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
                       <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell">
@@ -453,6 +447,12 @@ export default function TelecalligRegister() {
                       </td>
                     </tr>
                   ))
+                ) : isLoading ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                      Loading telecalling register…
+                    </td>
+                  </tr>
                 ) : (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-xs text-slate-400">

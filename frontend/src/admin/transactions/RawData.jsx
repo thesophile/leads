@@ -1126,13 +1126,7 @@ async function handleBulkImport(e) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
-                      Loading raw data...
-                    </td>
-                  </tr>
-                ) : rawDataList.length > 0 ? (
+                {rawDataList.length > 0 ? (
                   rawDataList.map((item) => (
                     <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
                       {/* Select Checkbox */}
@@ -1216,6 +1210,12 @@ async function handleBulkImport(e) {
                       </td>
                     </tr>
                   ))
+                ) : isLoading ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
+                      Loading raw data...
+                    </td>
+                  </tr>
                 ) : (
                   <tr>
                     <td colSpan={9} className="py-8 text-center text-xs text-slate-400">

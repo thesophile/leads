@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import NotificationBell from '../components/NotificationBell'
@@ -8,6 +8,24 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const navigate = useNavigate()
   const { user } = useAuth()
+
+  // When the active screen's Refresh button runs, fade its table out to blank
+  // and back in so the refresh is clearly communicated, smoothly and quickly.
+  useEffect(() => {
+    function setTablesFading(out) {
+      document.querySelectorAll('main table').forEach((table) => {
+        table.classList.toggle('refresh-fading', out)
+      })
+    }
+    const onOut = () => setTablesFading(true)
+    const onIn = () => setTablesFading(false)
+    window.addEventListener('leads:refresh-out', onOut)
+    window.addEventListener('leads:refresh-in', onIn)
+    return () => {
+      window.removeEventListener('leads:refresh-out', onOut)
+      window.removeEventListener('leads:refresh-in', onIn)
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
