@@ -1231,7 +1231,7 @@ async function handleBulkImport(e) {
             page={page}
             totalPages={totalPages}
             count={totalCount}
-            pageSize={100}
+            pageSize={50}
             onChange={setPage}
           />
         </div>

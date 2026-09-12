@@ -27,7 +27,7 @@ function getPageItems(current, total) {
   })
 }
 
-export default function PaginationBar({ page, totalPages, count, pageSize = 100, onChange, className = '' }) {
+export default function PaginationBar({ page, totalPages, count, pageSize = 50, onChange, className = '' }) {
   if (!count) return null
   const start = (page - 1) * pageSize + 1
   const end = Math.min(page * pageSize, count)

@@ -406,7 +406,7 @@ export default function RawDataRegister() {
             page={page}
             totalPages={totalPages}
             count={count}
-            pageSize={100}
+            pageSize={50}
             onChange={setPage}
             className="print:hidden"
           />
