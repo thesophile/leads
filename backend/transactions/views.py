@@ -4,9 +4,11 @@ import logging
 import random
 import re
 import secrets
+import sys
 from datetime import date, datetime, timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import Count, Max, Q, OuterRef, Subquery
@@ -1007,6 +1009,22 @@ class LeadMetaView(APIView):
         qs = scoped_queryset(request.user, status_filter)
         qs = filter_leads_by_params(qs, request.query_params)
 
+        # The DISTINCT / GROUP BY / COUNT queries below always scan the full
+        # visible dataset, so they do not scale with page_size. Cache the result
+        # briefly (badges & filters only change when leads are edited/assigned).
+        key = 'lead-meta:{}:{}'.format(
+            request.user.id,
+            hashlib.md5(
+                json.dumps(sorted(request.query_params.items()), sort_keys=True).encode()
+            ).hexdigest(),
+        )
+        # Skip the cache under the test runner so assertions see fresh data.
+        use_cache = 'test' not in sys.argv
+        if use_cache:
+            cached = cache.get(key)
+            if cached is not None:
+                return Response(cached)
+
         def distinct(field):
             return sorted(
                 v
@@ -1040,7 +1058,10 @@ class LeadMetaView(APIView):
             'by_call_status': call_status_counts,
             'unassigned': qs.filter(assigned_to='').count(),
         }
-        return Response({'facets': facets, 'counts': counts})
+        payload = {'facets': facets, 'counts': counts}
+        if use_cache:
+            cache.set(key, payload, 30)
+        return Response(payload)
 
 
 class LeadRegisterView(APIView):

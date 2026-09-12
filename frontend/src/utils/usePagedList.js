@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 
 const DEFAULT_PAGE_SIZE = 25
@@ -21,7 +21,7 @@ export async function fetchAllPaged(url, params = {}, pageSize = DEFAULT_PAGE_SI
   const collected = []
   let page = 1
   for (;;) {
-    const data = await api.get(url, { params: { ...params, page, page_size: pageSize } })
+    const data = await api.get(url, { params: { ...params, page, page_size: pageSize }, cache: false })
     const results = Array.isArray(data?.results) ? data.results : []
     collected.push(...results)
     if (!data || collected.length >= (data.count || 0) || results.length === 0) break
@@ -62,11 +62,14 @@ export default function usePagedList({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [nonce, setNonce] = useState(0)
+  const skipCacheRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
+    const skipCache = skipCacheRef.current
+    skipCacheRef.current = false
     api
-      .get(url, { params: { ...params, page, page_size: pageSize } })
+      .get(url, { params: { ...params, page, page_size: pageSize }, cache: !skipCache })
       .then((data) => {
         if (cancelled) return
         setRows(Array.isArray(data?.results) ? data.results : [])
@@ -101,6 +104,9 @@ export default function usePagedList({
     pageSize,
     totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
     setPage,
-    refetch: () => setNonce((n) => n + 1),
+    refetch: () => {
+      skipCacheRef.current = true
+      setNonce((n) => n + 1)
+    },
   }
 }

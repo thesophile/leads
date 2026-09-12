@@ -2,6 +2,34 @@ const API_BASE = '/api'
 const ACCESS_KEY = 'leads_access'
 const REFRESH_KEY = 'leads_refresh'
 
+// In-memory cache for GET responses so returning to a screen (tab/nav switch
+// remount) renders instantly instead of re-fetching. Cleared on any write, on
+// login, and on logout. Entries expire after CACHE_TTL_MS.
+const CACHE_TTL_MS = 60_000
+const responseCache = new Map()
+
+function cacheKey(url, params) {
+  return `${url}?${JSON.stringify(params || {})}`
+}
+
+function readResponseCache(key) {
+  const entry = responseCache.get(key)
+  if (!entry) return undefined
+  if (Date.now() - entry.at > CACHE_TTL_MS) {
+    responseCache.delete(key)
+    return undefined
+  }
+  return entry.value
+}
+
+function writeResponseCache(key, value) {
+  responseCache.set(key, { at: Date.now(), value })
+}
+
+export function clearResponseCache() {
+  responseCache.clear()
+}
+
 let onAuthFailure = null
 let refreshPromise = null
 
@@ -30,6 +58,7 @@ export function persistAuth(access, refresh, remember) {
   other.removeItem(REFRESH_KEY)
   storage.setItem(ACCESS_KEY, access)
   if (refresh) storage.setItem(REFRESH_KEY, refresh)
+  clearResponseCache()
 }
 
 export function clearAuth() {
@@ -37,6 +66,7 @@ export function clearAuth() {
   localStorage.removeItem(REFRESH_KEY)
   sessionStorage.removeItem(ACCESS_KEY)
   sessionStorage.removeItem(REFRESH_KEY)
+  clearResponseCache()
 }
 
 async function refreshAccessToken() {
@@ -105,7 +135,12 @@ function extractMessage(data) {
   return JSON.stringify(data)
 }
 
-async function request(path, { method = 'GET', body, headers = {}, auth = true, params = null } = {}) {
+async function request(path, { method = 'GET', body, headers = {}, auth = true, params = null, cache = true } = {}) {
+  const canCache = method === 'GET' && cache
+  if (canCache) {
+    const hit = readResponseCache(cacheKey(path, params))
+    if (hit !== undefined) return hit
+  }
   let url = path.startsWith('http') ? path : `${API_BASE}${path}`
   if (params) {
     const qs = new URLSearchParams(
@@ -161,15 +196,16 @@ async function request(path, { method = 'GET', body, headers = {}, auth = true, 
   if (!res.ok) {
     throw new ApiError(extractMessage(data) || `Request failed (${res.status})`, res.status, data)
   }
+  if (canCache) writeResponseCache(cacheKey(path, params), data)
   return data
 }
 
 export const api = {
   get: (path, opts) => request(path, { ...opts, method: 'GET' }),
-  post: (path, body, opts) => request(path, { ...opts, method: 'POST', body }),
-  put: (path, body, opts) => request(path, { ...opts, method: 'PUT', body }),
-  patch: (path, body, opts) => request(path, { ...opts, method: 'PATCH', body }),
-  del: (path, opts) => request(path, { ...opts, method: 'DELETE' }),
+  post: (path, body, opts) => { clearResponseCache(); return request(path, { ...opts, method: 'POST', body }) },
+  put: (path, body, opts) => { clearResponseCache(); return request(path, { ...opts, method: 'PUT', body }) },
+  patch: (path, body, opts) => { clearResponseCache(); return request(path, { ...opts, method: 'PATCH', body }) },
+  del: (path, opts) => { clearResponseCache(); return request(path, { ...opts, method: 'DELETE' }) },
   download: async (path, fallbackName = 'download') => {
     const url = path.startsWith('http') ? path : `${API_BASE}${path}`
     const { access } = getStoredTokens()
