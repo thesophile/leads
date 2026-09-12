@@ -6,6 +6,7 @@ import { can } from '../../utils/permissions'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
+import useUrlPage from '../../utils/useUrlPage'
 
 function PlusCircleIcon() {
   return (
@@ -101,7 +102,7 @@ export default function Categories() {
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPage, setCurrentPage] = useUrlPage()
   const [deleteModalId, setDeleteModalId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -218,6 +219,13 @@ export default function Categories() {
   }, [filteredCategories, currentPage, pageSize])
 
   const isEditing = Boolean(editingId)
+
+  useEffect(() => {
+    if (!isLoading && totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, totalPages, isLoading])
 
   return (
     <Layout>

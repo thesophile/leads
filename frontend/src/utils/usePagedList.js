@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
+import useUrlPage from './useUrlPage'
 
 const DEFAULT_PAGE_SIZE = 25
 
@@ -48,7 +49,7 @@ export default function usePagedList({
   onError,
 }) {
   const paramsKey = JSON.stringify(params)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [prevKey, setPrevKey] = useState(paramsKey)
   if (prevKey !== paramsKey) {
     // Adjusting state during render to reset the page when filters change.
@@ -93,6 +94,13 @@ export default function usePagedList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, paramsKey, page, pageSize, nonce])
 
+  const totalPages = Math.max(1, Math.ceil((count || 0) / pageSize))
+
+  useEffect(() => {
+    if (!loading && totalPages > 0 && page > totalPages) setPage(totalPages)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, totalPages, loading])
+
   return {
     rows,
     count,
@@ -102,7 +110,7 @@ export default function usePagedList({
     error,
     page,
     pageSize,
-    totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
+    totalPages,
     setPage,
     refetch: () => {
       setLoading(true)
