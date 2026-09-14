@@ -23,8 +23,10 @@ pymysql.install_as_MySQLdb()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env.dev at the repository root.
-load_dotenv(BASE_DIR.parent / '.env.dev')
 
+ENV = os.getenv("ENV", "prod")
+
+load_dotenv(BASE_DIR.parent / f".env.{ENV}")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
