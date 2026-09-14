@@ -276,6 +276,8 @@ export default function Telecall() {
   function handleOpenCallModal(lead, e) {
     if (e) e.stopPropagation()
     setIsSaving(false)
+    setError('')
+    setNotice('')
     setActiveLead(lead)
     setFormData({
       assignedTo: lead.assignedTo || callerOptions[0] || '',
@@ -746,6 +748,12 @@ export default function Telecall() {
 
               {/* Scrollable Body */}
               <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+                {/* In-drawer error banner: surface save/validation failures instead of failing silently */}
+                {error && (
+                  <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-medium text-rose-700">
+                    {error}
+                  </div>
+                )}
                 {/* Customer Summary */}
                 <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3.5">
                   <div className="flex items-start gap-3">
