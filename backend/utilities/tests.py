@@ -40,12 +40,12 @@ class BackupApiTests(TransactionTestCase):
 
     def _export(self, as_user):
         self.client.force_authenticate(as_user)
-        return self.client.get('/api/backup/export/')
+        return self.client.get('/v1/api/backup/export/')
 
     def _restore(self, content, as_user=None):
         self.client.force_authenticate(as_user or self.admin)
         upload = SimpleUploadedFile('backup.json', content.encode('utf-8'))
-        return self.client.post('/api/backup/restore/', {'file': upload}, format='multipart')
+        return self.client.post('/v1/api/backup/restore/', {'file': upload}, format='multipart')
 
     def test_export_returns_full_dump(self):
         resp = self._export(self.admin)
@@ -138,7 +138,7 @@ class ActivityLogTests(APITestCase):
         log_activity(self.admin, self.company, 'first', 'actor did first')
         log_activity(self.admin, self.company, 'second', 'actor did second')
         self.client.force_authenticate(self.admin)
-        resp = self.client.get('/api/activity/')
+        resp = self.client.get('/v1/api/activity/')
         self.assertEqual(resp.status_code, 200)
         rows = resp.json()
         self.assertEqual(len(rows), 2)
@@ -148,13 +148,13 @@ class ActivityLogTests(APITestCase):
     def test_activity_list_denied_for_staff(self):
         log_activity(self.admin, self.company, 'first', 'actor did first')
         self.client.force_authenticate(self.staff)
-        self.assertEqual(self.client.get('/api/activity/').status_code, 403)
+        self.assertEqual(self.client.get('/v1/api/activity/').status_code, 403)
 
     def test_activity_list_honours_limit(self):
         for i in range(5):
             log_activity(self.admin, self.company, f'a{i}', f'summary {i}')
         self.client.force_authenticate(self.admin)
-        rows = self.client.get('/api/activity/', {'limit': 2}).json()
+        rows = self.client.get('/v1/api/activity/', {'limit': 2}).json()
         self.assertEqual(len(rows), 2)
 
     def test_superuser_sees_all_tenants(self):
@@ -167,12 +167,12 @@ class ActivityLogTests(APITestCase):
         log_activity(self.admin, self.company, 'mine', 'from mine')
         superuser = User.objects.create_superuser(email='su@x.com', password='x', name='SU')
         self.client.force_authenticate(superuser)
-        rows = self.client.get('/api/activity/').json()
+        rows = self.client.get('/v1/api/activity/').json()
         self.assertEqual(len(rows), 2)
 
     def test_lead_create_logs_activity(self):
         self.client.force_authenticate(self.admin)
-        resp = self.client.post('/api/transactions/leads/', {
+        resp = self.client.post('/v1/api/transactions/leads/', {
             'company': 'Activity Co',
             'phone': '9876543210',
             'city': 'Kochi',
@@ -184,7 +184,7 @@ class ActivityLogTests(APITestCase):
 
     def test_backup_export_logs_activity(self):
         self.client.force_authenticate(self.admin)
-        resp = self.client.get('/api/backup/export/')
+        resp = self.client.get('/v1/api/backup/export/')
         self.assertEqual(resp.status_code, 200)
         entry = ActivityLog.objects.filter(
             tenant=self.company, action='downloaded backup'
@@ -206,7 +206,7 @@ class StaffTargetBugRegressionTests(APITestCase):
         self.client.force_authenticate(self.admin)
 
     def test_month_zero_is_rejected_without_crashing(self):
-        resp = self.client.post('/api/staff-targets/', {
+        resp = self.client.post('/v1/api/staff-targets/', {
             'name': 'Zero Month', 'month': 0, 'year': 2026,
             'raw_leads_target': 5,
         }, format='json')
@@ -220,7 +220,7 @@ class StaffTargetBugRegressionTests(APITestCase):
         dup = StaffTarget.objects.create(
             tenant=self.company, name='Bob', month=9, year=2026,
         )
-        resp = self.client.patch(f'/api/staff-targets/{dup.id}/', {
+        resp = self.client.patch(f'/v1/api/staff-targets/{dup.id}/', {
             'name': 'Alice',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -235,7 +235,7 @@ class StaffTargetBugRegressionTests(APITestCase):
         dup = StaffTarget.objects.create(
             tenant=self.company, name='Bob', month=9, year=2026,
         )
-        resp = self.client.patch(f'/api/staff-targets/{dup.id}/', {
+        resp = self.client.patch(f'/v1/api/staff-targets/{dup.id}/', {
             'name': 'ALICE',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -246,7 +246,7 @@ class StaffTargetBugRegressionTests(APITestCase):
             tenant=self.company, name='Nan Target', month=9, year=2026,
             calls_target=10,
         )
-        resp = self.client.post('/api/staff-targets/bulk-adjust/', {
+        resp = self.client.post('/v1/api/staff-targets/bulk-adjust/', {
             'type': 'calls', 'multiplier': 'nan', 'month': 9, 'year': 2026,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -257,7 +257,7 @@ class StaffTargetBugRegressionTests(APITestCase):
             tenant=self.company, name='Inf Target', month=9, year=2026,
             calls_target=10,
         )
-        resp = self.client.post('/api/staff-targets/bulk-adjust/', {
+        resp = self.client.post('/v1/api/staff-targets/bulk-adjust/', {
             'type': 'calls', 'multiplier': 'inf', 'month': 9, 'year': 2026,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -268,7 +268,7 @@ class StaffTargetBugRegressionTests(APITestCase):
             tenant=self.company, name='Huge Target', month=9, year=2026,
             calls_target=10,
         )
-        resp = self.client.post('/api/staff-targets/bulk-adjust/', {
+        resp = self.client.post('/v1/api/staff-targets/bulk-adjust/', {
             'type': 'calls', 'multiplier': '1e20', 'month': 9, 'year': 2026,
         }, format='json')
         self.assertEqual(resp.status_code, 400)

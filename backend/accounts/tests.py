@@ -74,7 +74,7 @@ class StaffListScopingTests(APITestCase):
 
     def test_staff_list_only_contains_own_company(self):
         self.client.force_authenticate(self.admin_a)
-        resp = self.client.get('/api/auth/users/')
+        resp = self.client.get('/v1/api/auth/users/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual({u['email'] for u in resp.data}, {'admin_a@acme.com', 'staff_a@acme.com'})
 
@@ -134,7 +134,7 @@ class SuperuserAdminManagementTests(APITestCase):
 
     def test_superuser_lists_all_admins_across_companies(self):
         self.client.force_authenticate(self.superuser)
-        resp = self.client.get('/api/auth/admins/')
+        resp = self.client.get('/v1/api/auth/admins/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
             {u['email'] for u in resp.data},
@@ -143,12 +143,12 @@ class SuperuserAdminManagementTests(APITestCase):
 
     def test_plain_admin_is_forbidden(self):
         self.client.force_authenticate(self.admin_a)
-        resp = self.client.get('/api/auth/admins/')
+        resp = self.client.get('/v1/api/auth/admins/')
         self.assertEqual(resp.status_code, 403)
 
     def test_create_admin_reuses_existing_company(self):
         self.client.force_authenticate(self.superuser)
-        resp = self.client.post('/api/auth/admins/', {
+        resp = self.client.post('/v1/api/auth/admins/', {
             'company': 'Globex',
             'company_email': 'accounts@globex.com',
             'company_phone': '+91 9447000001',
@@ -167,13 +167,13 @@ class SuperuserAdminManagementTests(APITestCase):
 
     def test_delete_admin_removes_login(self):
         self.client.force_authenticate(self.superuser)
-        resp = self.client.delete(f'/api/auth/admins/{self.admin_a.pk}/')
+        resp = self.client.delete(f'/v1/api/auth/admins/{self.admin_a.pk}/')
         self.assertEqual(resp.status_code, 204)
         self.assertFalse(User.objects.filter(pk=self.admin_a.pk).exists())
 
     def test_delete_self_is_blocked(self):
         self.client.force_authenticate(self.superuser)
-        resp = self.client.delete(f'/api/auth/admins/{self.superuser.pk}/')
+        resp = self.client.delete(f'/v1/api/auth/admins/{self.superuser.pk}/')
         self.assertEqual(resp.status_code, 400)
         self.assertTrue(User.objects.filter(pk=self.superuser.pk).exists())
 
@@ -182,14 +182,14 @@ class SuperuserAdminManagementTests(APITestCase):
             email='root2@platform.com', password='x', name='Root Two',
         )
         self.client.force_authenticate(self.superuser)
-        resp = self.client.delete(f'/api/auth/admins/{other.pk}/')
+        resp = self.client.delete(f'/v1/api/auth/admins/{other.pk}/')
         self.assertEqual(resp.status_code, 400)
         self.assertTrue(User.objects.filter(pk=other.pk).exists())
 
     def test_reset_password_works_cross_company(self):
         self.client.force_authenticate(self.superuser)
         resp = self.client.post(
-            f'/api/auth/admins/{self.admin_b.pk}/reset-password/',
+            f'/v1/api/auth/admins/{self.admin_b.pk}/reset-password/',
             {'new_password': 'NewPass123!'},
             format='json',
         )
@@ -220,7 +220,7 @@ class StaffRenamePropagationTests(APITestCase):
 
     def test_renaming_staff_keeps_assignments_and_history(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/users/{self.staff.pk}/', {
             'name': 'Shanu Kumar',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -268,7 +268,7 @@ class StaffRenameCrossTenantIsolationTests(APITestCase):
 
     def test_rename_in_one_company_does_not_touch_another(self):
         self.client.force_authenticate(self.admin_a)
-        resp = self.client.patch(f'/api/auth/users/{self.shanu_a.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/users/{self.shanu_a.pk}/', {
             'name': 'Shanu Kumar',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -296,7 +296,7 @@ class StaffAdminProtectionTests(APITestCase):
 
     def test_manager_cannot_deactivate_the_admin(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch(f'/api/auth/users/{self.admin.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/users/{self.admin.pk}/', {
             'is_active': False,
         }, format='json')
         self.assertEqual(resp.status_code, 403)
@@ -305,7 +305,7 @@ class StaffAdminProtectionTests(APITestCase):
 
     def test_manager_cannot_rename_the_admin(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch(f'/api/auth/users/{self.admin.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/users/{self.admin.pk}/', {
             'name': 'Hijacked',
         }, format='json')
         self.assertEqual(resp.status_code, 403)
@@ -313,7 +313,7 @@ class StaffAdminProtectionTests(APITestCase):
     def test_manager_cannot_reset_the_admin_password(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.post(
-            f'/api/auth/users/{self.admin.pk}/reset-password/',
+            f'/v1/api/auth/users/{self.admin.pk}/reset-password/',
             {'new_password': 'Hacked123!'},
             format='json',
         )
@@ -329,7 +329,7 @@ class StaffAdminProtectionTests(APITestCase):
             assigned_to=self.staff.name, status='assigned',
         )
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/users/{self.staff.pk}/', {
             'is_active': False,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -348,7 +348,7 @@ class StaffAdminProtectionTests(APITestCase):
             assigned_to='Manager A'
         )
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/users/{self.staff.pk}/', {
             'is_active': False,
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -359,7 +359,7 @@ class StaffAdminProtectionTests(APITestCase):
         )
         self.client.force_authenticate(superuser)
         resp = self.client.post(
-            f'/api/auth/admins/{superuser.pk}/reset-password/',
+            f'/v1/api/auth/admins/{superuser.pk}/reset-password/',
             {'new_password': 'Hacked123!'},
             format='json',
         )
@@ -385,7 +385,7 @@ class AdminRenamePropagationTests(APITestCase):
 
     def test_superuser_admin_rename_propagates_to_leads(self):
         self.client.force_authenticate(self.superuser)
-        resp = self.client.patch(f'/api/auth/admins/{self.admin.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/admins/{self.admin.pk}/', {
             'name': 'Husna K',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -407,14 +407,14 @@ class TokenRefreshSafetyTests(APITestCase):
         self.refresh_token = str(RefreshToken.for_user(self.user))
 
     def test_refresh_returns_200_when_user_exists(self):
-        resp = self.client.post('/api/auth/token/refresh/', {
+        resp = self.client.post('/v1/api/auth/token/refresh/', {
             'refresh': self.refresh_token,
         }, format='json')
         self.assertEqual(resp.status_code, 200)
 
     def test_refresh_returns_401_when_user_is_deleted(self):
         self.user.delete()
-        resp = self.client.post('/api/auth/token/refresh/', {
+        resp = self.client.post('/v1/api/auth/token/refresh/', {
             'refresh': self.refresh_token,
         }, format='json')
         self.assertEqual(resp.status_code, 401)
@@ -434,7 +434,7 @@ class RoleDuplicateNameTests(APITestCase):
 
     def test_create_with_duplicate_name_is_rejected(self):
         self.client.force_authenticate(self.admin)
-        resp = self.client.post('/api/auth/roles/', {
+        resp = self.client.post('/v1/api/auth/roles/', {
             'name': 'sales', 'code': 'sales2', 'permissions': [],
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -442,14 +442,14 @@ class RoleDuplicateNameTests(APITestCase):
 
     def test_create_with_same_name_different_case_is_rejected(self):
         self.client.force_authenticate(self.admin)
-        resp = self.client.post('/api/auth/roles/', {
+        resp = self.client.post('/v1/api/auth/roles/', {
             'name': 'SALES', 'code': 'sales2', 'permissions': [],
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
     def test_unique_name_create_succeeds(self):
         self.client.force_authenticate(self.admin)
-        resp = self.client.post('/api/auth/roles/', {
+        resp = self.client.post('/v1/api/auth/roles/', {
             'name': 'Telecall Team', 'code': 'telecall', 'permissions': [],
         }, format='json')
         self.assertEqual(resp.status_code, 201)
@@ -460,7 +460,7 @@ class RoleDuplicateNameTests(APITestCase):
             company=self.company, code='telecall', name='Telecall',
             permissions=['telecall.view'],
         )
-        resp = self.client.patch(f'/api/auth/roles/{role.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/roles/{role.pk}/', {
             'name': 'Sales',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -468,7 +468,7 @@ class RoleDuplicateNameTests(APITestCase):
 
     def test_renaming_to_self_name_is_allowed(self):
         self.client.force_authenticate(self.admin)
-        resp = self.client.patch(f'/api/auth/roles/{self.other.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/roles/{self.other.pk}/', {
             'name': 'SALES',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -505,7 +505,7 @@ class RoleEscalationGuardTests(APITestCase):
 
     def test_cannot_create_role_with_permissions_you_do_not_hold(self):
         self.client.force_authenticate(self.limited)
-        resp = self.client.post('/api/auth/roles/', {
+        resp = self.client.post('/v1/api/auth/roles/', {
             'name': 'Escalation', 'code': 'esc', 'permissions': ['roles.manage', 'order.delete'],
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -513,7 +513,7 @@ class RoleEscalationGuardTests(APITestCase):
 
     def test_can_create_role_with_subset_of_own_permissions(self):
         self.client.force_authenticate(self.limited)
-        resp = self.client.post('/api/auth/roles/', {
+        resp = self.client.post('/v1/api/auth/roles/', {
             'name': 'Viewer', 'code': 'viewer', 'permissions': ['leads.view'],
         }, format='json')
         self.assertEqual(resp.status_code, 201)
@@ -523,14 +523,14 @@ class RoleEscalationGuardTests(APITestCase):
         viewer = Role.objects.create(
             company=self.company, code='viewer', name='Viewer', permissions=['leads.view'],
         )
-        resp = self.client.patch(f'/api/auth/roles/{viewer.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/roles/{viewer.pk}/', {
             'permissions': ['leads.view', 'order.delete'],
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
     def test_cannot_assign_role_with_permissions_you_do_not_hold(self):
         self.client.force_authenticate(self.limited)
-        resp = self.client.post('/api/auth/users/', {
+        resp = self.client.post('/v1/api/auth/users/', {
             'name': 'New Guy', 'email': 'newguy@esco.com', 'password': 'Str0ngPass!',
             'role': self.power_role.pk,
         }, format='json')
@@ -538,7 +538,7 @@ class RoleEscalationGuardTests(APITestCase):
 
     def test_cannot_reassign_self_to_more_powerful_role(self):
         self.client.force_authenticate(self.limited)
-        resp = self.client.patch(f'/api/auth/users/{self.limited.pk}/', {
+        resp = self.client.patch(f'/v1/api/auth/users/{self.limited.pk}/', {
             'role': self.power_role.pk,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -547,7 +547,7 @@ class RoleEscalationGuardTests(APITestCase):
 
     def test_can_assign_role_that_is_subset_of_own_permissions(self):
         self.client.force_authenticate(self.limited)
-        resp = self.client.post('/api/auth/users/', {
+        resp = self.client.post('/v1/api/auth/users/', {
             'name': 'New Guy', 'email': 'newguy@esco.com', 'password': 'Str0ngPass!',
             'role': Role.objects.create(
                 company=self.company, code='viewer', name='Viewer', permissions=['leads.view'],
@@ -582,7 +582,7 @@ class SystemRoleFullCatalogTests(APITestCase):
         role.permissions = []
         role.save(update_fields=['permissions'])
         self.admin.refresh_from_db()
-        resp = self.client.get('/api/auth/me/')
+        resp = self.client.get('/v1/api/auth/me/')
         self.assertEqual(resp.status_code, 200)
         for p in ('leads.manage_lock', 'quotation.approve', 'quotation.send_without_approval', 'roles.manage'):
             self.assertIn(p, resp.data['permissions'])

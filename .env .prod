@@ -1,0 +1,16 @@
+DB_NAME=leadsdb
+DB_USER=root
+DB_PASSWORD=123456
+DB_HOST=localhost
+DB_PORT=3306
+
+# SMTP (Gmail). Replace these placeholders with your real details and restart
+# the backend. Emails are sent via SMTP and also printed to the terminal.
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=abhinavprogramers@gmail.com
+EMAIL_HOST_PASSWORD=luvennhnfoliurrf
+# DEFAULT_FROM_EMAIL=LEADS <noreply@programers.in>
+DEFAULT_FROM_EMAIL="LEADS <abhinavprogramers@gmail.com>"
+EMAIL_USE_TLS=true
+EMAIL_USE_SSL=false

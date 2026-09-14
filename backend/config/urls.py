@@ -5,10 +5,10 @@ from django.urls import include, path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/auth/', include('accounts.urls')),
-    path('api/master/', include('master.urls')),
-    path('api/transactions/', include('transactions.urls')),
-    path('api/', include('utilities.urls')),
+    path('v1/api/auth/', include('accounts.urls')),
+    path('v1/api/master/', include('master.urls')),
+    path('v1/api/transactions/', include('transactions.urls')),
+    path('v1/api/', include('utilities.urls')),
 ]
 
 if settings.DEBUG:
