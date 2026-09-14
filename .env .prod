@@ -1,3 +1,5 @@
+VITE_API_BASE_URL=/v1
+
 DB_NAME=newleadsprograme_leadsdb
 DB_USER=newleadsprograme_leadsuser
 DB_PASSWORD="_{[@L4auCSi2be;{"

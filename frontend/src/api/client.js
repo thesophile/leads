@@ -1,4 +1,5 @@
-const API_BASE = '/v1/api'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
+const API_BASE = `${apiBaseUrl}/api`
 const ACCESS_KEY = 'leads_access'
 const REFRESH_KEY = 'leads_refresh'
 
