@@ -58,14 +58,14 @@ class AssignLeadsToStaffTests(APITestCase):
 
     def test_staff_cannot_assign(self):
         self.client.force_authenticate(self.staff)
-        resp = self.client.post('/v1/api/transactions/leads/assign/', {
+        resp = self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': 'Shanu VR', 'count': 2,
         }, format='json')
         self.assertEqual(resp.status_code, 403)
 
     def test_manager_assign_flips_status_without_duplicating(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/assign/', {
+        resp = self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': 'Shanu VR', 'count': 3,
         }, format='json')
         self.assertEqual(resp.status_code, 201)
@@ -82,7 +82,7 @@ class AssignLeadsToStaffTests(APITestCase):
 
     def test_assign_respects_category_filter(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/assign/', {
+        resp = self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': 'Shanu VR', 'category': 'Fancy Shops', 'count': 10,
         }, format='json')
         self.assertEqual(resp.status_code, 201)
@@ -91,7 +91,7 @@ class AssignLeadsToStaffTests(APITestCase):
 
     def test_assign_caps_at_count(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/assign/', {
+        resp = self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': 'Shanu VR', 'category': 'Hospital', 'count': 2,
         }, format='json')
         self.assertEqual(resp.data['assigned'], 2)
@@ -99,16 +99,16 @@ class AssignLeadsToStaffTests(APITestCase):
 
     def test_assigned_leads_leave_the_raw_pool(self):
         self.client.force_authenticate(self.manager)
-        self.client.post('/v1/api/transactions/leads/assign/', {
+        self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': 'Shanu VR', 'category': 'Fancy Shops', 'count': 10,
         }, format='json')
-        resp = self.client.get('/v1/api/transactions/leads/?status=raw')
+        resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data['results']), 5)
 
     def test_assign_with_no_matching_leads_returns_clear_error(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/assign/', {
+        resp = self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': 'Shanu VR', 'category': 'Nothing Here', 'count': 5,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -116,7 +116,7 @@ class AssignLeadsToStaffTests(APITestCase):
 
     def test_assign_to_multiple_staff_distributes_round_robin(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/assign/', {
+        resp = self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': ['Shanu VR', 'Staff A'], 'count': 5,
         }, format='json')
         self.assertEqual(resp.status_code, 201)
@@ -134,14 +134,14 @@ class AssignLeadsToStaffTests(APITestCase):
 
     def test_assign_rejects_empty_staff_list(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/assign/', {
+        resp = self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': [], 'count': 2,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
     def test_assign_rejects_unknown_staff(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/assign/', {
+        resp = self.client.post('/api/transactions/leads/assign/', {
             'assigned_to': ['Shanu VR', 'Ghost User'], 'count': 2,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -190,7 +190,7 @@ class LeadVisibilityTests(APITestCase):
 
     def test_manager_sees_all_assigned_leads(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/transactions/leads/?status=assigned')
+        resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual({l['id'] for l in resp.data['results']}, {'TC-1'})
         self.assertIn('assignedTo', resp.data['results'][0])
@@ -198,34 +198,34 @@ class LeadVisibilityTests(APITestCase):
 
     def test_staff_only_sees_own_assigned_leads(self):
         self.client.force_authenticate(self.shanu)
-        resp = self.client.get('/v1/api/transactions/leads/?status=assigned')
+        resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual({l['id'] for l in resp.data['results']}, {'TC-1'})
 
     def test_staff_sees_only_own_raw_leads(self):
         # The default staff role no longer sees every raw lead in the company;
         # staff only see the raw leads they added themselves.
         self.client.force_authenticate(self.shanu)
-        resp = self.client.get('/v1/api/transactions/leads/?status=raw')
+        resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual({l['id'] for l in resp.data['results']}, {'RL-1'})
 
     def test_staff_without_view_raw_all_sees_only_own_raw_leads(self):
         self.client.force_authenticate(self.raw_less_staff)
-        resp = self.client.get('/v1/api/transactions/leads/?status=raw')
+        resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual({l['id'] for l in resp.data['results']}, set())
 
     def test_staff_without_view_raw_all_sees_only_own_assigned_leads(self):
         self.client.force_authenticate(self.raw_less_staff)
-        resp = self.client.get('/v1/api/transactions/leads/?status=assigned')
+        resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual(resp.data['results'], [])
 
     def test_other_staff_sees_nothing(self):
         self.client.force_authenticate(self.priya)
-        resp = self.client.get('/v1/api/transactions/leads/?status=assigned')
+        resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual(resp.data['results'], [])
 
     def test_staff_can_update_own_lead(self):
         self.client.force_authenticate(self.shanu)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'call_status': 'Interested', 'priority': 'Hot',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -236,7 +236,7 @@ class LeadVisibilityTests(APITestCase):
         # quotation stage: it leaves the assigned (telecall) list and appears
         # in the quotation list.
         self.client.force_authenticate(self.shanu)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'call_status': 'Quotation Requested',
             'remarks': 'Client asked for a quotation.',
         }, format='json')
@@ -245,23 +245,23 @@ class LeadVisibilityTests(APITestCase):
         self.assertEqual(resp.data['status'], 'quotation')
 
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/transactions/leads/?status=quotation')
+        resp = self.client.get('/api/transactions/leads/?status=quotation')
         self.assertEqual({l['id'] for l in resp.data['results']}, {'TC-1'})
-        resp = self.client.get('/v1/api/transactions/leads/?status=assigned')
+        resp = self.client.get('/api/transactions/leads/?status=assigned')
         self.assertEqual({l['id'] for l in resp.data['results']}, set())
 
     def test_staff_loses_control_after_quotation_requested(self):
         # Once a staff moves a lead to 'Quotation Requested' it leaves the
         # assigned stage and they lose the ability to update it.
         self.client.force_authenticate(self.shanu)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'call_status': 'Quotation Requested',
             'remarks': 'Client asked for a quotation.',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['status'], 'quotation')
 
-        blocked = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        blocked = self.client.patch('/api/transactions/leads/TC-1/', {
             'remarks': 'Still mine?',
         }, format='json')
         self.assertEqual(blocked.status_code, 403)
@@ -269,14 +269,14 @@ class LeadVisibilityTests(APITestCase):
     def test_staff_cannot_update_others_lead(self):
         # Priya cannot see (and therefore cannot edit) a lead assigned to Shanu.
         self.client.force_authenticate(self.priya)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'call_status': 'Interested',
         }, format='json')
         self.assertEqual(resp.status_code, 404)
 
     def test_logging_a_call_writes_history(self):
         self.client.force_authenticate(self.shanu)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'call_status': 'Interested',
             'priority': 'Hot',
             'remarks': 'Client eager to proceed.',
@@ -295,7 +295,7 @@ class LeadVisibilityTests(APITestCase):
 
     def test_pending_call_does_not_write_history(self):
         self.client.force_authenticate(self.shanu)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'call_status': 'Pending Call',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -303,7 +303,7 @@ class LeadVisibilityTests(APITestCase):
 
     def test_patch_with_unknown_call_status_is_rejected(self):
         self.client.force_authenticate(self.shanu)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'call_status': 'Random Junk',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -311,7 +311,7 @@ class LeadVisibilityTests(APITestCase):
     def test_patch_reassign_to_unknown_staff_is_rejected(self):
         # Managers hold the assign permission; unknown names are still rejected.
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'assigned_to': 'Ghost User',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -322,7 +322,7 @@ class LeadVisibilityTests(APITestCase):
         # A plain staff member must not be able to move a lead to a colleague;
         # reassignment is gated behind the assign permission.
         self.client.force_authenticate(self.shanu)
-        resp = self.client.patch('/v1/api/transactions/leads/TC-1/', {
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
             'assigned_to': 'Priya Sharma',
         }, format='json')
         self.assertEqual(resp.status_code, 403)
@@ -348,14 +348,14 @@ class AssignableStaffListViewTests(APITestCase):
 
     def test_manager_lists_real_company_staff(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/auth/assignable-staff/')
+        resp = self.client.get('/api/auth/assignable-staff/')
         self.assertEqual(resp.status_code, 200)
         names = {s['name'] for s in resp.data}
         self.assertEqual(names, {'Manager A', 'Shanu VR', 'Priya Sharma'})
 
     def test_staff_cannot_list_assignable_staff(self):
         self.client.force_authenticate(User.objects.get(email='shanu@acme.com'))
-        resp = self.client.get('/v1/api/auth/assignable-staff/')
+        resp = self.client.get('/api/auth/assignable-staff/')
         self.assertEqual(resp.status_code, 403)
 
 
@@ -375,23 +375,23 @@ class LeadDuplicateScopingTests(APITestCase):
 
     def test_same_tenant_duplicate_is_rejected(self):
         self.client.force_authenticate(self.manager)
-        first = self.client.post('/v1/api/transactions/leads/', {
+        first = self.client.post('/api/transactions/leads/', {
             'company': 'Cafe Day', 'phone': '111',
         }, format='json')
         self.assertEqual(first.status_code, 201)
-        duplicate = self.client.post('/v1/api/transactions/leads/', {
+        duplicate = self.client.post('/api/transactions/leads/', {
             'company': 'CAFE DAY', 'phone': '222',
         }, format='json')
         self.assertEqual(duplicate.status_code, 409)
 
     def test_cross_tenant_same_company_name_is_allowed(self):
         self.client.force_authenticate(self.manager)
-        first = self.client.post('/v1/api/transactions/leads/', {
+        first = self.client.post('/api/transactions/leads/', {
             'company': 'State Bank of India', 'phone': '111',
         }, format='json')
         self.assertEqual(first.status_code, 201)
         self.client.force_authenticate(self.other_manager)
-        second = self.client.post('/v1/api/transactions/leads/', {
+        second = self.client.post('/api/transactions/leads/', {
             'company': 'STATE BANK OF INDIA', 'phone': '222',
         }, format='json')
         self.assertEqual(second.status_code, 201)
@@ -405,11 +405,11 @@ class LeadDuplicateScopingTests(APITestCase):
 
         Category.objects.get_or_create(name='Hospital', company=self.manager.company)
         self.client.force_authenticate(self.manager)
-        bad = self.client.post('/v1/api/transactions/leads/', {
+        bad = self.client.post('/api/transactions/leads/', {
             'company': 'Some Co', 'category': 'Not A Category',
         }, format='json')
         self.assertEqual(bad.status_code, 400)
-        ok = self.client.post('/v1/api/transactions/leads/', {
+        ok = self.client.post('/api/transactions/leads/', {
             'company': 'Some Co', 'category': 'Hospital',
         }, format='json')
         self.assertEqual(ok.status_code, 201)
@@ -434,7 +434,7 @@ class ProposalTemplateApiTests(APITestCase):
         )
 
     def test_create_requires_authenticated_user(self):
-        resp = self.client.post('/v1/api/transactions/proposal-templates/', {
+        resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'My Tpl',
         }, format='json')
         self.assertEqual(resp.status_code, 401)
@@ -451,7 +451,7 @@ class ProposalTemplateApiTests(APITestCase):
             company=self.company,
         )
         self.client.force_authenticate(clerk)
-        resp = self.client.post('/v1/api/transactions/proposal-templates/', {
+        resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'My Tpl', 'scopeHtml': '<p>x</p>',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
@@ -459,7 +459,7 @@ class ProposalTemplateApiTests(APITestCase):
 
     def test_create_template_and_list_owned_only(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/proposal-templates/', {
+        resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'Hospital Suite',
             'category': 'Hospital',
             'defaultTotal': '80000',
@@ -473,7 +473,7 @@ class ProposalTemplateApiTests(APITestCase):
         self.assertEqual(resp.data['owner'], self.manager.id)
 
         self.client.force_authenticate(self.manager)
-        listing = self.client.get('/v1/api/transactions/proposal-templates/')
+        listing = self.client.get('/api/transactions/proposal-templates/')
         self.assertEqual(listing.status_code, 200)
         returned = listing.data
         names = {t['name'] for t in returned}
@@ -485,7 +485,7 @@ class ProposalTemplateApiTests(APITestCase):
 
     def test_user_templates_not_visible_to_others(self):
         self.client.force_authenticate(self.manager)
-        self.client.post('/v1/api/transactions/proposal-templates/', {
+        self.client.post('/api/transactions/proposal-templates/', {
             'name': 'Private Tpl', 'scopeHtml': '<p>p</p>',
         }, format='json')
         # Another manager in a different company sees neither company-agnostic
@@ -496,21 +496,21 @@ class ProposalTemplateApiTests(APITestCase):
             role=other_company.roles.get(code='manager'), company=other_company,
         )
         self.client.force_authenticate(other)
-        listing = self.client.get('/v1/api/transactions/proposal-templates/')
+        listing = self.client.get('/api/transactions/proposal-templates/')
         returned = listing.data
         self.assertNotIn('Private Tpl', {t['name'] for t in returned})
         self.assertIn('Global Website', {t['name'] for t in returned})
 
     def test_create_requires_name(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/proposal-templates/', {
+        resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': '   ',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
     def test_cannot_update_other_users_template(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/proposal-templates/', {
+        resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'Private Tpl', 'scopeHtml': '<p>p</p>',
         }, format='json')
         tpl_id = resp.data['id']
@@ -521,18 +521,18 @@ class ProposalTemplateApiTests(APITestCase):
             role=other_company.roles.get(code='manager'), company=other_company,
         )
         self.client.force_authenticate(other)
-        resp = self.client.put(f'/v1/api/transactions/proposal-templates/{tpl_id}/', {
+        resp = self.client.put(f'/api/transactions/proposal-templates/{tpl_id}/', {
             'name': 'Hijacked',
         }, format='json')
         self.assertEqual(resp.status_code, 404)
 
     def test_cannot_create_duplicate_name_for_owner(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/proposal-templates/', {
+        resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'Hospital Suite', 'scopeHtml': '<p>x</p>',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
-        resp = self.client.post('/v1/api/transactions/proposal-templates/', {
+        resp = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'hospital suite', 'scopeHtml': '<p>y</p>',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -540,14 +540,14 @@ class ProposalTemplateApiTests(APITestCase):
 
     def test_cannot_update_to_duplicate_name(self):
         self.client.force_authenticate(self.manager)
-        self.client.post('/v1/api/transactions/proposal-templates/', {
+        self.client.post('/api/transactions/proposal-templates/', {
             'name': 'First', 'scopeHtml': '<p>a</p>',
         }, format='json')
-        created = self.client.post('/v1/api/transactions/proposal-templates/', {
+        created = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'Second', 'scopeHtml': '<p>b</p>',
         }, format='json')
         tpl_id = created.data['id']
-        resp = self.client.put(f'/v1/api/transactions/proposal-templates/{tpl_id}/', {
+        resp = self.client.put(f'/api/transactions/proposal-templates/{tpl_id}/', {
             'name': 'First',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -555,11 +555,11 @@ class ProposalTemplateApiTests(APITestCase):
 
     def test_update_own_template(self):
         self.client.force_authenticate(self.manager)
-        created = self.client.post('/v1/api/transactions/proposal-templates/', {
+        created = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'Original', 'scopeHtml': '<p>a</p>', 'detailHtml': '<p>b</p>',
         }, format='json')
         tpl_id = created.data['id']
-        updated = self.client.put(f'/v1/api/transactions/proposal-templates/{tpl_id}/', {
+        updated = self.client.put(f'/api/transactions/proposal-templates/{tpl_id}/', {
             'name': 'Renamed', 'scopeHtml': '<p>a2</p>',
         }, format='json')
         self.assertEqual(updated.status_code, 200)
@@ -569,17 +569,17 @@ class ProposalTemplateApiTests(APITestCase):
 
     def test_delete_own_template(self):
         self.client.force_authenticate(self.manager)
-        created = self.client.post('/v1/api/transactions/proposal-templates/', {
+        created = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'Doomed', 'scopeHtml': '<p>x</p>',
         }, format='json')
         tpl_id = created.data['id']
-        resp = self.client.delete(f'/v1/api/transactions/proposal-templates/{tpl_id}/')
+        resp = self.client.delete(f'/api/transactions/proposal-templates/{tpl_id}/')
         self.assertEqual(resp.status_code, 204)
         self.assertFalse(ProposalTemplate.objects.filter(pk=tpl_id).exists())
 
     def test_cannot_delete_other_users_template(self):
         self.client.force_authenticate(self.manager)
-        created = self.client.post('/v1/api/transactions/proposal-templates/', {
+        created = self.client.post('/api/transactions/proposal-templates/', {
             'name': 'Doomed', 'scopeHtml': '<p>x</p>',
         }, format='json')
         tpl_id = created.data['id']
@@ -589,7 +589,7 @@ class ProposalTemplateApiTests(APITestCase):
             role=other_company.roles.get(code='manager'), company=other_company,
         )
         self.client.force_authenticate(other)
-        resp = self.client.delete(f'/v1/api/transactions/proposal-templates/{tpl_id}/')
+        resp = self.client.delete(f'/api/transactions/proposal-templates/{tpl_id}/')
         self.assertEqual(resp.status_code, 404)
 
 
@@ -607,7 +607,7 @@ class ProposalDraftApiTests(APITestCase):
 
     def test_save_and_retrieve_draft(self):
         self.client.force_authenticate(self.manager)
-        save = self.client.put('/v1/api/transactions/proposal-drafts/', {
+        save = self.client.put('/api/transactions/proposal-drafts/', {
             'proposalId': 'QTN-1',
             'customerPerson': 'John Doe',
             'companyName': 'Acme',
@@ -618,7 +618,7 @@ class ProposalDraftApiTests(APITestCase):
             'currency': 'INR (₹)',
         }, format='json')
         self.assertEqual(save.status_code, 200)
-        fetch = self.client.get('/v1/api/transactions/proposal-drafts/?proposal_id=QTN-1')
+        fetch = self.client.get('/api/transactions/proposal-drafts/?proposal_id=QTN-1')
         self.assertEqual(fetch.status_code, 200)
         self.assertEqual(fetch.data['customerPerson'], 'John Doe')
         self.assertEqual(fetch.data['proposalId'], 'QTN-1')
@@ -626,46 +626,46 @@ class ProposalDraftApiTests(APITestCase):
 
     def test_retrieve_unknown_draft_returns_empty(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/transactions/proposal-drafts/?proposal_id=nope')
+        resp = self.client.get('/api/transactions/proposal-drafts/?proposal_id=nope')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data, {})
 
     def test_put_upserts_same_draft(self):
         self.client.force_authenticate(self.manager)
-        self.client.put('/v1/api/transactions/proposal-drafts/', {
+        self.client.put('/api/transactions/proposal-drafts/', {
             'proposalId': 'QTN-2', 'customerPerson': 'First',
         }, format='json')
-        self.client.put('/v1/api/transactions/proposal-drafts/', {
+        self.client.put('/api/transactions/proposal-drafts/', {
             'proposalId': 'QTN-2', 'customerPerson': 'Second', 'total': '999',
         }, format='json')
         self.assertEqual(
             ProposalDraft.objects.filter(user=self.manager, proposal_id='QTN-2').count(),
             1,
         )
-        fetch = self.client.get('/v1/api/transactions/proposal-drafts/?proposal_id=QTN-2')
+        fetch = self.client.get('/api/transactions/proposal-drafts/?proposal_id=QTN-2')
         self.assertEqual(fetch.data['customerPerson'], 'Second')
         self.assertEqual(fetch.data['total'], '999')
 
     def test_drafts_are_scoped_per_user(self):
         self.client.force_authenticate(self.manager)
-        self.client.put('/v1/api/transactions/proposal-drafts/', {
+        self.client.put('/api/transactions/proposal-drafts/', {
             'proposalId': 'QTN-3', 'customerPerson': 'Manager draft',
         }, format='json')
         self.client.force_authenticate(self.staff)
-        fetch = self.client.get('/v1/api/transactions/proposal-drafts/?proposal_id=QTN-3')
+        fetch = self.client.get('/api/transactions/proposal-drafts/?proposal_id=QTN-3')
         self.assertEqual(fetch.data, {})
         fetch_other = self.client.get(
-            '/v1/api/transactions/proposal-drafts/?proposal_id=QTN-3',
+            '/api/transactions/proposal-drafts/?proposal_id=QTN-3',
         )
         self.assertNotEqual(fetch_other.data.get('customerPerson'), 'Manager draft')
 
     def test_delete_draft(self):
         self.client.force_authenticate(self.manager)
-        self.client.put('/v1/api/transactions/proposal-drafts/', {
+        self.client.put('/api/transactions/proposal-drafts/', {
             'proposalId': 'QTN-4', 'customerPerson': 'To delete',
         }, format='json')
         self.assertTrue(ProposalDraft.objects.filter(user=self.manager, proposal_id='QTN-4').exists())
-        resp = self.client.delete('/v1/api/transactions/proposal-drafts/?proposal_id=QTN-4')
+        resp = self.client.delete('/api/transactions/proposal-drafts/?proposal_id=QTN-4')
         self.assertEqual(resp.status_code, 204)
         self.assertFalse(ProposalDraft.objects.filter(user=self.manager, proposal_id='QTN-4').exists())
 
@@ -709,7 +709,7 @@ class QuotationApprovalFlowTests(APITestCase):
     def _send(self, approvers=None):
         self.client.force_authenticate(self.staff)
         return self.client.put(
-            f'/v1/api/transactions/quotations/{self.lead.id}/',
+            f'/api/transactions/quotations/{self.lead.id}/',
             {'status': 'Pending Approval', 'approvers': approvers if approvers is not None else self.approver_ids},
             format='json',
         )
@@ -724,18 +724,18 @@ class QuotationApprovalFlowTests(APITestCase):
 
         with patch('transactions.views.send_mail', side_effect=fake_send):
             otp = self.client.post(
-                f'/v1/api/transactions/quotations/{quotation}/approval-otp/', {}, format='json'
+                f'/api/transactions/quotations/{quotation}/approval-otp/', {}, format='json'
             )
         self.assertEqual(otp.status_code, 200)
         code = re.search(r'approval code is:\n\n\s*(\d{6})', mailbox['message']).group(1)
         return self.client.post(
-            f'/v1/api/transactions/quotations/{quotation}/approve/',
+            f'/api/transactions/quotations/{quotation}/approve/',
             {'otp': code}, format='json',
         )
 
     def test_approvers_list_excludes_staff(self):
         self.client.force_authenticate(self.staff)
-        resp = self.client.get('/v1/api/transactions/quotations/approvers/')
+        resp = self.client.get('/api/transactions/quotations/approvers/')
         self.assertEqual(resp.status_code, 200)
         names = set(a['name'] for a in resp.data)
         self.assertIn('Manager One', names)
@@ -744,7 +744,7 @@ class QuotationApprovalFlowTests(APITestCase):
 
     def test_approvers_list_excludes_self(self):
         self.client.force_authenticate(self.approver)
-        resp = self.client.get('/v1/api/transactions/quotations/approvers/')
+        resp = self.client.get('/api/transactions/quotations/approvers/')
         self.assertEqual(resp.status_code, 200)
         names = set(a['name'] for a in resp.data)
         self.assertNotIn('Manager One', names)
@@ -777,14 +777,14 @@ class QuotationApprovalFlowTests(APITestCase):
         self._send()
         self.client.force_authenticate(self.passenger)
         resp = self.client.post(
-            f'/v1/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
+            f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
         )
         self.assertEqual(resp.status_code, 403)
 
     def test_staff_cannot_request_otp(self):
         self.client.force_authenticate(self.staff)
         resp = self.client.post(
-            f'/v1/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
+            f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
         )
         self.assertEqual(resp.status_code, 403)
 
@@ -807,10 +807,10 @@ class QuotationApprovalFlowTests(APITestCase):
         self.client.force_authenticate(self.approver)
         with patch('transactions.views.send_mail', return_value=1):
             self.client.post(
-                f'/v1/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
+                f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
             )
         resp = self.client.post(
-            f'/v1/api/transactions/quotations/{self.lead.id}/approve/',
+            f'/api/transactions/quotations/{self.lead.id}/approve/',
             {'otp': '000000'}, format='json',
         )
         self.assertEqual(resp.status_code, 400)
@@ -819,7 +819,7 @@ class QuotationApprovalFlowTests(APITestCase):
         self._send()
         self.client.force_authenticate(self.approver)
         resp = self.client.post(
-            f'/v1/api/transactions/quotations/{self.lead.id}/reject/',
+            f'/api/transactions/quotations/{self.lead.id}/reject/',
             {'reason': 'Budget too low'}, format='json',
         )
         self.assertEqual(resp.status_code, 200)
@@ -831,13 +831,13 @@ class QuotationApprovalFlowTests(APITestCase):
         # Once rejected, another approver can no longer act.
         self.client.force_authenticate(self.approver2)
         otp = self.client.post(
-            f'/v1/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
+            f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
         )
         self.assertEqual(otp.status_code, 400)
 
     def test_status_cannot_be_set_directly(self):
         self.client.force_authenticate(self.approver)
-        resp = self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Approved',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -848,7 +848,7 @@ class QuotationApprovalFlowTests(APITestCase):
         # new approval round.
         self._send()
         self.client.force_authenticate(self.staff)
-        resp = self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Pending Approval',
             'remarks': 'Typo fixed',
         }, format='json')
@@ -860,7 +860,7 @@ class QuotationApprovalFlowTests(APITestCase):
     def test_resend_pending_quote_is_blocked(self):
         self._send()
         self.client.force_authenticate(self.staff)
-        resp = self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Pending Approval', 'approvers': self.approver_ids,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -872,7 +872,7 @@ class QuotationApprovalFlowTests(APITestCase):
         self._approve(self.approver, self.lead.id)
         self._approve(self.approver2, self.lead.id)
         self.client.force_authenticate(self.staff)
-        resp = self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Pending Approval', 'approvers': self.approver_ids,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -885,7 +885,7 @@ class QuotationApprovalFlowTests(APITestCase):
         self._approve(self.approver, self.lead.id)
         self._approve(self.approver2, self.lead.id)
         self.client.force_authenticate(self.staff)
-        resp = self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Approved',
             'remarks': 'Updated after approval',
         }, format='json')
@@ -899,7 +899,7 @@ class QuotationApprovalFlowTests(APITestCase):
         self._approve(self.approver, self.lead.id)
         self._approve(self.approver2, self.lead.id)
         self.client.force_authenticate(self.staff)
-        resp = self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'newVersion': True,
             'remarks': 'Revised offer',
             'total': '999',
@@ -924,7 +924,7 @@ class QuotationApprovalFlowTests(APITestCase):
         # The new version must be approved again before it can go to the client.
         self.client.force_authenticate(self.staff)
         send_resp = self.client.put(
-            f'/v1/api/transactions/quotations/{new_quote.id}/', {
+            f'/api/transactions/quotations/{new_quote.id}/', {
                 'status': 'Pending Approval', 'approvers': self.approver_ids,
             }, format='json',
         )
@@ -940,13 +940,13 @@ class QuotationApprovalFlowTests(APITestCase):
         self._approve(self.approver, self.lead.id)
         self._approve(self.approver2, self.lead.id)
         self.client.force_authenticate(self.staff)
-        self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'newVersion': True, 'total': '888',
         }, format='json')
         new_quote = Quotation.objects.get(lead_id=self.lead.id, version_no=2)
         self.client.force_authenticate(self.staff)
         self.client.put(
-            f'/v1/api/transactions/quotations/{new_quote.id}/', {
+            f'/api/transactions/quotations/{new_quote.id}/', {
                 'status': 'Pending Approval', 'approvers': self.approver_ids,
             }, format='json',
         )
@@ -954,11 +954,11 @@ class QuotationApprovalFlowTests(APITestCase):
         self._approve(self.approver2, new_quote.id)
         self.client.force_authenticate(self.approver)
         first = self.client.post(
-            f'/v1/api/transactions/quotations/{self.lead.id}/send-to-client/',
+            f'/api/transactions/quotations/{self.lead.id}/send-to-client/',
             {'channels': ['copy'], 'origin': 'https://app.test'}, format='json',
         )
         second = self.client.post(
-            f'/v1/api/transactions/quotations/{new_quote.id}/send-to-client/',
+            f'/api/transactions/quotations/{new_quote.id}/send-to-client/',
             {'channels': ['copy'], 'origin': 'https://app.test'}, format='json',
         )
         self.assertEqual(first.status_code, 200)
@@ -968,7 +968,7 @@ class QuotationApprovalFlowTests(APITestCase):
         self.assertEqual(len(set(tokens)), 2)
 
         # The client page for the first version lists the sibling via payload.
-        detail = self.client.get(f"/v1/api/transactions/public/quotations/{tokens[0]}/")
+        detail = self.client.get(f"/api/transactions/public/quotations/{tokens[0]}/")
         self.assertEqual(detail.status_code, 200)
         version_ids = [v['id'] for v in detail.data['versions']]
         self.assertIn(new_quote.id, version_ids)
@@ -980,11 +980,11 @@ class QuotationApprovalFlowTests(APITestCase):
             role=other.roles.get(code='manager'), company=other,
         )
         self.client.force_authenticate(other_manager)
-        resp = self.client.get(f'/v1/api/transactions/quotations/{self.lead.id}/')
+        resp = self.client.get(f'/api/transactions/quotations/{self.lead.id}/')
         self.assertEqual(resp.status_code, 404)
         # Legitimate same-company read still works.
         self.client.force_authenticate(self.approver)
-        resp = self.client.get(f'/v1/api/transactions/quotations/{self.lead.id}/')
+        resp = self.client.get(f'/api/transactions/quotations/{self.lead.id}/')
         self.assertEqual(resp.status_code, 200)
 
     def test_delete_quotation_is_scoped_to_company(self):
@@ -994,7 +994,7 @@ class QuotationApprovalFlowTests(APITestCase):
             role=other.roles.get(code='manager'), company=other,
         )
         self.client.force_authenticate(other_manager)
-        resp = self.client.delete(f'/v1/api/transactions/quotations/{self.lead.id}/')
+        resp = self.client.delete(f'/api/transactions/quotations/{self.lead.id}/')
         self.assertEqual(resp.status_code, 404)
         self.assertTrue(Quotation.objects.filter(lead_id=self.lead.id).exists())
 
@@ -1040,7 +1040,7 @@ class QuotationSendWithoutApprovalTests(APITestCase):
             tenant=company, staff='Bypass One', email='client@bypass.co',
             status='Not Sent',
         )
-        self.send_url = f'/v1/api/transactions/quotations/{self.quote.id}/send-to-client/'
+        self.send_url = f'/api/transactions/quotations/{self.quote.id}/send-to-client/'
 
     def _send_email(self, user):
         import types
@@ -1116,7 +1116,7 @@ class ContactEditSyncTests(APITestCase):
             tenant=self.company, mobile='111', email='old@sync.co',
         )
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch('/v1/api/transactions/leads/RL-SYNC/', {
+        resp = self.client.patch('/api/transactions/leads/RL-SYNC/', {
             'phone': '9999999999', 'email': 'new@sync.co',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -1126,7 +1126,7 @@ class ContactEditSyncTests(APITestCase):
 
     def test_lead_change_records_history_and_flags(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch('/v1/api/transactions/leads/RL-SYNC/', {
+        resp = self.client.patch('/api/transactions/leads/RL-SYNC/', {
             'phone': '222', 'city': 'Trivandrum',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -1141,7 +1141,7 @@ class ContactEditSyncTests(APITestCase):
 
     def test_lead_edit_without_contact_change_no_history(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch('/v1/api/transactions/leads/RL-SYNC/', {
+        resp = self.client.patch('/api/transactions/leads/RL-SYNC/', {
             'remarks': 'Just a note',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -1151,13 +1151,13 @@ class ContactEditSyncTests(APITestCase):
     def test_quotation_edit_syncs_and_audits_back_to_lead(self):
         self.client.force_authenticate(self.manager)
         # First save creates the proposal (baseline — nothing to mirror).
-        self.client.put('/v1/api/transactions/quotations/RL-SYNC/', {
+        self.client.put('/api/transactions/quotations/RL-SYNC/', {
             'company': 'Sync Co', 'customer': 'Old Person', 'mobile': '111',
             'email': 'old@sync.co', 'category': 'Hospital', 'city': 'Kochi',
             'source': 'Google Search', 'total': '1000',
         }, format='json')
         # Second save corrects the contact person / mobile / email.
-        resp = self.client.put('/v1/api/transactions/quotations/RL-SYNC/', {
+        resp = self.client.put('/api/transactions/quotations/RL-SYNC/', {
             'company': 'Sync Co', 'customer': 'New Person', 'mobile': '333',
             'email': 'mail@sync.co', 'category': 'Hospital', 'city': 'Kochi',
             'source': 'Google Search', 'total': '1000',
@@ -1180,7 +1180,7 @@ class ContactEditSyncTests(APITestCase):
 
     def test_quotation_edit_on_generated_quote_flags_warning(self):
         self.client.force_authenticate(self.manager)
-        self.client.put('/v1/api/transactions/quotations/RL-SYNC/', {
+        self.client.put('/api/transactions/quotations/RL-SYNC/', {
             'company': 'Sync Co', 'customer': 'Person', 'mobile': '111',
             'email': 'a@sync.co', 'category': 'Hospital', 'city': 'Kochi',
             'source': 'Google Search', 'total': '1000',
@@ -1190,12 +1190,12 @@ class ContactEditSyncTests(APITestCase):
         quotation.save()
         # Editing an approved proposal must go through "Edit as New Version";
         # a plain edit is refused.
-        blocked = self.client.put('/v1/api/transactions/quotations/RL-SYNC/', {
+        blocked = self.client.put('/api/transactions/quotations/RL-SYNC/', {
             'email': 'changed@sync.co',
         }, format='json')
         self.assertEqual(blocked.status_code, 400)
         # The new version still syncs the contact change and flags the warning.
-        resp = self.client.put('/v1/api/transactions/quotations/RL-SYNC/', {
+        resp = self.client.put('/api/transactions/quotations/RL-SYNC/', {
             'newVersion': True,
             'email': 'changed@sync.co',
         }, format='json')
@@ -1215,7 +1215,7 @@ class ContactEditSyncTests(APITestCase):
         # First-time proposal save with the same values as the lead records
         # nothing in the audit trail.
         self.client.force_authenticate(self.manager)
-        self.client.put('/v1/api/transactions/quotations/RL-SYNC/', {
+        self.client.put('/api/transactions/quotations/RL-SYNC/', {
             'company': 'Sync Co', 'customer': 'Old Person', 'mobile': '111',
             'email': 'old@sync.co', 'category': 'Hospital', 'city': 'Kochi',
             'source': 'Google Search', 'total': '1000',
@@ -1224,10 +1224,10 @@ class ContactEditSyncTests(APITestCase):
 
     def test_contact_history_rides_on_lead_list(self):
         self.client.force_authenticate(self.manager)
-        self.client.patch('/v1/api/transactions/leads/RL-SYNC/', {
+        self.client.patch('/api/transactions/leads/RL-SYNC/', {
             'phone': '444',
         }, format='json')
-        resp = self.client.get('/v1/api/transactions/leads/?status=raw')
+        resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual(resp.status_code, 200)
         row = next(l for l in resp.data['results'] if l['id'] == 'RL-SYNC')
         self.assertEqual(row['contactHistory'][0]['field'], 'phone')
@@ -1258,7 +1258,7 @@ class OrderSendToClientTests(APITestCase):
             scope='<p>Order summary</p>',
             details='<p>Order details</p>',
         )
-        self.send_url = f'/v1/api/transactions/orders/{self.order.id}/send-to-client/'
+        self.send_url = f'/api/transactions/orders/{self.order.id}/send-to-client/'
 
     def test_staff_without_edit_permission_cannot_send(self):
         self.client.force_authenticate(self.viewer)
@@ -1331,7 +1331,7 @@ class OrderSendToClientTests(APITestCase):
                 self.client.force_authenticate(user)
             else:
                 self.client.force_authenticate(None)
-            detail = self.client.get(f'/v1/api/transactions/public/orders/{token}/')
+            detail = self.client.get(f'/api/transactions/public/orders/{token}/')
             self.assertEqual(detail.status_code, 200)
             self.assertEqual(detail.data['id'], self.order.id)
             self.assertEqual(detail.data['clientStatus'], 'Pending')
@@ -1340,7 +1340,7 @@ class OrderSendToClientTests(APITestCase):
         # it again, so no respond endpoint exists.
         self.client.force_authenticate(None)
         resp = self.client.post(
-            f'/v1/api/transactions/public/orders/{token}/respond/',
+            f'/api/transactions/public/orders/{token}/respond/',
             {'decision': 'accept', 'message': 'Looks good, proceed'},
             format='json',
         )
@@ -1348,7 +1348,7 @@ class OrderSendToClientTests(APITestCase):
 
     def test_order_pdf_download(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.get(f'/v1/api/transactions/orders/{self.order.id}/pdf/')
+        resp = self.client.get(f'/api/transactions/orders/{self.order.id}/pdf/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp['Content-Type'], 'application/pdf')
         self.assertIn('attachment', resp['Content-Disposition'])
@@ -1359,7 +1359,7 @@ class OrderSendToClientTests(APITestCase):
         self.client.post(self.send_url, {'channels': ['copy'], 'origin': 'https://app.test'}, format='json')
         token = Order.objects.get(id=self.order.id).client_token
         self.client.force_authenticate(None)
-        resp = self.client.get(f'/v1/api/transactions/public/orders/{token}/pdf/')
+        resp = self.client.get(f'/api/transactions/public/orders/{token}/pdf/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp['Content-Type'], 'application/pdf')
 
@@ -1429,11 +1429,11 @@ class OrderSendToClientTests(APITestCase):
         )
 
         self.client.force_authenticate(None)
-        resp = self.client.get(f'/v1/api/transactions/public/orders/{token}/')
+        resp = self.client.get(f'/api/transactions/public/orders/{token}/')
         self.assertEqual(resp.status_code, 404)
 
         self.client.force_authenticate(None)
-        resp = self.client.get('/v1/api/transactions/public/orders/NOPE/')
+        resp = self.client.get('/api/transactions/public/orders/NOPE/')
         self.assertEqual(resp.status_code, 404)
 class ClientDetailFlowTests(APITestCase):
     """Accepted orders move from Manage Orders into Client Details."""
@@ -1483,7 +1483,7 @@ class ClientDetailFlowTests(APITestCase):
         create_client_detail_from_order(self.order)
         create_client_detail_from_order(other_order)
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/transactions/client-details/')
+        resp = self.client.get('/api/transactions/client-details/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual({r['orderNo'] for r in resp.data['results']}, {self.order.id})
 
@@ -1491,7 +1491,7 @@ class ClientDetailFlowTests(APITestCase):
         from transactions.services import create_client_detail_from_order
         create_client_detail_from_order(self.order)
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/client-details/', {
+        resp = self.client.post('/api/transactions/client-details/', {
             'orderNo': self.order.id,
             'company': 'Client Co',
             'clientName': 'Renamed Person',
@@ -1504,7 +1504,7 @@ class ClientDetailFlowTests(APITestCase):
 
     def test_create_new_record_with_attachments(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/client-details/', {
+        resp = self.client.post('/api/transactions/client-details/', {
             'orderNo': 'P2026-0002',
             'leadId': 'TC-CLIENT',
             'clientName': 'New Person',
@@ -1521,7 +1521,7 @@ class ClientDetailFlowTests(APITestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
         f = SimpleUploadedFile('card.jpg', b'fake-img-bytes', content_type='image/jpeg')
         upload = self.client.post(
-            f'/v1/api/transactions/client-details/{record.id}/attachments/',
+            f'/api/transactions/client-details/{record.id}/attachments/',
             {'file': f, 'type': 'Business Card'}, format='multipart',
         )
         self.assertEqual(upload.status_code, 201)
@@ -1533,7 +1533,7 @@ class ClientDetailFlowTests(APITestCase):
 
     def test_viewer_only_sorted_by_client_view_perm(self):
         self.client.force_authenticate(self.viewer)
-        resp = self.client.post('/v1/api/transactions/client-details/', {
+        resp = self.client.post('/api/transactions/client-details/', {
             'orderNo': 'P2026-0003', 'company': 'No Perm Co',
         }, format='json')
         self.assertEqual(resp.status_code, 403)
@@ -1544,12 +1544,12 @@ class ClientDetailFlowTests(APITestCase):
             id='CD-STATUS-1', order_no='P2026-0777', company='Status Co', tenant=self.company,
         )
         bad = self.client.put(
-            f'/v1/api/transactions/client-details/{record.id}/',
+            f'/api/transactions/client-details/{record.id}/',
             {'status': 'Not A Status'}, format='json',
         )
         self.assertEqual(bad.status_code, 400)
         good = self.client.put(
-            f'/v1/api/transactions/client-details/{record.id}/',
+            f'/api/transactions/client-details/{record.id}/',
             {'status': 'Paid'}, format='json',
         )
         self.assertEqual(good.status_code, 200)
@@ -1561,7 +1561,7 @@ class ClientDetailFlowTests(APITestCase):
         )
         # A normal manager is blocked even though they can edit client details.
         self.client.force_authenticate(self.manager)
-        blocked = self.client.delete(f'/v1/api/transactions/client-details/{record.id}/')
+        blocked = self.client.delete(f'/api/transactions/client-details/{record.id}/')
         self.assertEqual(blocked.status_code, 403)
         self.assertTrue(ClientDetail.objects.filter(pk='CD-DEL-1').exists())
         # A superuser can delete.
@@ -1569,7 +1569,7 @@ class ClientDetailFlowTests(APITestCase):
             email='super@cd.com', password='x', name='Super CD', is_superuser=True,
         )
         self.client.force_authenticate(admin)
-        ok = self.client.delete(f'/v1/api/transactions/client-details/{record.id}/')
+        ok = self.client.delete(f'/api/transactions/client-details/{record.id}/')
         self.assertEqual(ok.status_code, 204)
         self.assertFalse(ClientDetail.objects.filter(pk='CD-DEL-1').exists())
 
@@ -1596,7 +1596,7 @@ class ClientDetailAttachmentTests(APITestCase):
             id='CD-P2026-0001', order_no='P2026-0001', lead_id='TC-ATT',
             company='Att Co', tenant=company, status='Details Pending',
         )
-        self.upload_url = f'/v1/api/transactions/client-details/{self.record.id}/attachments/'
+        self.upload_url = f'/api/transactions/client-details/{self.record.id}/attachments/'
 
     def _upload(self, name='srs.pdf', content_type='application/pdf', content=b'%PDF-1.4\x0a%per-org', att_type='SRS Document'):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -1642,7 +1642,7 @@ class ClientDetailAttachmentTests(APITestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
         f = SimpleUploadedFile('srs.pdf', b'%PDF', content_type='application/pdf')
         resp = self.client.post(
-            f'/v1/api/transactions/client-details/{other_record.id}/attachments/',
+            f'/api/transactions/client-details/{other_record.id}/attachments/',
             {'file': f}, format='multipart',
         )
         self.assertEqual(resp.status_code, 404)
@@ -1661,7 +1661,7 @@ class ClientDetailAttachmentTests(APITestCase):
     def test_client_detail_json_save_ignores_attachments(self):
         # Attachments are managed by the dedicated upload/delete endpoints.
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/client-details/', {
+        resp = self.client.post('/api/transactions/client-details/', {
             'orderNo': 'P2026-0210', 'company': 'No Files Co',
             'attachments': [{'type': 'SRS Document', 'name': 'fake.pdf'}],
         }, format='json')
@@ -1684,14 +1684,14 @@ class ClientDetailTenantIsolationTests(APITestCase):
 
     def test_same_order_number_in_other_company_creates_own_record(self):
         self.client.force_authenticate(self.mgr_a)
-        first = self.client.post('/v1/api/transactions/client-details/', {
+        first = self.client.post('/api/transactions/client-details/', {
             'orderNo': 'ORD-1', 'company': 'Alpha Co',
         }, format='json')
         self.assertEqual(first.status_code, 201)
         first_id = first.data['id']
 
         self.client.force_authenticate(self.mgr_b)
-        second = self.client.post('/v1/api/transactions/client-details/', {
+        second = self.client.post('/api/transactions/client-details/', {
             'orderNo': 'ORD-1', 'company': 'Beta Co',
         }, format='json')
         # Must create a brand-new record in company B, not overwrite company A's.
@@ -1700,16 +1700,16 @@ class ClientDetailTenantIsolationTests(APITestCase):
         self.assertEqual(ClientDetail.objects.filter(order_no='ORD-1').count(), 2)
 
         self.client.force_authenticate(self.mgr_a)
-        list_a = self.client.get('/v1/api/transactions/client-details/')
+        list_a = self.client.get('/api/transactions/client-details/')
         self.assertEqual([r['id'] for r in list_a.data['results']], [first_id])
 
     def test_upsert_only_updates_own_company_record(self):
         self.client.force_authenticate(self.mgr_a)
-        self.client.post('/v1/api/transactions/client-details/', {
+        self.client.post('/api/transactions/client-details/', {
             'orderNo': 'ORD-2', 'company': 'Alpha Co', 'notes': 'v1',
         }, format='json')
         # Re-post the same orderNo within the SAME company updates in place.
-        resp = self.client.post('/v1/api/transactions/client-details/', {
+        resp = self.client.post('/api/transactions/client-details/', {
             'orderNo': 'ORD-2', 'company': 'Alpha Co', 'notes': 'v2',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -1731,25 +1731,25 @@ class QuotationWedgeRegressionTests(APITestCase):
     def test_pending_approval_without_approvers_is_rejected(self):
         # First create the proposal draft, then try to wedge it into approval.
         self.client.force_authenticate(self.manager)
-        draft = self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        draft = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Prepared', 'customer': 'Wedge Ltd',
         }, format='json')
         self.assertEqual(draft.status_code, 200)
-        resp = self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        resp = self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Pending Approval',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
     def test_delete_quotation_with_existing_order_is_rejected(self):
         self.client.force_authenticate(self.manager)
-        self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Prepared', 'customer': 'Wedge Ltd',
         }, format='json')
         Order.objects.create(
             id='O-WEDGE-1', lead_id=self.lead.id, company='Wedge Ltd',
             tenant=self.manager.company, status='Pending',
         )
-        resp = self.client.delete(f'/v1/api/transactions/quotations/{self.lead.id}/')
+        resp = self.client.delete(f'/api/transactions/quotations/{self.lead.id}/')
         self.assertEqual(resp.status_code, 400)
         self.assertTrue(Quotation.objects.filter(lead_id=self.lead.id).exists())
 
@@ -1759,7 +1759,7 @@ class QuotationWedgeRegressionTests(APITestCase):
         from transactions.views import create_order_from_quotation
 
         self.client.force_authenticate(self.manager)
-        self.client.put(f'/v1/api/transactions/quotations/{self.lead.id}/', {
+        self.client.put(f'/api/transactions/quotations/{self.lead.id}/', {
             'status': 'Prepared', 'customer': 'Wedge Ltd', 'total': '10000', 'netAmount': '10000',
         }, format='json')
         q1 = Quotation.objects.get(id=self.lead.id)
@@ -1816,7 +1816,7 @@ class LeadStatusAndLockTests(APITestCase):
 
     def test_staff_my_leads_lists_own_leads_across_stages(self):
         self.client.force_authenticate(self.staff)
-        resp = self.client.get('/v1/api/transactions/leads/my/')
+        resp = self.client.get('/api/transactions/leads/my/')
         self.assertEqual(resp.status_code, 200)
         ids = {item['id'] for item in resp.data['results']}
         self.assertEqual(ids, {'ST-RAW', 'ST-ASGN', 'ST-QTN'})
@@ -1827,13 +1827,13 @@ class LeadStatusAndLockTests(APITestCase):
 
     def test_staff_my_leads_excludes_others_leads(self):
         self.client.force_authenticate(self.staff)
-        resp = self.client.get('/v1/api/transactions/leads/my/')
+        resp = self.client.get('/api/transactions/leads/my/')
         ids = {item['id'] for item in resp.data['results']}
         self.assertNotIn('ST-OTH', ids)
 
     def test_staff_locks_assigned_lead(self):
         self.client.force_authenticate(self.staff)
-        resp = self.client.post('/v1/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['isLocked'])
         lead = Lead.objects.get(id='ST-ASGN')
@@ -1843,7 +1843,7 @@ class LeadStatusAndLockTests(APITestCase):
     def test_manager_cannot_reassign_locked_lead(self):
         self.staff_lock_lead()
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch('/v1/api/transactions/leads/ST-ASGN/', {
+        resp = self.client.patch('/api/transactions/leads/ST-ASGN/', {
             'assigned_to': 'Other S',
         }, format='json')
         self.assertEqual(resp.status_code, 403)
@@ -1852,7 +1852,7 @@ class LeadStatusAndLockTests(APITestCase):
     def test_admin_can_reassign_locked_lead(self):
         self.staff_lock_lead()
         self.client.force_authenticate(self.admin)
-        resp = self.client.patch('/v1/api/transactions/leads/ST-ASGN/', {
+        resp = self.client.patch('/api/transactions/leads/ST-ASGN/', {
             'assigned_to': 'Other S',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -1861,36 +1861,36 @@ class LeadStatusAndLockTests(APITestCase):
     def test_manager_cannot_unlock(self):
         self.staff_lock_lead()
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/ST-ASGN/unlock/', {}, format='json')
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/unlock/', {}, format='json')
         self.assertEqual(resp.status_code, 403)
         self.assertTrue(Lead.objects.get(id='ST-ASGN').is_locked)
 
     def test_owner_can_unlock(self):
         self.staff_lock_lead()
         self.client.force_authenticate(self.staff)
-        resp = self.client.post('/v1/api/transactions/leads/ST-ASGN/unlock/', {}, format='json')
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/unlock/', {}, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.data['isLocked'])
         # After unlock, a manager can reassign again.
         self.client.force_authenticate(self.manager)
-        resp = self.client.patch('/v1/api/transactions/leads/ST-ASGN/', {
+        resp = self.client.patch('/api/transactions/leads/ST-ASGN/', {
             'assigned_to': 'Other S',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
 
     def test_staff_cannot_lock_lead_not_assigned_to_them(self):
         self.client.force_authenticate(self.staff)
-        resp = self.client.post('/v1/api/transactions/leads/ST-OTH/lock/', {}, format='json')
+        resp = self.client.post('/api/transactions/leads/ST-OTH/lock/', {}, format='json')
         self.assertEqual(resp.status_code, 404)
 
     def test_manager_cannot_lock_others_lead(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.post('/v1/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
         self.assertEqual(resp.status_code, 403)
 
     def staff_lock_lead(self):
         self.client.force_authenticate(self.staff)
-        resp = self.client.post('/v1/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
+        resp = self.client.post('/api/transactions/leads/ST-ASGN/lock/', {}, format='json')
         self.assertEqual(resp.status_code, 200)
 
 
@@ -1927,7 +1927,7 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
             return_value=fake_email,
         ) as builder:
             resp = self.client.post(
-                '/v1/api/transactions/public/quotations/tok-confirm/respond/',
+                '/api/transactions/public/quotations/tok-confirm/respond/',
                 {'decision': 'accept', 'message': ''}, format='json',
             )
         self.assertEqual(resp.status_code, 200)
@@ -1940,7 +1940,7 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
         self.client.force_authenticate(None)
         with patch('transactions.views.build_quotation_accepted_email') as builder:
             resp = self.client.post(
-                '/v1/api/transactions/public/quotations/tok-confirm/respond/',
+                '/api/transactions/public/quotations/tok-confirm/respond/',
                 {'decision': 'accept', 'message': ''}, format='json',
             )
         self.assertEqual(resp.status_code, 200)
@@ -1968,7 +1968,7 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
 
         with patch('transactions.views.build_quotation_accepted_email') as builder:
             resp = self.client.post(
-                '/v1/api/transactions/public/quotations/tok-confirm/respond/',
+                '/api/transactions/public/quotations/tok-confirm/respond/',
                 {'decision': 'decline', 'message': ''}, format='json',
             )
         self.assertEqual(resp.status_code, 200)
@@ -1996,7 +1996,7 @@ class PaginationAndFilterTests(APITestCase):
 
     def test_first_page_returns_100_rows_and_total_count(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/transactions/leads/?status=raw')
+        resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['count'], 120)
         self.assertEqual(resp.data['page'], 1)
@@ -2005,19 +2005,19 @@ class PaginationAndFilterTests(APITestCase):
 
     def test_second_page_returns_the_remaining_rows(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/transactions/leads/?status=raw&page=2')
+        resp = self.client.get('/api/transactions/leads/?status=raw&page=2')
         self.assertEqual(len(resp.data['results']), 20)
         self.assertEqual(resp.data['count'], 120)
         ids = {row['id'] for row in resp.data['results']}
         self.assertTrue(ids.isdisjoint({
             row['id'] for row in (
-                self.client.get('/v1/api/transactions/leads/?status=raw&page=1').data['results']
+                self.client.get('/api/transactions/leads/?status=raw&page=1').data['results']
             )
         }))
 
     def test_search_filter_is_applied_server_side(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/transactions/leads/?status=raw&search=Paged%20Lead%201')
+        resp = self.client.get('/api/transactions/leads/?status=raw&search=Paged%20Lead%201')
         self.assertEqual(resp.data['count'], 31)
         self.assertTrue(all(
             'Paged Lead 1' in row['company'] for row in resp.data['results']
@@ -2031,13 +2031,13 @@ class PaginationAndFilterTests(APITestCase):
         )
         self.client.force_authenticate(self.manager)
         resp = self.client.get(
-            '/v1/api/transactions/leads/?status=raw&added_by=Manager%20P'
+            '/api/transactions/leads/?status=raw&added_by=Manager%20P'
         )
         self.assertEqual(resp.data['count'], 120)
 
     def test_leads_meta_returns_facets_and_counts(self):
         self.client.force_authenticate(self.manager)
-        resp = self.client.get('/v1/api/transactions/leads/meta/?status=raw')
+        resp = self.client.get('/api/transactions/leads/meta/?status=raw')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['counts']['total'], 120)
         self.assertIn('Kochi', resp.data['facets']['cities'])
@@ -2054,7 +2054,7 @@ class PaginationAndFilterTests(APITestCase):
                 tenant=lead.tenant, staff='Manager P', status='Not Sent',
             )
         # 105 leads with proposals + 15 leads without one.
-        resp = self.client.get('/v1/api/transactions/quotations/rows/')
+        resp = self.client.get('/api/transactions/quotations/rows/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['count'], 120)
         self.assertEqual(resp.data['counts']['Not Sent'], 105)
@@ -2069,7 +2069,7 @@ class PaginationAndFilterTests(APITestCase):
                 id=f'ORD-{i:03d}', company=f'Order Co {i}',
                 tenant=self.company,
             )
-        resp = self.client.get('/v1/api/transactions/orders/register/')
+        resp = self.client.get('/api/transactions/orders/register/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['count'], 120)
         self.assertEqual(len(resp.data['results']), 100)
@@ -2082,7 +2082,7 @@ class PaginationAndFilterTests(APITestCase):
                 id=f'EX-{i}', company=f'Ex Co {i}', tenant=self.company,
                 status='Accepted' if i == 0 else 'Pending',
             )
-        resp = self.client.get('/v1/api/transactions/orders/?exclude_status=Accepted')
+        resp = self.client.get('/api/transactions/orders/?exclude_status=Accepted')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['count'], 4)
         self.assertEqual(resp.data['counts']['total'], 4)

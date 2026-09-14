@@ -28,7 +28,7 @@ class MasterNameUniquenessTests(APITestCase):
     def test_duplicate_category_is_rejected_case_insensitive(self):
         Category.objects.create(name='Blood Bank', code='BB01', company=self.admin.company)
         self.client.force_authenticate(self.admin)
-        resp = self.client.post('/v1/api/master/categories/', {
+        resp = self.client.post('/api/master/categories/', {
             'name': 'blood bank',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -36,7 +36,7 @@ class MasterNameUniquenessTests(APITestCase):
     def test_same_category_in_other_company_is_allowed(self):
         Category.objects.create(name='Blood Bank', code='BB01', company=self.other_admin.company)
         self.client.force_authenticate(self.admin)
-        resp = self.client.post('/v1/api/master/categories/', {
+        resp = self.client.post('/api/master/categories/', {
             'name': 'Blood Bank',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
@@ -44,7 +44,7 @@ class MasterNameUniquenessTests(APITestCase):
     def test_duplicate_source_is_rejected(self):
         Source.objects.create(name='Google Search', code='G01', company=self.admin.company)
         self.client.force_authenticate(self.admin)
-        resp = self.client.post('/v1/api/master/sources/', {
+        resp = self.client.post('/api/master/sources/', {
             'name': 'Google Search',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -52,7 +52,7 @@ class MasterNameUniquenessTests(APITestCase):
     def test_duplicate_branch_in_same_company_is_rejected(self):
         Branch.objects.create(name='Main Office', code='MO01', company=self.admin.company)
         self.client.force_authenticate(self.admin)
-        resp = self.client.post('/v1/api/master/branches/', {
+        resp = self.client.post('/api/master/branches/', {
             'name': 'main office', 'address': 'xyz',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -60,7 +60,7 @@ class MasterNameUniquenessTests(APITestCase):
     def test_same_branch_name_in_other_company_is_allowed(self):
         Branch.objects.create(name='Main Office', code='MO01', company=self.admin.company)
         self.client.force_authenticate(self.other_admin)
-        resp = self.client.post('/v1/api/master/branches/', {
+        resp = self.client.post('/api/master/branches/', {
             'name': 'Main Office', 'address': 'abc',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
@@ -69,7 +69,7 @@ class MasterNameUniquenessTests(APITestCase):
         Branch.objects.create(name='Main Office', code='MO01', company=self.admin.company)
         target = Branch.objects.create(name='Second', code='MO02', company=self.admin.company)
         self.client.force_authenticate(self.admin)
-        resp = self.client.patch(f'/v1/api/master/branches/{target.pk}/', {
+        resp = self.client.patch(f'/api/master/branches/{target.pk}/', {
             'name': 'Main Office',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
