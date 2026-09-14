@@ -78,3 +78,5 @@ Desktop.ini
 *.tmp
 *.temp
 *.bak
+
+*.sql
