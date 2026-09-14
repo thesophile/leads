@@ -776,6 +776,9 @@ class LeadDetailView(APIView):
         edited_contact_fields = [f for f in CONTACT_FIELD_MAP if f in request.data]
         old_contact = {f: getattr(lead, f) for f in edited_contact_fields}
         old_call_status = lead.call_status
+        old_category = lead.category
+        old_source = lead.source
+        old_assigned_to = lead.assigned_to
         if 'company' in request.data:
             company = request.data.get('company', '').strip()
             if not company:
@@ -811,8 +814,11 @@ class LeadDetailView(APIView):
         submitted = set(request.data)
         # Reassigning a lead to another staff member is an assign action: only
         # users with an assign permission may change who owns a lead. This keeps
-        # the per-lead edit path consistent with the bulk-assign gate.
-        if 'assigned_to' in submitted:
+        # the per-lead edit path consistent with the bulk-assign gate. When the
+        # submitted assignment is identical to the stored one — the common case
+        # when a caller merely saves feedback, status or remarks — no assign
+        # permission or lock override is needed.
+        if 'assigned_to' in submitted and lead.assigned_to != old_assigned_to:
             if not user.has_permission('leads.assign') and not user.has_permission('telecall.assign'):
                 return Response(
                     {'detail': 'You do not have permission to reassign leads.'},
@@ -824,20 +830,28 @@ class LeadDetailView(APIView):
                     {'detail': 'This lead is locked and cannot be reassigned.'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-        if 'category' in submitted and lead.category and not Category.objects.filter(
-            company=user.company, name=lead.category
-        ).exists():
+        # Category/source are validated against the company master catalog, but
+        # only when the value actually changes: legacy/seed leads may carry
+        # values that predate the catalog, and editing their call status,
+        # remarks or priorities must not be blocked by an untouched field.
+        if ('category' in submitted and lead.category and lead.category != old_category
+                and not Category.objects.filter(
+                    company=user.company, name__iexact=lead.category
+                ).exists()):
             invalid.append(f'category: Unknown category "{lead.category}".')
-        if 'source' in submitted and lead.source and not Source.objects.filter(
-            company=user.company, name=lead.source
-        ).exists():
+        if ('source' in submitted and lead.source and lead.source != old_source
+                and not Source.objects.filter(
+                    company=user.company, name__iexact=lead.source
+                ).exists()):
             invalid.append(f'source: Unknown source "{lead.source}".')
         if 'call_status' in submitted and lead.call_status not in Lead.CALL_STATUS_VALUES:
             invalid.append(f'call_status: "{lead.call_status}" is not a valid call status.')
-        if 'assigned_to' in submitted and lead.assigned_to:
-            valid_names = assignment_name_set(user)
-            if lead.assigned_to not in valid_names:
-                invalid.append(f'assigned_to: Unknown staff member "{lead.assigned_to}".')
+        # Legacy assignments (names that predate the current user list) must not
+        # block saving feedback: only validate the name when the assignment
+        # actually changes.
+        if ('assigned_to' in submitted and lead.assigned_to and lead.assigned_to != old_assigned_to
+                and lead.assigned_to not in assignment_name_set(user)):
+            invalid.append(f'assigned_to: Unknown staff member "{lead.assigned_to}".')
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
         if 'has_follow_up' in request.data:
