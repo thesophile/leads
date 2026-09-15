@@ -113,7 +113,7 @@ function csvRowsToLeads(text) {
   }
   const colCompany = findCol('Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name')
   const colContact = findCol('Contact Person', 'Contact Name', 'Contact', 'Name')
-  const colPhone = findCol('Mobile', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number')
+  const colPhone = findCol('Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number')
   const colEmail = findCol('Email', 'Email Address', 'Mail')
   const colCategory = findCol('Category', 'Business Type', 'Segmentation')
   const colSource = findCol('Lead Source', 'Source', 'Source Name')
