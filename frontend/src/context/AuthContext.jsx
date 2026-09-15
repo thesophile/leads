@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async ({ email, password, remember = true }) => {
     const data = await api.post('/auth/login/', { email, password }, { auth: false })
+    if (!data?.tokens) throw new Error('Unexpected server response.')
     persistAuth(data.tokens.access, data.tokens.refresh, remember)
     setUser(data.user)
     return data.user
@@ -15,6 +16,7 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (payload) => {
     const data = await api.post('/auth/register/', payload, { auth: false })
+    if (!data?.tokens) throw new Error('Unexpected server response.')
     persistAuth(data.tokens.access, data.tokens.refresh, true)
     setUser(data.user)
     return data.user
