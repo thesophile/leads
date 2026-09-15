@@ -101,7 +101,7 @@ function parseCSV(text) {
 
 function csvRowsToLeads(text) {
   const rows = parseCSV(text)
-  if (rows.length === 0) return []
+  if (rows.length === 0) return { leads: [], skippedRows: 0, unmatchedColumns: [] }
   const normalize = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '')
   const headers = rows[0].map((h) => normalize(h))
   const findCol = (...keys) => {
@@ -113,17 +113,29 @@ function csvRowsToLeads(text) {
   }
   const colCompany = findCol('Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name')
   const colContact = findCol('Contact Person', 'Contact Name', 'Contact', 'Name')
-  const colPhone = findCol('Mobile', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number')
+  const colPhone = findCol('Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number')
   const colEmail = findCol('Email', 'Email Address', 'Mail')
   const colCategory = findCol('Category', 'Business Type', 'Segmentation')
   const colSource = findCol('Lead Source', 'Source', 'Source Name')
   const colCity = findCol('City', 'Location', 'City / Location', 'Region')
 
+  const matchedCols = new Set(
+    [colCompany, colContact, colPhone, colEmail, colCategory, colSource, colCity].filter((c) => c >= 0)
+  )
+  const unmatchedColumns = rows[0]
+    .map((h, i) => ({ h, i }))
+    .filter(({ h, i }) => String(h || '').trim() !== '' && !matchedCols.has(i))
+    .map(({ h }) => String(h).trim())
+
   const leads = []
+  let skippedRows = 0
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]
     const company = ((colCompany >= 0 && r[colCompany]) || '').trim()
-    if (!company) continue
+    if (!company) {
+      skippedRows += 1
+      continue
+    }
     leads.push({
       company,
       contact: ((colContact >= 0 && r[colContact]) || '').trim(),
@@ -134,7 +146,7 @@ function csvRowsToLeads(text) {
       city: ((colCity >= 0 && r[colCity]) || '').trim(),
     })
   }
-  return leads
+  return { leads, skippedRows, unmatchedColumns }
 }
 
 function UploadCloudIcon() {
@@ -292,6 +304,7 @@ export default function RawData() {
   const [importedFileName, setImportedFileName] = useState('')
   const [importedFile, setImportedFile] = useState(null)
   const [importSuccessMessage, setImportSuccessMessage] = useState('')
+  const [importNeedsAck, setImportNeedsAck] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [drawerHistory, setDrawerHistory] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -366,8 +379,19 @@ export default function RawData() {
   }
 
   function requestCloseImport() {
-    if (importDirty) setDiscardImportOpen(true)
+    if (importNeedsAck) closeImportModal()
+    else if (importDirty) setDiscardImportOpen(true)
     else setImportModalOpen(false)
+  }
+
+  function closeImportModal() {
+    setImportModalOpen(false)
+    setImportedFileName('')
+    setImportedFile(null)
+    setImportSuccessMessage('')
+    setImportNeedsAck(false)
+    setError('')
+    resetImportDirty()
   }
 
   const searchDebounced = useDebouncedValue(searchQuery)
@@ -570,15 +594,25 @@ async function handleBulkImport(e) {
 
     if (/\.xlsx?$/i.test(importedFileName)) {
       setError('Excel files are not supported yet. Please export your sheet as CSV and import that.')
+      setImportNeedsAck(true)
       return
     }
 
     setIsImporting(true)
+    let keepOpen = false
     try {
       const text = await importedFile.text()
-      const leads = csvRowsToLeads(text)
+      const { leads, skippedRows, unmatchedColumns } = csvRowsToLeads(text)
       if (leads.length === 0) {
-        setError('No importable rows found. Make sure the first row has headers such as Company Name, Contact, Phone, Email, Category, Source, City.')
+        setError(
+          'No importable rows found. Make sure the first row has headers such as Company Name, Contact, Phone, Email, Category, Source, City.' +
+            (skippedRows ? ` ${skippedRows} row(s) skipped because the company name was empty.` : '') +
+            (unmatchedColumns.length
+              ? ` ${unmatchedColumns.length} column(s) not recognized: ${unmatchedColumns.join(', ')}.`
+              : '')
+        )
+        keepOpen = true
+        setImportNeedsAck(true)
         setIsImporting(false)
         return
       }
@@ -596,27 +630,54 @@ async function handleBulkImport(e) {
         }
       }
 
+      const summary = (extra) =>
+        (extra ? extra + ' ' : '') +
+        (skippedRows ? ` ${skippedRows} row(s) skipped (missing company name).` : '') +
+        (unmatchedColumns.length
+          ? ` ${unmatchedColumns.length} column(s) not recognized: ${unmatchedColumns.join(', ')}.`
+          : '')
+
+      const fullSuccess =
+        imported > 0 && failed === 0 && duplicates === 0 && skippedRows === 0 && unmatchedColumns.length === 0
+
       if (imported === 0 && failed > 0) {
-        setError('None of the rows could be imported. Check the file headers and that categories/sources exist.')
+        setError(
+          `None of the rows could be imported (${duplicates} duplicate(s), ${failed} failed).` +
+            summary('Check the file headers.')
+        )
+      } else if (imported === 0 && duplicates > 0) {
+        setImportSuccessMessage(`All ${duplicates} row(s) already exist as duplicates.` + summary(''))
       } else {
         setImportSuccessMessage(
           `Successfully imported ${imported} lead(s) from ${importedFileName}!` +
             (duplicates ? ` ${duplicates} duplicate(s) skipped.` : '') +
-            (failed ? ` ${failed} row(s) failed validation.` : '')
+            (failed ? ` ${failed} row(s) failed validation.` : '') +
+            summary('')
         )
-        await refreshData()
+      }
+
+      if (imported > 0) await refreshData()
+      if (!fullSuccess) {
+        keepOpen = true
+        setImportNeedsAck(true)
       }
 } catch (err) {
       setError(err.message || 'Failed to read the file.')
+      keepOpen = true
+      setImportNeedsAck(true)
     } finally {
       setIsImporting(false)
       resetImportDirty()
-      setTimeout(() => {
-        setImportModalOpen(false)
-        setImportedFileName('')
-        setImportedFile(null)
-        setImportSuccessMessage('')
-      }, 1200)
+      if (!keepOpen) {
+        setTimeout(() => {
+          setImportModalOpen(false)
+          setImportedFileName('')
+          setImportedFile(null)
+          setImportSuccessMessage('')
+          setImportNeedsAck(false)
+          setError('')
+        }, 1200)
+      }
     }
   }
 
@@ -820,7 +881,7 @@ async function handleBulkImport(e) {
           </div>
         )}
 
-        {error && (
+        {error && !importModalOpen && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             {error}
           </div>
@@ -842,17 +903,17 @@ async function handleBulkImport(e) {
             </p>
           </div>
 
-          {/* Action Buttons: Import Excel/CSV + Add Raw Data */}
+          {/* Action Buttons: Import CSV + Add Raw Data */}
           <div className="flex items-center gap-2.5">
             <RefreshButton onClick={refreshData} loading={isLoading} />
-            {/* Import Excel / CSV Button */}
+            {/* Import CSV Button */}
             <button
               type="button"
               onClick={() => setImportModalOpen(true)}
               className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
             >
               <UploadCloudIcon />
-              <span>Import Excel / CSV</span>
+              <span>Import CSV</span>
             </button>
 
             {/* Action Button to Open Drawer Form */}
@@ -1664,12 +1725,14 @@ async function handleBulkImport(e) {
         </div>
       )}
 
-      {/* Bulk Excel/CSV Import Modal */}
+      {/* Bulk CSV Import Modal */}
       {importModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
           onClick={(e) => {
-            if (e.target === e.currentTarget && !importDirty) setImportModalOpen(false)
+            if (e.target !== e.currentTarget) return
+            if (importNeedsAck) closeImportModal()
+            else if (!importDirty) setImportModalOpen(false)
           }}
         >
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
@@ -1678,7 +1741,7 @@ async function handleBulkImport(e) {
                 <div className="h-8 w-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
                   <UploadCloudIcon />
                 </div>
-                <h3 className="text-base font-bold text-slate-900">Import Excel / CSV Leads</h3>
+                <h3 className="text-base font-bold text-slate-900">Import CSV Leads</h3>
               </div>
               <button
                 type="button"
@@ -1694,7 +1757,7 @@ async function handleBulkImport(e) {
               <div className="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-6 text-center hover:bg-slate-50 transition">
                 <input
                   type="file"
-                  accept=".csv,.xlsx,.xls"
+                  accept=".csv"
                   onChange={(e) => {
                     if (e.target.files[0]) {
                       setImportedFile(e.target.files[0])
@@ -1708,11 +1771,11 @@ async function handleBulkImport(e) {
                   {importedFileName ? (
                     <span className="text-brand-600 font-bold">{importedFileName}</span>
                   ) : (
-                    'Click to upload or drag and drop Excel/CSV'
+                    'Click to upload or drag and drop CSV'
                   )}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Supports CSV, XLSX or XLS spreadsheets
+                  Supports CSV files
                 </p>
               </div>
 
@@ -1722,22 +1785,40 @@ async function handleBulkImport(e) {
                 </div>
               )}
 
+              {error && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-2.5 text-xs font-semibold text-red-700 text-center">
+                  {error}
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={requestCloseImport}
-                  disabled={isImporting}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isImporting || !importedFileName}
-                  className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 disabled:opacity-50 transition cursor-pointer disabled:cursor-not-allowed"
-                >
-                  {isImporting ? 'Importing…' : 'Upload & Import'}
-                </button>
+                {importNeedsAck ? (
+                  <button
+                    type="button"
+                    onClick={closeImportModal}
+                    className="rounded-xl bg-brand-600 px-5 py-2 text-xs font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 transition cursor-pointer"
+                  >
+                    OK
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={requestCloseImport}
+                      disabled={isImporting}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isImporting || !importedFileName}
+                      className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 disabled:opacity-50 transition cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      {isImporting ? 'Importing…' : 'Upload & Import'}
+                    </button>
+                  </>
+                )}
               </div>
             </form>
           </div>

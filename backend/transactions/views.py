@@ -510,10 +510,18 @@ def duplicate_response(existing):
     added_by = existing.added_by or 'another user'
     when = existing.display_date or (format_display_date(existing.date) if existing.date else '')
     when_text = f' on {when}' if when else ''
+    stage_labels = {
+        Lead.STATUS_RAW: 'Raw Data',
+        Lead.STATUS_ASSIGNED: 'Tele Call',
+        Lead.STATUS_QUOTATION: 'Quotation',
+        Lead.STATUS_ORDER: 'Orders',
+        Lead.STATUS_CLIENT: 'Clients',
+    }
+    stage = stage_labels.get(existing.status, existing.status)
     return Response(
         {
-            'detail': f'This lead was already entered by {added_by}{when_text}. '
-                      f'Please use the existing record.',
+            'detail': f'This lead was already entered by {added_by}{when_text} '
+                      f'and is currently in {stage}. Please use the existing record.',
             'existing': LeadSerializer(existing).data,
         },
         status=status.HTTP_409_CONFLICT,
