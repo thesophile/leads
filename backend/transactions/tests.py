@@ -2089,3 +2089,110 @@ class PaginationAndFilterTests(APITestCase):
         self.assertFalse(any(o['status'] == 'Accepted' for o in resp.data['results']))
 
 
+class RegisterFacetStabilityTests(APITestCase):
+    """A facet dropdown must not collapse its own options when a value in it is
+    selected, while sibling dropdowns still narrow to the filtered rows."""
+
+    def setUp(self):
+        company = make_company('Facet Co')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@facet.com', password='x', name='Manager F',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        Lead.objects.create(
+            id='FT-A', company='Alpha Co', contact='A', phone='111',
+            category='Hospital', city='Kochi', tenant=company,
+            status='assigned', assigned_to='Staff A', call_status='Interested',
+            date='2026-01-01',
+        )
+        Lead.objects.create(
+            id='FT-B', company='Beta Co', contact='B', phone='222',
+            category='School', city='Trivandrum', tenant=company,
+            status='assigned', assigned_to='Staff B', call_status='Follow Up',
+            date='2026-01-01',
+        )
+        Lead.objects.create(
+            id='FT-C', company='Gamma Co', contact='C', phone='333',
+            category='Hospital', city='Kochi', tenant=company,
+            status='assigned', assigned_to='Staff C', call_status='Not Interested',
+            date='2026-01-01',
+        )
+
+    def test_lead_register_staff_facet_stays_full_after_staff_filter(self):
+        self.client.force_authenticate(self.manager)
+        base = {'statuses': 'assigned'}
+        all_resp = self.client.get('/api/transactions/leads/register/', base)
+        self.assertEqual(all_resp.status_code, 200)
+        self.assertIn('Staff A', all_resp.data['facets']['staff'])
+
+        filtered = self.client.get(
+            '/api/transactions/leads/register/',
+            {**base, 'staff': 'Staff A'},
+        )
+        self.assertEqual(filtered.status_code, 200)
+        # The Staff dropdown keeps every option even though one is selected.
+        self.assertEqual(
+            filtered.data['facets']['staff'],
+            all_resp.data['facets']['staff'],
+        )
+        # Rows are still correctly filtered to the selected staff.
+        self.assertTrue(filtered.data['results'])
+        self.assertTrue(all(r['staff'] == 'Staff A' for r in filtered.data['results']))
+        # Sibling dropdowns still narrow to the filtered rows.
+        self.assertEqual(filtered.data['facets']['locations'], ['Kochi'])
+
+    def test_lead_register_status_facet_stays_full_after_status_filter(self):
+        self.client.force_authenticate(self.manager)
+        base = {'statuses': 'assigned'}
+        all_resp = self.client.get('/api/transactions/leads/register/', base)
+        self.assertEqual(all_resp.status_code, 200)
+        self.assertIn('Interested', all_resp.data['facets']['statuses'])
+
+        filtered = self.client.get(
+            '/api/transactions/leads/register/',
+            {**base, 'status': 'Interested'},
+        )
+        self.assertEqual(filtered.status_code, 200)
+        # The Status dropdown keeps every option even though one is selected.
+        self.assertEqual(
+            filtered.data['facets']['statuses'],
+            all_resp.data['facets']['statuses'],
+        )
+        # Rows are still correctly filtered to the selected status.
+        self.assertTrue(filtered.data['results'])
+        self.assertTrue(all(r['status'] == 'Interested' for r in filtered.data['results']))
+
+    def test_order_register_staff_facet_stays_full_after_staff_filter(self):
+        self.client.force_authenticate(self.manager)
+        Order.objects.create(
+            id='FO-1', company='Order One', tenant=self.company,
+            staff='Staff A', bdm='BDM X', category='Hospital',
+        )
+        Order.objects.create(
+            id='FO-2', company='Order Two', tenant=self.company,
+            staff='Staff B', bdm='BDM Y', category='School',
+        )
+        all_resp = self.client.get('/api/transactions/orders/register/')
+        self.assertEqual(all_resp.status_code, 200)
+        self.assertEqual(
+            all_resp.data['facets']['staff'],
+            ['BDM X', 'BDM Y', 'Staff A', 'Staff B'],
+        )
+
+        filtered = self.client.get(
+            '/api/transactions/orders/register/', {'staff': 'Staff A'},
+        )
+        self.assertEqual(filtered.status_code, 200)
+        # The Staff dropdown keeps every option even though one is selected.
+        self.assertEqual(
+            filtered.data['facets']['staff'],
+            ['BDM X', 'BDM Y', 'Staff A', 'Staff B'],
+        )
+        # Rows are still correctly filtered to the selected staff.
+        self.assertEqual(filtered.data['count'], 1)
+        self.assertEqual(filtered.data['results'][0]['staff'], 'Staff A')
+        # Sibling category dropdown still narrows to the filtered rows.
+        self.assertEqual(filtered.data['facets']['categories'], ['Hospital'])
+
+

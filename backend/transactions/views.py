@@ -1121,51 +1121,67 @@ class LeadRegisterView(APIView):
                 | Q(assigned_to__icontains=search)
                 | Q(call_status__icontains=search)
             )
-        staff = none_value(request.query_params.get('staff'))
-        if staff:
-            qs = qs.filter(Q(added_by=staff) | Q(assigned_to=staff))
-        category = request.query_params.get('category')
-        if category:
-            qs = qs.filter(category__iexact=category)
-        city = request.query_params.get('city')
-        if city:
-            qs = qs.filter(city__iexact=city)
+        # Each facet dropdown's options are computed with every OTHER filter
+        # applied but not its own, so picking a value never collapses the very
+        # dropdown it belongs to while still narrowing the sibling pickers.
+        staff_param = none_value(request.query_params.get('staff'))
+        category_param = request.query_params.get('category')
+        city_param = request.query_params.get('city')
         date_from = request.query_params.get('date_from')
-        if date_from:
-            qs = qs.filter(date__gte=date_from)
         date_to = request.query_params.get('date_to')
-        if date_to:
-            qs = qs.filter(date__lte=date_to)
-        status_filter = request.query_params.get('status')
-        if status_filter and status_filter != 'All Status':
-            if status_filter == 'Quotation Requested':
-                qs = qs.filter(status=Lead.STATUS_QUOTATION)
-            elif status_filter == 'Converted':
-                qs = qs.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT])
-            else:
-                qs = qs.filter(call_status=status_filter)
+        status_param = request.query_params.get('status')
 
-        def distinct(field):
+        def filter_facets(base, *, exclude_staff=False, exclude_category=False,
+                          exclude_city=False, exclude_status=False):
+            q = base
+            if not exclude_staff and staff_param:
+                q = q.filter(Q(added_by=staff_param) | Q(assigned_to=staff_param))
+            if not exclude_category and category_param:
+                q = q.filter(category__iexact=category_param)
+            if not exclude_city and city_param:
+                q = q.filter(city__iexact=city_param)
+            if date_from:
+                q = q.filter(date__gte=date_from)
+            if date_to:
+                q = q.filter(date__lte=date_to)
+            if not exclude_status and status_param and status_param != 'All Status':
+                if status_param == 'Quotation Requested':
+                    q = q.filter(status=Lead.STATUS_QUOTATION)
+                elif status_param == 'Converted':
+                    q = q.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT])
+                else:
+                    q = q.filter(call_status=status_param)
+            return q
+
+        base_qs = qs
+        qs = filter_facets(base_qs)
+        facet_qs_no_staff = filter_facets(base_qs, exclude_staff=True)
+        facet_qs_no_category = filter_facets(base_qs, exclude_category=True)
+        facet_qs_no_city = filter_facets(base_qs, exclude_city=True)
+        facet_qs_no_status = filter_facets(base_qs, exclude_status=True)
+
+        def distinct(base, field):
             return sorted(
                 v
-                for v in (qs.exclude(**{f'{field}': ''})
+                for v in (base.exclude(**{f'{field}': ''})
                           .order_by(field)
                           .values_list(field, flat=True)
                           .distinct())
                 if v
             )
 
-        statuses = set(qs.exclude(call_status='')
+        statuses = set(facet_qs_no_status.exclude(call_status='')
                        .values_list('call_status', flat=True)
                        .distinct())
-        if qs.filter(status=Lead.STATUS_QUOTATION).exists():
+        if facet_qs_no_status.filter(status=Lead.STATUS_QUOTATION).exists():
             statuses.add('Quotation Requested')
-        if qs.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).exists():
+        if facet_qs_no_status.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).exists():
             statuses.add('Converted')
         facets = {
-            'staff': sorted(set(distinct('assigned_to')) | set(distinct('added_by'))),
-            'locations': distinct('city'),
-            'categories': distinct('category'),
+            'staff': sorted(set(distinct(facet_qs_no_staff, 'assigned_to'))
+                            | set(distinct(facet_qs_no_staff, 'added_by'))),
+            'locations': distinct(facet_qs_no_city, 'city'),
+            'categories': distinct(facet_qs_no_category, 'category'),
             'statuses': sorted(statuses),
         }
 
@@ -3029,23 +3045,35 @@ class OrderRegisterView(APIView):
                 | Q(id__icontains=search)
                 | Q(proposal_no__icontains=search)
             )
-        staff = request.query_params.get('staff')
-        if staff:
-            qs = qs.filter(Q(staff=staff) | Q(bdm=staff) | Q(proposal_by=staff))
-        category = request.query_params.get('category')
-        if category:
-            qs = qs.filter(category__iexact=category)
+        # Each facet dropdown's options ignore only its own filter, so a
+        # selection never collapses the dropdown it belongs to while still
+        # narrowing the sibling pickers.
+        staff_param = request.query_params.get('staff')
+        category_param = request.query_params.get('category')
         date_from = request.query_params.get('date_from')
-        if date_from:
-            qs = qs.filter(created_at__date__gte=date_from)
         date_to = request.query_params.get('date_to')
-        if date_to:
-            qs = qs.filter(created_at__date__lte=date_to)
 
-        def distinct(field):
+        def filter_facets(base, *, exclude_staff=False, exclude_category=False):
+            q = base
+            if not exclude_staff and staff_param:
+                q = q.filter(Q(staff=staff_param) | Q(bdm=staff_param) | Q(proposal_by=staff_param))
+            if not exclude_category and category_param:
+                q = q.filter(category__iexact=category_param)
+            if date_from:
+                q = q.filter(created_at__date__gte=date_from)
+            if date_to:
+                q = q.filter(created_at__date__lte=date_to)
+            return q
+
+        base_qs = qs
+        qs = filter_facets(base_qs)
+        facet_qs_no_staff = filter_facets(base_qs, exclude_staff=True)
+        facet_qs_no_category = filter_facets(base_qs, exclude_category=True)
+
+        def distinct(base, field):
             return sorted(
                 v
-                for v in (qs.exclude(**{f'{field}': ''})
+                for v in (base.exclude(**{f'{field}': ''})
                           .order_by(field)
                           .values_list(field, flat=True)
                           .distinct())
@@ -3053,10 +3081,10 @@ class OrderRegisterView(APIView):
             )
 
         facets = {
-            'staff': sorted(set(distinct('staff'))
-                            | set(distinct('bdm'))
-                            | set(distinct('proposal_by'))),
-            'categories': distinct('category'),
+            'staff': sorted(set(distinct(facet_qs_no_staff, 'staff'))
+                            | set(distinct(facet_qs_no_staff, 'bdm'))
+                            | set(distinct(facet_qs_no_staff, 'proposal_by'))),
+            'categories': distinct(facet_qs_no_category, 'category'),
         }
 
         cd_status = (
