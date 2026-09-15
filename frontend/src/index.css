@@ -238,12 +238,4 @@ main table.refresh-fading {
   .print-sheet .register-table .nowrap-cell {
     white-space: nowrap !important;
   }
-  .print-sheet .register-table tr.remarks-row {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-  .print-sheet .register-table tr.remarks-row td {
-    border-top: none !important;
-    font-style: italic !important;
-  }
 }
