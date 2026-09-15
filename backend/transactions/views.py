@@ -650,6 +650,21 @@ def to_iso_order_date(value):
     return ''
 
 
+def validate_master_values(tenant_company, category, source):
+    """Return validation errors for category/source against the company's
+    master catalog (empty list when both are valid)."""
+    invalid = []
+    if category and not Category.objects.filter(
+        company=tenant_company, name=category
+    ).exists():
+        invalid.append(f'category: Unknown category "{category}".')
+    if source and not Source.objects.filter(
+        company=tenant_company, name=source
+    ).exists():
+        invalid.append(f'source: Unknown source "{source}".')
+    return invalid
+
+
 class LeadListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -698,15 +713,7 @@ class LeadListView(APIView):
             return duplicate_response(existing)
         category = request.data.get('category', '').strip()
         source = request.data.get('source', '').strip()
-        invalid = []
-        if category and not Category.objects.filter(
-            company=request.user.company, name=category
-        ).exists():
-            invalid.append(f'category: Unknown category "{category}".')
-        if source and not Source.objects.filter(
-            company=request.user.company, name=source
-        ).exists():
-            invalid.append(f'source: Unknown source "{source}".')
+        invalid = validate_master_values(request.user.company, category, source)
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
         phone = request.data.get('phone', '').strip()
@@ -749,6 +756,115 @@ class LeadListView(APIView):
             entity_id=saved.id,
         )
         return Response(LeadSerializer(saved).data, status=status.HTTP_201_CREATED)
+
+
+class LeadImportView(APIView):
+    """Create-or-update a single raw lead row from a CSV import.
+
+    When a lead with the same (tenant, company) already exists, the incoming
+    row overwrites its contact fields instead of being skipped as a duplicate,
+    so re-importing a corrected CSV updates the record. The pipeline fields
+    (status, remarks, assignment, dates) are never touched by an import.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not can(request.user, 'leads.create'):
+            return Response(
+                {'detail': 'You do not have permission to add leads.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        company = request.data.get('company', '').strip()
+        if not company:
+            return Response(
+                {'detail': 'company: This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        category = request.data.get('category', '').strip()
+        source = request.data.get('source', '').strip()
+        invalid = validate_master_values(request.user.company, category, source)
+        if invalid:
+            return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing = find_duplicate_lead(request.user, company)
+        if existing is not None:
+            return self._update(request, existing, company, category, source)
+
+        saved = None
+        last_error = None
+        lead_date = date.today()
+        for _ in range(5):
+            try:
+                saved = Lead.objects.create(
+                    id=generate_lead_id(company),
+                    company=company,
+                    tenant=request.user.company,
+                    contact=request.data.get('contact', '').strip(),
+                    phone=request.data.get('phone', '').strip(),
+                    email=request.data.get('email', '').strip(),
+                    category=category,
+                    source=source,
+                    city=request.data.get('city', '').strip(),
+                    date=lead_date,
+                    display_date=format_display_date(lead_date),
+                    added_by=request.user.name,
+                    status=Lead.STATUS_RAW,
+                )
+                break
+            except IntegrityError as exc:
+                # Either a real duplicate (concurrent create) or a random id
+                # collision; retry the id-generation rather than 500.
+                last_error = exc
+                existing = find_duplicate_lead(request.user, company)
+                if existing is not None:
+                    return self._update(request, existing, company, category, source)
+        if saved is None:
+            raise last_error
+        log_activity(
+            request.user,
+            request.user.company,
+            'added lead',
+            f'{request.user.name} added raw lead {saved.id} - {saved.company}.',
+            entity_type='lead',
+            entity_id=saved.id,
+        )
+        return Response(
+            {'updated': False, 'lead': LeadSerializer(saved).data},
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _update(self, request, lead, company, category, source):
+        changed_fields = []
+        fields = (
+            ('company', company),
+            ('contact', request.data.get('contact', '').strip()),
+            ('phone', request.data.get('phone', '').strip()),
+            ('email', request.data.get('email', '').strip()),
+            ('category', category),
+            ('source', source),
+            ('city', request.data.get('city', '').strip()),
+        )
+        for field, new_value in fields:
+            new_value = '' if new_value is None else new_value
+            old_value = getattr(lead, field) or ''
+            if old_value != new_value:
+                log_contact_change(request.user, lead, field, old_value, new_value)
+                setattr(lead, field, new_value)
+                changed_fields.append(field)
+        if changed_fields:
+            lead.save(update_fields=changed_fields + ['updated_at'])
+            sync_lead_contact_to_quotation(lead, changed_fields)
+        else:
+            lead.save(update_fields=['updated_at'])
+        log_activity(
+            request.user,
+            request.user.company,
+            'updated lead',
+            f'{request.user.name} updated lead {lead.id} - {lead.company} via import.',
+            entity_type='lead',
+            entity_id=lead.id,
+        )
+        return Response({'updated': True, 'lead': LeadSerializer(lead).data})
 
 
 class LeadDetailView(APIView):

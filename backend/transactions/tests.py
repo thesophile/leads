@@ -415,6 +415,94 @@ class LeadDuplicateScopingTests(APITestCase):
         self.assertEqual(ok.status_code, 201)
 
 
+class LeadImportTests(APITestCase):
+    def setUp(self):
+        self.company = make_company('Acme Import')
+        self.manager = User.objects.create_user(
+            email='mgr@acme-import.com', password='x', name='Manager I',
+            role=self.company.roles.get(code='manager'), company=self.company,
+        )
+        Lead.objects.filter(tenant__isnull=True).delete()
+
+    def test_import_creates_new_lead(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertFalse(resp.data['updated'])
+        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        self.assertEqual(lead.phone, '')
+
+    def test_reimport_updates_existing_lead(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post('/api/transactions/leads/import/', {
+            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '',
+        }, format='json')
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '9998887776',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['updated'])
+        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        self.assertEqual(lead.phone, '9998887776')
+        self.assertEqual(
+            Lead.objects.filter(tenant=self.company, company_key='cafe day').count(), 1
+        )
+
+    def test_reimport_blank_value_overwrites(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post('/api/transactions/leads/import/', {
+            'company': 'Cafe Day', 'phone': '111',
+        }, format='json')
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Cafe Day', 'phone': '',
+        }, format='json')
+        self.assertTrue(resp.data['updated'])
+        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        self.assertEqual(lead.phone, '')
+
+    def test_import_does_not_touch_pipeline_fields(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post('/api/transactions/leads/import/', {
+            'company': 'Cafe Day', 'phone': '111',
+        }, format='json')
+        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead.status = Lead.STATUS_ASSIGNED
+        lead.assigned_to = 'Manager I'
+        lead.remarks = 'keep me'
+        lead.save()
+        self.client.post('/api/transactions/leads/import/', {
+            'company': 'Cafe Day', 'phone': '222',
+        }, format='json')
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, Lead.STATUS_ASSIGNED)
+        self.assertEqual(lead.assigned_to, 'Manager I')
+        self.assertEqual(lead.remarks, 'keep me')
+        self.assertEqual(lead.phone, '222')
+
+    def test_import_rejects_unknown_category(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Some Co', 'category': 'Not A Category',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_import_requires_permission(self):
+        viewer = User.objects.create_user(
+            email='viewer@acme-import.com', password='x', name='Viewer I',
+            role=self.company.roles.create(
+                code='viewer', name='Viewer', permissions=[],
+            ),
+            company=self.company,
+        )
+        self.client.force_authenticate(viewer)
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Cafe Day',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+
 class ProposalTemplateApiTests(APITestCase):
     def setUp(self):
         self.company = make_company('Template Co')

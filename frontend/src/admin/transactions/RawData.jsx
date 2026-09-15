@@ -618,12 +618,14 @@ async function handleBulkImport(e) {
       }
 
       let imported = 0
+      let updated = 0
       let duplicates = 0
       let failed = 0
       for (const record of leads) {
         try {
-          await api.post('/transactions/leads/', record)
-          imported += 1
+          const res = await api.post('/transactions/leads/import/', record)
+          if (res && res.updated) updated += 1
+          else imported += 1
         } catch (err) {
           if (err.status === 409) duplicates += 1
           else failed += 1
@@ -637,26 +639,30 @@ async function handleBulkImport(e) {
           ? ` ${unmatchedColumns.length} column(s) not recognized: ${unmatchedColumns.join(', ')}.`
           : '')
 
+      const processed = imported + updated
       const fullSuccess =
-        imported > 0 && failed === 0 && duplicates === 0 && skippedRows === 0 && unmatchedColumns.length === 0
+        processed > 0 && failed === 0 && duplicates === 0 && skippedRows === 0 && unmatchedColumns.length === 0
 
-      if (imported === 0 && failed > 0) {
+      if (processed === 0 && failed > 0) {
         setError(
           `None of the rows could be imported (${duplicates} duplicate(s), ${failed} failed).` +
             summary('Check the file headers.')
         )
-      } else if (imported === 0 && duplicates > 0) {
+      } else if (processed === 0 && duplicates > 0) {
         setImportSuccessMessage(`All ${duplicates} row(s) already exist as duplicates.` + summary(''))
       } else {
+        const parts = []
+        if (imported) parts.push(`${imported} new`)
+        if (updated) parts.push(`${updated} updated`)
         setImportSuccessMessage(
-          `Successfully imported ${imported} lead(s) from ${importedFileName}!` +
+          `Successfully processed ${parts.join(', ')} lead(s) from ${importedFileName}!` +
             (duplicates ? ` ${duplicates} duplicate(s) skipped.` : '') +
             (failed ? ` ${failed} row(s) failed validation.` : '') +
             summary('')
         )
       }
 
-      if (imported > 0) await refreshData()
+      if (processed > 0) await refreshData()
       if (!fullSuccess) {
         keepOpen = true
         setImportNeedsAck(true)
