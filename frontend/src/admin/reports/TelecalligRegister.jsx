@@ -6,11 +6,31 @@ import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
 import usePagedList, { useDebouncedValue, fetchAllPaged } from '../../utils/usePagedList'
 
+const MONTH_SHORT = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+}
+
 function toDmyDate(value) {
   if (!value) return ''
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value))
   if (m) return `${m[3]}-${m[2]}-${m[1]}`
   return String(value)
+}
+
+function toDmyLastCall(value) {
+  if (!value) return ''
+  const text = String(value).trim()
+  let m = /^(\d{2})[-/](\d{2})[-/](\d{4})$/.exec(text)
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`
+  m = /^(\d{2})[\s]+([A-Za-z]{3})[\s]+(\d{4})$/.exec(text)
+  if (m) {
+    const month = MONTH_SHORT[m[2].toLowerCase()]
+    if (month) return `${m[1]}-${month}-${m[3]}`
+  }
+  m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  return text
 }
 
 // Live telecalling pipeline stages (everything past Raw Data).
@@ -138,19 +158,22 @@ export default function TelecalligRegister() {
     setIsExporting(true)
     try {
       const all = await fetchAllPaged('/transactions/leads/register/', listParams)
-      const rows = all.map(leadToRow).map((r) => [
-        r.date,
-        r.lastCallDate,
-        r.company,
-        r.number,
-        r.location,
-        r.staff,
-        r.status,
-      ])
+      const fields = [
+        { key: 'date', label: 'Date', width: 48 },
+        { key: 'lastCallDate', label: 'Last Called', width: 48 },
+        { key: 'company', label: 'Company', width: 'auto' },
+        { key: 'number', label: 'Number', width: 75 },
+        { key: 'location', label: 'Location', width: 'auto' },
+        ...(staff === 'All Staff' ? [{ key: 'staff', label: 'Staff', width: 'auto' }] : []),
+        ...(status === 'All Status' ? [{ key: 'status', label: 'Status', width: 'auto' }] : []),
+      ]
+      const rows = all.map(leadToRow).map((r) =>
+        fields.map((f) => (f.key === 'lastCallDate' ? toDmyLastCall(r[f.key]) : r[f.key]))
+      )
       await exportRegisterPdf({
         title: 'TELECALLING REGISTER',
         fileNamePrefix: 'Telecalling_Register',
-        columns: ['Date', 'Last Called', 'Company', 'Number', 'Location', 'Staff', 'Status'],
+        columns: fields.map((f) => f.label),
         rows,
         filters: {
           Category: category !== 'All Category' ? category : '',
@@ -160,15 +183,7 @@ export default function TelecalligRegister() {
           From: fromDate || '',
           To: toDate || '',
         },
-        columnStyles: {
-          0: { cellWidth: 60 },
-          1: { cellWidth: 65 },
-          2: { cellWidth: 'auto' },
-          3: { cellWidth: 75 },
-          4: { cellWidth: 'auto' },
-          5: { cellWidth: 'auto' },
-          6: { cellWidth: 'auto' },
-        },
+        columnStyles: Object.fromEntries(fields.map((f, i) => [i, { cellWidth: f.width }])),
       })
     } finally {
       setIsExporting(false)
