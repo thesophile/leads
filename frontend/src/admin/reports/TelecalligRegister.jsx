@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
@@ -176,10 +176,13 @@ export default function TelecalligRegister() {
       all.map(leadToRow).forEach((r) => {
         const cells = fields.map((f) => (f.key === 'lastCallDate' ? toDmyLastCall(r[f.key]) : r[f.key]))
         if (r.remarks) {
-          const ci = fields.findIndex((f) => f.key === 'company')
-          if (ci >= 0) cells[ci] = `${cells[ci]}\n${r.remarks}`
+          cells[0] = { content: cells[0], rowSpan: 2 }
+          cells[1] = { content: cells[1], rowSpan: 2 }
+          rows.push(cells)
+          rows.push([{ content: `Remarks: ${r.remarks}`, colSpan: fields.length - 2, styles: { fontStyle: 'italic', textColor: [80, 80, 80], fontSize: 7 } }])
+        } else {
+          rows.push(cells)
         }
-        rows.push(cells)
       })
       await exportRegisterPdf({
         title: 'TELECALLING REGISTER',
@@ -435,48 +438,53 @@ export default function TelecalligRegister() {
               <tbody className="divide-y divide-slate-100 print:divide-slate-200">
                 {filteredData.length > 0 ? (
                   filteredData.map((row) => (
-                    <tr key={row.id} className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
-                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell">
-                        {row.date}
-                      </td>
-                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell">
-                        {toDmyLastCall(row.lastCallDate)}
-                      </td>
-                      <td className="py-1.5 pr-4 font-semibold text-slate-900 print:text-black max-w-[200px] company-cell" title={row.company}>
-                        <div className="truncate">{row.company}</div>
-                        {row.remarks && (
-                          <div className="mt-0.5 text-[10.5px] font-normal italic text-slate-500 print:text-black break-words">
+                    <Fragment key={row.id}>
+                      <tr className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
+                        <td rowSpan={row.remarks ? 2 : undefined} className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell align-middle">
+                          {row.date}
+                        </td>
+                        <td rowSpan={row.remarks ? 2 : undefined} className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell align-middle">
+                          {toDmyLastCall(row.lastCallDate)}
+                        </td>
+                        <td className="py-1.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px] company-cell" title={row.company}>
+                          {row.company}
+                        </td>
+                        <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap nowrap-cell">
+                          {row.number}
+                        </td>
+                        <td className="py-1.5 pr-3 font-medium text-slate-700 print:text-black uppercase text-[11px]">
+                          {row.location}
+                        </td>
+                        <td className="py-1.5 pr-3 font-medium text-slate-800 print:text-black">
+                          {row.staff}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          <span
+                            className={`inline-block rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${
+                              row.status === 'Not Interested'
+                                ? 'bg-amber-500 text-white'
+                                : row.status === 'Called'
+                                ? 'bg-cyan-500 text-white'
+                                : row.status === 'Quotation Requested'
+                                ? 'bg-purple-600 text-white'
+                                : row.status === 'Converted'
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-500 text-white'
+                            }`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                      {row.remarks && (
+                        <tr className="remarks-row print:hover:bg-transparent">
+                          <td colSpan={5} className="px-3 pb-2 text-[11px] italic text-slate-500 print:text-black break-words">
+                            <span className="font-semibold print:text-black">Remarks: </span>
                             {row.remarks}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-700 print:text-black whitespace-nowrap nowrap-cell">
-                        {row.number}
-                      </td>
-                      <td className="py-1.5 pr-3 font-medium text-slate-700 print:text-black uppercase text-[11px]">
-                        {row.location}
-                      </td>
-                      <td className="py-1.5 pr-3 font-medium text-slate-800 print:text-black">
-                        {row.staff}
-                      </td>
-                      <td className="py-1.5 pr-2 whitespace-nowrap">
-                        <span
-                          className={`inline-block rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${
-                            row.status === 'Not Interested'
-                              ? 'bg-amber-500 text-white'
-                              : row.status === 'Called'
-                              ? 'bg-cyan-500 text-white'
-                              : row.status === 'Quotation Requested'
-                              ? 'bg-purple-600 text-white'
-                              : row.status === 'Converted'
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-500 text-white'
-                          }`}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
-                    </tr>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))
                 ) : isLoading ? (
                   <tr>
