@@ -18,18 +18,22 @@ function toDmyDate(value) {
   return String(value)
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
 function toDmyLastCall(value) {
   if (!value) return ''
   const text = String(value).trim()
-  let m = /^(\d{2})[-/](\d{2})[-/](\d{4})$/.exec(text)
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`
-  m = /^(\d{2})[\s]+([A-Za-z]{3})[\s]+(\d{4})$/.exec(text)
+  let m = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(\s.*)?$/.exec(text)
+  if (m) return `${pad2(m[1])}-${pad2(m[2])}-${m[3]}`
+  m = /^(\d{1,2})[\s]+([A-Za-z]{3})[\s]+(\d{4})(\s.*)?$/.exec(text)
   if (m) {
     const month = MONTH_SHORT[m[2].toLowerCase()]
-    if (month) return `${m[1]}-${month}-${m[3]}`
+    if (month) return `${pad2(m[1])}-${month}-${m[3]}`
   }
-  m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  m = /^(\d{4})-(\d{1,2})-(\d{1,2})(\s.*)?$/.exec(text)
+  if (m) return `${pad2(m[3])}-${pad2(m[2])}-${m[1]}`
   return text
 }
 
@@ -429,7 +433,7 @@ export default function TelecalligRegister() {
                         {row.date}
                       </td>
                       <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell">
-                        {row.lastCallDate}
+                        {toDmyLastCall(row.lastCallDate)}
                       </td>
                       <td className="py-1.5 pr-4 font-semibold text-slate-900 print:text-black truncate max-w-[200px] company-cell" title={row.company}>
                         {row.company}
