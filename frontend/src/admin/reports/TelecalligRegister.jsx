@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
@@ -56,6 +56,7 @@ function leadToRow(item) {
     location: item.city || '',
     staff: item.assignedTo || '',
     category: item.category || '',
+    remarks: item.remarks || '',
     status,
   }
 }
@@ -171,9 +172,19 @@ export default function TelecalligRegister() {
         ...(staff === 'All Staff' ? [{ key: 'staff', label: 'Staff', width: 'auto' }] : []),
         ...(status === 'All Status' ? [{ key: 'status', label: 'Status', width: 'auto' }] : []),
       ]
-      const rows = all.map(leadToRow).map((r) =>
-        fields.map((f) => (f.key === 'lastCallDate' ? toDmyLastCall(r[f.key]) : r[f.key]))
-      )
+      const rows = []
+      all.map(leadToRow).forEach((r) => {
+        rows.push(fields.map((f) => (f.key === 'lastCallDate' ? toDmyLastCall(r[f.key]) : r[f.key])))
+        if (r.remarks) {
+          rows.push([
+            {
+              content: `Remarks: ${r.remarks}`,
+              colSpan: fields.length,
+              styles: { fontStyle: 'italic', textColor: [80, 80, 80], fontSize: 7 },
+            },
+          ])
+        }
+      })
       await exportRegisterPdf({
         title: 'TELECALLING REGISTER',
         fileNamePrefix: 'Telecalling_Register',
@@ -428,7 +439,8 @@ export default function TelecalligRegister() {
               <tbody className="divide-y divide-slate-100 print:divide-slate-200">
                 {filteredData.length > 0 ? (
                   filteredData.map((row) => (
-                    <tr key={row.id} className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
+                    <Fragment key={row.id}>
+                      <tr className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
                       <td className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell">
                         {row.date}
                       </td>
@@ -464,7 +476,16 @@ export default function TelecalligRegister() {
                           {row.status}
                         </span>
                       </td>
-                    </tr>
+                      </tr>
+                      {row.remarks && (
+                        <tr className="remarks-row print:hover:bg-transparent">
+                          <td colSpan={7} className="px-3 pb-2 pt-0 text-[11px] italic text-slate-500 print:text-black">
+                            <span className="font-bold text-slate-600 print:text-black">Remarks: </span>
+                            {row.remarks}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))
                 ) : isLoading ? (
                   <tr>

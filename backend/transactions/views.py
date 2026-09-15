@@ -619,6 +619,7 @@ def register_lead_row(lead):
         'status': register_lead_status(lead),
         'callStatus': lead.call_status,
         'priority': lead.priority,
+        'remarks': lead.remarks,
         'assignedTo': lead.assigned_to,
         'addedBy': lead.added_by,
     }
