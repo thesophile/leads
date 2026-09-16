@@ -315,7 +315,7 @@ export default function Telecall() {
       await api.patch(`/transactions/leads/${activeLead.id}/`, {
         assigned_to: formData.assignedTo,
         call_status: formData.callStatus,
-        priority: (isActuallyCalled ? formData.priority : (activeLead.priority || formData.priority)) || '',
+        priority: formData.priority || '',
         remarks: formData.remarks || activeLead.remarks,
         next_follow_up_date: formData.nextFollowUpDate,
         next_follow_up_time: formData.nextFollowUpTime,
