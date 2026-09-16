@@ -99,9 +99,58 @@ function parseCSV(text) {
   return rows
 }
 
-function csvRowsToLeads(text) {
+// Canonical table columns for CSV import. Every one of these must exist as a
+// header in the uploaded CSV (matched via aliases). CSV columns that do not
+// match any known column are ignored with a warning.
+const REQUIRED_IMPORT_COLUMNS = [
+  { key: 'company', label: 'Company Name', aliases: ['Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name'] },
+  { key: 'contact', label: 'Contact Person', aliases: ['Contact Person', 'Contact Name', 'Contact', 'Name'] },
+  { key: 'phone', label: 'Phone', aliases: ['Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number'] },
+  { key: 'email', label: 'Email', aliases: ['Email', 'Email Address', 'Mail'] },
+  { key: 'category', label: 'Category', aliases: ['Category', 'Business Type', 'Segmentation'] },
+  { key: 'source', label: 'Lead Source', aliases: ['Lead Source', 'Source', 'Source Name'] },
+  { key: 'city', label: 'City', aliases: ['City', 'Location', 'City / Location', 'Region'] },
+]
+
+function escapeCSVField(value) {
+  const s = String(value ?? '')
+  if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
+    return `"${s.replace(/"/g, '""')}"`
+  }
+  return s
+}
+
+function invalidRowsFilename(originalName) {
+  const base = String(originalName || '').replace(/\.csv$/i, '').trim() || 'import'
+  return `${base}_invalid_rows.csv`
+}
+
+function joinRowErrors(errors) {
+  return `${errors.map((e) => String(e).replace(/[.;\s]+$/, '')).join('; ')}.`
+}
+
+function downloadInvalidRowsCSV(filename, originalHeaders, invalidRows) {
+  const headers = [...originalHeaders.map((h) => String(h ?? '')), 'Error']
+  const lines = [headers.map(escapeCSVField).join(',')]
+  for (const { originalRow, errors } of invalidRows) {
+    const cells = originalHeaders.map((_, idx) => escapeCSVField(originalRow[idx] ?? ''))
+    cells.push(escapeCSVField(joinRowErrors(errors)))
+    lines.push(cells.join(','))
+  }
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function csvRowsToLeads(text, master = {}) {
   const rows = parseCSV(text)
-  if (rows.length === 0) return { leads: [], skippedRows: 0, unmatchedColumns: [] }
+  if (rows.length === 0) return { empty: true }
   const normalize = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '')
   const headers = rows[0].map((h) => normalize(h))
   const findCol = (...keys) => {
@@ -111,42 +160,65 @@ function csvRowsToLeads(text) {
     }
     return -1
   }
-  const colCompany = findCol('Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name')
-  const colContact = findCol('Contact Person', 'Contact Name', 'Contact', 'Name')
-  const colPhone = findCol('Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number')
-  const colEmail = findCol('Email', 'Email Address', 'Mail')
-  const colCategory = findCol('Category', 'Business Type', 'Segmentation')
-  const colSource = findCol('Lead Source', 'Source', 'Source Name')
-  const colCity = findCol('City', 'Location', 'City / Location', 'Region')
+  const colByKey = {}
+  for (const col of REQUIRED_IMPORT_COLUMNS) {
+    colByKey[col.key] = findCol(...col.aliases)
+  }
 
-  const matchedCols = new Set(
-    [colCompany, colContact, colPhone, colEmail, colCategory, colSource, colCity].filter((c) => c >= 0)
-  )
+  // CSV structure check: every table column must exist as a CSV header.
+  const missingColumns = REQUIRED_IMPORT_COLUMNS.filter((c) => colByKey[c.key] < 0).map((c) => c.label)
+  if (missingColumns.length > 0) return { missingColumns }
+
+  const matchedCols = new Set(Object.values(colByKey).filter((c) => c >= 0))
   const unmatchedColumns = rows[0]
     .map((h, i) => ({ h, i }))
     .filter(({ h, i }) => String(h || '').trim() !== '' && !matchedCols.has(i))
     .map(({ h }) => String(h).trim())
 
-  const leads = []
-  let skippedRows = 0
+  // Category / Source master validation (mirrors the backend rules). When the
+  // master lists have not loaded yet, skip the frontend check and let the
+  // backend remain the authority — its failures are still collected per row.
+  const categorySet =
+    master.categoryNames instanceof Set && master.categoryNames.size > 0 ? master.categoryNames : null
+  const sourceSet =
+    master.sourceNames instanceof Set && master.sourceNames.size > 0 ? master.sourceNames : null
+
+  const validLeads = []
+  const invalidRows = []
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]
-    const company = ((colCompany >= 0 && r[colCompany]) || '').trim()
-    if (!company) {
-      skippedRows += 1
+    const cell = (key) => ((colByKey[key] >= 0 && r[colByKey[key]]) || '').trim()
+    const company = cell('company')
+    const category = cell('category')
+    const source = cell('source')
+    const errors = []
+    if (!company) errors.push('Company Name is required.')
+    if (category && categorySet && !categorySet.has(category)) {
+      errors.push(`Category "${category}" does not exist.`)
+    }
+    if (source && sourceSet && !sourceSet.has(source)) {
+      errors.push(`Source "${source}" does not exist.`)
+    }
+    // Preserve the original CSV data for this row (padded to header width).
+    const originalRow = rows[0].map((_, idx) => r[idx] ?? '')
+    if (errors.length > 0) {
+      invalidRows.push({ originalRow, errors })
       continue
     }
-    leads.push({
-      company,
-      contact: ((colContact >= 0 && r[colContact]) || '').trim(),
-      phone: ((colPhone >= 0 && r[colPhone]) || '').trim(),
-      email: ((colEmail >= 0 && r[colEmail]) || '').trim(),
-      category: ((colCategory >= 0 && r[colCategory]) || '').trim(),
-      source: ((colSource >= 0 && r[colSource]) || '').trim(),
-      city: ((colCity >= 0 && r[colCity]) || '').trim(),
+    validLeads.push({
+      record: {
+        company,
+        contact: cell('contact'),
+        phone: cell('phone'),
+        email: cell('email'),
+        category,
+        source,
+        city: cell('city'),
+      },
+      originalRow,
     })
   }
-  return { leads, skippedRows, unmatchedColumns }
+  return { validLeads, invalidRows, unmatchedColumns, originalHeaders: rows[0].map((h) => String(h ?? '')) }
 }
 
 function UploadCloudIcon() {
@@ -394,6 +466,22 @@ export default function RawData() {
     resetImportDirty()
   }
 
+  // The import result dialog must stay visible until dismissed: close it with
+  // OK, with Enter, or by clicking outside (handled on the backdrop below).
+  useEffect(() => {
+    if (!importModalOpen || !importNeedsAck) return
+    function handleImportResultKeyDown(ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault()
+        closeImportModal()
+      }
+    }
+    window.addEventListener('keydown', handleImportResultKeyDown)
+    return () => window.removeEventListener('keydown', handleImportResultKeyDown)
+    // closeImportModal only resets import-modal state, safe to omit from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importModalOpen, importNeedsAck])
+
   const searchDebounced = useDebouncedValue(searchQuery)
 
   const listParams = useMemo(
@@ -590,6 +678,7 @@ async function handleBulkImport(e) {
     e.preventDefault()
     if (isImporting) return
     setError('')
+    setImportSuccessMessage('')
     if (!importedFileName || !importedFile) return
 
     if (/\.xlsx?$/i.test(importedFileName)) {
@@ -599,91 +688,127 @@ async function handleBulkImport(e) {
     }
 
     setIsImporting(true)
-    let keepOpen = false
     try {
       const text = await importedFile.text()
-      const { leads, skippedRows, unmatchedColumns } = csvRowsToLeads(text)
-      if (leads.length === 0) {
+      const toNameSet = (opts) =>
+        new Set((opts || []).map((o) => (typeof o === 'string' ? o : o?.name)).filter(Boolean))
+      const parsed = csvRowsToLeads(text, {
+        categoryNames: toNameSet(categoryOptions),
+        sourceNames: toNameSet(sourceOptions),
+      })
+
+      if (parsed.empty) {
         setError(
-          'No importable rows found. Make sure the first row has headers such as Company Name, Contact, Phone, Email, Category, Source, City.' +
-            (skippedRows ? ` ${skippedRows} row(s) skipped because the company name was empty.` : '') +
-            (unmatchedColumns.length
-              ? ` ${unmatchedColumns.length} column(s) not recognized: ${unmatchedColumns.join(', ')}.`
-              : '')
+          'No importable rows found. Make sure the first row has headers such as Company Name, Contact Person, Phone, Email, Category, Lead Source, City.'
         )
-        keepOpen = true
         setImportNeedsAck(true)
-        setIsImporting(false)
         return
       }
 
+      // CSV structure error: a required table column is missing. Import zero
+      // rows and do not generate an invalid-rows CSV.
+      if (parsed.missingColumns) {
+        setError(
+          `❌ Import failed\n\nRequired column(s) missing from the CSV:\n${parsed.missingColumns.join(', ')}\n\nNo rows were imported.`
+        )
+        setImportNeedsAck(true)
+        return
+      }
+
+      const { validLeads, invalidRows, unmatchedColumns, originalHeaders } = parsed
+      if (validLeads.length === 0 && invalidRows.length === 0) {
+        setError('No importable rows found. The CSV has headers but no data rows.')
+        setImportNeedsAck(true)
+        return
+      }
+
+      // Import every structurally valid row; backend rejections become
+      // per-row errors so no row is ever silently discarded.
       let imported = 0
       let updated = 0
       let duplicates = 0
-      let failed = 0
-      for (const record of leads) {
+      const backendInvalidRows = []
+      for (const { record, originalRow } of validLeads) {
         try {
           const res = await api.post('/transactions/leads/import/', record)
           if (res && res.updated) updated += 1
           else imported += 1
         } catch (err) {
           if (err.status === 409) duplicates += 1
-          else failed += 1
+          else backendInvalidRows.push({ originalRow, errors: [err.message || 'Validation failed.'] })
         }
       }
 
-      const summary = (extra) =>
-        (extra ? extra + ' ' : '') +
-        (skippedRows ? ` ${skippedRows} row(s) skipped (missing company name).` : '') +
-        (unmatchedColumns.length
-          ? ` ${unmatchedColumns.length} column(s) not recognized: ${unmatchedColumns.join(', ')}.`
-          : '')
+      const allInvalidRows = [...invalidRows, ...backendInvalidRows]
+      const successCount = imported + updated
+      const invalidCount = allInvalidRows.length
+      const warningBlock =
+        unmatchedColumns.length > 0
+          ? `⚠️ ${unmatchedColumns.length} column(s) skipped because they do not exist in this table:\n${unmatchedColumns.join(', ')}`
+          : ''
+      const duplicatesNote = duplicates > 0 ? `${duplicates} duplicate(s) skipped.` : ''
 
-      const processed = imported + updated
-      const fullSuccess =
-        processed > 0 && failed === 0 && duplicates === 0 && skippedRows === 0 && unmatchedColumns.length === 0
-
-      if (processed === 0 && failed > 0) {
-        setError(
-          `None of the rows could be imported (${duplicates} duplicate(s), ${failed} failed).` +
-            summary('Check the file headers.')
-        )
-      } else if (processed === 0 && duplicates > 0) {
-        setImportSuccessMessage(`All ${duplicates} row(s) already exist as duplicates.` + summary(''))
+      if (invalidCount > 0) {
+        // Invalid rows exist: import the valid ones and download the rest.
+        const filename = invalidRowsFilename(importedFileName)
+        downloadInvalidRowsCSV(filename, originalHeaders, allInvalidRows)
+        const downloadBlock =
+          `The ${invalidCount} invalid rows have been downloaded as:\n${filename}\n\nCorrect them and import the file again.`
+        if (successCount > 0) {
+          const lines = [
+            'Import completed',
+            '',
+            `✅ ${successCount} row(s) imported`,
+            `❌ ${invalidCount} row(s) could not be imported`,
+          ]
+          if (warningBlock) lines.push('', warningBlock)
+          lines.push('', downloadBlock)
+          if (duplicatesNote) lines.push(duplicatesNote)
+          setImportSuccessMessage(lines.join('\n'))
+        } else {
+          const lines = [
+            '❌ Import failed',
+            '',
+            '0 rows imported',
+            `${invalidCount} row(s) could not be imported`,
+          ]
+          if (warningBlock) lines.push('', warningBlock)
+          lines.push('', downloadBlock)
+          if (duplicatesNote) lines.push(duplicatesNote)
+          setError(lines.join('\n'))
+        }
+      } else if (successCount > 0) {
+        if (warningBlock) {
+          const lines = ['Import completed', '', `✅ ${successCount} row(s) imported`, '', warningBlock]
+          if (duplicatesNote) lines.push('', duplicatesNote)
+          setImportSuccessMessage(lines.join('\n'))
+        } else {
+          let msg =
+            successCount === 1
+              ? '✅ Import successful\n\n1 item imported successfully.'
+              : `✅ Import successful\n\n${successCount} items imported successfully.`
+          if (duplicatesNote) msg += `\n${duplicatesNote}`
+          setImportSuccessMessage(msg)
+        }
+      } else if (duplicates > 0) {
+        const lines = [`All ${duplicates} row(s) already exist as duplicates.`]
+        if (warningBlock) lines.push('', warningBlock)
+        setImportSuccessMessage(lines.join('\n'))
       } else {
-        const parts = []
-        if (imported) parts.push(`${imported} new`)
-        if (updated) parts.push(`${updated} updated`)
-        setImportSuccessMessage(
-          `Successfully processed ${parts.join(', ')} lead(s) from ${importedFileName}!` +
-            (duplicates ? ` ${duplicates} duplicate(s) skipped.` : '') +
-            (failed ? ` ${failed} row(s) failed validation.` : '') +
-            summary('')
-        )
+        const lines = ['❌ Import failed', '', 'No rows were imported.']
+        if (warningBlock) lines.push('', warningBlock)
+        setError(lines.join('\n'))
       }
 
-      if (processed > 0) await refreshData()
-      if (!fullSuccess) {
-        keepOpen = true
-        setImportNeedsAck(true)
-      }
-} catch (err) {
+      if (successCount > 0) await refreshData()
+      // The result dialog always stays open until the user dismisses it.
+      setImportNeedsAck(true)
+    } catch (err) {
       setError(err.message || 'Failed to read the file.')
-      keepOpen = true
       setImportNeedsAck(true)
     } finally {
       setIsImporting(false)
       resetImportDirty()
-      if (!keepOpen) {
-        setTimeout(() => {
-          setImportModalOpen(false)
-          setImportedFileName('')
-          setImportedFile(null)
-          setImportSuccessMessage('')
-          setImportNeedsAck(false)
-          setError('')
-        }, 1200)
-      }
     }
   }
 
@@ -1768,6 +1893,10 @@ async function handleBulkImport(e) {
                     if (e.target.files[0]) {
                       setImportedFile(e.target.files[0])
                       setImportedFileName(e.target.files[0].name)
+                      // A newly picked file starts a fresh import attempt.
+                      setImportSuccessMessage('')
+                      setError('')
+                      setImportNeedsAck(false)
                     }
                   }}
                   className="absolute inset-0 opacity-0 cursor-pointer"
@@ -1786,13 +1915,13 @@ async function handleBulkImport(e) {
               </div>
 
               {importSuccessMessage && (
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-semibold text-emerald-700 text-center">
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-semibold text-emerald-700 text-center whitespace-pre-line">
                   {importSuccessMessage}
                 </div>
               )}
 
               {error && (
-                <div className="rounded-lg bg-red-50 border border-red-200 p-2.5 text-xs font-semibold text-red-700 text-center">
+                <div className="rounded-lg bg-red-50 border border-red-200 p-2.5 text-xs font-semibold text-red-700 text-center whitespace-pre-line">
                   {error}
                 </div>
               )}
@@ -1801,6 +1930,7 @@ async function handleBulkImport(e) {
                 {importNeedsAck ? (
                   <button
                     type="button"
+                    autoFocus
                     onClick={closeImportModal}
                     className="rounded-xl bg-brand-600 px-5 py-2 text-xs font-semibold text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 transition cursor-pointer"
                   >
