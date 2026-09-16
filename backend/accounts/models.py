@@ -66,6 +66,13 @@ class Company(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        if is_new:
+            from .defaults import DEFAULT_TERMS_FULL, DEFAULT_TERMS_SUMMARY
+
+            if not self.terms_summary_html:
+                self.terms_summary_html = DEFAULT_TERMS_SUMMARY
+            if not self.terms_full_html:
+                self.terms_full_html = DEFAULT_TERMS_FULL
         super().save(*args, **kwargs)
         if is_new:
             from .rbac import seed_default_roles
