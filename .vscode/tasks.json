@@ -23,7 +23,7 @@
     {
       "label": "Start Backend",
       "type": "shell",
-      "command": "venv\\Scripts\\activate; python manage.py runserver",
+      "command": "$env:ENV='dev'; .\\venv\\Scripts\\python.exe manage.py runserver",
       "options": {
         "cwd": "${workspaceFolder}\\backend"
       },
