@@ -102,14 +102,16 @@ function parseCSV(text) {
 // Canonical table columns for CSV import. Every one of these must exist as a
 // header in the uploaded CSV (matched via aliases). CSV columns that do not
 // match any known column are ignored with a warning.
+// Canonical table columns for CSV import. Company Name is the only required column;
+// all other columns are optional and will default to empty if omitted in the CSV.
 const REQUIRED_IMPORT_COLUMNS = [
-  { key: 'company', label: 'Company Name', aliases: ['Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name'] },
-  { key: 'contact', label: 'Contact Person', aliases: ['Contact Person', 'Contact Name', 'Contact', 'Name'] },
-  { key: 'phone', label: 'Phone', aliases: ['Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number'] },
-  { key: 'email', label: 'Email', aliases: ['Email', 'Email Address', 'Mail'] },
-  { key: 'category', label: 'Category', aliases: ['Category', 'Business Type', 'Segmentation'] },
-  { key: 'source', label: 'Lead Source', aliases: ['Lead Source', 'Source', 'Source Name'] },
-  { key: 'city', label: 'City', aliases: ['City', 'Location', 'City / Location', 'Region'] },
+  { key: 'company', label: 'Company Name', required: true, aliases: ['Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name', 'Client', 'Client Name', 'Customer', 'Customer Name', 'Company/Organization'] },
+  { key: 'contact', label: 'Contact Person', required: false, aliases: ['Contact Person', 'Contact Name', 'Contact', 'Name', 'Contact Details', 'Person', 'Full Name'] },
+  { key: 'phone', label: 'Phone', required: false, aliases: ['Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number', 'Tel', 'Telephone', 'Cell', 'Mobile No', 'Phone No'] },
+  { key: 'email', label: 'Email', required: false, aliases: ['Email', 'Email Address', 'Mail', 'E-Mail', 'Email ID', 'E-Mail ID'] },
+  { key: 'category', label: 'Category', required: false, aliases: ['Category', 'Business Type', 'Segmentation', 'Industry', 'Lead Category'] },
+  { key: 'source', label: 'Lead Source', required: false, aliases: ['Lead Source', 'Source', 'Source Name', 'Lead Sources', 'LeadSource', 'Lead_Source', 'Sources', 'Lead Source Name', 'Source of Lead', 'Lead Origin', 'Origin', 'Platform', 'Channel', 'Media Source'] },
+  { key: 'city', label: 'City', required: false, aliases: ['City', 'Location', 'City / Location', 'Region', 'State', 'Address', 'Place'] },
 ]
 
 function escapeCSVField(value) {
@@ -165,8 +167,8 @@ function csvRowsToLeads(text, master = {}) {
     colByKey[col.key] = findCol(...col.aliases)
   }
 
-  // CSV structure check: every table column must exist as a CSV header.
-  const missingColumns = REQUIRED_IMPORT_COLUMNS.filter((c) => colByKey[c.key] < 0).map((c) => c.label)
+  // CSV structure check: only mandatory columns (e.g. Company Name) must exist as CSV headers.
+  const missingColumns = REQUIRED_IMPORT_COLUMNS.filter((c) => c.required && colByKey[c.key] < 0).map((c) => c.label)
   if (missingColumns.length > 0) return { missingColumns }
 
   const matchedCols = new Set(Object.values(colByKey).filter((c) => c >= 0))
