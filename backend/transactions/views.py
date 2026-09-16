@@ -352,31 +352,23 @@ def generate_lead_id(company):
 def scoped_queryset(user, status_filter='all'):
     """Return the Lead queryset visible to ``user``.
 
-    Superusers see everything. Managers/admins (``leads.view_all``) see their
-    company's records plus legacy unassigned rows. Staff with
-    ``leads.view_raw_all`` see all raw data in the company but otherwise only
-    the leads assigned to them. An optional ``status_filter`` narrows the
-    result by lead status.
+    Superusers see everything. Every regular user is hard-scoped to their own
+    company: managers/admins (``leads.view_all``) see all of the company's
+    leads; staff with ``leads.view_raw_all`` additionally see all raw data in
+    the company; other staff only see the leads assigned to them plus the raw
+    leads they entered. Orphaned (tenant-less) rows are never shown to a
+    company. An optional ``status_filter`` narrows the result by lead status.
     """
     qs = Lead.objects.all()
     if not user.is_superuser:
+        qs = qs.filter(tenant=user.company)
         if user.has_permission('leads.view_all'):
-            # Managers/admins see their company's records plus legacy rows.
-            qs = qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+            pass
         elif user.has_permission('leads.view_raw_all'):
-            # Raw data is public in the company; otherwise staff only see
-            # the leads assigned to them.
-            qs = qs.filter(
-                Q(status=Lead.STATUS_RAW, tenant=user.company)
-                | Q(status=Lead.STATUS_RAW, tenant__isnull=True)
-                | Q(tenant=user.company, assigned_to=user.name)
-            )
+            qs = qs.filter(Q(status=Lead.STATUS_RAW) | Q(assigned_to=user.name))
         else:
-            # Staff without view_raw_all see the leads assigned to them plus
-            # the leads they still hold in raw status.
             qs = qs.filter(
-                Q(tenant=user.company, assigned_to=user.name)
-                | Q(added_by=user.name, status=Lead.STATUS_RAW)
+                Q(assigned_to=user.name) | Q(added_by=user.name, status=Lead.STATUS_RAW)
             )
     if status_filter and status_filter != 'all':
         qs = qs.filter(status=status_filter)
@@ -388,19 +380,19 @@ def my_leads_queryset(user):
 
     Managers (``leads.view_all``) see their company's records; staff see the
     leads assigned to them plus the organisation-wide raw pool (raw leads have
-    no single owner after the legacy import, so they are shared). Used by the
-    read-only Lead Status screen.
+    no single owner). Used by the read-only Lead Status screen. Every regular
+    user is hard-scoped to their own company; orphaned (tenant-less) rows are
+    never shown.
     """
     qs = Lead.objects.all()
     if user.is_superuser:
         return qs
+    qs = qs.filter(tenant=user.company)
     if user.has_permission('leads.view_all'):
-        return qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+        return qs
     return qs.filter(
-        Q(tenant=user.company, assigned_to=user.name)
-        | Q(tenant__isnull=True, assigned_to=user.name)
-        | Q(tenant=user.company, status=Lead.STATUS_RAW)
-        | Q(tenant__isnull=True, status=Lead.STATUS_RAW)
+        Q(assigned_to=user.name)
+        | Q(status=Lead.STATUS_RAW)
     )
 
 
@@ -495,11 +487,11 @@ def parse_due_date(value):
 
 def find_duplicate_lead(user, company):
     """Return an existing Lead with the same normalized company name, from
-    across the org (not just the current user's own records) and regardless
-    of its current status."""
+    within the caller's own company (not just the current user's records) and
+    regardless of its current status."""
     queryset = Lead.objects.all()
     if not user.is_superuser:
-        queryset = queryset.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+        queryset = queryset.filter(tenant=user.company)
     return queryset.filter(company_key=str(company or '').strip().lower()).only(
         'id', 'company', 'contact', 'phone', 'category', 'city', 'added_by',
         'display_date', 'date', 'status',
@@ -2626,7 +2618,7 @@ def scoped_orders(user):
     """Return the Order queryset visible to ``user`` (superusers see all)."""
     qs = Order.objects.all()
     if not user.is_superuser:
-        qs = qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+        qs = qs.filter(tenant=user.company)
     return qs
 
 
@@ -2643,7 +2635,7 @@ def scoped_client_details(user):
     """Return the ClientDetail queryset visible to ``user`` (superusers see all)."""
     qs = ClientDetail.objects.all()
     if not user.is_superuser:
-        qs = qs.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+        qs = qs.filter(tenant=user.company)
     return qs
 
 

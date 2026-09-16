@@ -11,7 +11,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.core.serializers.json import Deserializer as JSONDeserializer
-from django.db.models import Q
 from django.db.models.signals import post_save, pre_save
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -129,7 +128,7 @@ def _target_scope_filter(queryset, user):
     """Scope target rows to the caller's tenant (superusers see all)."""
     if user.is_superuser:
         return queryset
-    return queryset.filter(Q(tenant=user.company) | Q(tenant__isnull=True))
+    return queryset.filter(tenant=user.company)
 
 
 def _int_param(request, key):
