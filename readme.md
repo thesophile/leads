@@ -22,6 +22,27 @@ venv\Scripts\activate
 Python manage.py runserver
 ```
 
+## Deploy
+
+Frontend
+```
+cd ~\Desktop\Codebase\leads\frontend
+npm run build -- --mode prod
+ssh leads "rm -rf ~/public_html/assets"
+scp -r .\dist\* leads:/home/newleadsprograme/public_html/
+scp .\dist\.htaccess leads:/home/newleadsprograme/public_html/
+ssh leads "chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1"
+```
+
+Backend
+```
+cd ~\Desktop\Codebase\leads
+git archive HEAD backend -o backend.zip
+scp backend.zip leads:/home/newleadsprograme/
+ssh leads "cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip"
+ssh leads "source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate && cd /home/newleadsprograme/backend && python manage.py migrate"
+```
+
 
 
 ### Preview

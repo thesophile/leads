@@ -38,6 +38,33 @@
       ],
       "dependsOrder": "parallel",
       "problemMatcher": []
+    },
+    {
+      "label": "Deploy Backend",
+      "type": "shell",
+      "command": "git archive HEAD backend -o backend.zip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp backend.zip leads:/home/newleadsprograme/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate && cd /home/newleadsprograme/backend && python manage.py migrate\"",
+      "options": {
+        "cwd": "${env:USERPROFILE}/Desktop/Codebase/leads"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Deploy Frontend",
+      "type": "shell",
+      "command": "npm run build -- --mode prod; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"rm -rf ~/public_html/assets\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp -r .\\dist\\* leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp .\\dist\\.htaccess leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1\"",
+      "options": {
+        "cwd": "${env:USERPROFILE}/Desktop/Codebase/leads/frontend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Deploy Full",
+      "dependsOn": [
+        "Deploy Backend",
+        "Deploy Frontend"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
     }
   ]
 }
