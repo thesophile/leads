@@ -141,8 +141,7 @@ CALL_REPORTS = [
 QUOTE_STATUSES = ['Not Sent', 'Pending Approval', 'Approved', 'Sent to Client', 'Rejected']
 QUOTE_WEIGHTS = [30, 25, 20, 15, 10]
 CALL_STATUSES = [
-    'Interested', 'Follow Up', 'Considering', 'Not Reachable',
-    'Busy', 'Not Interested', 'For Future',
+    'Interested', 'Follow Up', 'Called', 'Not Interested', 'For Future',
 ]
 CLIENT_STATUSES = [
     ClientDetail.STATUS_PENDING,
@@ -289,7 +288,7 @@ class Command(BaseCommand):
                 call_status = 'Pending Call'
                 priority = ''
             elif status in (Lead.STATUS_QUOTATION, Lead.STATUS_ORDER, Lead.STATUS_CLIENT):
-                call_status = rng.choice(['Interested', 'Quotation Requested', 'Considering'])
+                call_status = rng.choice(['Interested', 'Quotation Requested', 'Follow Up'])
                 priority = rng.choices(['Hot', 'High', 'Medium', 'Low'], weights=[1, 3, 4, 2])[0]
             else:
                 call_status = rng.choice(CALL_STATUSES)

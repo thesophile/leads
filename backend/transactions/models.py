@@ -91,11 +91,9 @@ class Lead(models.Model):
         'Interested',
         'Quotation Requested',
         'Follow Up',
-        'Considering',
-        'Not Reachable',
-        'Busy',
         'Not Interested',
         'For Future',
+        'Called',
     ]
 
     id = models.CharField(max_length=20, primary_key=True)

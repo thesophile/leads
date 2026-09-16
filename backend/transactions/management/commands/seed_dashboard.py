@@ -48,7 +48,8 @@ CALL_STATUSES = [
     'Quotation Requested',
     'Follow Up',
     'Not Interested',
-    'Considering',
+    'For Future',
+    'Called',
 ]
 
 STATUS_WEIGHTS = [

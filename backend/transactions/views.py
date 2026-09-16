@@ -3737,7 +3737,7 @@ class DashboardStatsView(APIView):
             'contacted': contacted_total,
             'interested': (
                 scoped.filter(
-                    Q(call_status__in=['Interested', 'Quotation Requested', 'Considering'])
+                    Q(call_status__in=['Interested', 'Quotation Requested', 'Follow Up'])
                     | Q(status__in=[Lead.STATUS_QUOTATION, Lead.STATUS_ORDER, Lead.STATUS_CLIENT])
                 ).count()
             ),
