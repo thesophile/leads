@@ -1031,7 +1031,8 @@ class LeadDetailView(APIView):
             if changed_fields:
                 contact_changed = True
                 sync_lead_contact_to_quotation(lead, changed_fields)
-        if 'assigned_to' in submitted and lead.assigned_to:
+        if ('assigned_to' in submitted and lead.assigned_to
+                and lead.assigned_to != old_assigned_to):
             log_activity(
                 user,
                 user.company,
