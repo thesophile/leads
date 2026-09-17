@@ -8,12 +8,6 @@ pip install -r requirements.txt
 
 ## Run
 
-frontend
-```
-cd ~\Desktop\Codebase\leads\frontend
-npm run dev -- --mode dev
-```
-
 Backend
 ```
 $env:ENV = "dev"
@@ -22,6 +16,21 @@ venv\Scripts\activate
 Python manage.py runserver
 ```
 
+frontend
+```
+cd ~\Desktop\Codebase\leads\frontend
+npm run dev -- --mode dev
+```
+
+
+---
+migrate
+```
+$env:ENV = "dev"
+cd ~\Desktop\Codebase\leads\backend
+venv\Scripts\activate
+Python manage.py migrate
+```
 ## Deploy
 
 Frontend
