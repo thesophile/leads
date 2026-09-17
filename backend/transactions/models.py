@@ -122,6 +122,10 @@ class Lead(models.Model):
     display_date = models.CharField(max_length=50, blank=True)
     added_by = models.CharField(max_length=120, blank=True)
     assigned_to = models.CharField(max_length=120, blank=True)
+    # When the lead was (re)assigned to its current owner (``assigned_to``).
+    # Stamp is refreshed on every real assignment so the "age" of a lead can be
+    # measured per employee (how long it has sat with the current owner).
+    assigned_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,

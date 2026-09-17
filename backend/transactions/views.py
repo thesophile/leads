@@ -606,6 +606,7 @@ def register_lead_row(lead):
         'id': lead.id,
         'date': iso,
         'rawDate': iso,
+        'assignedAt': lead.assigned_at.isoformat() if lead.assigned_at else '',
         'lastCallDate': lead.last_call_date,
         'company': lead.company,
         'number': lead.phone,
@@ -947,6 +948,10 @@ class LeadDetailView(APIView):
                     {'detail': 'This lead is locked and cannot be reassigned.'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+            # A real (re)assignment refreshes the stamp so the ownership age is
+            # measured from ownership of the current employee.
+            if lead.assigned_to:
+                lead.assigned_at = timezone.now()
         # Category/source are validated against the company master catalog, but
         # only when the value actually changes: legacy/seed leads may carry
         # values that predate the catalog, and editing their call status,
@@ -2467,15 +2472,17 @@ class LeadAssignView(APIView):
             )
 
         updated = []
+        now = timezone.now()
         for index, lead in enumerate(leads):
             assignee = assigned_to[index % len(assigned_to)]
             lead.assigned_to = assignee
+            lead.assigned_at = now
             lead.tenant = request.user.company
             lead.status = Lead.STATUS_ASSIGNED
             lead.call_status = 'Pending Call'
             lead.remarks = 'Newly assigned from raw data.'
             lead.save(update_fields=[
-                'assigned_to', 'tenant', 'status', 'call_status', 'remarks', 'updated_at',
+                'assigned_to', 'assigned_at', 'tenant', 'status', 'call_status', 'remarks', 'updated_at',
             ])
             updated.append(lead)
 

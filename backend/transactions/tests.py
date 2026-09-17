@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from transactions.models import (
@@ -145,6 +146,48 @@ class AssignLeadsToStaffTests(APITestCase):
             'assigned_to': ['Shanu VR', 'Ghost User'], 'count': 2,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
+
+    def test_assign_stamps_assigned_at(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': 'Shanu VR', 'count': 2,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        assigned = Lead.objects.filter(status='assigned')
+        self.assertEqual(assigned.count(), 2)
+        self.assertTrue(all(l.assigned_at is not None for l in assigned))
+        self.assertTrue(all(l.assigned_at <= timezone.now() for l in assigned))
+
+    def test_reassign_refreshes_assigned_at_for_new_owner(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': 'Shanu VR', 'count': 1,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get(status='assigned')
+        first_stamp = lead.assigned_at
+        self.assertIsNotNone(first_stamp)
+        resp = self.client.patch(f'/api/transactions/leads/{lead.id}/', {
+            'assigned_to': 'Staff A',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        lead.refresh_from_db()
+        self.assertEqual(lead.assigned_to, 'Staff A')
+        self.assertIsNotNone(lead.assigned_at)
+        self.assertGreaterEqual(lead.assigned_at, first_stamp)
+        self.assertIn('assignedAt', resp.data)
+        self.assertTrue(resp.data['assignedAt'])
+
+    def test_assign_surfaces_assigned_at_in_register(self):
+        self.client.force_authenticate(self.manager)
+        self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': 'Shanu VR', 'count': 1,
+        }, format='json')
+        resp = self.client.get('/api/transactions/leads/register/?statuses=assigned')
+        self.assertEqual(resp.status_code, 200)
+        row = resp.data['results'][0]
+        self.assertIn('assignedAt', row)
+        self.assertTrue(row['assignedAt'])
 
 
 class LeadVisibilityTests(APITestCase):

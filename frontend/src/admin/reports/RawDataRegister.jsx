@@ -126,7 +126,7 @@ export default function RawDataRegister() {
       await exportRegisterPdf({
         title: 'RAW DATA REGISTER',
         fileNamePrefix: 'Raw_Data_Register',
-        columns: ['Date', 'Company', 'Number', 'Location', 'Staff'],
+        columns: ['Entered Date', 'Company', 'Number', 'Location', 'Staff'],
         rows,
         filters: {
           Category: category !== 'All Category' ? category : '',
@@ -351,7 +351,7 @@ export default function RawDataRegister() {
             <table className="register-table w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-bold text-[11px] print:border-black print:text-black">
-                  <th className="py-1.5 pr-4 font-bold">Date</th>
+                  <th className="py-1.5 pr-4 font-bold">Entered Date</th>
                   <th className="py-1.5 pr-4 font-bold">Company</th>
                   <th className="py-1.5 pr-4 font-bold">Number</th>
                   <th className="py-1.5 pr-4 font-bold">Location</th>

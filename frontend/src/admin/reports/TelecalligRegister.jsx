@@ -42,14 +42,12 @@ function toDmyLastCall(value) {
 // Map a lead returned by the backend into the register row shape. The status
 // column reflects the call outcome the lead currently sits at in the pipeline.
 function leadToRow(item) {
-  const iso = item.date ? String(item.date).slice(0, 10) : ''
   let status = item.callStatus || 'Pending Call'
   if (item.status === 'quotation') status = 'Quotation Requested'
   if (item.status === 'order' || item.status === 'client') status = 'Converted'
   return {
     id: item.id,
-    date: toDmyDate(iso),
-    rawDate: iso,
+    assignedAt: toDmyDate(item.assignedAt || ''),
     lastCallDate: item.lastCallDate || '',
     company: item.company || '',
     number: item.phone || '',
@@ -164,7 +162,7 @@ export default function TelecalligRegister() {
     try {
       const all = await fetchAllPaged('/transactions/leads/register/', listParams)
       const fields = [
-        { key: 'date', label: 'Date', width: 48 },
+        { key: 'assignedAt', label: 'Assigned Date', width: 48 },
         { key: 'lastCallDate', label: 'Last Called', width: 48 },
         { key: 'company', label: 'Company', width: 'auto' },
         { key: 'number', label: 'Number', width: 75 },
@@ -426,7 +424,7 @@ export default function TelecalligRegister() {
             <table className="register-table w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-bold text-[11px] print:border-black print:text-black">
-                  <th className="py-1.5 pr-3 font-bold">Date</th>
+                  <th className="py-1.5 pr-3 font-bold">Assigned Date</th>
                   <th className="py-1.5 pr-3 font-bold">Last Called Date</th>
                   <th className="py-1.5 pr-4 font-bold">Company Name</th>
                   <th className="py-1.5 pr-3 font-bold">Number</th>
@@ -441,7 +439,7 @@ export default function TelecalligRegister() {
                     <Fragment key={row.id}>
                       <tr className="text-slate-800 hover:bg-slate-50/70 transition-colors print:hover:bg-transparent">
                         <td rowSpan={row.remarks ? 2 : undefined} className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell align-middle">
-                          {row.date}
+                          {row.assignedAt}
                         </td>
                         <td rowSpan={row.remarks ? 2 : undefined} className="py-1.5 pr-3 font-mono text-[11px] text-slate-600 print:text-black whitespace-nowrap nowrap-cell align-middle">
                           {toDmyLastCall(row.lastCallDate)}

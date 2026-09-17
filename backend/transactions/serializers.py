@@ -336,6 +336,7 @@ class LeadSerializer(serializers.ModelSerializer):
     displayDate = serializers.CharField(source='display_date', required=False, allow_blank=True)
     addedBy = serializers.CharField(source='added_by', required=False, allow_blank=True)
     assignedTo = serializers.CharField(source='assigned_to', required=False, allow_blank=True)
+    assignedAt = serializers.SerializerMethodField()
     callStatus = serializers.CharField(source='call_status', required=False, allow_blank=True)
     lastCallDate = serializers.CharField(source='last_call_date', required=False, allow_blank=True)
     nextFollowUpDate = serializers.CharField(source='next_follow_up_date', required=False, allow_blank=True)
@@ -359,6 +360,7 @@ class LeadSerializer(serializers.ModelSerializer):
             'displayDate',
             'addedBy',
             'assignedTo',
+            'assignedAt',
             'status',
             'callStatus',
             'priority',
@@ -374,6 +376,9 @@ class LeadSerializer(serializers.ModelSerializer):
             'quotations',
             'quotation',
         ]
+
+    def get_assignedAt(self, obj):
+        return obj.assigned_at.isoformat() if obj.assigned_at else ''
 
     def get_quotation(self, obj):
         quotations = self.context.get('quotations')
