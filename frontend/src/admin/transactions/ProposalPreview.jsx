@@ -461,14 +461,11 @@ export default function ProposalPreview() {
 const approvedByRef = useRef(null)
   const financialRef = useRef(null)
   const page1FooterRef = useRef(null)
-  const page2FooterRef = useRef(null)
   const termsContentRef = useRef(null)
   const summaryContentRef = useRef(null)
-  const detailsContentRef = useRef(null)
   const approvalRefetchedRef = useRef(false)
   const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 48)
   const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 44)
-  const detailsPaged = usePagedContent(detailsContentRef, page2FooterRef, [], 64)
 
 
   function handlePrint() {
@@ -771,11 +768,6 @@ const approvedByRef = useRef(null)
                       )}
                     </div>
                   )}
-                  {termsPaged.part2Html ? (
-                    <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
-                      Continued…
-                    </p>
-                  ) : null}
                 </SectionBox>
 
                 <div ref={approvedByRef}>
@@ -871,11 +863,6 @@ const approvedByRef = useRef(null)
                     style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
                     dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.proposalSummaryHtml) }}
                   />
-                  {summaryPaged.part2Html ? (
-                    <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
-                      Continued…
-                    </p>
-                  ) : null}
                 </SectionBox>
 
                 <div ref={financialRef}>
@@ -890,86 +877,28 @@ const approvedByRef = useRef(null)
             </div>
           </div>
 
-          {/* -------------------- PAGE 2 (ANNEXURE A - 1/1) -------------------- */}
-          <div className={PAGE_CLASS}>
-            <div className="flex flex-1 flex-col">
-            <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (1/1)" company={company} />
+          {/* -------------------- PAGE 2 (PROPOSAL IN DETAILS & SPECIFICATIONS) -------------------- */}
+          <PagedSection
+            html={wrappableHtml(proposalData.proposalInDetailsHtml)}
+            reserve={64}
+            contentClass="space-y-3 text-[13px] leading-relaxed text-slate-800"
+            sectionTitle="Proposal in Details &amp; Specifications"
+            boxClass="rounded-xl border border-slate-300 bg-white"
+            titleClass="text-left"
+            pageHeader={
+              <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} />
+            }
+            pageFooter={<PageFooter company={company} />}
+            endBlock={
+              <div className="space-y-2">
+                <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
+                <p className="text-right text-[11px] font-bold text-slate-400">
+                  --- End of proposal ---
+                </p>
+              </div>
+            }
+          />
 
-            <div className="mt-4 flex flex-1 flex-col">
-              <SectionBox title="Proposal in Details &amp; Specifications" className="flex-1">
-                <div className="flex h-full flex-1 flex-col justify-between">
-                  <div
-                    ref={detailsContentRef}
-                    className="space-y-3 text-[13px] leading-relaxed text-slate-800"
-                    style={detailsPaged.cap ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
-                    dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.proposalInDetailsHtml) }}
-                  />
-                  <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
-                  {detailsPaged.part2Html ? (
-                    <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
-                      Continued…
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-right text-[11px] font-bold text-slate-400">
-                    --- End of proposal ---
-                  </p>
-                </div>
-              </SectionBox>
-            </div>
-
-            <div ref={page2FooterRef} className="mt-auto pt-4">
-              <PageFooter company={company} />
-            </div>
-            </div>
-          </div>
-
-          {/* -------------------- PAGE 3 (SUMMARY CONTINUED) -------------------- */}
-          {summaryPaged.part2Html && (
-            <PagedSection
-              html={wrappableHtml(summaryPaged.part2Html)}
-              reserve={44}
-              contentClass="space-y-1.5 text-[13.5px] leading-relaxed text-slate-800"
-              sectionTitle="Proposal Summary (Continued)"
-              boxClass="rounded-xl border border-slate-300 bg-white"
-              titleClass="text-left"
-              pageHeader={
-                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (1/2)" company={company} />
-              }
-              pageFooter={<PageFooter company={company} />}
-            />
-          )}
-
-          {/* -------------------- PAGE 3 (PROPOSAL IN DETAILS CONTINUED) -------------------- */}
-          {detailsPaged.part2Html && (
-            <PagedSection
-              html={wrappableHtml(detailsPaged.part2Html)}
-              reserve={64}
-              contentClass="space-y-3 text-[13px] leading-relaxed text-slate-800"
-              sectionTitle="Proposal in Details &amp; Specifications (Continued)"
-              boxClass="rounded-xl border border-slate-300 bg-white"
-              titleClass="text-left"
-              pageHeader={
-                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (2/2)" company={company} />
-              }
-              pageFooter={<PageFooter company={company} />}
-            />
-          )}
-
-          {/* -------------------- LAST PAGE (TERMS & CONDITIONS CONTINUED) -------------------- */}
-          {termsPaged.part2Html && (
-            <PagedSection
-              html={wrappableHtml(termsPaged.part2Html)}
-              reserve={48}
-              contentClass="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
-              sectionTitle="Terms &amp; Conditions (Continued)"
-              boxClass="rounded-xl border border-slate-300 bg-white"
-              titleClass="text-left"
-              pageHeader={
-                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A (3/2)" company={company} />
-              }
-              pageFooter={<PageFooter company={company} />}
-            />
-          )}
         </div>
       </div>
 
