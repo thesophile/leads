@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
@@ -6,7 +6,7 @@ import { can } from '../../utils/permissions'
 import { localISO } from '../../utils/date'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
-import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
+import usePagedList, { useDebouncedValue, fetchAllPaged } from '../../utils/usePagedList'
 
 const STATUSES = [
   'All Status',
@@ -98,6 +98,17 @@ function LockIcon({ className = 'h-3.5 w-3.5' }) {
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="3" y="11" width="18" height="11" rx="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
+function UsersIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   )
 }
@@ -361,6 +372,147 @@ export default function Telecall() {
   // the page rows are rendered as-is.
   const filteredLeads = telecallList
 
+  // Reassignable staff dropdown options (mirrors Raw Data's assign modal).
+  const [assignableStaff, setAssignableStaff] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    async function fetchStaff() {
+      try {
+        const data = await api.get('/auth/assignable-staff/')
+        if (!cancelled) setAssignableStaff(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }
+    if (canAssign) fetchStaff()
+    return () => {
+      cancelled = true
+    }
+  }, [canAssign])
+
+  // Bulk reassign selection state
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [reassignOpen, setReassignOpen] = useState(false)
+  const [reassignStaffList, setReassignStaffList] = useState([])
+  const [reassignStaffOpen, setReassignStaffOpen] = useState(false)
+  const [reassignIsSaving, setReassignIsSaving] = useState(false)
+  const [reassignSuccessMessage, setReassignSuccessMessage] = useState('')
+
+  const isSelectable = (lead) => !!lead && !lead.isLocked
+
+  function toggleSelectLead(lead) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(lead.id)) next.delete(lead.id)
+      else next.add(lead.id)
+      return next
+    })
+  }
+
+  // Header "select all on this page" checkbox state.
+  const pageIds = filteredLeads.filter(isSelectable).map((lead) => lead.id)
+  const pageSelectedCount = pageIds.filter((id) => selectedIds.has(id)).length
+  const allPageSelected = pageIds.length > 0 && pageSelectedCount === pageIds.length
+  const somePageSelected = pageSelectedCount > 0 && !allPageSelected
+  const headerCheckboxRef = useRef(null)
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = somePageSelected
+    }
+  }, [somePageSelected])
+
+  function toggleSelectPage() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of pageIds) {
+        if (allPageSelected) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }
+
+  // Select every reassignable (non-locked) lead matching the current filters,
+  // across all pages — same behaviour as Raw Data's "select all records".
+  async function selectAllRecords() {
+    setError('')
+    try {
+      const all = await fetchAllPaged('/transactions/leads/', listParams, 500)
+      const ids = all.filter(isSelectable).map((lead) => lead.id).filter(Boolean)
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of ids) next.add(id)
+        return next
+      })
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  function toggleReassignStaff(name) {
+    setReassignStaffList((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+    )
+  }
+
+  function toggleAllReassignStaff() {
+    const allNames = assignableStaff.map((s) => s.name)
+    const allSelected = reassignStaffList.length === allNames.length && allNames.length > 0
+    setReassignStaffList(allSelected ? [] : allNames)
+  }
+
+  function formatReassignStaffSummary(names) {
+    const joined = names.join(', ')
+    const maxLen = 42
+    if (joined.length <= maxLen) return joined
+    let cut = joined.slice(0, maxLen)
+    const lastComma = cut.lastIndexOf(', ')
+    if (lastComma > 0) cut = cut.slice(0, lastComma)
+    return `${cut}…`
+  }
+
+  function closeReassignModal() {
+    setReassignOpen(false)
+    setReassignStaffOpen(false)
+    setReassignStaffList([])
+    setReassignSuccessMessage('')
+  }
+
+  async function handleExecuteReassign(e) {
+    e.preventDefault()
+    if (reassignIsSaving) return
+    setError('')
+    if (reassignStaffList.length === 0) {
+      setError('Please select at least one staff member.')
+      return
+    }
+    if (selectedIds.size === 0) {
+      setError('Please select at least one tele-call lead to reassign.')
+      return
+    }
+
+    setReassignIsSaving(true)
+    try {
+      const res = await api.post('/transactions/leads/reassign/', {
+        assigned_to: reassignStaffList,
+        lead_ids: [...selectedIds],
+      })
+      setReassignSuccessMessage(
+        `✓ Successfully reassigned ${res.reassigned} lead(s) to ${formatReassignStaffSummary(reassignStaffList)}!`
+      )
+      await refreshData()
+      setSelectedIds(new Set())
+      setTimeout(() => {
+        closeReassignModal()
+        setReassignIsSaving(false)
+      }, 1200)
+    } catch (err) {
+      setError(err.message)
+      setReassignIsSaving(false)
+    }
+  }
+
   return (
     <Layout>
       <div className="space-y-4">
@@ -514,11 +666,67 @@ export default function Telecall() {
             </div>
           </div>
 
+          {/* Selection Bar (appears when any lead is selected for reassign) */}
+          {canAssign && selectedIds.size > 0 && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-brand-800">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 text-[9px] font-black text-white">
+                    ☑
+                  </span>
+                  {selectedIds.size} selected
+                </span>
+                {selectedIds.size < count && (
+                  <button
+                    type="button"
+                    onClick={selectAllRecords}
+                    className="flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-brand-700 transition hover:text-brand-800 hover:underline cursor-pointer"
+                  >
+                    Select all {count} leads?
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="flex items-center gap-1 rounded-md border border-brand-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
+                >
+                  <CloseIcon className="h-3 w-3" />
+                  Clear
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReassignOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98] cursor-pointer"
+              >
+                <UsersIcon className="h-3.5 w-3.5 text-white" />
+                <span>Reassign</span>
+              </button>
+            </div>
+          )}
+
           {/* Telecall Table */}
           <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 mt-3">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
+                  {canAssign && (
+                    <th className="pb-2.5 pr-2 font-semibold w-8">
+                      <label
+                        title="Select all on this page"
+                        className="flex cursor-pointer items-center justify-center px-1 -mx-1 -my-2 py-2"
+                      >
+                        <input
+                          type="checkbox"
+                          ref={headerCheckboxRef}
+                          checked={allPageSelected}
+                          onChange={toggleSelectPage}
+                          aria-label="Select all reassignable leads on this page"
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
+                      </label>
+                    </th>
+                  )}
                   <th className="pb-2.5 pr-2 font-semibold min-w-[180px]">Company</th>
                   <th className="pb-2.5 pr-2 font-semibold min-w-[110px]">Mobile</th>
                   <th className="pb-2.5 pr-2 font-semibold min-w-[100px]">Category</th>
@@ -539,6 +747,33 @@ export default function Telecall() {
                         onClick={() => openHistoryPanel(lead)}
                         className={`transition-colors cursor-pointer text-slate-600 hover:bg-slate-50/60`}
                       >
+                        {/* Select Checkbox (locked leads cannot be selected) */}
+                        {canAssign && (
+                          <td className="py-0.5 pr-2">
+                            {lead.isLocked ? (
+                              <span
+                                className="flex items-center justify-center cursor-not-allowed text-amber-400"
+                                title="This lead is locked and cannot be reassigned"
+                              >
+                                <LockIcon className="h-3.5 w-3.5" />
+                              </span>
+                            ) : (
+                              <label
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex cursor-pointer items-center justify-center px-1 -mx-1 py-2 -my-2"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(lead.id)}
+                                  onChange={() => toggleSelectLead(lead)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Select ${lead.company}`}
+                                  className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                                />
+                              </label>
+                            )}
+                          </td>
+                        )}
                         {/* Company */}
                         <td className="py-0.5 pr-3">
                           <div className="flex items-center gap-1.5">
@@ -673,7 +908,7 @@ export default function Telecall() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={canViewAll ? 7 : 6} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={(canViewAll ? 7 : 6) + (canAssign ? 1 : 0)} className="py-8 text-center text-xs text-slate-400">
                       {isLoading
                         ? 'Loading tele-call leads...'
                         : error
@@ -1280,6 +1515,169 @@ export default function Telecall() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reassign Selected Leads Modal */}
+      {reassignOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeReassignModal()
+          }}
+        >
+          <div className="flex max-h-full w-full flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150 sm:max-w-xl">
+            {/* Modal Header */}
+            <div className="flex shrink-0 items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                  <UsersIcon className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Reassign Tele-Call Leads
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Move the selected leads to one or more staff members.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeReassignModal}
+                aria-label="Close"
+                className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteReassign} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+              {/* Step 1: Select Staff Member */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                      1
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Select Staff Member
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-medium text-slate-500">
+                    {reassignStaffList.length === 0
+                      ? 'None selected'
+                      : `${reassignStaffList.length} selected`}
+                  </span>
+                </div>
+
+                <div className="relative mt-1">
+                  {/* Multi-select trigger */}
+                  <button
+                    type="button"
+                    onClick={() => setReassignStaffOpen((v) => !v)}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-slate-50/50 px-3 py-2 text-left text-xs transition cursor-pointer ${
+                      reassignStaffOpen
+                        ? 'border-emerald-500 ring-2 ring-emerald-500/10'
+                        : 'border-slate-300'
+                    }`}
+                  >
+                    <span className={`truncate font-semibold ${
+                      reassignStaffList.length === 0 ? 'text-slate-400' : 'text-slate-800'
+                    }`}>
+                      {reassignStaffList.length === 0
+                        ? 'Select staff members…'
+                        : formatReassignStaffSummary(reassignStaffList)}
+                    </span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${reassignStaffOpen ? 'rotate-180' : ''}`}
+                      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+
+                  {/* Checkbox dropdown panel */}
+                  {reassignStaffOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setReassignStaffOpen(false)}
+                      />
+                      <div className="absolute left-0 right-0 z-20 mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                        {assignableStaff.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-slate-400">No assignable staff</p>
+                        ) : (
+                          [
+                            <label
+                              key="__all__"
+                              className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={
+                                  reassignStaffList.length === assignableStaff.length && assignableStaff.length > 0
+                                }
+                                onChange={toggleAllReassignStaff}
+                                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              />
+                              <span className="font-semibold text-slate-800">All staff</span>
+                            </label>,
+                            ...assignableStaff.map((staff) => (
+                              <label
+                                key={staff.name}
+                                className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={reassignStaffList.includes(staff.name)}
+                                  onChange={() => toggleReassignStaff(staff.name)}
+                                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                />
+                                <span className="font-semibold text-slate-800">{staff.name}</span>
+                                {staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
+                              </label>
+                            )),
+                          ]
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Live Info Banner */}
+              <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 flex items-center justify-between text-xs">
+                <span className="text-slate-600">
+                  Reassigning <strong className="text-emerald-700">{selectedIds.size}</strong> selected lead(s).
+                </span>
+              </div>
+
+              {reassignSuccessMessage && (
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
+                  {reassignSuccessMessage}
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={closeReassignModal}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reassignIsSaving || reassignStaffList.length === 0 || selectedIds.size === 0}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span>✓ Reassign {selectedIds.size} Lead(s) to {reassignStaffList.length > 0 ? `${reassignStaffList.length} Staff` : 'Select Staff'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

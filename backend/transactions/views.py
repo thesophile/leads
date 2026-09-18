@@ -2565,6 +2565,100 @@ class LeadAssignView(APIView):
         )
 
 
+class LeadReassignView(APIView):
+    """Reassign tele-call (already assigned) leads to one or more staff.
+
+    Mirrors the per-lead reassign gate: an assign permission is required and
+    locked leads are only reassigned by admins (``leads.manage_lock``). Skipped
+    leads are reported back so the frontend never loses track of them.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not can(request.user, 'leads.assign', 'telecall.assign'):
+            return Response(
+                {'detail': 'You do not have permission to reassign leads.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        assigned_raw = request.data.get('assigned_to')
+        if isinstance(assigned_raw, str):
+            assigned_raw = [assigned_raw]
+        assigned_to = [str(n).strip() for n in (assigned_raw or []) if str(n).strip()]
+        if not assigned_to:
+            return Response(
+                {'detail': 'assigned_to: At least one staff member is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if request.user.company:
+            valid_names = assignment_name_set(request.user)
+            unknown = [name for name in assigned_to if name not in valid_names]
+            if unknown:
+                return Response(
+                    {'detail': f'assigned_to: Unknown staff member(s): {", ".join(unknown)}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        lead_ids_raw = request.data.get('lead_ids')
+        if isinstance(lead_ids_raw, str):
+            try:
+                lead_ids_raw = json.loads(lead_ids_raw)
+            except (TypeError, ValueError):
+                lead_ids_raw = [lead_ids_raw]
+        lead_ids = [str(i).strip() for i in (lead_ids_raw or []) if str(i).strip()]
+        if not lead_ids:
+            return Response(
+                {'detail': 'lead_ids: At least one lead id is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        can_manage_locks = request.user.is_superuser or request.user.has_permission('leads.manage_lock')
+
+        candidates = list(
+            scoped_queryset(request.user, Lead.STATUS_ASSIGNED).filter(pk__in=lead_ids)
+        )
+        missing = len(lead_ids) - len(candidates)
+        if can_manage_locks:
+            reassignable = candidates
+            skipped_locked = 0
+        else:
+            reassignable = [lead for lead in candidates if not lead.is_locked]
+            skipped_locked = len(candidates) - len(reassignable)
+
+        if not reassignable:
+            return Response(
+                {'detail': 'None of the selected leads can be reassigned.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+        updated = []
+        for index, lead in enumerate(reassignable):
+            assignee = assigned_to[index % len(assigned_to)]
+            lead.assigned_to = assignee
+            lead.assigned_at = now
+            lead.tenant = request.user.company
+            lead.save(update_fields=['assigned_to', 'assigned_at', 'tenant', 'updated_at'])
+            updated.append(lead)
+
+        log_activity(
+            request.user,
+            request.user.company,
+            'reassigned leads',
+            f'{request.user.name} reassigned {len(updated)} lead(s) to {", ".join(assigned_to)}.',
+        )
+
+        return Response(
+            {
+                'reassigned': len(updated),
+                'skipped': missing + skipped_locked,
+                'skipped_locked': skipped_locked,
+                'assigned_to': assigned_to,
+                'leads': LeadSerializer(updated, many=True).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class ProposalTemplateListView(APIView):
     permission_classes = [IsAuthenticated]
 

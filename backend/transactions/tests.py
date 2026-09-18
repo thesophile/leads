@@ -190,6 +190,131 @@ class AssignLeadsToStaffTests(APITestCase):
         self.assertTrue(row['assignedAt'])
 
 
+class ReassignLeadsTests(APITestCase):
+    """Bulk reassign of assigned (tele-call) leads."""
+
+    def setUp(self):
+        company = make_company('Acme')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@acme.com', password='x', name='Manager A',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@acme.com', password='x', name='Staff A',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.target = User.objects.create_user(
+            email='target@acme.com', password='x', name='Target T',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.admin = User.objects.create_user(
+            email='super@acme.com', password='x', name='Big Admin', is_superuser=True,
+        )
+        self.viewer = User.objects.create_user(
+            email='viewer@acme.com', password='x', name='Viewer V',
+            role=company.roles.create(code='viewer', name='Viewer', permissions=[]),
+            company=company,
+        )
+        Lead.objects.filter(tenant__isnull=True).delete()
+        self.leads = []
+        for i in range(4):
+            self.leads.append(
+                make_raw_lead(
+                    company, f'Assigned {i}', status=Lead.STATUS_ASSIGNED,
+                    assigned_to='Staff A',
+                )
+            )
+
+    def lead_ids(self, leads=None):
+        return [lead.id for lead in (leads if leads is not None else self.leads)]
+
+    def test_staff_cannot_reassign(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': 'Target T', 'lead_ids': self.lead_ids(),
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_requires_lead_ids(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': 'Target T',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_manager_reassigns_selected_leads(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': 'Target T', 'lead_ids': self.lead_ids(),
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['reassigned'], 4)
+        self.assertEqual(resp.data['skipped'], 0)
+        self.assertEqual(
+            Lead.objects.filter(assigned_to='Target T', status='assigned').count(), 4
+        )
+
+    def test_reassign_to_multiple_staff_distributes_round_robin(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': ['Target T', 'Manager A'], 'lead_ids': self.lead_ids(),
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['reassigned'], 4)
+        self.assertEqual(
+            Lead.objects.filter(assigned_to='Target T', status='assigned').count(), 2
+        )
+        self.assertEqual(
+            Lead.objects.filter(assigned_to='Manager A', status='assigned').count(), 2
+        )
+
+    def test_manager_skips_locked_leads(self):
+        locked = self.leads[0]
+        locked.is_locked = True
+        locked.save(update_fields=['is_locked', 'updated_at'])
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': 'Target T', 'lead_ids': self.lead_ids(),
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['reassigned'], 3)
+        self.assertEqual(resp.data['skipped_locked'], 1)
+        locked.refresh_from_db()
+        self.assertEqual(locked.assigned_to, 'Staff A')
+
+    def test_admin_can_reassign_locked_leads(self):
+        locked = self.leads[0]
+        locked.is_locked = True
+        locked.save(update_fields=['is_locked', 'updated_at'])
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': 'Target T', 'lead_ids': self.lead_ids(),
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['reassigned'], 4)
+        locked.refresh_from_db()
+        self.assertEqual(locked.assigned_to, 'Target T')
+
+    def test_reassign_rejects_unknown_staff(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': ['Ghost User'], 'lead_ids': self.lead_ids(),
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_reassign_ignores_raw_and_quotation_leads(self):
+        raw = make_raw_lead(self.company, 'Raw Only')
+        quotation = make_raw_lead(self.company, 'Quote Only')
+        quotation.status = Lead.STATUS_QUOTATION
+        quotation.save(update_fields=['status', 'updated_at'])
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': 'Target T', 'lead_ids': [raw.id, quotation.id],
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+
 class BulkDeleteLeadsTests(APITestCase):
     """Raw-data bulk delete mirrors the per-lead delete permissions."""
 
