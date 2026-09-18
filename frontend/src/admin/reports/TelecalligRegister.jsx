@@ -167,6 +167,7 @@ export default function TelecalligRegister() {
         { key: 'company', label: 'Company', width: 'auto' },
         { key: 'number', label: 'Number', width: 75 },
         { key: 'location', label: 'Location', width: 'auto' },
+        { key: 'category', label: 'Category', width: 'auto' },
         ...(staff === 'All Staff' ? [{ key: 'staff', label: 'Staff', width: 'auto' }] : []),
         ...(status === 'All Status' ? [{ key: 'status', label: 'Status', width: 'auto' }] : []),
       ]
@@ -429,6 +430,7 @@ export default function TelecalligRegister() {
                   <th className="py-1.5 pr-4 font-bold">Company Name</th>
                   <th className="py-1.5 pr-3 font-bold">Number</th>
                   <th className="py-1.5 pr-3 font-bold">Location</th>
+                  <th className="py-1.5 pr-3 font-bold">Category</th>
                   <th className="py-1.5 pr-3 font-bold">Staff</th>
                   <th className="py-1.5 pr-2 font-bold">Status</th>
                 </tr>
@@ -453,6 +455,9 @@ export default function TelecalligRegister() {
                         <td className="py-1.5 pr-3 font-medium text-slate-700 print:text-black uppercase text-[11px]">
                           {row.location}
                         </td>
+                        <td className="py-1.5 pr-3 font-medium text-slate-700 print:text-black">
+                          {row.category || ''}
+                        </td>
                         <td className="py-1.5 pr-3 font-medium text-slate-800 print:text-black">
                           {row.staff}
                         </td>
@@ -476,7 +481,7 @@ export default function TelecalligRegister() {
                       </tr>
                       {row.remarks && (
                         <tr className="remarks-row print:hover:bg-transparent">
-                          <td colSpan={5} className="px-3 pb-2 text-[11px] italic text-slate-500 print:text-black break-words">
+                          <td colSpan={6} className="px-3 pb-2 text-[11px] italic text-slate-500 print:text-black break-words">
                             <span className="font-semibold print:text-black">Remarks: </span>
                             {row.remarks}
                           </td>
@@ -486,13 +491,13 @@ export default function TelecalligRegister() {
                   ))
                 ) : isLoading ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
                       Loading telecalling register…
                     </td>
                   </tr>
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
                       No telecalling register records found matching the selected filter criteria.
                     </td>
                   </tr>

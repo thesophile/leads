@@ -2542,7 +2542,7 @@ class LeadAssignView(APIView):
             lead.tenant = request.user.company
             lead.status = Lead.STATUS_ASSIGNED
             lead.call_status = 'Pending Call'
-            lead.remarks = 'Newly assigned from raw data.'
+            lead.remarks = ''
             lead.save(update_fields=[
                 'assigned_to', 'assigned_at', 'tenant', 'status', 'call_status', 'remarks', 'updated_at',
             ])
