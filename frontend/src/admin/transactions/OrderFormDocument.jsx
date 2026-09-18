@@ -3,7 +3,10 @@ import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
-import { wrappableHtml } from './orderFormDocumentUtils'
+import { wrappableHtml, limitRichHtml } from './orderFormDocumentUtils'
+
+const ORDER_SUMMARY_MAX_CHARS = 550
+const TERMS_SUMMARY_MAX_CHARS = 550
 
 function QRCodeVisual({ value }) {
   return (
@@ -266,17 +269,10 @@ export default function OrderFormDocument({ order }) {
                   ref={summaryContentRef}
                   className="space-y-1.5 text-[13px] leading-relaxed text-black"
                   style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
-                  dangerouslySetInnerHTML={{ __html: wrappableHtml(order.orderSummaryHtml) }}
+                  dangerouslySetInnerHTML={{
+                    __html: limitRichHtml(wrappableHtml(order.orderSummaryHtml), ORDER_SUMMARY_MAX_CHARS),
+                  }}
                 />
-                {summaryPaged.part2Html ? (
-                  <p className="mt-2 text-right text-[10.5px] font-bold text-slate-500">
-                    --- Continued ---
-                  </p>
-                ) : (
-                  <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
-                    --- Continued ---
-                  </p>
-                )}
               </SectionBox>
 
               <FinancialBanner order={order} />
@@ -289,17 +285,10 @@ export default function OrderFormDocument({ order }) {
                   ref={termsSummaryContentRef}
                   className="space-y-1.5 text-[11px] leading-relaxed text-slate-700"
                   style={termsSummaryPaged.cap ? { maxHeight: termsSummaryPaged.cap, overflow: 'hidden' } : undefined}
-                  dangerouslySetInnerHTML={{ __html: wrappableHtml(order.termsSummaryHtml) }}
+                  dangerouslySetInnerHTML={{
+                    __html: limitRichHtml(wrappableHtml(order.termsSummaryHtml), TERMS_SUMMARY_MAX_CHARS),
+                  }}
                 />
-                {termsSummaryPaged.part2Html ? (
-                  <p className="mt-2 text-right text-[10.5px] font-bold text-slate-500">
-                    --- Continued ---
-                  </p>
-                ) : (
-                  <p className="mt-auto pt-2 text-center text-[10.5px] font-bold text-slate-500">
-                    --- Detailed continued in Page 2 ---
-                  </p>
-                )}
               </SectionBox>
             </div>
           </div>

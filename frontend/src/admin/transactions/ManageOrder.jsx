@@ -7,6 +7,7 @@ import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
+import { limitRichHtml, richTextCharCount } from './orderFormDocumentUtils'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
 import SendToClientModal from './SendToClientModal'
@@ -54,6 +55,8 @@ const QUILL_FORMATS = [
   'link',
   'blockquote',
 ]
+
+const ORDER_SUMMARY_MAX_CHARS = 550
 
 function EyeIcon({ className = 'h-3.5 w-3.5' }) {
   return (
@@ -358,6 +361,12 @@ export default function ManageOrder() {
   async function handleSubmitOrder(e) {
     e.preventDefault()
     if (savingOrder) return
+    if (richTextCharCount(orderSummaryHtml) > ORDER_SUMMARY_MAX_CHARS) {
+      setSubmitMessage(
+        `Character limit exceeded — Order Summary must be ${ORDER_SUMMARY_MAX_CHARS.toLocaleString()} characters or fewer.`,
+      )
+      return
+    }
     setSavingOrder(true)
     try {
       if (editingOrderId) {
@@ -1008,11 +1017,32 @@ export default function ManageOrder() {
                     theme="snow"
                     className="quill-tall"
                     value={orderSummaryHtml}
-                    onChange={setOrderSummaryHtml}
+                    onChange={(value) => {
+                      setOrderSummaryHtml(
+                        richTextCharCount(value) > ORDER_SUMMARY_MAX_CHARS
+                          ? limitRichHtml(value, ORDER_SUMMARY_MAX_CHARS)
+                          : value,
+                      )
+                    }}
                     modules={QUILL_MODULES}
                     formats={QUILL_FORMATS}
                     placeholder="Enter order summary, domain/server registration, and key deliverables..."
                   />
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <p className="text-[10px] font-semibold text-slate-400">
+                    Maximum {ORDER_SUMMARY_MAX_CHARS.toLocaleString()} characters
+                  </p>
+                  <p
+                    className={`font-mono text-[10px] ${
+                      richTextCharCount(orderSummaryHtml) >= ORDER_SUMMARY_MAX_CHARS
+                        ? 'font-bold text-rose-600'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    {richTextCharCount(orderSummaryHtml).toLocaleString()} /{' '}
+                    {ORDER_SUMMARY_MAX_CHARS.toLocaleString()}
+                  </p>
                 </div>
               </div>
 
