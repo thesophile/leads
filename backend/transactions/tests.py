@@ -190,6 +190,77 @@ class AssignLeadsToStaffTests(APITestCase):
         self.assertTrue(row['assignedAt'])
 
 
+class BulkDeleteLeadsTests(APITestCase):
+    """Raw-data bulk delete mirrors the per-lead delete permissions."""
+
+    def setUp(self):
+        company = make_company('Acme')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@acme.com', password='x', name='Manager A',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@acme.com', password='x', name='Staff A',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.admin = User.objects.create_user(
+            email='super@acme.com', password='x', name='Big Admin', is_superuser=True,
+        )
+        self.viewer = User.objects.create_user(
+            email='viewer@acme.com', password='x', name='Viewer V',
+            role=company.roles.create(code='viewer', name='Viewer', permissions=[]),
+            company=company,
+        )
+        Lead.objects.filter(tenant__isnull=True).delete()
+        self.own = make_raw_lead(company, 'Own Lead', added_by='Manager A')
+        self.other = make_raw_lead(company, 'Other Lead', added_by='Staff A')
+
+    def test_requires_delete_permission(self):
+        self.client.force_authenticate(self.viewer)
+        resp = self.client.post('/api/transactions/leads/bulk-delete/', {
+            'lead_ids': [self.own.id, self.other.id],
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_requires_lead_ids(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/bulk-delete/', {}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_manager_only_deletes_own_leads(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/bulk-delete/', {
+            'lead_ids': [self.own.id, self.other.id],
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['deleted'], 1)
+        self.assertEqual(resp.data['skipped'], 1)
+        self.assertFalse(Lead.objects.filter(pk=self.own.id).exists())
+        self.assertTrue(Lead.objects.filter(pk=self.other.id).exists())
+
+    def test_admin_deletes_all_selected_leads(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/transactions/leads/bulk-delete/', {
+            'lead_ids': [self.own.id, self.other.id],
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['deleted'], 2)
+        self.assertEqual(resp.data['skipped'], 0)
+        self.assertFalse(Lead.objects.filter(pk__in=[self.own.id, self.other.id]).exists())
+
+    def test_staff_with_delete_can_bulk_delete_own_entries(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post('/api/transactions/leads/bulk-delete/', {
+            'lead_ids': [self.other.id, self.own.id],
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['deleted'], 1)
+        self.assertEqual(resp.data['skipped'], 1)
+        self.assertFalse(Lead.objects.filter(pk=self.other.id).exists())
+        self.assertTrue(Lead.objects.filter(pk=self.own.id).exists())
+
+
 class LeadVisibilityTests(APITestCase):
     def setUp(self):
         company = make_company('Acme')

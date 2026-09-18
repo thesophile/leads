@@ -2392,6 +2392,67 @@ class ClientQuotationResponseView(APIView):
         return Response(public_quotation_payload(quotation))
 
 
+class LeadBulkDeleteView(APIView):
+    """Permanently delete several raw leads in one request.
+
+    Mirrors the per-lead delete permission: ``leads.delete`` lets a user delete
+    their own entries, ``leads.delete_all`` lets them delete any lead. Leads the
+    user is not allowed to delete are skipped (reported back, never silently
+    dropped from the response count).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        has_own_delete = user.has_permission('leads.delete')
+        has_all_delete = user.has_permission('leads.delete_all')
+        if not has_own_delete and not has_all_delete:
+            return Response(
+                {'detail': 'You do not have permission to delete leads.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        lead_ids_raw = request.data.get('lead_ids')
+        if isinstance(lead_ids_raw, str):
+            try:
+                lead_ids_raw = json.loads(lead_ids_raw)
+            except (TypeError, ValueError):
+                lead_ids_raw = [lead_ids_raw]
+        lead_ids = [str(i).strip() for i in (lead_ids_raw or []) if str(i).strip()]
+        if not lead_ids:
+            return Response(
+                {'detail': 'lead_ids: At least one lead id is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        candidates = list(
+            scoped_queryset(user, Lead.STATUS_RAW).filter(pk__in=lead_ids)
+        )
+        deletable = [
+            lead
+            for lead in candidates
+            if (has_own_delete and lead.added_by == user.name) or has_all_delete
+        ]
+
+        for lead in deletable:
+            lead.delete()
+        deleted = len(deletable)
+        skipped = len(candidates) - deleted
+
+        if deleted:
+            log_activity(
+                user,
+                user.company,
+                'deleted leads',
+                f'{user.name} permanently deleted {deleted} lead(s).',
+            )
+
+        return Response(
+            {'deleted': deleted, 'skipped': skipped, 'total': len(lead_ids)}
+        )
+
+
 class LeadAssignView(APIView):
     permission_classes = [IsAuthenticated]
 

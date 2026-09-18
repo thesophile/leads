@@ -384,11 +384,14 @@ export default function RawData() {
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteModalId, setDeleteModalId] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false)
+  const [deletingSelected, setDeletingSelected] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [duplicateRecord, setDuplicateRecord] = useState(null)
 
   const canAssignLeads = !!user && (can(user, 'leads.assign') || user.is_superuser)
+  const canDeleteLeads = !!user && (can(user, 'leads.delete') || can(user, 'leads.delete_all'))
 
   const [assignableStaff, setAssignableStaff] = useState([])
   const employeeNames = isManager ? assignableStaff.map((s) => s.name) : []
@@ -827,6 +830,32 @@ async function handleBulkImport(e) {
       setError(err.message)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function confirmDeleteSelected() {
+    if (deletingSelected) return
+    setError('')
+    setDeletingSelected(true)
+    try {
+      const res = await api.post('/transactions/leads/bulk-delete/', {
+        lead_ids: [...selectedIds],
+      })
+      const skipped = res?.skipped ?? 0
+      if (skipped > 0) {
+        setError(
+          `${res?.deleted ?? 0} lead(s) deleted. ${skipped} skipped — you do not have permission to delete them.`
+        )
+      } else {
+        showToast(`${res?.deleted ?? 0} raw data deleted.`)
+      }
+      setDeleteSelectedOpen(false)
+      setSelectedIds(new Set())
+      await refreshData()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingSelected(false)
     }
   }
 
@@ -1336,7 +1365,23 @@ async function handleBulkImport(e) {
                   <CloseIcon className="h-3 w-3" />
                   Clear
                 </button>
-              </div>
+</div>
+              <div className="flex items-center gap-2">
+                {canDeleteLeads && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteSelectedOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-rose-600/20 transition hover:bg-rose-700 active:scale-[0.98] cursor-pointer"
+                >
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                  <span>Delete Selected</span>
+                </button>
+              )}
               {canAssignLeads && (
                 <button
                   type="button"
@@ -1347,6 +1392,7 @@ async function handleBulkImport(e) {
                   <span>Assign Selected</span>
                 </button>
               )}
+              </div>
             </div>
               </div>
             </div>
@@ -2423,6 +2469,19 @@ async function handleBulkImport(e) {
           </div>
         </div>
       )}
+
+      {/* Delete Selected Confirmation */}
+      <ConfirmDialog
+        open={deleteSelectedOpen}
+        title="Delete Selected"
+        message={`${selectedIds.size} lead(s) will be permanently deleted. Proceed?`}
+        cancelLabel="Cancel"
+        confirmLabel="Delete"
+        saving={deletingSelected}
+        savingLabel="Deleting…"
+        onCancel={() => setDeleteSelectedOpen(false)}
+        onConfirm={confirmDeleteSelected}
+      />
 
       {/* Discard Changes Confirms */}
       <ConfirmDialog
