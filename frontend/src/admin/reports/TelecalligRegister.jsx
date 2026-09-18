@@ -426,9 +426,9 @@ export default function TelecalligRegister() {
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-bold text-[11px] print:border-black print:text-black">
                   <th className="py-1.5 pr-3 font-bold">Assigned Date</th>
-                  <th className="py-1.5 pr-3 font-bold">Last Called Date</th>
+                  <th className="py-1.5 pr-3 font-bold">Last Called</th>
                   <th className="py-1.5 pr-4 font-bold">Company Name</th>
-                  <th className="py-1.5 pr-3 font-bold">Number</th>
+                  <th className="py-1.5 pr-3 font-bold">Phone</th>
                   <th className="py-1.5 pr-3 font-bold">Location</th>
                   <th className="py-1.5 pr-3 font-bold">Category</th>
                   <th className="py-1.5 pr-3 font-bold">Staff</th>
