@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import Layout from '../../Layout/Layout'
@@ -8,7 +8,7 @@ import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
-import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
+import usePagedList, { useDebouncedValue, fetchAllPaged } from '../../utils/usePagedList'
 
 function PlusIcon() {
   return (
@@ -987,6 +987,46 @@ async function handleBulkImport(e) {
     })
   }
 
+  // Header "select all on this page" checkbox state.
+  const pageIds = rawDataList.map((item) => item.id)
+  const pageSelectedCount = pageIds.filter((id) => selectedIds.has(id)).length
+  const allPageSelected = rawDataList.length > 0 && pageSelectedCount === rawDataList.length
+  const somePageSelected = pageSelectedCount > 0 && !allPageSelected
+  const headerCheckboxRef = useRef(null)
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = somePageSelected
+    }
+  }, [somePageSelected])
+
+  function toggleSelectPage() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of pageIds) {
+        if (allPageSelected) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }
+
+  // Select every record matching the current filters, across all pages.
+  async function selectAllRecords() {
+    setError('')
+    try {
+      const all = await fetchAllPaged('/transactions/leads/', listParams, 500)
+      const ids = all.map((item) => item.id).filter(Boolean)
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of ids) next.add(id)
+        return next
+      })
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   const hasActiveFilters =
     selectedStaff !== defaultStaffFilter ||
     selectedSource !== 'All Sources' ||
@@ -1279,6 +1319,15 @@ async function handleBulkImport(e) {
                   </span>
                   {selectedIds.size} selected
                 </span>
+                {selectedIds.size < totalCount && (
+                  <button
+                    type="button"
+                    onClick={selectAllRecords}
+                    className="flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-brand-700 transition hover:text-brand-800 hover:underline cursor-pointer"
+                  >
+                    Select all {totalCount} records?
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setSelectedIds(new Set())}
@@ -1308,7 +1357,19 @@ async function handleBulkImport(e) {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-black text-slate-800 font-bold uppercase tracking-wider text-[11px]">
-                  <th className="pb-2 font-semibold w-8 pr-2" aria-hidden="true"></th>
+                  <th className="pb-2 font-semibold w-8 pr-2">
+                    <label className="flex cursor-pointer items-center justify-center px-3 -mx-3 -my-2 py-2">
+                      <input
+                        type="checkbox"
+                        ref={headerCheckboxRef}
+                        checked={allPageSelected}
+                        onChange={toggleSelectPage}
+                        aria-label="Select all records on this page"
+                        title="Select all on this page"
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                      />
+                    </label>
+                  </th>
                   <th className="pb-2 font-semibold w-64">Company Name</th>
                   <th className="pb-2 font-semibold w-44">Contact Person</th>
                   <th className="pb-2 font-semibold w-32">Mobile</th>
