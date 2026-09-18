@@ -74,8 +74,8 @@ const MENU_BASE = [
     id: 'reports',
     label: 'Reports',
     items: [
-      { id: 'raw-data-register', label: 'Raw Data Register', path: '/raw-data-register', perm: 'reports.view' },
-      { id: 'telecalling-register', label: 'Telecalling Register', path: '/telecalling-register', perm: 'reports.view' },
+      { id: 'raw-data-register', label: 'Raw Data Register', path: '/raw-data-register', perm: 'leads.view' },
+      { id: 'telecalling-register', label: 'Telecalling Register', path: '/telecalling-register', perm: 'telecall.view' },
       { id: 'quotation-submitted-register', label: 'Quotation Submitted Register', path: '/quotation-submitted-register', perm: 'reports.view' },
       { id: 'order-received-register', label: 'Converted Clients Register', path: '/order-received-register', perm: 'reports.view' },
     ],

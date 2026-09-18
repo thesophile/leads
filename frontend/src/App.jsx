@@ -62,8 +62,8 @@ function App() {
         <Route path="/orders" element={guard(<ManageOrder />, { perm: 'order.view' })} />
         <Route path="/orders/preview/:id" element={guard(<OrderPreview />, { perm: 'order.view' })} />
         <Route path="/client-details" element={guard(<ClientDetails />, { perm: 'client.view' })} />
-        <Route path="/raw-data-register" element={guard(<RawDataRegister />, { perm: 'reports.view' })} />
-        <Route path="/telecalling-register" element={guard(<TelecalligRegister />, { perm: 'reports.view' })} />
+        <Route path="/raw-data-register" element={guard(<RawDataRegister />, { perm: 'leads.view' })} />
+        <Route path="/telecalling-register" element={guard(<TelecalligRegister />, { perm: 'telecall.view' })} />
         <Route path="/quotation-submitted-register" element={guard(<QuotationRegister />, { perm: 'reports.view' })} />
         <Route path="/order-received-register" element={guard(<OrderReceived />, { perm: 'reports.view' })} />
         <Route path="/settings" element={guard(<Settings />, { perm: 'company.view' })} />
