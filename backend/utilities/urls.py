@@ -11,9 +11,11 @@ from .views import (
     StaffTargetBulkAdjustView,
     StaffTargetDetailView,
     StaffTargetListCreateView,
+    VersionView,
 )
 
 urlpatterns = [
+    path('version/', VersionView.as_view(), name='version'),
     path('activity/', ActivityLogListView.as_view(), name='activity-list'),
     path('backup/export/', BackupExportView.as_view(), name='backup-export'),
     path('backup/restore/', BackupRestoreView.as_view(), name='backup-restore'),

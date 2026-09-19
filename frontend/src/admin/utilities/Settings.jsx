@@ -7,6 +7,7 @@ import 'react-quill-new/dist/quill.snow.css'
 import Spinner from '../../components/Spinner'
 import { downloadBackup, restoreBackup } from '../../utils/backup'
 import { useAuth } from '../../context/auth-context'
+import { APP_MAJOR_VERSION, FRONTEND_VERSION } from '../../config'
 
 const LOGO_TARGET_WIDTH = 400
 const LOGO_TARGET_HEIGHT = 160
@@ -114,6 +115,16 @@ function CheckIcon({ className = 'h-4 w-4' }) {
   )
 }
 
+function InfoIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  )
+}
+
 function FileTextIcon({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -214,6 +225,7 @@ const TABS = [
   { id: 'general', label: 'General & Finance', icon: BuildingIcon },
   { id: 'templates', label: 'Templates', icon: FileTextIcon },
   { id: 'backup', label: 'Backup & Logs', icon: DatabaseIcon },
+  { id: 'about', label: 'About', icon: InfoIcon },
 ]
 
 const inputClass =
@@ -323,6 +335,8 @@ export default function Settings() {
   const [gstNo, setGstNo] = useState('')
   const [currency, setCurrency] = useState('INR (₹)')
   const [defaultBank, setDefaultBank] = useState('')
+  const [backendVersion, setBackendVersion] = useState('')
+  const [versionLoading, setVersionLoading] = useState(false)
 
   const [targetStaffName, setTargetStaffName] = useState('')
   const [targetStaffRole, setTargetStaffRole] = useState('')
@@ -399,6 +413,25 @@ export default function Settings() {
     }, 0)
     return () => clearTimeout(timer)
   }, [activeTab, selectedMonth, selectedYear])
+
+  useEffect(() => {
+    if (activeTab !== 'about') return
+    let cancelled = false
+    ;(async () => {
+      setVersionLoading(true)
+      try {
+        const data = await api.get('/version/')
+        if (!cancelled) setBackendVersion(data?.backend || '')
+      } catch {
+        if (!cancelled) setBackendVersion('')
+      } finally {
+        if (!cancelled) setVersionLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab])
 
   useEffect(() => {
     if (activeTab !== 'backup') return
@@ -1273,6 +1306,50 @@ export default function Settings() {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'about' && (
+          <div className="max-w-3xl space-y-6">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                  <InfoIcon className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">About</h2>
+                  <p className="mt-0.5 text-[11px] text-slate-400">Application details and credits</p>
+                </div>
+              </div>
+              <div className="px-6 py-6 md:px-8">
+                <div className="mb-6">
+                  <h3 className="text-base font-bold text-slate-900 mb-1">Leads Management System</h3>
+                  <p className="text-sm text-slate-500">Your trusted platform for lead tracking and management.</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 mb-6">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Version</p>
+                  <p className="mt-1 text-lg font-bold font-mono text-slate-900">
+                    {versionLoading ? '…' : `${APP_MAJOR_VERSION}.${FRONTEND_VERSION}.${backendVersion || '…'}`}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">
+                      Frontend
+                      <span className="font-mono text-slate-700">{APP_MAJOR_VERSION}.{FRONTEND_VERSION}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">
+                      Backend
+                      <span className="font-mono text-slate-700">{versionLoading ? '…' : backendVersion}</span>
+                    </span>
+                  </div>
+                </div>
+                <div className="border-t border-slate-200 pt-6">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+                    <span className="h-4 w-1 rounded-full bg-brand-500 mr-2 inline-block" />
+                    Credits
+                  </h3>
+                  <p className="text-sm text-slate-600">Developed by Programers</p>
+                </div>
               </div>
             </div>
           </div>

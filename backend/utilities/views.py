@@ -7,6 +7,7 @@ from datetime import date
 from io import StringIO
 
 from django.apps import apps
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
@@ -80,6 +81,22 @@ def _ensure_content_types(objects):
 
 def _cleanup_content_types(ids):
     ContentType.objects.filter(id__in=ids).delete()
+
+
+class VersionView(APIView):
+    """The backend build version, read from Django settings.
+
+    Combined on the frontend with the frontend build version (from the
+    frontend config) to show the full app version on the About screen.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({
+            'major': getattr(settings, 'APP_MAJOR_VERSION', ''),
+            'backend': getattr(settings, 'BACKEND_VERSION', ''),
+        })
 
 
 class NotificationListView(APIView):
