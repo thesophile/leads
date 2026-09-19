@@ -176,6 +176,18 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Check a single permission key (company-scoped role permissions)."""
         return bool(self.is_superuser or key in self.get_permissions())
 
+    def has_perm(self, perm, obj=None):
+        """Delegate to has_permission for Django's auth system compatibility.
+
+        This ensures Django's ModelBackend and any code calling has_perm()
+        works with the custom RBAC permission keys (e.g. 'leads.create').
+        """
+        return self.has_permission(perm)
+
+    def has_module_perms(self, app_label):
+        """Delegate to is_superuser check for Django's auth system compatibility."""
+        return self.is_superuser
+
     @property
     def permissions(self):
         return sorted(self.get_permissions())
