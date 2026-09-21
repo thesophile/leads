@@ -6,6 +6,7 @@ import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Spinner from '../../components/Spinner'
 import { downloadBackup, restoreBackup } from '../../utils/backup'
+import { limitRichHtml, richTextCharCount } from '../transactions/orderFormDocumentUtils'
 import { useAuth } from '../../context/auth-context'
 import { APP_MAJOR_VERSION, FRONTEND_VERSION } from '../../config'
 
@@ -65,6 +66,8 @@ const QUILL_FORMATS = [
   'link',
   'blockquote',
 ]
+
+const TERMS_SUMMARY_MAX_CHARS = 550
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -1181,11 +1184,32 @@ export default function Settings() {
                       theme="snow"
                       className="quill-tall"
                       value={termsSummaryHtml}
-                      onChange={setTermsSummaryHtml}
+                      onChange={(value) => {
+                        setTermsSummaryHtml(
+                          richTextCharCount(value) > TERMS_SUMMARY_MAX_CHARS
+                            ? limitRichHtml(value, TERMS_SUMMARY_MAX_CHARS)
+                            : value,
+                        )
+                      }}
                       modules={QUILL_MODULES}
                       formats={QUILL_FORMATS}
                       placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
                     />
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <p className="text-[10px] font-semibold text-slate-400">
+                      Maximum {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} characters
+                    </p>
+                    <p
+                      className={`font-mono text-[10px] ${
+                        richTextCharCount(termsSummaryHtml) >= TERMS_SUMMARY_MAX_CHARS
+                          ? 'font-bold text-rose-600'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {richTextCharCount(termsSummaryHtml).toLocaleString()} /{' '}
+                      {TERMS_SUMMARY_MAX_CHARS.toLocaleString()}
+                    </p>
                   </div>
                 </div>
 
