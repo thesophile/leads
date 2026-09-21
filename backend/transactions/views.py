@@ -706,9 +706,22 @@ class LeadListView(APIView):
             return duplicate_response(existing)
         category = request.data.get('category', '').strip()
         source = request.data.get('source', '').strip()
+<<<<<<< HEAD
         invalid = validate_master_values(request.user.company, category, source)
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
+=======
+        if category:
+            Category.objects.get_or_create(
+                company=request.user.company, name=category,
+                defaults={'code': f'CT-{hashlib.md5(category.encode()).hexdigest()[:6]}'},
+            )
+        if source:
+            Source.objects.get_or_create(
+                company=request.user.company, name=source,
+                defaults={'code': f'SR-{hashlib.md5(source.encode()).hexdigest()[:6]}'},
+            )
+>>>>>>> rawdata/import
         phone = request.data.get('phone', '').strip()
         lead_date = date.today()
         saved = None

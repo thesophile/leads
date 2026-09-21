@@ -162,10 +162,20 @@ function csvRowsToLeads(text, master = {}) {
     }
     return -1
   }
+<<<<<<< HEAD
   const colByKey = {}
   for (const col of REQUIRED_IMPORT_COLUMNS) {
     colByKey[col.key] = findCol(...col.aliases)
   }
+=======
+  const colCompany = findCol('Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name')
+  const colContact = findCol('Contact Person', 'Contact Name', 'Contact', 'Name')
+  const colPhone = findCol('Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number')
+  const colEmail = findCol('Email', 'Email Address', 'Mail')
+  const colCategory = findCol('Category', 'Business Type', 'Segmentation')
+  const colSource = findCol('Lead Source', 'Source', 'Source Name')
+  const colCity = findCol('City', 'Location', 'City / Location', 'Region')
+>>>>>>> rawdata/import
 
   // CSV structure check: only mandatory columns (e.g. Company Name) must exist as CSV headers.
   const missingColumns = REQUIRED_IMPORT_COLUMNS.filter((c) => c.required && colByKey[c.key] < 0).map((c) => c.label)
