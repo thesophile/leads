@@ -1,5 +1,5 @@
 
-## INstallation
+## Installation
 
 ```
 venv\Scripts\activate
@@ -13,7 +13,7 @@ Backend
 $env:ENV = "dev"
 cd ~\Desktop\Codebase\leads\backend
 venv\Scripts\activate
-Python manage.py runserver
+Python manage.py runserver 8002
 ```
 
 frontend
