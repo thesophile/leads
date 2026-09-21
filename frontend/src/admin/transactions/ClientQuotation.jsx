@@ -290,7 +290,7 @@ export default function ClientQuotation() {
                 <div className="overflow-hidden rounded-xl border border-slate-300">
                   <div className="bg-black px-3 py-2">
                     <span className="text-[12px] font-bold uppercase tracking-wider text-white">
-                      Scope & Deliverables
+                      Proposal Summary
                     </span>
                   </div>
                   <div

@@ -323,7 +323,7 @@ def render_quotation_pdf(quotation):
         elements.append(Spacer(1, 8))
         elements.append(financial)
 
-        # Scope & deliverables.
+        # Proposal Summary.
         scope_markup = html_to_pdf_markup(quotation.proposal_scope)
         if scope_markup:
             elements.append(Paragraph('SCOPE &amp; DELIVERABLES', pdf_styles.section))

@@ -984,7 +984,7 @@ export default function Managequotation() {
     const stripHtml = (html) => (html ? String(html).replace(/<[^>]*>/g, '').trim() : '')
     const rules = [
       { key: 'customerPerson', label: 'Client Name', value: customerPerson.trim() },
-      { key: 'scopeHtml', label: 'Scope & Deliverables', value: stripHtml(scopeHtml) },
+      { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) },
       { key: 'termsHtml', label: 'Proposal in Detail', value: stripHtml(termsHtml) },
       { key: 'totalVal', label: 'Total', value: totalVal.trim() },
     ]
@@ -992,7 +992,7 @@ export default function Managequotation() {
       if (!value) errors[key] = `${label} is required`
     })
     if (stripHtmlText(scopeHtml).length > SCOPE_MAX_CHARS) {
-      errors.scopeHtml = `Scope & Deliverables must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer`
+      errors.scopeHtml = `Proposal Summary must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer`
     }
     return errors
   }
@@ -1005,7 +1005,7 @@ export default function Managequotation() {
     setValidationErrors(errors)
     if (stripHtmlText(scopeHtml).length > SCOPE_MAX_CHARS) {
       showToast(
-        `Character limit exceeded — Scope & Deliverables must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer.`,
+        `Character limit exceeded — Proposal Summary must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer.`,
         'error',
       )
       return
@@ -2125,10 +2125,10 @@ export default function Managequotation() {
                 </div>
               </div>
 
-              {/* Rich Text Editor 1 - Proposal Scope & Deliverables */}
+              {/* Rich Text Editor 1 - Proposal Proposal Summary */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Scope &amp; Deliverables
+                  Proposal Summary
                 </label>
                 <div className={`rounded-lg border overflow-hidden bg-white shadow-2xs ${validationErrors.scopeHtml ? 'border-rose-400' : 'border-slate-300'}`}>
                   <ReactQuill
