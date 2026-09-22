@@ -36,7 +36,8 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
-const SCOPE_MAX_CHARS = 1000
+const SCOPE_MAX_CHARS = 800
+const SCOPE_MAX_LINES = 30
 
 const BLOCKED_PREFIXES = new Set([
   'ASS', 'BIT', 'CUM', 'DAM', 'DIC', 'FAG', 'FUC', 'GAY', 'JAP',
@@ -109,6 +110,58 @@ const clampRichHtml = (html, limit) => {
       if (n.parentNode) n.parentNode.removeChild(n)
     }
   }
+  return div.innerHTML
+}
+
+const RICH_LINE_BLOCKS = new Set([
+  'P',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'LI',
+  'BLOCKQUOTE',
+])
+
+function richBlockLines(el) {
+  const tag = el.tagName
+  if (tag === 'UL' || tag === 'OL') return Math.max(1, el.querySelectorAll('li').length)
+  if (!RICH_LINE_BLOCKS.has(tag)) return 0
+  const hasText = el.textContent.replace(/\u200b/g, '').trim().length > 0
+  return hasText ? el.querySelectorAll('br').length + 1 : 1
+}
+
+const countRichLines = (html) => {
+  const div = document.createElement('div')
+  div.innerHTML = html || ''
+  let total = 0
+  const walk = (el) => {
+    Array.from(el.children).forEach((child) => {
+      const lines = richBlockLines(child)
+      if (lines > 0) total += lines
+      else walk(child)
+    })
+  }
+  walk(div)
+  return total
+}
+
+const clampRichLines = (html, limit) => {
+  const div = document.createElement('div')
+  div.innerHTML = html || ''
+  let count = 0
+  Array.from(div.children).forEach((child) => {
+    const lines = richBlockLines(child)
+    if (lines > 0) {
+      if (count + lines > limit) {
+        if (child.parentNode) child.parentNode.removeChild(child)
+      } else {
+        count += lines
+      }
+    }
+  })
   return div.innerHTML
 }
 
@@ -994,6 +1047,9 @@ export default function Managequotation() {
     if (stripHtmlText(scopeHtml).length > SCOPE_MAX_CHARS) {
       errors.scopeHtml = `Proposal Summary must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer`
     }
+    if (countRichLines(scopeHtml) > SCOPE_MAX_LINES) {
+      errors.scopeHtml = `Proposal Summary must be ${SCOPE_MAX_LINES} lines or fewer`
+    }
     return errors
   }
 
@@ -1006,6 +1062,13 @@ export default function Managequotation() {
     if (stripHtmlText(scopeHtml).length > SCOPE_MAX_CHARS) {
       showToast(
         `Character limit exceeded — Proposal Summary must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer.`,
+        'error',
+      )
+      return
+    }
+    if (countRichLines(scopeHtml) > SCOPE_MAX_LINES) {
+      showToast(
+        `Line limit exceeded — Proposal Summary must be ${SCOPE_MAX_LINES} lines or fewer.`,
         'error',
       )
       return
@@ -2136,11 +2199,14 @@ export default function Managequotation() {
                     className="quill-tall"
                     value={scopeHtml}
                     onChange={(value) => {
-                      setScopeHtml(
-                        stripHtmlText(value).length > SCOPE_MAX_CHARS
-                          ? clampRichHtml(value, SCOPE_MAX_CHARS)
-                          : value,
-                      )
+                      let next = value
+                      if (stripHtmlText(next).length > SCOPE_MAX_CHARS) {
+                        next = clampRichHtml(next, SCOPE_MAX_CHARS)
+                      }
+                      if (countRichLines(next) > SCOPE_MAX_LINES) {
+                        next = clampRichLines(next, SCOPE_MAX_LINES)
+                      }
+                      setScopeHtml(next)
                       clearError('scopeHtml')
                     }}
                     modules={QUILL_MODULES}
@@ -2153,18 +2219,30 @@ export default function Managequotation() {
                     {validationErrors.scopeHtml ? (
                       <span className="text-rose-600">{validationErrors.scopeHtml}</span>
                     ) : (
-                      `Maximum ${SCOPE_MAX_CHARS.toLocaleString()} characters`
+                      `Maximum ${SCOPE_MAX_LINES} lines, ${SCOPE_MAX_CHARS.toLocaleString()} characters`
                     )}
                   </p>
-                  <p
-                    className={`font-mono text-[10px] ${
-                      stripHtmlText(scopeHtml).length >= SCOPE_MAX_CHARS
-                        ? 'font-bold text-rose-600'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {stripHtmlText(scopeHtml).length.toLocaleString()} /{' '}
-                    {SCOPE_MAX_CHARS.toLocaleString()}
+                  <p className="font-mono text-[10px] text-slate-400">
+                    <span
+                      className={
+                        countRichLines(scopeHtml) >= SCOPE_MAX_LINES
+                          ? 'font-bold text-rose-600'
+                          : ''
+                      }
+                    >
+                      {countRichLines(scopeHtml)} / {SCOPE_MAX_LINES} lines
+                    </span>
+                    <span className="mx-1 text-slate-300">|</span>
+                    <span
+                      className={
+                        stripHtmlText(scopeHtml).length >= SCOPE_MAX_CHARS
+                          ? 'font-bold text-rose-600'
+                          : ''
+                      }
+                    >
+                      {stripHtmlText(scopeHtml).length.toLocaleString()} /{' '}
+                      {SCOPE_MAX_CHARS.toLocaleString()} chars
+                    </span>
                   </p>
                 </div>
               </div>

@@ -67,11 +67,19 @@ def html_to_pdf_markup(html):
     text = text.replace('&#x27;', "'")
     text = text.replace('&#39;', "'")
 
+    # Blank paragraphs (with or without an inner <br>) become a single line
+    # break so the empty-line spacing survives in the PDF.
+    text = re.sub(r'<p[^>]*>\s*(?:<br\s*/?>)?\s*</p>', '<br/>', text)
+
     def repl(match):
         closing = match.group(1)
         tag = match.group(2).lower()
         if tag == 'br':
             return '<br/>'
+        if tag == 'p':
+            # Reportlab renders consecutive <p> blocks on the same line unless
+            # broken explicitly, so end each paragraph with a line break.
+            return '<br/>' if closing else ''
         if tag in KEEP:
             return f'<{closing}{tag}>'
         if tag in ('div', 'section', 'article', 'table', 'tr'):
@@ -84,8 +92,9 @@ def html_to_pdf_markup(html):
         return ''
 
     text = re.sub(r'<(/?)([a-zA-Z0-9]+)(\s[^<>]*?)?(/)?>', repl, text)
-    text = re.sub(r'<p>\s*</p>', '<br/>', text)
     text = re.sub(r'\s{2,}', ' ', text).strip()
+    # Drop any trailing break so the section does not end on a stray blank line.
+    text = re.sub(r'(?:<br/>)+\s*$', '', text)
     return text
 
 

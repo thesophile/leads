@@ -11,7 +11,9 @@ function stripHtml(html) {
 }
 
 function wrappableHtml(html) {
-  return String(html || '').replace(/&nbsp;/gi, ' ')
+  return String(html || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/<p(?:\s[^>]*)?>\s*(?:<br\s*\/?>)?\s*<\/p>/gi, '<p><br></p>')
 }
 
 function currencySymbol(raw) {
