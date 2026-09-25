@@ -706,22 +706,9 @@ class LeadListView(APIView):
             return duplicate_response(existing)
         category = request.data.get('category', '').strip()
         source = request.data.get('source', '').strip()
-<<<<<<< HEAD
         invalid = validate_master_values(request.user.company, category, source)
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
-=======
-        if category:
-            Category.objects.get_or_create(
-                company=request.user.company, name=category,
-                defaults={'code': f'CT-{hashlib.md5(category.encode()).hexdigest()[:6]}'},
-            )
-        if source:
-            Source.objects.get_or_create(
-                company=request.user.company, name=source,
-                defaults={'code': f'SR-{hashlib.md5(source.encode()).hexdigest()[:6]}'},
-            )
->>>>>>> rawdata/import
         phone = request.data.get('phone', '').strip()
         lead_date = date.today()
         saved = None
@@ -2554,10 +2541,12 @@ class LeadAssignView(APIView):
             lead.assigned_at = now
             lead.tenant = request.user.company
             lead.status = Lead.STATUS_ASSIGNED
-            lead.call_status = 'Pending Call'
-            lead.remarks = ''
+            # Never destroy call work: a lead that was already called (e.g. its
+            # status was logged while it still sat in the raw pool) keeps its
+            # call_status and remarks. Untouched leads default to Pending Call.
+            lead.call_status = lead.call_status or 'Pending Call'
             lead.save(update_fields=[
-                'assigned_to', 'assigned_at', 'tenant', 'status', 'call_status', 'remarks', 'updated_at',
+                'assigned_to', 'assigned_at', 'tenant', 'status', 'call_status', 'updated_at',
             ])
             updated.append(lead)
 

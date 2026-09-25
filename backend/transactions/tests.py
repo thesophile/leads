@@ -189,6 +189,29 @@ class AssignLeadsToStaffTests(APITestCase):
         self.assertIn('assignedAt', row)
         self.assertTrue(row['assignedAt'])
 
+    def test_assign_preserves_existing_call_status_and_remarks(self):
+        # A lead called before it was formally assigned must not lose its call
+        # work when a later bulk distribution moves it to another employee.
+        self.client.force_authenticate(self.manager)
+        self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': 'Shanu VR', 'count': 3,
+        }, format='json')
+        called = make_raw_lead(
+            make_company('Acme'), 'Worked Lead',
+            category='Hospital', call_status='Called',
+            remarks='Spoke to the owner, very interested.',
+        )
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': ['Shanu VR', 'Staff A'], 'count': 5,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['assigned'], 4)
+        worked = Lead.objects.get(pk=called.id)
+        self.assertEqual(worked.status, 'assigned')
+        self.assertEqual(worked.call_status, 'Called')
+        self.assertEqual(worked.remarks, 'Spoke to the owner, very interested.')
+        self.assertIsNotNone(worked.assigned_at)
+
 
 class ReassignLeadsTests(APITestCase):
     """Bulk reassign of assigned (tele-call) leads."""
