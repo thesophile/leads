@@ -398,9 +398,12 @@ export default function Telecall() {
   const [reassignIsSaving, setReassignIsSaving] = useState(false)
   const [reassignSuccessMessage, setReassignSuccessMessage] = useState('')
 
-  const isSelectable = (lead) => !!lead && !lead.isLocked
+  // Locked leads are selectable only by admins (leads.manage_lock), who may
+  // reassign worked/closed leads; managers can only select unlocked leads.
+  const isSelectable = (lead) => !!lead && (!lead.isLocked || isLockAdmin)
 
   function toggleSelectLead(lead) {
+    if (lead.isLocked && !isLockAdmin) return
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(lead.id)) next.delete(lead.id)
@@ -433,8 +436,9 @@ export default function Telecall() {
     })
   }
 
-  // Select every reassignable (non-locked) lead matching the current filters,
-  // across all pages — same behaviour as Raw Data's "select all records".
+  // Select every reassignable lead matching the current filters, across all
+  // pages — same behaviour as Raw Data's "select all records". Locked leads are
+  // included for admins only.
   async function selectAllRecords() {
     setError('')
     try {
@@ -751,10 +755,10 @@ export default function Telecall() {
                         onClick={() => openHistoryPanel(lead)}
                         className={`transition-colors cursor-pointer text-slate-600 hover:bg-slate-50/60`}
                       >
-                        {/* Select Checkbox (locked leads cannot be selected) */}
+                        {/* Select Checkbox (locked leads require an admin) */}
                         {canAssign && (
                           <td className="py-0.5 pr-2">
-                            {lead.isLocked ? (
+                            {lead.isLocked && !isLockAdmin ? (
                               <span
                                 className="flex items-center justify-center cursor-not-allowed text-amber-400"
                                 title="This lead is locked and cannot be reassigned"
@@ -772,6 +776,7 @@ export default function Telecall() {
                                   onChange={() => toggleSelectLead(lead)}
                                   onClick={(e) => e.stopPropagation()}
                                   aria-label={`Select ${lead.company}`}
+                                  title={lead.isLocked ? 'Locked lead — admin can reassign' : undefined}
                                   className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
                                 />
                               </label>
