@@ -1226,6 +1226,10 @@ class LeadRegisterView(APIView):
 
     ``statuses`` is a comma-separated list (default ``raw``) so the Telecalling
     register can page across the whole live pipeline in a single request.
+
+    Row visibility matches the lead lists via ``scoped_queryset``: managers
+    (``leads.view_all``) see every company record while staff only see the raw
+    leads they entered and the tele-calls assigned to them.
     """
 
     permission_classes = [IsAuthenticated]
@@ -1238,7 +1242,7 @@ class LeadRegisterView(APIView):
             )
         raw_statuses = (request.query_params.get('statuses') or 'raw').split(',')
         status_list = [s for s in raw_statuses if s in dict(Lead.STATUS_CHOICES)]
-        qs = my_leads_queryset(request.user)
+        qs = scoped_queryset(request.user)
         if status_list:
             qs = qs.filter(status__in=status_list)
 

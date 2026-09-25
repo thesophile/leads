@@ -2634,6 +2634,63 @@ class RegisterFacetStabilityTests(APITestCase):
         self.assertEqual(filtered.data['facets']['categories'], ['Hospital'])
 
 
+class LeadRegisterScopingTests(APITestCase):
+    """The register mirrors the lead-list scoping: staff only see their own
+    raw leads and their own assigned tele-calls; managers see every record."""
+
+    def setUp(self):
+        company = make_company('Scope Co')
+        Lead.objects.filter(tenant__isnull=True).delete()
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@scope.com', password='x', name='Manager S',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.alice = User.objects.create_user(
+            email='alice@scope.com', password='x', name='Alice A',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.bob = User.objects.create_user(
+            email='bob@scope.com', password='x', name='Bob B',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.alice.raw_own = make_raw_lead(
+            company, 'Alice Raw', added_by='Alice A', date='2026-01-01',
+        )
+        self.bob.raw_own = make_raw_lead(
+            company, 'Bob Raw', added_by='Bob B', date='2026-01-01',
+        )
+        Lead.objects.create(
+            id='SC-TEL', company='Tele Co', tenant=company,
+            status='assigned', assigned_to='Alice A', call_status='Interested',
+            date='2026-01-02',
+        )
+
+    def test_staff_raw_register_shows_only_own_entered_leads(self):
+        self.client.force_authenticate(self.alice)
+        resp = self.client.get('/api/transactions/leads/register/?statuses=raw')
+        self.assertEqual(resp.status_code, 200)
+        ids = {row['id'] for row in resp.data['results']}
+        self.assertEqual(ids, {self.alice.raw_own.id})
+
+    def test_staff_raw_register_hides_other_staffs_leads(self):
+        self.client.force_authenticate(self.alice)
+        resp = self.client.get('/api/transactions/leads/register/?statuses=raw')
+        self.assertNotIn(self.bob.raw_own.id, {row['id'] for row in resp.data['results']})
+
+    def test_staff_telecall_register_shows_only_own_assigned_leads(self):
+        self.client.force_authenticate(self.alice)
+        resp = self.client.get('/api/transactions/leads/register/?statuses=assigned')
+        ids = {row['id'] for row in resp.data['results']}
+        self.assertEqual(ids, {'SC-TEL'})
+
+    def test_manager_raw_register_shows_all_records(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/leads/register/?statuses=raw')
+        ids = {row['id'] for row in resp.data['results']}
+        self.assertEqual(ids, {self.alice.raw_own.id, self.bob.raw_own.id})
+
+
 class ExternalOrdersFeedTests(APITestCase):
     """Read-only external orders feed (normalized id, created stamp)."""
 
