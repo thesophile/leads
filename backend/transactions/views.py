@@ -1016,6 +1016,15 @@ class LeadDetailView(APIView):
                 follow_up=follow_up,
                 status=lead.call_status,
             )
+            # A worked call is locked by default so managers cannot silently
+            # reassign it — only the assigned staff or an admin
+            # (leads.manage_lock) can unlock. Never overwrite an existing
+            # lock's owner (e.g. an admin's) with a later caller's name.
+            if not lead.is_locked:
+                lead.is_locked = True
+                lead.locked_by = user.name
+                lead.locked_at = timezone.now()
+                lead.save(update_fields=['is_locked', 'locked_by', 'locked_at', 'updated_at'])
         quotation = Quotation.objects.filter(lead_id=lead.id).first()
         was_generated = quotation_was_generated(quotation)
         contact_changed = False

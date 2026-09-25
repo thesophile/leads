@@ -259,6 +259,40 @@ class ReassignLeadsTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 403)
 
+    def test_manager_cannot_reassign_auto_locked_lead_but_admin_can(self):
+        # A call logged by staff auto-locks the lead; managers must skip it
+        # while an admin can still reassign it.
+        worked = make_raw_lead(
+            make_company('Acme'), 'Worked Call',
+            status=Lead.STATUS_ASSIGNED, assigned_to='Staff A',
+        )
+        free = self.leads[0]
+        self.client.force_authenticate(self.staff)
+        resp = self.client.patch(f'/api/transactions/leads/{worked.id}/', {
+            'call_status': 'Interested',
+            'remarks': 'Client keen.',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(Lead.objects.get(pk=worked.id).is_locked)
+
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': 'Target T', 'lead_ids': [worked.id, free.id],
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['reassigned'], 1)
+        self.assertEqual(resp.data['skipped_locked'], 1)
+        self.assertEqual(Lead.objects.get(pk=worked.id).assigned_to, 'Staff A')
+        self.assertEqual(Lead.objects.get(pk=free.id).assigned_to, 'Target T')
+
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/transactions/leads/reassign/', {
+            'assigned_to': 'Target T', 'lead_ids': [worked.id],
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['reassigned'], 1)
+        self.assertEqual(Lead.objects.get(pk=worked.id).assigned_to, 'Target T')
+
     def test_requires_lead_ids(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.post('/api/transactions/leads/reassign/', {
@@ -562,6 +596,52 @@ class LeadVisibilityTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(CallHistory.objects.filter(lead_id='TC-1').exists())
+
+    def test_logging_a_call_auto_locks_the_lead(self):
+        # Logging a real call locks the lead so managers cannot silently
+        # reassign it; the caller is recorded as the lock owner.
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'call_status': 'Called',
+            'remarks': 'Spoke to the owner.',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        lead = Lead.objects.get(id='TC-1')
+        self.assertTrue(lead.is_locked)
+        self.assertEqual(lead.locked_by, 'Shanu VR')
+        self.assertIsNotNone(lead.locked_at)
+
+    def test_remarks_only_or_pending_call_does_not_lock(self):
+        # Editing remarks without logging a call, or saving back to Pending
+        # Call, must not lock the lead.
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'remarks': 'Just a note, no call logged.',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Lead.objects.get(id='TC-1').is_locked)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'call_status': 'Pending Call',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Lead.objects.get(id='TC-1').is_locked)
+
+    def test_existing_lock_owner_is_not_overwritten_by_later_calls(self):
+        # A lead already locked (e.g. by an admin) keeps its lock owner even
+        # when a staff member logs another call on it.
+        lead = Lead.objects.get(id='TC-1')
+        lead.is_locked = True
+        lead.locked_by = 'Big Admin'
+        lead.locked_at = timezone.now()
+        lead.save(update_fields=['is_locked', 'locked_by', 'locked_at', 'updated_at'])
+        self.client.force_authenticate(self.shanu)
+        resp = self.client.patch('/api/transactions/leads/TC-1/', {
+            'call_status': 'For Future',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        lead.refresh_from_db()
+        self.assertTrue(lead.is_locked)
+        self.assertEqual(lead.locked_by, 'Big Admin')
 
     def test_patch_with_unknown_call_status_is_rejected(self):
         self.client.force_authenticate(self.shanu)

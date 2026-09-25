@@ -498,8 +498,12 @@ export default function Telecall() {
         assigned_to: reassignStaffList,
         lead_ids: [...selectedIds],
       })
+      const lockedNote =
+        (res.skipped_locked ?? 0) > 0
+          ? ` ${res.skipped_locked} locked lead(s) skipped — only the assigned staff or an admin can move them.`
+          : ''
       setReassignSuccessMessage(
-        `✓ Successfully reassigned ${res.reassigned} lead(s) to ${formatReassignStaffSummary(reassignStaffList)}!`
+        `✓ Successfully reassigned ${res.reassigned} lead(s) to ${formatReassignStaffSummary(reassignStaffList)}!${lockedNote}`
       )
       await refreshData()
       setSelectedIds(new Set())
