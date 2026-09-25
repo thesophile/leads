@@ -67,8 +67,8 @@ def html_to_pdf_markup(html):
     text = text.replace('&#x27;', "'")
     text = text.replace('&#39;', "'")
 
-    # Blank paragraphs (with or without an inner <br>) become a single line
-    # break so the empty-line spacing survives in the PDF.
+    # Empty paragraphs (with or without an inner <br>) are real blank lines the
+    # author entered, so keep them as line breaks in the PDF.
     text = re.sub(r'<p[^>]*>\s*(?:<br\s*/?>)?\s*</p>', '<br/>', text)
 
     def repl(match):

@@ -32,6 +32,10 @@ export default function PagedSection({
   const endBlockRef = useRef(null)
   const paged = usePagedContent(contentRef, footerRef, endBlock ? [endBlockRef] : [], reserve)
   const showEnd = endBlock && !paged.part2Html
+  // Stop recursing when the overflow is an unbreakable block that cannot fit
+  // on any continuation page (part2Html makes no progress) — otherwise the
+  // page chain would render forever.
+  const canContinue = paged.part2Html && paged.part2Html !== html
 
   return (
     <>
@@ -72,7 +76,7 @@ export default function PagedSection({
         </div>
       </div>
 
-      {paged.part2Html ? (
+      {canContinue ? (
         <PagedSection
           html={paged.part2Html}
           reserve={reserve}

@@ -56,7 +56,9 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     const cap = part2.length ? Math.max(48, lastFit) : c
 
     const prev = committed.current
-    if (prev.cap !== cap || prev.part2Html !== part2Str) {
+    const capChanged = Math.abs((prev.cap || 0) - cap) > 0.5
+    const part2Changed = prev.part2Html !== part2Str
+    if (capChanged || part2Changed) {
       committed.current = { cap, part2Html: part2Str }
       setCap(cap)
       setPart2Html(part2Str)
@@ -66,7 +68,13 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
   useLayoutEffect(() => {
     const contentEl = contentRef && contentRef.current
 
-    check()
+    // Measure on the next animation frame instead of synchronously during the
+    // layout effect. Applying the cap changes the page geometry, and measuring
+    // + setState synchronously here nests re-renders inside one commit, which
+    // can escalate into React's "Maximum update depth exceeded" when geometry
+    // is slow to settle. Deferring to rAF spreads the measurements over frames
+    // so the committed guard simply converges.
+    const raf = requestAnimationFrame(check)
 
     // Re-measure on a short polling loop so content that loads asynchronously
     // (network fetch, navigation state) is captured as soon as it renders.
@@ -86,6 +94,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     }
 
     return () => {
+      cancelAnimationFrame(raf)
       clearInterval(interval)
       window.removeEventListener('resize', check)
       if (observer) observer.disconnect()
