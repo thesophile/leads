@@ -10,7 +10,13 @@ import usePagedContent from './usePagedContent'
  * - `pageHeader` / `pageFooter`: React nodes placed at the top/bottom of the page
  * - `contentRef` is created internally and capped against the page footer so
  *   the recursion terminates once the tail fits on a single page.
+ *
+ * Recursion is hard-capped at `MAX_CONTINUATION_PAGES` as a safety net — the
+ * pagination in `usePagedContent` already stops splitting content that can
+ * never fit a page, so the cap should never be reached with normal data.
  */
+const MAX_CONTINUATION_PAGES = 12
+
 export default function PagedSection({
   html,
   reserve = 48,
@@ -26,12 +32,15 @@ export default function PagedSection({
   continueNote = true,
   endBlock = null,
   endBlockClass = '',
+  pageIndex = 0,
 }) {
   const contentRef = useRef(null)
   const footerRef = useRef(null)
   const endBlockRef = useRef(null)
   const paged = usePagedContent(contentRef, footerRef, endBlock ? [endBlockRef] : [], reserve)
   const showEnd = endBlock && !paged.part2Html
+  const atLimit = pageIndex >= MAX_CONTINUATION_PAGES
+  const showContinue = continueNote && paged.part2Html && !atLimit
 
   return (
     <>
@@ -52,7 +61,7 @@ export default function PagedSection({
                   style={paged.cap ? { maxHeight: paged.cap, overflow: 'hidden' } : undefined}
                   dangerouslySetInnerHTML={{ __html: html }}
                 />
-                {continueNote && paged.part2Html ? (
+                {showContinue ? (
                   <p className="mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                 ) : null}
                 {!continueNote && (
@@ -72,7 +81,7 @@ export default function PagedSection({
         </div>
       </div>
 
-      {paged.part2Html ? (
+      {paged.part2Html && !atLimit ? (
         <PagedSection
           html={paged.part2Html}
           reserve={reserve}
@@ -88,6 +97,7 @@ export default function PagedSection({
           continueNote={continueNote}
           endBlock={endBlock}
           endBlockClass={endBlockClass}
+          pageIndex={pageIndex + 1}
         />
       ) : null}
     </>
