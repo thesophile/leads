@@ -756,6 +756,9 @@ class LeadListView(APIView):
 class LeadImportView(APIView):
     """Create-or-update a single raw lead row from a CSV import.
 
+    Every row must carry a company and a phone number; a row missing either is
+    rejected so the frontend can report it and hand it back for correction.
+
     When a lead with the same (tenant, company) already exists, the incoming
     row overwrites its contact fields instead of being skipped as a duplicate,
     so re-importing a corrected CSV updates the record. The pipeline fields
@@ -773,6 +776,12 @@ class LeadImportView(APIView):
         if not company:
             return Response(
                 {'detail': 'company: This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        phone = request.data.get('phone', '').strip()
+        if not phone:
+            return Response(
+                {'detail': 'phone: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         category = request.data.get('category', '').strip()

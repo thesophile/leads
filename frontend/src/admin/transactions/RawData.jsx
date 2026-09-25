@@ -102,8 +102,9 @@ function parseCSV(text) {
 // Canonical table columns for CSV import. Every one of these must exist as a
 // header in the uploaded CSV (matched via aliases). CSV columns that do not
 // match any known column are ignored with a warning.
-// Canonical table columns for CSV import. Company Name is the only required column;
-// all other columns are optional and will default to empty if omitted in the CSV.
+// The Company Name header must exist. On every data row, Company Name and
+// Phone are required; rows missing either are skipped with a reason and
+// downloaded back for correction.
 const REQUIRED_IMPORT_COLUMNS = [
   { key: 'company', label: 'Company Name', required: true, aliases: ['Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name', 'Client', 'Client Name', 'Customer', 'Customer Name', 'Company/Organization'] },
   { key: 'contact', label: 'Contact Person', required: false, aliases: ['Contact Person', 'Contact Name', 'Contact', 'Name', 'Contact Details', 'Person', 'Full Name'] },
@@ -191,10 +192,12 @@ function csvRowsToLeads(text, master = {}) {
     const r = rows[i]
     const cell = (key) => ((colByKey[key] >= 0 && r[colByKey[key]]) || '').trim()
     const company = cell('company')
+    const phone = cell('phone')
     const category = cell('category')
     const source = cell('source')
     const errors = []
     if (!company) errors.push('Company Name is required.')
+    if (!phone) errors.push('Phone Number is required.')
     if (category && categorySet && !categorySet.has(category)) {
       errors.push(`Category "${category}" does not exist.`)
     }

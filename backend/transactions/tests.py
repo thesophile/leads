@@ -770,17 +770,24 @@ class LeadImportTests(APITestCase):
     def test_import_creates_new_lead(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.post('/api/transactions/leads/import/', {
-            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '',
+            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '9998887776',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertFalse(resp.data['updated'])
         lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
-        self.assertEqual(lead.phone, '')
+        self.assertEqual(lead.phone, '9998887776')
+
+    def test_import_requires_phone(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'No Phone Co',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
 
     def test_reimport_updates_existing_lead(self):
         self.client.force_authenticate(self.manager)
         self.client.post('/api/transactions/leads/import/', {
-            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '',
+            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '111',
         }, format='json')
         resp = self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'contact': 'Ann', 'phone': '9998887776',
@@ -793,7 +800,7 @@ class LeadImportTests(APITestCase):
             Lead.objects.filter(tenant=self.company, company_key='cafe day').count(), 1
         )
 
-    def test_reimport_blank_value_overwrites(self):
+    def test_reimport_rejects_blank_phone(self):
         self.client.force_authenticate(self.manager)
         self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'phone': '111',
@@ -801,9 +808,9 @@ class LeadImportTests(APITestCase):
         resp = self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'phone': '',
         }, format='json')
-        self.assertTrue(resp.data['updated'])
+        self.assertEqual(resp.status_code, 400)
         lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
-        self.assertEqual(lead.phone, '')
+        self.assertEqual(lead.phone, '111')
 
     def test_import_does_not_touch_pipeline_fields(self):
         self.client.force_authenticate(self.manager)
@@ -827,7 +834,7 @@ class LeadImportTests(APITestCase):
     def test_import_rejects_unknown_category(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.post('/api/transactions/leads/import/', {
-            'company': 'Some Co', 'category': 'Not A Category',
+            'company': 'Some Co', 'phone': '123', 'category': 'Not A Category',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
