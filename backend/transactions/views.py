@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import logging
 import random
@@ -7,6 +8,7 @@ import secrets
 import sys
 from datetime import date, datetime, timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.mail import send_mail
@@ -3700,6 +3702,76 @@ class OrderSendToClientView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ExternalOrdersView(APIView):
+    """Read-only orders feed for external systems (e.g. ERP / accounting).
+
+    Authenticates with an API key (``Authorization: Bearer <key>`` or the
+    ``X-API-Key`` header) matched against ``settings.EXTERNAL_ORDERS_API_KEY``.
+    Returns every order across tenants, paginated, with the fields external
+    consumers typically need. ``order_id`` is prefixed with "ORD-". The sales
+    person is the telecaller who first moved the lead to "Quotation Requested".
+    Delivery date is internal-only data (manually entered on the Manage Orders
+    screen) and is never shown on any client-facing form or PDF.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def _authorized(self, request):
+        expected = getattr(settings, 'EXTERNAL_ORDERS_API_KEY', '')
+        if not expected:
+            return False
+        header = request.headers.get('Authorization', '')
+        if header.startswith('Bearer '):
+            provided = header[len('Bearer '):]
+        else:
+            provided = request.headers.get('X-API-Key', '')
+        return bool(provided) and hmac.compare_digest(str(provided).strip(), expected)
+
+    @staticmethod
+    def _sales_person(order, requesters_by_lead):
+        """Telecaller who moved the lead to 'Quotation Requested' first."""
+        if order.lead_id:
+            caller = requesters_by_lead.get(order.lead_id)
+            if caller:
+                return caller
+        return order.bdm or order.proposal_by or order.staff or ''
+
+    def get(self, request):
+        if not self._authorized(request):
+            return Response(
+                {'detail': 'Invalid or missing API key.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = Order.objects.select_related('tenant').order_by('-created_at')
+        company = (request.query_params.get('company') or '').strip()
+        if company:
+            qs = qs.filter(company__icontains=company)
+        page_orders, envelope = paginated_queryset(qs, request)
+        lead_ids = [order.lead_id for order in page_orders if order.lead_id]
+        requesters_by_lead = {}
+        if lead_ids:
+            histories = (
+                CallHistory.objects.filter(
+                    lead_id__in=lead_ids, status='Quotation Requested'
+                ).order_by('created_at', 'pk')
+            )
+            for history in histories:
+                requesters_by_lead.setdefault(history.lead_id, history.caller)
+        envelope['results'] = [
+            {
+                'order_id': f'ORD-{order.id}',
+                'company': order.company,
+                'order_value': order.net_amount or order.total or '',
+                'order_date': to_iso_order_date(order.date),
+                'delivery_date': to_iso_order_date(order.delivery_date),
+                'sales_person': self._sales_person(order, requesters_by_lead),
+            }
+            for order in page_orders
+        ]
+        return Response(envelope)
 
 
 class OrderPdfView(APIView):

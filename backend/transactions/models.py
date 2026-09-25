@@ -377,6 +377,9 @@ class Order(models.Model):
     proposal_by = models.CharField(max_length=120, blank=True)
     staff = models.CharField(max_length=120, blank=True)
     date = models.CharField(max_length=50, blank=True)
+    # Internal-only expected delivery date. Manually entered on the Manage
+    # Orders screen; never shown on the client-facing order form or PDF.
+    delivery_date = models.CharField(max_length=50, blank=True)
     status = models.CharField(max_length=50, default='Pending')
     total = models.CharField(max_length=40, blank=True)
     discount = models.CharField(max_length=40, blank=True)

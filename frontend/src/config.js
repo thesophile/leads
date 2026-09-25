@@ -4,4 +4,4 @@
 // e.g. v1.f1.b1
 
 export const APP_MAJOR_VERSION = 'v1' // application major version
-export const FRONTEND_VERSION = 'f2' // frontend build version
+export const FRONTEND_VERSION = 'f3' // frontend build version

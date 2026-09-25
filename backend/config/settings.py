@@ -44,7 +44,7 @@ ALLOWED_HOSTS = ['*']
 # build. They are exposed via /api/version/ and shown on the About screen so a
 # deployed update is easy to verify from the web app.
 APP_MAJOR_VERSION = 'v1'  # application major version
-BACKEND_VERSION = 'b2'    # backend build version
+BACKEND_VERSION = 'b3'    # backend build version
 
 
 # Application definition
@@ -140,6 +140,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # Custom user model (email-based login)
 AUTH_USER_MODEL = 'accounts.User'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Shared secret for the read-only external orders API (GET /api/external/orders/).
+# Consumers authenticate with "Authorization: Bearer <key>" or "X-API-Key: <key>".
+EXTERNAL_ORDERS_API_KEY = os.environ.get('EXTERNAL_ORDERS_API_KEY', '')
 
 # Allow the Vite dev server (also proxied via /api, so CORS is a fallback)
 CORS_ALLOWED_ORIGINS = [

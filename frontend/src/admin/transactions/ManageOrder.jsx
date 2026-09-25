@@ -190,6 +190,7 @@ export default function ManageOrder() {
   const [categoryName, setCategoryName] = useState('Dynamic Website')
   const [orderDate, setOrderDate] = useState(todayStr)
   const [proposalDate, setProposalDate] = useState(todayStr)
+  const [deliveryDate, setDeliveryDate] = useState('')
   const [proposalNo, setProposalNo] = useState(() => `P${new Date().getFullYear()}-0001`)
 
   const [orderSummaryHtml, setOrderSummaryHtml] = useState('')
@@ -218,6 +219,7 @@ export default function ManageOrder() {
         orderDate,
         proposalDate,
         proposalNo,
+        deliveryDate,
         orderSummaryHtml,
         orderInDetailsHtml,
         totalVal,
@@ -227,7 +229,7 @@ export default function ManageOrder() {
       }),
       [
         bdm, proposalBy, customerPerson, companyName, mobileNum, categoryName,
-        orderDate, proposalDate, proposalNo, orderSummaryHtml, orderInDetailsHtml,
+        orderDate, proposalDate, proposalNo, deliveryDate, orderSummaryHtml, orderInDetailsHtml,
         totalVal, discountVal, netVal, remarksVal,
       ]
     )
@@ -324,6 +326,7 @@ export default function ManageOrder() {
       setCategoryName(order.category || 'Dynamic Website')
       setOrderDate(order.date || todayStr())
       setProposalDate(order.proposalDate || todayStr())
+      setDeliveryDate(order.deliveryDate || '')
       setProposalNo(order.proposalNo || order.id || nextOrderNumber())
       setOrderSummaryHtml(order.scope || order.orderSummaryHtml || '')
       setOrderInDetailsHtml(order.details || order.orderInDetailsHtml || '')
@@ -342,6 +345,7 @@ export default function ManageOrder() {
       setCategoryName('Dynamic Website')
       setOrderDate(todayStr())
       setProposalDate(todayStr())
+      setDeliveryDate('')
       setProposalNo(nextOrderNumber())
       const defaultTpl = PROPOSAL_TEMPLATES[0]
       setOrderSummaryHtml(defaultTpl?.scopeHtml || '')
@@ -383,6 +387,7 @@ export default function ManageOrder() {
             staff: proposalBy,
             proposalNo,
             proposalDate,
+            deliveryDate,
             date: orderDate,
             total: totalVal,
             discount: discountVal,
@@ -403,6 +408,7 @@ export default function ManageOrder() {
           leadId: `TC-${Date.now().toString().slice(-3)}`,
           proposalNo,
           proposalDate,
+          deliveryDate,
           customer: customerPerson || 'New Client',
           company: companyName || 'Enterprise Client',
           mobile: mobileNum || '',
@@ -1002,6 +1008,23 @@ export default function ManageOrder() {
                     value={proposalDate}
                     onChange={(e) => setProposalDate(e.target.value)}
                     placeholder="DD-MM-YYYY"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: Delivery Date (internal only — never shown to the client) */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Delivery Date <span className="font-normal text-slate-400">(Internal)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                    placeholder="DD-MM-YYYY"
+                    title="Internal only: this date is not shown to the client or on the order form."
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>

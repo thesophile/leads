@@ -271,6 +271,7 @@ class OrderSerializer(serializers.ModelSerializer):
     proposalDate = serializers.CharField(source='proposal_date', required=False, allow_blank=True)
     proposalBy = serializers.CharField(source='proposal_by', required=False, allow_blank=True)
     netAmount = serializers.CharField(source='net_amount', required=False, allow_blank=True)
+    deliveryDate = serializers.CharField(source='delivery_date', required=False, allow_blank=True)
     termsSummaryHtml = serializers.SerializerMethodField()
     termsFullHtml = serializers.SerializerMethodField()
     clientStatus = serializers.SerializerMethodField()
@@ -297,6 +298,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'total',
             'discount',
             'netAmount',
+            'deliveryDate',
             'currency',
             'category',
             'remarks',
