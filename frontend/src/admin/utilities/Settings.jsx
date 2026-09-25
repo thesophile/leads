@@ -1359,7 +1359,7 @@ export default function Settings() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">
                       Frontend
-                      <span className="font-mono text-slate-700">{APP_MAJOR_VERSION}.{FRONTEND_VERSION}</span>
+                      <span className="font-mono text-slate-700">{FRONTEND_VERSION}</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">
                       Backend

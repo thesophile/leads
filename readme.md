@@ -33,6 +33,9 @@ Python manage.py migrate
 ```
 ## Deploy
 
+> [!NOTE]
+> Backend Deployment works from last committed version
+
 Backend
 ```
 cd ~\Desktop\Codebase\leads
