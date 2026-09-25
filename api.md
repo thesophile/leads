@@ -34,10 +34,11 @@ Response shape:
   "page_size": 20,
   "results": [
     {
-      "order_id": "ORD-P2026-0001",
+      "order_id": "ORD-692711082026B",
       "company": "Acme Corp",
       "order_value": "45000",
       "order_date": "2026-09-25",
+      "order_created_at": "2026-09-25T10:15:00.000000+05:30",
       "delivery_date": "2026-10-30",
       "sales_person": "Malavika"
     }
@@ -47,8 +48,16 @@ Response shape:
 
 Field notes:
 
-- `order_id` — order number with the internal id prefixed by `ORD-`.
+- `order_id` — order number normalized to a single `ORD-` prefix. The stored
+  internal id may already carry an `ORDQTN` / `QTN` / `ORD` marker (orders
+  derived from a quotation keep the quotation's id); that marker is stripped
+  and re-applied once, so consuming systems always see a stable shape:
+  `ORDQTN692711082026B` → `ORD-692711082026B`, `QTN-030001` → `ORD-030001`,
+  `ORD-1` → `ORD-1`.
 - `order_value` — order net value (after discount), as stored.
 - `order_date` / `delivery_date` — ISO dates (`YYYY-MM-DD`); empty when unset.
+- `order_created_at` — ISO 8601 timestamp of when the order record was created
+  (the true "time of order creation" backing the Age column; `order_date` is
+  often empty because it is free-text).
 - `delivery_date` — internal expected delivery date, manually entered on the Manage Orders screen. It is **not** shown to clients or included in the order form / proposal / PDF.
 - `sales_person` — the telecaller who changed the lead status to "Quotation Requested".

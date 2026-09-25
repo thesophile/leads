@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
@@ -2624,5 +2625,57 @@ class RegisterFacetStabilityTests(APITestCase):
         self.assertEqual(filtered.data['results'][0]['staff'], 'Staff A')
         # Sibling category dropdown still narrows to the filtered rows.
         self.assertEqual(filtered.data['facets']['categories'], ['Hospital'])
+
+
+class ExternalOrdersFeedTests(APITestCase):
+    """Read-only external orders feed (normalized id, created stamp)."""
+
+    def setUp(self):
+        self.company = make_company('Ext Co')
+        Lead.objects.filter(tenant__isnull=True).delete()
+        self.order_a = Order.objects.create(
+            id='ORDQTN692711082026B', company='Ext Alpha', tenant=self.company,
+        )
+        self.order_b = Order.objects.create(
+            id='QTN-030001', company='Ext Beta', tenant=self.company,
+        )
+        self.order_c = Order.objects.create(
+            id='ORD-1', company='Ext Gamma', tenant=self.company,
+        )
+
+    def test_requires_valid_api_key(self):
+        self.assertEqual(
+            self.client.get('/api/external/orders/').status_code, 403,
+        )
+        resp = self.client.get(
+            '/api/external/orders/', HTTP_X_API_KEY='bad-key',
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
+    def test_normalizes_order_id_and_exposes_created_at(self):
+        resp = self.client.get(
+            '/api/external/orders/', HTTP_X_API_KEY='test-key',
+        )
+        self.assertEqual(resp.status_code, 200)
+        by_company = {row['company']: row for row in resp.data['results']}
+        self.assertEqual(by_company['Ext Alpha']['order_id'], 'ORD-692711082026B')
+        self.assertEqual(by_company['Ext Beta']['order_id'], 'ORD-030001')
+        self.assertEqual(by_company['Ext Gamma']['order_id'], 'ORD-1')
+        for row in resp.data['results']:
+            self.assertIn('order_created_at', row)
+            self.assertTrue(row['order_created_at'])
+        self.assertEqual(
+            by_company['Ext Alpha']['order_created_at'],
+            self.order_a.created_at.isoformat(),
+        )
+
+    @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
+    def test_accepts_bearer_key(self):
+        resp = self.client.get(
+            '/api/external/orders/', HTTP_AUTHORIZATION='Bearer test-key',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['results']), 3)
 
 

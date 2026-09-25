@@ -3704,16 +3704,34 @@ class OrderSendToClientView(APIView):
         )
 
 
+ORDER_ID_PREFIX_RE = re.compile(r'^(ORDQTN|QTN|ORD)[-\s]*', re.IGNORECASE)
+
+
+def normalize_external_order_id(order_id):
+    """Map the stored order id to a canonical ``ORD-<rest>`` reference.
+
+    The internal id may already carry an ORDQTN/QTN/ORD marker (e.g. an order
+    derived from a quotation keeps the quotation's id), so the marker is
+    stripped and re-applied once so every consumer of the external feed sees a
+    single stable prefix: ``ORDQTN692711082026B`` -> ``ORD-692711082026B``,
+    ``QTN-030001`` -> ``ORD-030001``, ``ORD-1`` -> ``ORD-1``.
+    """
+    stripped = ORDER_ID_PREFIX_RE.sub('', str(order_id or ''))
+    return f'ORD-{stripped}'
+
+
 class ExternalOrdersView(APIView):
     """Read-only orders feed for external systems (e.g. ERP / accounting).
 
     Authenticates with an API key (``Authorization: Bearer <key>`` or the
     ``X-API-Key`` header) matched against ``settings.EXTERNAL_ORDERS_API_KEY``.
     Returns every order across tenants, paginated, with the fields external
-    consumers typically need. ``order_id`` is prefixed with "ORD-". The sales
-    person is the telecaller who first moved the lead to "Quotation Requested".
-    Delivery date is internal-only data (manually entered on the Manage Orders
-    screen) and is never shown on any client-facing form or PDF.
+    consumers typically need. ``order_id`` is the stored id normalized to a
+    single "ORD-" prefix and ``order_created_at`` is the true order-creation
+    timestamp (the Age column's source). The sales person is the telecaller
+    who first moved the lead to "Quotation Requested". Delivery date is
+    internal-only data (manually entered on the Manage Orders screen) and is
+    never shown on any client-facing form or PDF.
     """
 
     authentication_classes = []
@@ -3762,10 +3780,11 @@ class ExternalOrdersView(APIView):
                 requesters_by_lead.setdefault(history.lead_id, history.caller)
         envelope['results'] = [
             {
-                'order_id': f'ORD-{order.id}',
+                'order_id': normalize_external_order_id(order.id),
                 'company': order.company,
                 'order_value': order.net_amount or order.total or '',
                 'order_date': to_iso_order_date(order.date),
+                'order_created_at': order.created_at.isoformat() if order.created_at else '',
                 'delivery_date': to_iso_order_date(order.delivery_date),
                 'sales_person': self._sales_person(order, requesters_by_lead),
             }
