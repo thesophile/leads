@@ -458,9 +458,7 @@ export default function Managequotation() {
   const [revertingQuote, setRevertingQuote] = useState(false)
 
   function toggleApprover(id) {
-    setSelectedApprovers((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    )
+    setSelectedApprovers((prev) => (prev.includes(id) ? [] : [id]))
   }
 
   // "Send to Client" Modal State
@@ -2446,7 +2444,7 @@ export default function Managequotation() {
               {/* Approver Selection */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admins <span className="text-rose-500">*</span>
+                  Select Approving Admin <span className="text-rose-500">*</span>
                 </label>
                 <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-52 overflow-y-auto">
                   {approverOptions.length === 0 && (
@@ -2460,10 +2458,11 @@ export default function Managequotation() {
                         className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50 transition"
                       >
                         <input
-                          type="checkbox"
+                          type="radio"
+                          name="approver"
                           checked={checked}
                           onChange={() => toggleApprover(admin.id)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                          className="h-3.5 w-3.5 rounded-full border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
                         />
                         <span className="flex-1 min-w-0">
                           <span className="block font-semibold text-slate-800 truncate">
@@ -2482,7 +2481,7 @@ export default function Managequotation() {
                   })}
                 </div>
                 <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  Every selected admin must approve this proposal before it can be sent to the client.
+                  The selected admin must approve this proposal before it can be sent to the client.
                 </p>
               </div>
 

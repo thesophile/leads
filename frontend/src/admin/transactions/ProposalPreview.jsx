@@ -278,6 +278,12 @@ function approvalCountBy(approvals, status) {
   return (approvals || []).filter((a) => a.status === status).length
 }
 
+// The Approved By box keeps one fixed height so it never grows or shrinks with
+// the approval state. The value fits a fully approved signature block; short
+// content (no approvers / pending) leaves empty space below, which is fine for
+// PDF export.
+const APPROVED_BY_CONTENT_HEIGHT = 152
+
 export default function ProposalPreview() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -776,6 +782,7 @@ const approvedByRef = useRef(null)
 
                 <div ref={approvedByRef}>
                   <SectionBox title="Approved By">
+                  <div style={{ height: APPROVED_BY_CONTENT_HEIGHT }}>
                   {approvals.length === 0 ? (
                     <p className="text-[11px] text-slate-400 py-0.5">No approvers selected yet.</p>
                   ) : (
@@ -855,6 +862,7 @@ const approvedByRef = useRef(null)
                       )}
                     </div>
                   )}
+                  </div>
                 </SectionBox>
                 </div>
               </div>
@@ -942,7 +950,7 @@ const approvedByRef = useRef(null)
               </p>
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admins <span className="text-rose-500">*</span>
+                  Select Approving Admin <span className="text-rose-500">*</span>
                 </label>
                 <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-48 overflow-y-auto">
                   {approvers.length === 0 && (
@@ -956,14 +964,11 @@ const approvedByRef = useRef(null)
                         className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50 transition"
                       >
                         <input
-                          type="checkbox"
+                          type="radio"
+                          name="approver"
                           checked={checked}
-                          onChange={() =>
-                            setSendApprovers((prev) =>
-                              prev.includes(a.id) ? prev.filter((x) => x !== a.id) : [...prev, a.id]
-                            )
-                          }
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                          onChange={() => setSendApprovers([a.id])}
+                          className="h-3.5 w-3.5 rounded-full border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
                         />
                         <span className="flex-1 min-w-0">
                           <span className="block font-semibold text-slate-800 truncate">{a.name}</span>
@@ -979,7 +984,7 @@ const approvedByRef = useRef(null)
                   })}
                 </div>
                 <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  Every selected admin must approve this proposal before it is sent to the client.
+                  The selected admin must approve this proposal before it is sent to the client.
                 </p>
               </div>
             </div>
