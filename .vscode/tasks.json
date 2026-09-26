@@ -40,20 +40,24 @@
       "problemMatcher": []
     },
     {
-      "label": "Deploy Backend",
+      "label": "Deploy Frontend",
       "type": "shell",
-      "command": "git archive HEAD backend -o backend.zip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp backend.zip leads:/home/newleadsprograme/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate && cd /home/newleadsprograme/backend && python manage.py migrate\"",
+      "command": "cd \"$env:USERPROFILE\\Desktop\\Codebase\\leads\\frontend\"; npm run build -- --mode prod; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"rm -rf ~/public_html/assets\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp -r .\\dist\\* leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp .\\dist\\.htaccess leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1\"",
       "options": {
-        "cwd": "${env:USERPROFILE}/Desktop/Codebase/leads"
+        "shell": {
+          "executable": "powershell.exe"
+        }
       },
       "problemMatcher": []
     },
     {
-      "label": "Deploy Frontend",
+      "label": "Deploy Backend",
       "type": "shell",
-      "command": "npm run build -- --mode prod; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"rm -rf ~/public_html/assets\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp -r .\\dist\\* leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp .\\dist\\.htaccess leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1\"",
+      "command": "cd \"$env:USERPROFILE\\Desktop\\Codebase\\leads\"; git archive HEAD backend -o backend.zip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp backend.zip leads:/home/newleadsprograme/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads \"source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate && cd /home/newleadsprograme/backend && python manage.py migrate\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Remove-Item .\\backend.zip -ErrorAction SilentlyContinue",
       "options": {
-        "cwd": "${env:USERPROFILE}/Desktop/Codebase/leads/frontend"
+        "shell": {
+          "executable": "powershell.exe"
+        }
       },
       "problemMatcher": []
     },
@@ -64,6 +68,13 @@
         "Deploy Frontend"
       ],
       "dependsOrder": "sequence",
+      "type": "shell",
+      "command": "Write-Host 'Full deployment completed.'",
+      "options": {
+        "shell": {
+          "executable": "powershell.exe"
+        }
+      },
       "problemMatcher": []
     }
   ]

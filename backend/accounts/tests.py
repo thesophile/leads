@@ -1,8 +1,14 @@
+from datetime import timedelta
+
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import RequestFactory, TestCase
+from django.test.utils import override_settings
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
+from unittest.mock import patch
 
 from transactions.admin import LeadAdmin
 from transactions.models import Lead
@@ -280,6 +286,14 @@ class StaffRenameCrossTenantIsolationTests(APITestCase):
 
 
 class StaffAdminProtectionTests(APITestCase):
+    """A lesser role cannot administer the company admin.
+
+    Authority is read from the permission system: an actor may only manage a
+    record whose current role grants no more than they hold themselves. The
+    admin (system) role holds the full catalog, so only an Admin or a platform
+    superuser may touch it. Admins themselves can modify/demote other admins.
+    """
+
     def setUp(self):
         company = make_company('Acme')
         self.admin = User.objects.create_user(
@@ -352,6 +366,62 @@ class StaffAdminProtectionTests(APITestCase):
             'is_active': False,
         }, format='json')
         self.assertEqual(resp.status_code, 200)
+
+    def test_admin_can_demote_another_admin(self):
+        second_admin = User.objects.create_user(
+            email='admin2@acme.com', password='x', name='Admin Two',
+            role=admin_role(self.admin.company), company=self.admin.company,
+        )
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch(f'/api/auth/users/{second_admin.pk}/', {
+            'role': self.staff.role.pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        second_admin.refresh_from_db()
+        self.assertEqual(second_admin.role.code, 'staff')
+
+    def test_admin_can_edit_another_admin(self):
+        second_admin = User.objects.create_user(
+            email='admin2@acme.com', password='x', name='Admin Two',
+            role=admin_role(self.admin.company), company=self.admin.company,
+        )
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch(f'/api/auth/users/{second_admin.pk}/', {
+            'name': 'Admin Two Renamed',
+            'email': 'admin2new@acme.com',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        second_admin.refresh_from_db()
+        self.assertEqual(second_admin.name, 'Admin Two Renamed')
+        self.assertEqual(second_admin.email, 'admin2new@acme.com')
+
+    def test_manager_cannot_assign_admin_role(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'role': admin_role(self.manager.company).pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.staff.refresh_from_db()
+        self.assertNotEqual(self.staff.role.code, 'admin')
+
+    def test_admin_can_create_another_admin(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/auth/users/', {
+            'name': 'New Admin', 'email': 'newadmin@acme.com',
+            'password': 'Str0ngPass!', 'role': admin_role(self.admin.company).pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        new_admin = User.objects.get(email='newadmin@acme.com')
+        self.assertEqual(new_admin.role.code, 'admin')
+
+    def test_manager_cannot_create_admin(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/auth/users/', {
+            'name': 'New Guy', 'email': 'newadmin2@acme.com',
+            'password': 'Str0ngPass!', 'role': admin_role(self.manager.company).pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(User.objects.filter(email='newadmin2@acme.com').exists())
 
     def test_superuser_reset_blocked_for_platform_admin(self):
         superuser = User.objects.create_superuser(
@@ -594,3 +664,193 @@ class SystemRoleFullCatalogTests(APITestCase):
         self.assertFalse(staff.has_permission('quotation.send_without_approval'))
         self.assertFalse(staff.has_permission('quotation.approve'))
         self.assertFalse(staff.has_permission('roles.manage'))
+
+
+class SelfRoleChangeGuardTests(APITestCase):
+    """A user can never change their own role or permissions."""
+
+    def setUp(self):
+        self.company = make_company('Self Guard Co')
+        self.admin = User.objects.create_user(
+            email='admin@selfguard.com', password='x', name='Admin A',
+            role=admin_role(self.company), company=self.company,
+        )
+        self.manager = User.objects.create_user(
+            email='mgr@selfguard.com', password='x', name='Manager A',
+            role=self.company.roles.get(code='manager'), company=self.company,
+        )
+
+    def test_admin_cannot_demote_their_own_role(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch(f'/api/auth/users/{self.admin.pk}/', {
+            'role': self.company.roles.get(code='staff').pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.admin.refresh_from_db()
+        self.assertEqual(self.admin.role.code, 'admin')
+
+    def test_staff_cannot_promote_their_own_role(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.manager.pk}/', {
+            'role': admin_role(self.company).pk,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.manager.refresh_from_db()
+        self.assertEqual(self.manager.role.code, 'manager')
+
+    def test_cannot_deactivate_own_account(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch(f'/api/auth/users/{self.admin.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_can_still_edit_own_basic_fields(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.manager.pk}/', {
+            'name': 'Manager Renamed',
+            'phone': '9876543210',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.manager.refresh_from_db()
+        self.assertEqual(self.manager.name, 'Manager Renamed')
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class EmailChangeOtpTests(APITestCase):
+    """Self-service email changes send an OTP to the *new* address and the new
+    email is persisted only after verification; the user is then signed out."""
+
+    FIXED_CODE = '424242'
+
+    def setUp(self):
+        self.company = make_company('Email Co')
+        self.user = User.objects.create_user(
+            email='old@emailco.com', password='x', name='Email User',
+            role=admin_role(self.company), company=self.company,
+        )
+
+    def _auth(self):
+        self.refresh_token = str(RefreshToken.for_user(self.user))
+        self.token = RefreshToken(self.refresh_token).access_token
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+    def test_cannot_change_own_email_through_staff_edit(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(f'/api/auth/users/{self.user.pk}/', {
+            'email': 'sneaky@emailco.com',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'old@emailco.com')
+
+    def test_request_sends_code_to_new_email_only(self):
+        self.client.force_authenticate(self.user)
+        mail.outbox = []
+        with patch('accounts.views.generate_otp', return_value=self.FIXED_CODE):
+            resp = self.client.post('/api/auth/email-change/request/', {
+                'new_email': 'new@emailco.com',
+            }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['new_email'], 'new@emailco.com')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['new@emailco.com'])
+        self.assertIn(self.FIXED_CODE, mail.outbox[0].body)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'old@emailco.com')
+
+    def test_new_email_must_not_be_in_use(self):
+        User.objects.create_user(
+            email='taken@emailco.com', password='x', name='Taken', company=self.company,
+        )
+        self.client.force_authenticate(self.user)
+        resp = self.client.post('/api/auth/email-change/request/', {
+            'new_email': 'taken@emailco.com',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_verify_with_wrong_code_fails_and_counts_attempts(self):
+        self.client.force_authenticate(self.user)
+        with patch('accounts.views.generate_otp', return_value=self.FIXED_CODE):
+            self.client.post('/api/auth/email-change/request/', {
+                'new_email': 'new@emailco.com',
+            }, format='json')
+        resp = self.client.post('/api/auth/email-change/verify/', {
+            'otp': '999999',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(self.user.email_change_request.attempts, 1)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'old@emailco.com')
+
+    def test_flow_updates_email_and_invalidates_sessions(self):
+        self._auth()
+        with patch('accounts.views.generate_otp', return_value=self.FIXED_CODE):
+            self.client.post('/api/auth/email-change/request/', {
+                'new_email': 'new@emailco.com',
+            }, format='json')
+
+        resp = self.client.post('/api/auth/email-change/verify/', {
+            'otp': self.FIXED_CODE,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.data['logged_out'], True)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'new@emailco.com')
+        self.assertFalse(hasattr(self.user, 'email_change_request'))
+
+        # Every outstanding refresh token is blacklisted and can no longer refresh.
+        self.assertTrue(OutstandingToken.objects.filter(user=self.user).exists())
+        self.assertTrue(BlacklistedToken.objects.filter(token__user=self.user).exists())
+        resp = self.client.post('/api/auth/token/refresh/', {
+            'refresh': self.refresh_token,
+        }, format='json')
+        self.assertIn(resp.status_code, (401, 400))
+
+    def test_verify_without_request_fails(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post('/api/auth/email-change/verify/', {
+            'otp': self.FIXED_CODE,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_resend_within_cooldown_is_rejected(self):
+        self.client.force_authenticate(self.user)
+        with patch('accounts.views.generate_otp', return_value=self.FIXED_CODE):
+            first = self.client.post('/api/auth/email-change/request/', {
+                'new_email': 'new@emailco.com',
+            }, format='json')
+            second = self.client.post('/api/auth/email-change/request/', {
+                'new_email': 'new@emailco.com',
+            }, format='json')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+
+    def test_verify_after_expiry_fails(self):
+        self.client.force_authenticate(self.user)
+        with patch('accounts.views.generate_otp', return_value=self.FIXED_CODE):
+            self.client.post('/api/auth/email-change/request/', {
+                'new_email': 'new@emailco.com',
+            }, format='json')
+        self.user.email_change_request.otp_expires_at -= timedelta(hours=1)
+        self.user.email_change_request.save(update_fields=['otp_expires_at'])
+        resp = self.client.post('/api/auth/email-change/verify/', {
+            'otp': self.FIXED_CODE,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'old@emailco.com')
+
+    def test_admin_can_change_other_users_email_without_otp(self):
+        staff = User.objects.create_user(
+            email='staff@emailco.com', password='x', name='Staff A', company=self.company,
+        )
+        self.client.force_authenticate(self.user)  # self.user is the admin
+        resp = self.client.patch(f'/api/auth/users/{staff.pk}/', {
+            'email': 'staffnew@emailco.com',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        staff.refresh_from_db()
+        self.assertEqual(staff.email, 'staffnew@emailco.com')

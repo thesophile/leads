@@ -176,6 +176,28 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Check a single permission key (company-scoped role permissions)."""
         return bool(self.is_superuser or key in self.get_permissions())
 
+    def can_manage(self, other):
+        """Whether this user may administer ``other``'s staff record.
+
+        Authority is read purely from the permission system — there is no
+        separate role hierarchy. An actor may manage a target only when the
+        target's current role grants no permissions the actor does not already
+        hold themselves (equal or lower authority). Company admins therefore
+        manage each other, while a lesser role cannot touch an admin.
+        """
+        if self.is_superuser:
+            return True
+        if self.company_id is None or self.company_id != other.company_id:
+            return False
+        if other.is_superuser:
+            return False
+        role = other.role
+        if role is None:
+            return True
+        if self.role is None:
+            return False
+        return role.permission_names <= self.get_permissions()
+
     def has_perm(self, perm, obj=None):
         """Delegate to has_permission for Django's auth system compatibility.
 
@@ -191,3 +213,30 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def permissions(self):
         return sorted(self.get_permissions())
+
+
+class EmailChangeRequest(models.Model):
+    """A pending self-service email change for a user.
+
+    The user requests a change to a new email; a one-time code is sent to the
+    *new* address. The new email is only persisted (and all of the user's
+    sessions/tokens invalidated) once the code is verified. The code confirms
+    access to the new mailbox; it is not an authentication mechanism.
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='email_change_request',
+    )
+    new_email = models.EmailField()
+    otp_hash = models.CharField(max_length=160, blank=True)
+    otp_sent_at = models.DateTimeField(null=True, blank=True)
+    otp_expires_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    requests_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.user.email} -> {self.new_email}'

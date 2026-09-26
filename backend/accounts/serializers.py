@@ -203,9 +203,11 @@ class StaffCreateSerializer(serializers.ModelSerializer):
             owner = self.context['request'].user
             if role.company != owner.company:
                 raise serializers.ValidationError({'role': 'This role does not belong to your company.'})
-            if role.is_system:
-                raise serializers.ValidationError({'role': 'The system admin role cannot be assigned here.'})
-            if not owner.is_superuser and set(role.permissions or []) - owner.get_permissions():
+            # Authority is measured through the permission system only: a role
+            # may be granted to someone only if every permission it carries is
+            # one the caller already holds. The Admin role carries the full
+            # catalog, so only an Admin (or a platform superuser) can assign it.
+            if not owner.is_superuser and role.permission_names - owner.get_permissions():
                 raise serializers.ValidationError(
                     {'role': 'You cannot assign a role with permissions you do not have yourself.'}
                 )
@@ -256,34 +258,68 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
             self.fields['role'].queryset = company.roles.all()
 
     def validate(self, attrs):
-        role = attrs.get('role')
-        if role is not None and role.is_system:
-            raise serializers.ValidationError({'role': 'The system admin role cannot be assigned here.'})
-
         request = self.context.get('request')
         actor = request.user if request else None
         target = self.instance
 
-        if role is not None and actor is not None and not actor.is_superuser and set(role.permissions or []) - actor.get_permissions():
+        # A user may only administer another staff record whose authority is
+        # equal or below their own (measured through the permission system).
+        if (
+            actor is not None
+            and target is not None
+            and target.pk
+            and not actor.can_manage(target)
+        ):
             raise serializers.ValidationError(
-                {'role': 'You cannot assign a role with permissions you do not have yourself.'}
+                {'detail': 'You cannot manage a user with greater authority than your own.'}
             )
 
-        # The company's system-admin account is protected: only the admin
-        # themselves (or a platform superuser) may edit it, and never deactivate
-        # it. This prevents a manager from demoting/locking out the admin.
-        if target is not None and target.pk and target.role_id and target.role.is_system:
-            can_edit_admin = actor is not None and (
-                actor.is_superuser or actor.pk == target.pk
+        new_email = attrs.get('email')
+        if (
+            new_email is not None
+            and target is not None
+            and target.email
+            and new_email != target.email
+            and actor is not None
+            and actor.pk == target.pk
+        ):
+            # Self-service email changes go through the OTP flow: the code is
+            # sent to the new address and the new email is only persisted once
+            # it is verified. Never let the plain staff edit path change it.
+            raise serializers.ValidationError({
+                'email': (
+                    'To change your own email, use the verification flow — '
+                    'a one-time code will be sent to your new email address.'
+                )
+            })
+
+        role = attrs.get('role')
+        if role is not None and actor is not None and target is not None and actor.pk == target.pk:
+            # A user can never change their own role / permissions.
+            if role != target.role:
+                raise serializers.ValidationError(
+                    {'role': 'You cannot change your own role.'}
+                )
+
+        if role is not None and actor is not None and not actor.is_superuser:
+            # Equal or lower authority is allowed; never grant more than the
+            # caller holds. The Admin (system) role carries the full catalog,
+            # so only an Admin may assign it to another user.
+            if role.permission_names - actor.get_permissions():
+                raise serializers.ValidationError(
+                    {'role': 'You cannot assign a role with permissions you do not have yourself.'}
+                )
+
+        # You cannot lock yourself out of your own account.
+        if (
+            attrs.get('is_active') is False
+            and target is not None
+            and actor is not None
+            and actor.pk == target.pk
+        ):
+            raise serializers.ValidationError(
+                {'detail': 'You cannot deactivate your own account.'}
             )
-            if not can_edit_admin:
-                raise serializers.ValidationError(
-                    {'detail': 'The company admin account cannot be edited by another staff member.'}
-                )
-            if attrs.get('is_active') is False and not (actor and actor.is_superuser):
-                raise serializers.ValidationError(
-                    {'detail': 'The company admin account cannot be deactivated.'}
-                )
 
         # Block deactivating a staff member who still owns working leads;
         # leads must be reassigned first so they are not orphaned.
@@ -311,11 +347,7 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         if mobile is not None:
             validated_data['phone'] = mobile
         if role is not None:
-            # If the user being edited is the admin, keep their admin role.
-            if instance.role_id and instance.role.is_system:
-                pass
-            else:
-                validated_data['role'] = role
+            validated_data['role'] = role
 
         instance = super().update(instance, validated_data)
 

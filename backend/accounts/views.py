@@ -1,6 +1,9 @@
+import hashlib
 import io
 import logging
 import re
+import secrets
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
@@ -8,6 +11,7 @@ from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.db.models import Q
 from django.core.files.images import get_image_dimensions
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -15,12 +19,16 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from PIL import Image
 
 from .permissions import IsSuperuser, can, require_permission
-from .models import Company, Role
+from .models import Company, EmailChangeRequest, Role
 from .rbac import FLAT_PERMISSIONS, PERMISSION_GROUPS
 from utilities.models import log_activity
 from .serializers import (
@@ -42,6 +50,31 @@ from .serializers import (
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
+
+# Self-service email change limits.
+EMAIL_OTP_MINUTES = 5  # a code lapses after this long
+EMAIL_OTP_MAX_ATTEMPTS = 5  # wrong codes before the request must be restarted
+EMAIL_OTP_RESEND_COOLDOWN = 60  # seconds between code sends
+EMAIL_OTP_MAX_REQUESTS = 10  # total code sends per pending request
+
+
+def hash_otp(code, salt):
+    return hashlib.sha256(f'{salt}:{code}'.encode('utf-8')).hexdigest()
+
+
+def generate_otp():
+    return f'{secrets.randbelow(1000000):06d}'
+
+
+def blacklist_user_tokens(user):
+    """Revoke every outstanding refresh token for a user.
+
+    Access tokens carry no blacklist checks and simply expire on their own, so
+    this guarantees the user can no longer obtain a fresh access token — the
+    same guarantee the logout endpoint provides.
+    """
+    for outstanding in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=outstanding)
 
 
 def get_tokens_for_user(user):
@@ -136,13 +169,31 @@ class StaffDetailView(APIView):
         user = self.get_object(pk)
         if user is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        # Belt-and-braces guard for the protected system-admin account.
-        if user.role_id and user.role.is_system and not (
-            request.user.is_superuser or request.user.pk == user.pk
+        # Authority comes from the permission system: you manage only records at
+        # your own level or below. Admins manage other admins; a lesser role
+        # cannot touch an account with greater authority.
+        if not request.user.can_manage(user):
+            return Response(
+                {'detail': 'You cannot manage a user with greater authority than your own.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # A user may not change their own email through the staff edit path;
+        # self-service email changes require the OTP verification flow.
+        new_email = request.data.get('email')
+        if (
+            user.pk == request.user.pk
+            and new_email
+            and new_email != user.email
+            and request.user.is_authenticated
         ):
             return Response(
-                {'detail': 'The company admin account cannot be edited by another staff member.'},
-                status=status.HTTP_403_FORBIDDEN,
+                {
+                    'email': (
+                        'To change your own email, use the verification flow — '
+                        'a one-time code will be sent to your new email address.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
         serializer = StaffUpdateSerializer(user, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -168,13 +219,9 @@ class StaffResetPasswordView(APIView):
             user = User.objects.get(pk=pk, company=request.user.company)
         except User.DoesNotExist:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        # Password-reset can escalate to full admin; protect the system-admin
-        # account from being reset by a lesser staff role.
-        if user.role_id and user.role.is_system and not (
-            request.user.is_superuser or request.user.pk == user.pk
-        ):
+        if not request.user.can_manage(user):
             return Response(
-                {'detail': 'The company admin account password cannot be reset by another staff member.'},
+                {'detail': 'You cannot manage a user with greater authority than your own.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         serializer = PasswordResetByAdminSerializer(data=request.data)
@@ -762,6 +809,160 @@ class PasswordResetConfirmView(APIView):
         user.set_password(serializer.validated_data['new_password'])
         user.save(update_fields=['password'])
         return Response({'detail': 'Password has been reset. You can now sign in.'})
+
+
+class EmailChangeRequestView(APIView):
+    """Start a self-service email change: send a one-time code to the *new*
+    address. The current email is left untouched until the code is verified.
+
+    The code confirms the user actually owns the new mailbox; it is not an
+    authentication mechanism, so no other use is made of it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        new_email = str(request.data.get('new_email', '')).strip().lower()
+        if not new_email:
+            return Response(
+                {'new_email': 'This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if new_email == (user.email or '').strip().lower():
+            return Response(
+                {'new_email': 'This is already your email address.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+            return Response(
+                {'new_email': 'Another account is already using this email address.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        request_row, _ = EmailChangeRequest.objects.get_or_create(user=user)
+        now = timezone.now()
+
+        if (
+            request_row.otp_sent_at
+            and (now - request_row.otp_sent_at).total_seconds() < EMAIL_OTP_RESEND_COOLDOWN
+        ):
+            return Response(
+                {'detail': 'Please wait a moment before requesting another code.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        if request_row.requests_count >= EMAIL_OTP_MAX_REQUESTS:
+            return Response(
+                {'detail': 'Too many code requests. Please try again later.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        code = generate_otp()
+        request_row.new_email = new_email
+        request_row.otp_hash = hash_otp(code, request_row.pk)
+        request_row.otp_sent_at = now
+        request_row.otp_expires_at = now + timedelta(minutes=EMAIL_OTP_MINUTES)
+        request_row.attempts = 0
+        request_row.requests_count += 1
+        request_row.save(update_fields=[
+            'new_email', 'otp_hash', 'otp_sent_at', 'otp_expires_at',
+            'attempts', 'requests_count', 'updated_at',
+        ])
+
+        try:
+            send_mail(
+                subject='LEADS — Verify your new email address',
+                message=(
+                    f'Hi {user.name},\n\n'
+                    f'You asked to change the sign-in email for your LEADS account\n'
+                    f'to:\n\n    {new_email}\n\n'
+                    f'Your one-time verification code is:\n\n    {code}\n\n'
+                    f'Enter it to confirm you have access to this mailbox. '
+                    f'Your account email will only change after you verify, and '
+                    f'you will be signed out of all sessions.\n\n'
+                    f'The code expires in {EMAIL_OTP_MINUTES} minutes and can only '
+                    f'be used once.\n\n'
+                    f'If you did not request this, you can safely ignore this email.\n\n'
+                    f'— LEADS'
+                ),
+                from_email=None,
+                recipient_list=[new_email],
+                fail_silently=True,
+            )
+        except Exception:
+            logger.exception('Failed to send email-change code to %s', new_email)
+
+        return Response({
+            'sent': True,
+            'expires_in': EMAIL_OTP_MINUTES * 60,
+            'new_email': new_email,
+        })
+
+
+class EmailChangeVerifyView(APIView):
+    """Verify the code, persist the new email, revoke every session and sign the
+    user out. Returning users must sign in with the new email address."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        code = str(request.data.get('otp', '')).strip()
+
+        request_row = getattr(user, 'email_change_request', None)
+        if request_row is None or not request_row.otp_hash or request_row.otp_expires_at is None:
+            return Response(
+                {'detail': 'No verification code was requested. Please request a code first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if timezone.now() > request_row.otp_expires_at:
+            return Response(
+                {'detail': 'The verification code has expired. Please request a new one.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if request_row.attempts >= EMAIL_OTP_MAX_ATTEMPTS:
+            return Response(
+                {'detail': 'Too many incorrect attempts. Please request a new code.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if hash_otp(code, request_row.pk) != request_row.otp_hash:
+            request_row.attempts += 1
+            request_row.save(update_fields=['attempts', 'updated_at'])
+            return Response(
+                {'detail': 'The verification code is invalid. Please try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_email = request_row.new_email
+        if not new_email or User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+            return Response(
+                {'new_email': 'Another account is already using this email address.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        old_email = user.email
+        user.email = User.objects.normalize_email(new_email)
+        user.save(update_fields=['email', 'updated_at'])
+        log_activity(
+            user,
+            user.company,
+            'changed own email',
+            f'{user.name} changed their sign-in email from {old_email} to {user.email}.',
+            entity_type='staff',
+            entity_id=str(user.pk),
+        )
+
+        request_row.delete()
+        blacklist_user_tokens(user)
+
+        return Response({
+            'detail': (
+                'Your email address has been updated and you have been signed out. '
+                'Please sign in with your new email.'
+            ),
+            'logged_out': True,
+            'email': user.email,
+        })
 
 
 class SafeTokenRefreshSerializer(TokenRefreshSerializer):

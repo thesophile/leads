@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
@@ -196,7 +197,7 @@ function FloatingField({ label, id, value, onChange, type = 'text', icon }) {
   )
 }
 
-function FloatingSelect({ label, id, value, onChange, icon, children }) {
+function FloatingSelect({ label, id, value, onChange, icon, children, disabled = false }) {
   return (
     <div className="relative mt-2">
       {icon && (
@@ -208,7 +209,8 @@ function FloatingSelect({ label, id, value, onChange, icon, children }) {
         id={id}
         value={value}
         onChange={onChange}
-        className={`${inputClass} ${icon ? 'pl-9' : ''} peer cursor-pointer ${value ? '' : 'text-slate-400'}`}
+        disabled={disabled}
+        className={`${inputClass} ${icon ? 'pl-9' : ''} peer cursor-pointer ${value ? '' : 'text-slate-400'} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400`}
       >
         {children}
       </select>
@@ -227,7 +229,8 @@ function FloatingSelect({ label, id, value, onChange, icon, children }) {
 }
 
 export default function Staff() {
-  const { user } = useAuth()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
   const [tab, setTab] = useState('staff')
   const [staffList, setStaffList] = useState([])
   const [branches, setBranches] = useState([])
@@ -249,6 +252,7 @@ export default function Staff() {
   const [showCredentials, setShowCredentials] = useState(null) // newly created creds
   const [resetModal, setResetModal] = useState(null) // user object for reset
   const [resetPw, setResetPw] = useState('')
+  const [selfEmailModal, setSelfEmailModal] = useState(null) // { stage, otp, busy, error }
   const [toast, setToast] = useState('')
   const [saving, setSaving] = useState(false)
   const [togglingId, setTogglingId] = useState(null)
@@ -330,13 +334,25 @@ export default function Staff() {
     setSaving(true)
     try {
       if (editingId) {
+        const isSelf = editingEmp && user && editingEmp.id === user.id
+        if (
+          isSelf &&
+          formData.email.trim().toLowerCase() !== (editingEmp.email || '').trim().toLowerCase()
+        ) {
+          // Changing your own email requires OTP verification; the code goes to
+          // the new address and you are signed out once it succeeds.
+          setSelfEmailModal({ stage: 'warn', otp: '', busy: false, error: '' })
+          return
+        }
         const payload = {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
           branch: formData.branch,
         }
-        if (formData.role) payload.role = formData.role
+        if (!isSelf && formData.role && Number(formData.role) !== (editingEmp?.role?.id ?? null)) {
+          payload.role = Number(formData.role)
+        }
         await api.patch(`/auth/users/${editingId}/`, payload)
         showToast('Employee updated.')
       } else {
@@ -416,6 +432,50 @@ export default function Staff() {
     }
   }
 
+  async function requestSelfEmailOtp() {
+    setSelfEmailModal((m) => ({ ...m, busy: true, error: '' }))
+    try {
+      await api.post('/auth/email-change/request/', { new_email: formData.email })
+      setSelfEmailModal((m) => ({ ...m, stage: 'otp', busy: false, otp: '' }))
+    } catch (err) {
+      setSelfEmailModal((m) => ({ ...m, busy: false, error: err.message }))
+    }
+  }
+
+  async function verifySelfEmailOtp() {
+    const m = selfEmailModal
+    if (!m || m.busy) return
+    setSelfEmailModal({ ...m, busy: true, error: '' })
+    try {
+      await api.post('/auth/email-change/verify/', { otp: m.otp })
+      // Persist the rest of the self edit (never email or role here — the email
+      // was already saved by the verification step).
+      try {
+        if (editingEmp) {
+          await api.patch(`/auth/users/${editingEmp.id}/`, {
+            name: formData.name,
+            phone: formData.phone,
+            branch: formData.branch,
+          })
+        }
+      } catch {
+        // The email change itself already succeeded; other fields can be re-saved
+        // after signing back in.
+      }
+      setSelfEmailModal(null)
+      setFormData({ name: '', email: '', phone: '', branch: '', role: null, password: '' })
+      setEditingId(null)
+      sessionStorage.setItem(
+        'leads_notice',
+        'Your email address has been changed. Please sign in with your new email.'
+      )
+      await logout()
+      navigate('/login', { replace: true })
+    } catch (err) {
+      setSelfEmailModal((m) => ({ ...m, busy: false, error: err.message }))
+    }
+  }
+
   const filteredStaff = useMemo(() => {
     if (!searchQuery.trim()) return staffList
     const q = searchQuery.toLowerCase()
@@ -427,6 +487,33 @@ export default function Staff() {
         (s.role_name || '').toLowerCase().includes(q)
     )
   }, [staffList, searchQuery])
+
+  // The full catalog (from /auth/permissions/), used to compute which roles the
+  // acting user may assign. Authority is a pure permission-set subset relation:
+  // a role may be granted only if every permission it carries is held by the
+  // assigner (equal or lower authority). An Admin holds the full catalog, so
+  // they (and only they) can assign the Admin role.
+  const allPermissions = useMemo(() => {
+    const set = new Set()
+    permissionCatalog.forEach((group) => (group.permissions || []).forEach(([key]) => set.add(key)))
+    return set
+  }, [permissionCatalog])
+
+  const assignableRoles = useMemo(() => {
+    if (!user) return []
+    if (user.is_superuser) return roles
+    const mine = new Set(user.permissions || [])
+    return roles.filter((r) => {
+      const needed = r.is_system ? allPermissions : new Set(r.permissions || [])
+      return Array.from(needed).every((p) => mine.has(p))
+    })
+  }, [roles, user, allPermissions])
+
+  const editingEmp = useMemo(
+    () => staffList.find((s) => s.id === editingId) || null,
+    [staffList, editingId]
+  )
+  const isEditingSelf = Boolean(editingEmp && user && editingEmp.id === user.id)
 
   const isEditing = Boolean(editingId)
 
@@ -552,14 +639,20 @@ export default function Staff() {
                 value={formData.role ?? ''}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value ? Number(e.target.value) : null })}
                 icon={<BriefcaseIcon />}
+                disabled={isEditingSelf}
               >
-                <option value="" disabled hidden />
-                {roles.map((r) => (
+                <option value="" disabled={!isEditingSelf} hidden />
+                {assignableRoles.map((r) => (
                   <option key={r.id} value={r.id} className="text-slate-800">
-                    {r.name}
+                    {r.name}{isEditingSelf && r.id === formData.role ? ' (current)' : ''}
                   </option>
                 ))}
               </FloatingSelect>
+              {isEditingSelf && (
+                <p className="-mt-1 text-[10px] text-slate-400">
+                  Your role cannot be changed here. You can change your own email, which requires a verification code.
+                </p>
+              )}
 
               {!isEditing && (
                 <>
@@ -821,6 +914,106 @@ export default function Staff() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+    {/* Self email change (OTP) modal */}
+      {selfEmailModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !selfEmailModal.busy) {
+              setSelfEmailModal(null)
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+                <KeyIcon />
+              </span>
+              <h3 className="text-base font-bold text-slate-900">Change your email</h3>
+            </div>
+
+            {selfEmailModal.stage === 'warn' ? (
+              <>
+                <p className="mt-3 text-sm text-slate-600">
+                  You are changing the sign-in email for <span className="font-semibold">{user?.name}</span>{' '}
+                  from <span className="font-semibold">{user?.email}</span> to{' '}
+                  <span className="font-semibold text-brand-600">{formData.email}</span>.
+                </p>
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+                  <p>A verification code will be sent to <span className="font-semibold">{formData.email}</span>.</p>
+                  <p className="mt-1.5">
+                    After you verify, your email will be updated and you will be{' '}
+                    <span className="font-semibold">signed out of all sessions</span>. You must then sign in with
+                    your new email address.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 text-sm text-slate-600">
+                  We sent a one-time verification code to{' '}
+                  <span className="font-semibold text-brand-600">{formData.email}</span>. It expires in 5 minutes.
+                </p>
+                <div className="mt-4">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Verification code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={selfEmailModal.otp}
+                    onChange={(e) =>
+                      setSelfEmailModal({ ...selfEmailModal, otp: e.target.value.replace(/\D/g, '').slice(0, 6) })
+                    }
+                    placeholder="Enter the 6-digit code"
+                    disabled={selfEmailModal.busy}
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-mono tracking-widest text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:opacity-60"
+                  />
+                </div>
+              </>
+            )}
+
+            {selfEmailModal.error && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+                {selfEmailModal.error}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSelfEmailModal(null)}
+                disabled={selfEmailModal.busy}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              {selfEmailModal.stage === 'warn' ? (
+                <button
+                  type="button"
+                  onClick={requestSelfEmailOtp}
+                  disabled={selfEmailModal.busy}
+                  className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {selfEmailModal.busy && <Spinner className="h-3.5 w-3.5" />}
+                  {selfEmailModal.busy ? 'Sending…' : 'Send code'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={verifySelfEmailOtp}
+                  disabled={selfEmailModal.busy || (selfEmailModal.otp || '').length !== 6}
+                  className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {selfEmailModal.busy && <Spinner className="h-3.5 w-3.5" />}
+                  {selfEmailModal.busy ? 'Verifying…' : 'Verify & sign out'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
