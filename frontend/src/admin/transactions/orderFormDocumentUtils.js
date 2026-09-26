@@ -126,24 +126,39 @@ function fitTextPrefixLen(text, budgetPx) {
   return lo
 }
 
-// Trim rich text so it fits within a hard limit of whole lines, each line no
-// wider than maxLinePx. Uses the same line-break rules as htmlToPlainLines
-// (<br>, closing tags of p/div/h*/li/etc.) and measures rendered width with
-// the font the terms summary is drawn with in the proposal form.
+const RICH_OPEN_LINE_BLOCK_RE = /^<\s*(p|div|h[1-6]|li|blockquote|pre|tr|section|article)\b[^>]*>$/i
+
+// Trim rich text so it fits a hard limit of whole lines, each line no wider
+// than maxLinePx. Accounting matches richTextLineCount: a paragraph block with
+// visible text is one line, <br> ends a line, and an empty paragraph block
+// (<p><br></p>) is one blank line. Rendered width is measured with the same
+// font the terms summary is drawn with in the proposal form.
 export function trimRichHtmlToLines(html, maxLines, maxLinePx) {
   const tokens = String(html || '').split(/(<[^>]+>)/g)
   const out = []
   let lineIndex = 0
   let linePlain = ''
+  let blockHasText = false
+  let blockOpenIndex = -1
+  let blockEmittedContent = false
   let cut = false
 
-  const hasContentAhead = (fromIndex) => {
-    for (let i = fromIndex; i < tokens.length; i++) {
-      const t = tokens[i]
-      if (!t || t.startsWith('<')) continue
-      if (plainMeasureText(t).trim() !== '') return true
+  const revertEmptyBlock = () => {
+    if (!blockEmittedContent && blockOpenIndex >= 0) {
+      out.length = blockOpenIndex
+      blockOpenIndex = -1
     }
-    return false
+  }
+
+  const endLineAt = (eventToken) => {
+    if (lineIndex + 1 > maxLines) return false
+    if (eventToken) {
+      out.push(eventToken)
+      blockEmittedContent = true
+    }
+    lineIndex += 1
+    linePlain = ''
+    return true
   }
 
   for (let i = 0; i < tokens.length && !cut; i++) {
@@ -151,21 +166,32 @@ export function trimRichHtmlToLines(html, maxLines, maxLinePx) {
     if (!token) continue
 
     if (token.startsWith('<')) {
-      const isBr = RICH_BR_RE.test(token)
-      const isClosingBreak = RICH_LINE_BREAK_RE.test(token)
-      if (isBr || isClosingBreak) {
-        if (lineIndex + 1 > maxLines) {
-          break
-        }
-        if (lineIndex + 1 >= maxLines && hasContentAhead(i + 1)) {
-          break
-        }
+      if (RICH_OPEN_LINE_BLOCK_RE.test(token)) {
+        blockHasText = false
+        blockOpenIndex = out.length
+        blockEmittedContent = false
         out.push(token)
-        lineIndex += 1
-        linePlain = ''
-      } else {
-        out.push(token)
+        continue
       }
+      if (RICH_BR_RE.test(token)) {
+        if (!endLineAt(token)) {
+          revertEmptyBlock()
+          break
+        }
+        continue
+      }
+      if (RICH_LINE_BREAK_RE.test(token)) {
+        if (blockHasText) {
+          if (!endLineAt(token)) {
+            break
+          }
+        } else {
+          out.push(token)
+        }
+        blockHasText = false
+        continue
+      }
+      out.push(token)
       continue
     }
 
@@ -174,6 +200,7 @@ export function trimRichHtmlToLines(html, maxLines, maxLinePx) {
       const seg = segments[s]
       if (seg) {
         if (lineIndex >= maxLines) {
+          revertEmptyBlock()
           cut = true
           break
         }
@@ -181,20 +208,20 @@ export function trimRichHtmlToLines(html, maxLines, maxLinePx) {
           const budget = Math.max(0, maxLinePx - measureTextWidth(linePlain))
           const fit = fitTextPrefixLen(seg, budget)
           out.push(seg.slice(0, fit))
+          blockEmittedContent = true
           cut = true
           break
         }
         out.push(seg)
+        blockEmittedContent = true
+        if (plainMeasureText(seg).trim() !== '') blockHasText = true
         linePlain += plainMeasureText(seg)
       }
       if (s < segments.length - 1) {
-        if (lineIndex + 1 >= maxLines) {
+        if (!endLineAt('<br>')) {
           cut = true
           break
         }
-        out.push('<br>')
-        lineIndex += 1
-        linePlain = ''
       }
     }
   }
@@ -202,8 +229,19 @@ export function trimRichHtmlToLines(html, maxLines, maxLinePx) {
   return out.join('')
 }
 
+const RICH_EMPTY_BLOCK =
+  String.raw`<\s*(p|div|h[1-6]|li|blockquote|pre|tr|section|article)\b[^>]*>\s*(?:<\s*br\s*/?\s*>\s*)?</\s*\1\s*>`
+const RICH_TRAILING_EMPTY_BLOCKS_RE = new RegExp(
+  String.raw`(?:${RICH_EMPTY_BLOCK}(?:\s*))+$`,
+  'i',
+)
+
 export function richTextLineCount(html) {
-  return htmlToPlainLines(html).length
+  const s = String(html || '')
+  const base = htmlToPlainLines(s).length
+  const m = s.match(RICH_TRAILING_EMPTY_BLOCKS_RE)
+  const trailing = m ? (m[0].match(/<\//g) || []).length : 0
+  return base + trailing
 }
 
 export function orderBarcodeValue(id) {
