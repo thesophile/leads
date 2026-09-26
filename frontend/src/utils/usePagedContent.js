@@ -29,6 +29,13 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
   // when the caller passes a fresh array literal on every render.
   const belowRef = useRef(belowBlocks)
   const reserveRef = useRef(reserve)
+
+  // Once a page commits as the final page (no continuation), keep it final.
+  // Incidental re-measures (font loads, async heights) must not re-spawn a
+  // continuation page — that feedback made the content flicker and the page
+  // height jump on every measurement tick.
+  const finalLatchRef = useRef(false)
+
   useLayoutEffect(() => {
     belowRef.current = belowBlocks
     reserveRef.current = reserve
@@ -38,6 +45,12 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     const bottomEl = bottomRef && bottomRef.current
     const contentEl = contentRef && contentRef.current
     if (!bottomEl || !contentEl || contentEl.children.length === 0) return
+
+    // A once-final page is frozen: stop measuring it. Mounting the end block
+    // (or incidental font/resize noise) must never push it back into a
+    // continuation and start the flicker again. The latch is cleared only when
+    // the content's children materially change (see MutationObserver below).
+    if (finalLatchRef.current) return
 
     const contentTop = contentEl.getBoundingClientRect().top
     const bottom = bottomEl.getBoundingClientRect().top
@@ -79,9 +92,11 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       }
     }
 
+    // A once-final page stays final.
     const prev = committed.current
     if (prev.cap !== nextCap || prev.part2Html !== nextPart2) {
       committed.current = { cap: nextCap, part2Html: nextPart2 }
+      if (nextPart2 === '') finalLatchRef.current = true
       setCap(nextCap)
       setPart2Html(nextPart2)
     }
@@ -103,9 +118,14 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     }
 
     // Re-measure immediately when innerHTML/children change (e.g. data arrives).
+    // A real content change also clears the final-page latch so genuinely new
+    // content is allowed to re-paginate.
     let observer
     if (contentEl && typeof MutationObserver !== 'undefined') {
-      observer = new MutationObserver(check)
+      observer = new MutationObserver(() => {
+        finalLatchRef.current = false
+        check()
+      })
       observer.observe(contentEl, { childList: true, subtree: true, characterData: true })
     }
 
