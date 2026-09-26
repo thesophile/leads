@@ -1165,6 +1165,8 @@ class QuotationApprovalFlowTests(APITestCase):
                 f'/api/transactions/quotations/{quotation}/approval-otp/', {}, format='json'
             )
         self.assertEqual(otp.status_code, 200)
+        self.assertIs(otp.data['sent'], True)
+        self.assertEqual(otp.data['email'], user.email)
         code = re.search(r'approval code is:\n\n\s*(\d{6})', mailbox['message']).group(1)
         return self.client.post(
             f'/api/transactions/quotations/{quotation}/approve/',
@@ -1225,6 +1227,18 @@ class QuotationApprovalFlowTests(APITestCase):
             f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
         )
         self.assertEqual(resp.status_code, 403)
+
+    def test_otp_send_failure_is_reported(self):
+        self._send()
+        self.client.force_authenticate(self.approver)
+        with patch('transactions.views.send_mail', side_effect=Exception('SMTP 550')):
+            resp = self.client.post(
+                f'/api/transactions/quotations/{self.lead.id}/approval-otp/', {}, format='json'
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.data['sent'], False)
+        self.assertIn('SMTP 550', resp.data['detail'])
+        self.assertEqual(resp.data['email'], self.approver.email)
 
     def test_approval_requires_all_approvers(self):
         self._send()

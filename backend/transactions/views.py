@@ -1883,8 +1883,11 @@ class QuotationOtpView(QuotationApprovalBaseView):
         approval.otp_expires_at = timezone.now() + timedelta(minutes=self.OTP_MINUTES)
         approval.otp_attempts = 0
         approval.save(update_fields=['otp_hash', 'otp_sent_at', 'otp_expires_at', 'otp_attempts', 'updated_at'])
+
+        sent = False
+        error = None
         try:
-            send_mail(
+            sent = send_mail(
                 subject='LEADS — Quotation approval code',
                 message=(
                     f'Hi {request.user.name},\n\n'
@@ -1897,11 +1900,25 @@ class QuotationOtpView(QuotationApprovalBaseView):
                 ),
                 from_email=None,
                 recipient_list=[request.user.email],
-                fail_silently=True,
+                fail_silently=False,
+            ) > 0
+        except Exception as exc:
+            sent = False
+            error = str(exc) or exc.__class__.__name__
+            logger.exception(
+                'Failed to email approval code for quotation %s to %s',
+                quotation.id, request.user.email,
             )
-        except Exception:
-            pass
-        return Response({'sent': True, 'expires_in': self.OTP_MINUTES * 60})
+        payload = {
+            'sent': sent,
+            'expires_in': self.OTP_MINUTES * 60,
+            'email': request.user.email,
+        }
+        if error:
+            payload['detail'] = (
+                f'The approval code could not be emailed to {request.user.email}. {error}'
+            )
+        return Response(payload)
 
 
 class QuotationApproveView(QuotationApprovalBaseView):

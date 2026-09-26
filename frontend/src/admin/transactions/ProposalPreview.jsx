@@ -518,12 +518,16 @@ const approvedByRef = useRef(null)
     setActionError('')
     setOtpSent(false)
     try {
-      await api.post(
+      const res = await api.post(
         `/transactions/quotations/${encodeURIComponent(proposalData.id)}/approval-otp/`,
         {}
       )
+      if (res?.sent === false || res?.detail) {
+        setActionError(res?.detail || 'The approval code could not be emailed.')
+        return
+      }
       setOtpSent(true)
-      setApproveNotice('A one-time approval code has been sent to your email.')
+      setApproveNotice(`A one-time approval code has been sent to ${res?.email || 'your email'}.`)
     } catch (err) {
       setActionError(err.message)
     } finally {

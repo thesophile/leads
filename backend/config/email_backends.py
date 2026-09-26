@@ -12,5 +12,6 @@ class PrintAndSendEmailBackend(SMTPEmailBackend):
     """Send emails over SMTP and print each message to the terminal."""
 
     def send_messages(self, email_messages):
+        sent = super().send_messages(email_messages)
         ConsoleEmailBackend().send_messages(email_messages)
-        return super().send_messages(email_messages)
+        return sent
