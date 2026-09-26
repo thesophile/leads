@@ -158,6 +158,15 @@ main table.refresh-fading {
   max-height: 360px;
 }
 
+/* 17-line variant for the Terms & Conditions template editor */
+.quill-terms-17 .ql-container.ql-snow {
+  min-height: 318px;
+}
+.quill-terms-17 .ql-editor {
+  min-height: 318px;
+  max-height: 318px;
+}
+
 .ql-editor.ql-blank::before {
   color: #94a3b8;
   font-style: normal;

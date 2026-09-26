@@ -1221,10 +1221,10 @@ export default function Settings() {
             </div>
 
             <form onSubmit={handleSaveTemplates}>
-              <div className="space-y-8 px-6 py-6 md:px-8 md:py-7">
-                <div>
+              <div className="grid grid-cols-1 items-start gap-8 px-6 py-6 md:px-8 md:py-7 lg:grid-cols-[min-content_minmax(0,1fr)]">
+                <div className="w-fit">
                   <SectionTitle>Terms &amp; Conditions Summary</SectionTitle>
-                  <p className="mt-1.5 text-[11px] text-slate-400">
+                  <p className="mt-1.5 w-[233px] text-[11px] text-slate-400">
                     A short version shown in the "Terms &amp; Conditions" box of the proposal and on the first
                     page of the order form.
                   </p>
@@ -1234,13 +1234,14 @@ export default function Settings() {
                       onChange={(e) => handleTermsSummaryChange(e.target.value)}
                       rows={TERMS_SUMMARY_MAX_LINES}
                       maxLength={TERMS_SUMMARY_MAX_CHARS}
-                      className={`${inputClass} resize-none`}
+                      className={'resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-xs transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/15'}
+                      style={{ width: termsSummaryMaxLinePx() + 30 }}
                       placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
                     />
                   </div>
                   <div className="mt-1 flex items-center justify-between">
                     <p className="text-[10px] font-semibold text-slate-400">
-                      Maximum {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} characters ·{' '}
+                      Max {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} chars ·{' '}
                       {TERMS_SUMMARY_MAX_LINES} lines · ~{Math.round(termsSummaryMaxLinePx())}px per line
                     </p>
                     <p
@@ -1257,7 +1258,7 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <SectionTitle>Full Terms &amp; Conditions</SectionTitle>
                   <p className="mt-1.5 text-[11px] text-slate-400">
                     The complete legal terms shown on the final page of the order form and used for proposals.
@@ -1265,7 +1266,7 @@ export default function Settings() {
                   <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <ReactQuill
                       theme="snow"
-                      className="quill-tall"
+                      className="quill-terms-17"
                       value={termsFullHtml}
                       onChange={setTermsFullHtml}
                       modules={QUILL_MODULES}
