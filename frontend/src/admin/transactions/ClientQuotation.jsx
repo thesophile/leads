@@ -10,10 +10,32 @@ function stripHtml(html) {
     .trim()
 }
 
-function wrappableHtml(html) {
-  return String(html || '')
+// Render stored rich text as plain text: drop all formatting/markup but keep the
+// author's line breaks. Consecutive blank lines collapse to one.
+function htmlToPlainLines(html) {
+  const raw = String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|blockquote|pre|tr|section|article)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/<p(?:\s[^>]*)?>\s*(?:<br\s*\/?>)?\s*<\/p>/gi, '<p class="rich-blank"><br></p>')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&mdash;/gi, '\u2014')
+    .replace(/&ndash;/gi, '\u2013')
+    .replace(/\r\n?/g, '\n')
+
+  const lines = []
+  for (const line of raw.split('\n')) {
+    const text = line.trim()
+    if (text === '' && (lines.length === 0 || lines[lines.length - 1] === '')) continue
+    lines.push(text)
+  }
+  while (lines.length && lines[lines.length - 1] === '') lines.pop()
+  return lines
 }
 
 function currencySymbol(raw) {
@@ -295,10 +317,11 @@ export default function ClientQuotation() {
                       Proposal Summary
                     </span>
                   </div>
-                  <div
-                    className="bg-white p-4 text-[13px] leading-relaxed text-slate-800 space-y-2"
-                    dangerouslySetInnerHTML={{ __html: wrappableHtml(scopeHtml) }}
-                  />
+                  <div className="bg-white p-4 text-[13px] leading-snug text-slate-800">
+                    {htmlToPlainLines(scopeHtml).map((line, i) => (
+                      <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -309,10 +332,11 @@ export default function ClientQuotation() {
                       Proposal in Detail
                     </span>
                   </div>
-                  <div
-                    className="bg-white p-4 text-[13px] leading-relaxed text-slate-800 space-y-2"
-                    dangerouslySetInnerHTML={{ __html: wrappableHtml(detailsHtml) }}
-                  />
+                  <div className="bg-white p-4 text-[13px] leading-snug text-slate-800">
+                    {htmlToPlainLines(detailsHtml).map((line, i) => (
+                      <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -323,10 +347,11 @@ export default function ClientQuotation() {
                       Terms & Conditions
                     </span>
                   </div>
-                  <div
-                    className="bg-white p-4 text-[12.5px] leading-relaxed text-slate-700 space-y-2"
-                    dangerouslySetInnerHTML={{ __html: wrappableHtml(companyTerms) }}
-                  />
+                  <div className="bg-white p-4 text-[12.5px] leading-snug text-slate-700">
+                    {htmlToPlainLines(companyTerms).map((line, i) => (
+                      <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                    ))}
+                  </div>
                 </div>
               )}
 

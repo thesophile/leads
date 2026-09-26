@@ -4,13 +4,20 @@
 
 DEFAULT_TERMS_SUMMARY = """
 <h4>1. Payment Terms</h4>
-<p>A non-refundable advance of 50% of the order value is payable on acceptance of the order form. The balance must be cleared in full before the goods/services are delivered or completed. Payments by bank transfer only.</p>
+<p>Non-refundable 50% advance on</p>
+<p>acceptance; balance due before</p>
+<p>delivery, paid by bank transfer.</p>
 <h4>2. Taxes</h4>
-<p>All prices are exclusive of applicable taxes, which will be charged at the prevailing rates.</p>
+<p>Prices exclude applicable taxes;</p>
+<p>charged at prevailing rates.</p>
 <h4>3. Delivery Timeline</h4>
-<p>The scope and timelines agreed in the order form will be strictly followed. Any change requested after acceptance may affect the timeline and cost.</p>
+<p>Agreed scope and timelines are</p>
+<p>followed strictly; variations may</p>
+<p>affect the timeline and cost.</p>
 <h4>4. Support &amp; Warranty</h4>
-<p>Post-delivery support is provided as specified in the order form for the agreed period. Support beyond the agreed period is billed separately.</p>
+<p>Post-delivery support as per the</p>
+<p>order form for the agreed period;</p>
+<p>beyond it, billed separately.</p>
 """.strip()
 
 DEFAULT_TERMS_FULL = """

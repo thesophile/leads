@@ -47,11 +47,14 @@ main table.refresh-fading {
   background: transparent;
 }
 
-/* Real Rich Text Editor typography and element styles */
+/* Real Rich Text Editor typography and element styles.
+   NOTE: deliberately no `white-space: pre-wrap` here — stored rich text can
+   contain literal newline characters that would otherwise render as full
+   blank lines between paragraphs. Displayed documents collapse whitespace
+   normally; the editor's own .ql-editor keeps its pre-wrap. */
 .rich-editor-content {
   outline: none;
   font-family: inherit;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 .rich-editor-content ul {

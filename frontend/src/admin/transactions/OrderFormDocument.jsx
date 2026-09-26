@@ -3,10 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
-import { wrappableHtml, limitRichHtml } from './orderFormDocumentUtils'
-
-const ORDER_SUMMARY_MAX_CHARS = 550
-const TERMS_SUMMARY_MAX_CHARS = 550
+import { htmlToPlainLines } from './orderFormDocumentUtils'
 
 function QRCodeVisual({ value }) {
   return (
@@ -267,12 +264,13 @@ export default function OrderFormDocument({ order }) {
               <SectionBox title="ORDER SUMMARY" className="flex-1">
                 <div
                   ref={summaryContentRef}
-                  className="space-y-1.5 text-[13px] leading-relaxed text-black"
+                  className="text-[13px] leading-snug text-black"
                   style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
-                  dangerouslySetInnerHTML={{
-                    __html: limitRichHtml(wrappableHtml(order.orderSummaryHtml), ORDER_SUMMARY_MAX_CHARS),
-                  }}
-                />
+                >
+                  {htmlToPlainLines(order.orderSummaryHtml).map((line, i) => (
+                    <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                  ))}
+                </div>
               </SectionBox>
 
               <FinancialBanner order={order} />
@@ -283,12 +281,13 @@ export default function OrderFormDocument({ order }) {
               <SectionBox title="TERMS &amp; CONDITIONS" className="h-full">
                 <div
                   ref={termsSummaryContentRef}
-                  className="space-y-1.5 text-[11px] leading-relaxed text-slate-700"
+                  className="text-[11px] leading-snug text-slate-700"
                   style={termsSummaryPaged.cap ? { maxHeight: termsSummaryPaged.cap, overflow: 'hidden' } : undefined}
-                  dangerouslySetInnerHTML={{
-                    __html: limitRichHtml(wrappableHtml(order.termsSummaryHtml), TERMS_SUMMARY_MAX_CHARS),
-                  }}
-                />
+                >
+                  {htmlToPlainLines(order.termsSummaryHtml).map((line, i) => (
+                    <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                  ))}
+                </div>
               </SectionBox>
             </div>
           </div>
@@ -318,10 +317,13 @@ export default function OrderFormDocument({ order }) {
             <SectionBox title="ORDER IN DETAILS" className="flex-1 flex flex-col justify-between min-h-[580px]">
               <div
                 ref={detailsContentRef}
-                className="space-y-3 text-[13px] leading-relaxed text-slate-800"
+                className="text-[13px] leading-snug text-slate-800"
                 style={detailsPaged.cap ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
-                dangerouslySetInnerHTML={{ __html: wrappableHtml(order.orderInDetailsHtml) }}
-              />
+              >
+                {htmlToPlainLines(order.orderInDetailsHtml).map((line, i) => (
+                  <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                ))}
+              </div>
               {detailsPaged.part2Html ? (
                 <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- Continued ---</p>
               ) : (
@@ -341,9 +343,9 @@ export default function OrderFormDocument({ order }) {
       ========================================================================= */}
       {termsSummaryPaged.part2Html && (
         <PagedSection
-          html={wrappableHtml(termsSummaryPaged.part2Html)}
+          html={termsSummaryPaged.part2Html}
           reserve={48}
-          contentClass="space-y-1.5 text-[11px] leading-relaxed text-slate-700"
+          contentClass="text-[11px] leading-snug text-slate-700"
           sectionTitle="TERMS &amp; CONDITIONS (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
@@ -367,10 +369,13 @@ export default function OrderFormDocument({ order }) {
             <SectionBox title="DETAILED TERMS &amp; CONDITIONS" className="flex-1">
               <div
                 ref={legalTermsContentRef}
-                className="space-y-2 text-[12.5px] leading-relaxed text-slate-700"
+                className="text-[12.5px] leading-snug text-slate-700"
                 style={legalPaged.cap ? { maxHeight: legalPaged.cap, overflow: 'hidden' } : undefined}
-                dangerouslySetInnerHTML={{ __html: wrappableHtml(order.legalTermsHtml) }}
-              />
+              >
+                {htmlToPlainLines(order.legalTermsHtml).map((line, i) => (
+                  <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                ))}
+              </div>
               {legalPaged.part2Html ? (
                 <p className="mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
               ) : null}
@@ -397,9 +402,9 @@ export default function OrderFormDocument({ order }) {
       ========================================================================= */}
       {summaryPaged.part2Html && (
         <PagedSection
-          html={wrappableHtml(summaryPaged.part2Html)}
+          html={summaryPaged.part2Html}
           reserve={48}
-          contentClass="space-y-1.5 text-[13px] leading-relaxed text-black"
+          contentClass="text-[13px] leading-snug text-black"
           sectionTitle="ORDER SUMMARY (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
@@ -411,9 +416,9 @@ export default function OrderFormDocument({ order }) {
 
       {detailsPaged.part2Html && (
         <PagedSection
-          html={wrappableHtml(detailsPaged.part2Html)}
+          html={detailsPaged.part2Html}
           reserve={64}
-          contentClass="space-y-3 text-[13px] leading-relaxed text-slate-800"
+          contentClass="text-[13px] leading-snug text-slate-800"
           sectionTitle="ORDER IN DETAILS (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
@@ -426,9 +431,9 @@ export default function OrderFormDocument({ order }) {
 
       {legalPaged.part2Html && (
         <PagedSection
-          html={wrappableHtml(legalPaged.part2Html)}
+          html={legalPaged.part2Html}
           reserve={64}
-          contentClass="space-y-2 text-[12.5px] leading-relaxed text-slate-700"
+          contentClass="text-[12.5px] leading-snug text-slate-700"
           sectionTitle="DETAILED TERMS &amp; CONDITIONS (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"

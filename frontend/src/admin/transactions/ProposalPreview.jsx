@@ -10,10 +10,43 @@ import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
 
-function wrappableHtml(html) {
-  return String(html || '')
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+// Render stored rich text as plain text: drop all formatting/markup but keep the
+// author's line breaks. Consecutive blank lines collapse to one.
+function htmlToPlainLines(html) {
+  const raw = String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|blockquote|pre|tr|section|article)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/<p(?:\s[^>]*)?>\s*(?:<br\s*\/?>)?\s*<\/p>/gi, '<p class="rich-blank"><br></p>')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&mdash;/gi, '\u2014')
+    .replace(/&ndash;/gi, '\u2013')
+    .replace(/\r\n?/g, '\n')
+
+  const lines = []
+  for (const line of raw.split('\n')) {
+    const text = line.trim()
+    if (text === '' && (lines.length === 0 || lines[lines.length - 1] === '')) continue
+    lines.push(text)
+  }
+  while (lines.length && lines[lines.length - 1] === '') lines.pop()
+  return lines
+}
+
+function linesToHtml(lines) {
+  return lines.map((line) => `<div>${line ? escapeHtml(line) : '&nbsp;'}</div>`).join('')
 }
 
 
@@ -755,14 +788,17 @@ const approvedByRef = useRef(null)
                   {proposalData.termsHtml ? (
                     <div
                       ref={termsContentRef}
-                      className="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
+                      className="text-[12.5px] leading-snug text-slate-700"
                       style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
-                      dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.termsHtml) }}
-                    />
+                    >
+                      {htmlToPlainLines(proposalData.termsHtml).map((line, i) => (
+                        <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                      ))}
+                    </div>
                   ) : (
                     <div
                       ref={termsContentRef}
-                      className="space-y-3 text-[12.5px] leading-relaxed text-slate-700"
+                      className="text-[12.5px] leading-snug text-slate-700"
                       style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
                       {Array.isArray(proposalData.termsConditions) ? (
@@ -772,11 +808,9 @@ const approvedByRef = useRef(null)
                           </div>
                         ))
                       ) : (
-                        proposalData.termsConditions ? (
-                          <div
-                            dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.termsConditions) }}
-                          />
-                        ) : null
+                        htmlToPlainLines(proposalData.termsConditions).map((line, i) => (
+                          <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                        ))
                       )}
                     </div>
                   )}
@@ -873,10 +907,13 @@ const approvedByRef = useRef(null)
                 <SectionBox title="Proposal Summary" className="flex-1">
                   <div
                     ref={summaryContentRef}
-                    className="space-y-1.5 text-[13.5px] leading-relaxed text-slate-800"
+                    className="text-[13.5px] leading-snug text-slate-800"
                     style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
-                    dangerouslySetInnerHTML={{ __html: wrappableHtml(proposalData.proposalSummaryHtml) }}
-                  />
+                  >
+                    {htmlToPlainLines(proposalData.proposalSummaryHtml).map((line, i) => (
+                      <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                    ))}
+                  </div>
                 </SectionBox>
 
                 <div ref={financialRef}>
@@ -893,9 +930,9 @@ const approvedByRef = useRef(null)
 
           {/* -------------------- PAGE 2 (PROPOSAL IN DETAILS & SPECIFICATIONS) -------------------- */}
           <PagedSection
-            html={wrappableHtml(proposalData.proposalInDetailsHtml)}
+            html={linesToHtml(htmlToPlainLines(proposalData.proposalInDetailsHtml))}
             reserve={64}
-            contentClass="space-y-3 text-[13px] leading-relaxed text-slate-800"
+            contentClass="text-[13px] leading-snug text-slate-800"
             sectionTitle="Proposal in Details &amp; Specifications"
             boxClass="rounded-xl border border-slate-300 bg-white"
             titleClass="text-left"

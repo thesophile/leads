@@ -6,7 +6,13 @@ import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Spinner from '../../components/Spinner'
 import { downloadBackup, restoreBackup } from '../../utils/backup'
-import { limitRichHtml, richTextCharCount } from '../transactions/orderFormDocumentUtils'
+import {
+  limitRichHtml,
+  richTextCharCount,
+  richTextLineCount,
+  termsSummaryMaxLinePx,
+  trimRichHtmlToLines,
+} from '../transactions/orderFormDocumentUtils'
 import { useAuth } from '../../context/auth-context'
 import { APP_MAJOR_VERSION, FRONTEND_VERSION } from '../../config'
 
@@ -68,6 +74,7 @@ const QUILL_FORMATS = [
 ]
 
 const TERMS_SUMMARY_MAX_CHARS = 550
+const TERMS_SUMMARY_MAX_LINES = 17
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -508,6 +515,15 @@ export default function Settings() {
     } finally {
       setSavingGeneral(false)
     }
+  }
+
+  function handleTermsSummaryChange(value) {
+    let next = value
+    if (richTextCharCount(next) > TERMS_SUMMARY_MAX_CHARS) {
+      next = limitRichHtml(next, TERMS_SUMMARY_MAX_CHARS)
+    }
+    next = trimRichHtmlToLines(next, TERMS_SUMMARY_MAX_LINES, termsSummaryMaxLinePx())
+    setTermsSummaryHtml(next)
   }
 
   async function handleSaveTemplates(e) {
@@ -1184,13 +1200,7 @@ export default function Settings() {
                       theme="snow"
                       className="quill-tall"
                       value={termsSummaryHtml}
-                      onChange={(value) => {
-                        setTermsSummaryHtml(
-                          richTextCharCount(value) > TERMS_SUMMARY_MAX_CHARS
-                            ? limitRichHtml(value, TERMS_SUMMARY_MAX_CHARS)
-                            : value,
-                        )
-                      }}
+                      onChange={handleTermsSummaryChange}
                       modules={QUILL_MODULES}
                       formats={QUILL_FORMATS}
                       placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
@@ -1198,17 +1208,20 @@ export default function Settings() {
                   </div>
                   <div className="mt-1 flex items-center justify-between">
                     <p className="text-[10px] font-semibold text-slate-400">
-                      Maximum {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} characters
+                      Maximum {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} characters · {TERMS_SUMMARY_MAX_LINES}{' '}
+                      lines, each up to ~{Math.round(termsSummaryMaxLinePx())}px wide
                     </p>
                     <p
                       className={`font-mono text-[10px] ${
-                        richTextCharCount(termsSummaryHtml) >= TERMS_SUMMARY_MAX_CHARS
+                        richTextCharCount(termsSummaryHtml) >= TERMS_SUMMARY_MAX_CHARS ||
+                        richTextLineCount(termsSummaryHtml) >= TERMS_SUMMARY_MAX_LINES
                           ? 'font-bold text-rose-600'
                           : 'text-slate-400'
                       }`}
                     >
+                      {richTextLineCount(termsSummaryHtml)} / {TERMS_SUMMARY_MAX_LINES} lines ·{' '}
                       {richTextCharCount(termsSummaryHtml).toLocaleString()} /{' '}
-                      {TERMS_SUMMARY_MAX_CHARS.toLocaleString()}
+                      {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} chars
                     </p>
                   </div>
                 </div>
