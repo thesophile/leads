@@ -1888,7 +1888,7 @@ class QuotationOtpView(QuotationApprovalBaseView):
         error = None
         try:
             sent = send_mail(
-                subject='LEADS — Quotation approval code',
+                subject='LEADS - Quotation approval code',
                 message=(
                     f'Hi {request.user.name},\n\n'
                     f'You requested to approve quotation {quotation.id} for '
@@ -1896,7 +1896,7 @@ class QuotationOtpView(QuotationApprovalBaseView):
                     f'Your one-time approval code is:\n\n    {code}\n\n'
                     f'It expires in {self.OTP_MINUTES} minutes and can only be used once.\n\n'
                     f'If you did not request this, you can safely ignore this email.\n\n'
-                    f'— LEADS'
+                    f'- LEADS'
                 ),
                 from_email=None,
                 recipient_list=[request.user.email],

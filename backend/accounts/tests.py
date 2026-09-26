@@ -758,6 +758,8 @@ class EmailChangeOtpTests(APITestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['new@emailco.com'])
         self.assertIn(self.FIXED_CODE, mail.outbox[0].body)
+        self.assertTrue(mail.outbox[0].subject.isascii())
+        self.assertTrue(mail.outbox[0].body.isascii())
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, 'old@emailco.com')
 

@@ -1167,6 +1167,7 @@ class QuotationApprovalFlowTests(APITestCase):
         self.assertEqual(otp.status_code, 200)
         self.assertIs(otp.data['sent'], True)
         self.assertEqual(otp.data['email'], user.email)
+        self.assertTrue(mailbox['message'].isascii(), 'OTP email body must be ASCII-only')
         code = re.search(r'approval code is:\n\n\s*(\d{6})', mailbox['message']).group(1)
         return self.client.post(
             f'/api/transactions/quotations/{quotation}/approve/',

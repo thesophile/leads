@@ -780,7 +780,7 @@ class PasswordResetRequestView(APIView):
             token = default_token_generator.make_token(user)
             try:
                 send_mail(
-                    subject='LEADS — Password reset code',
+                    subject='LEADS - Password reset code',
                     message=(
                         f'Hi {user.name},\n\n'
                         f'You requested a password reset for {user.email}.\n\n'
@@ -788,7 +788,7 @@ class PasswordResetRequestView(APIView):
                         f'Enter it on the reset screen along with your new password. '
                         f'The code expires in 1 hour and can only be used once.\n\n'
                         f'If you did not request this, you can safely ignore this email.\n\n'
-                        f'— LEADS'
+                        f'- LEADS'
                     ),
                     from_email=None,
                     recipient_list=[user.email],
@@ -871,7 +871,7 @@ class EmailChangeRequestView(APIView):
 
         try:
             send_mail(
-                subject='LEADS — Verify your new email address',
+                subject='LEADS - Verify your new email address',
                 message=(
                     f'Hi {user.name},\n\n'
                     f'You asked to change the sign-in email for your LEADS account\n'
@@ -883,7 +883,7 @@ class EmailChangeRequestView(APIView):
                     f'The code expires in {EMAIL_OTP_MINUTES} minutes and can only '
                     f'be used once.\n\n'
                     f'If you did not request this, you can safely ignore this email.\n\n'
-                    f'— LEADS'
+                    f'- LEADS'
                 ),
                 from_email=None,
                 recipient_list=[new_email],
