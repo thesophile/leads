@@ -347,16 +347,11 @@ export default function ManageOrder() {
       setProposalDate(todayStr())
       setDeliveryDate('')
       setProposalNo(nextOrderNumber())
-      const defaultTpl = PROPOSAL_TEMPLATES[0]
-      setOrderSummaryHtml(defaultTpl?.scopeHtml || '')
-      setOrderInDetailsHtml(defaultTpl?.detailHtml || '')
-      setTotalVal(defaultTpl?.defaultTotal || '50,000')
-      setDiscountVal(defaultTpl?.defaultDiscount || '5,000')
-      setNetVal(
-        defaultTpl
-          ? formatMoney(moneyToNumber(defaultTpl.defaultTotal) - moneyToNumber(defaultTpl.defaultDiscount))
-          : '40,000.00'
-      )
+      setOrderSummaryHtml('')
+      setOrderInDetailsHtml('')
+      setTotalVal('50,000')
+      setDiscountVal('5,000')
+      setNetVal('45,000.00')
       setRemarksVal('')
     }
     setOrderModalOpen(true)

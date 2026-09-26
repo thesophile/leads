@@ -714,7 +714,6 @@ export default function Managequotation() {
   const [discardApprovalOpen, setDiscardApprovalOpen] = useState(false)
 
   const [savedTemplates, setSavedTemplates] = useState([])
-  const [companyDefaultTerms, setCompanyDefaultTerms] = useState('')
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateOverrideOpen, setTemplateOverrideOpen] = useState(false)
@@ -747,28 +746,6 @@ export default function Managequotation() {
         }
       } catch (err) {
         console.error('Failed to load proposal templates', err)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // Load the company's default Terms & Conditions summary so new proposals
-  // can be prefilled with it (editable per proposal). &nbsp; (non-breaking
-  // spaces) are normalised to plain spaces so words wrap whole onto the next
-  // line instead of overflowing or being split mid-word.
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const company = await api.get('/auth/company/')
-        if (!cancelled && company) {
-          const summary = String(company.termsSummaryHtml || '').replace(/&nbsp;/gi, ' ')
-          if (summary) setCompanyDefaultTerms(summary)
-        }
-      } catch (err) {
-        console.error('Failed to load company default terms', err)
       }
     })()
     return () => {
@@ -1004,7 +981,7 @@ export default function Managequotation() {
       setCategoryName(quote.category || 'Hospital')
       setCityVal(quote.city || '')
       setScopeHtml(quote.proposalScope || '')
-      setTermsHtml(quote.termsConditions || companyDefaultTerms || '')
+      setTermsHtml(quote.termsConditions || '')
       setTotalVal(quote.total || quote.amount?.replace('₹', '') || '')
       setDiscountVal(quote.discount || '0')
       setSourceVal(quote.source || 'Google Search')
@@ -1024,7 +1001,7 @@ export default function Managequotation() {
       setCategoryName('General')
       setCityVal('')
       setScopeHtml('')
-      setTermsHtml(companyDefaultTerms || '')
+      setTermsHtml('')
       setTotalVal('')
       setDiscountVal('0')
       setSourceVal('Google Search')
