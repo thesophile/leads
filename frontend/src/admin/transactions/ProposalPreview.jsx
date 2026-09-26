@@ -11,7 +11,9 @@ import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
 
 function wrappableHtml(html) {
-  return String(html || '').replace(/&nbsp;/gi, ' ')
+  return String(html || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/<p(?:\s[^>]*)?>\s*(?:<br\s*\/?>)?\s*<\/p>/gi, '<p class="rich-blank"><br></p>')
 }
 
 

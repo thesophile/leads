@@ -1,5 +1,5 @@
 
-## INstallation
+## Installation
 
 ```
 venv\Scripts\activate

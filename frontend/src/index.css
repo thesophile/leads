@@ -83,6 +83,17 @@ main table.refresh-fading {
   margin: 0.3rem 0 !important;
   line-height: 1.55 !important;
 }
+
+/* Blank paragraphs inside rendered proposal/order text (kept so the author's
+   empty lines survive) should read as a compact gap, not a full text line
+   PLUS the shared vertical spacing. */
+.rich-blank {
+  line-height: 1 !important;
+  height: 1em !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  overflow: hidden;
+}
 .rich-editor-content a {
   color: #2563eb !important;
   text-decoration: underline !important;

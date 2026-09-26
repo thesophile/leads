@@ -11,7 +11,9 @@ function stripHtml(html) {
 }
 
 function wrappableHtml(html) {
-  return String(html || '').replace(/&nbsp;/gi, ' ')
+  return String(html || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/<p(?:\s[^>]*)?>\s*(?:<br\s*\/?>)?\s*<\/p>/gi, '<p class="rich-blank"><br></p>')
 }
 
 function currencySymbol(raw) {
@@ -290,7 +292,7 @@ export default function ClientQuotation() {
                 <div className="overflow-hidden rounded-xl border border-slate-300">
                   <div className="bg-black px-3 py-2">
                     <span className="text-[12px] font-bold uppercase tracking-wider text-white">
-                      Scope & Deliverables
+                      Proposal Summary
                     </span>
                   </div>
                   <div
