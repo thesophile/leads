@@ -50,7 +50,18 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     // (or incidental font/resize noise) must never push it back into a
     // continuation and start the flicker again. The latch is cleared only when
     // the content's children materially change (see MutationObserver below).
-    if (finalLatchRef.current) return
+    if (finalLatchRef.current) {
+      // One exception: real fonts may load after the first measure and grow the
+      // text taller than the frozen cap. A frozen cap that now clips content is
+      // stale, so lift the latch and re-measure — otherwise the bottom lines are
+      // silently hidden by `overflow: hidden` with no continuation page.
+      const capNow = committed.current.cap
+      if (typeof capNow === 'number' && contentEl.scrollHeight > capNow + 1) {
+        finalLatchRef.current = false
+      } else {
+        return
+      }
+    }
 
     const contentTop = contentEl.getBoundingClientRect().top
     const bottom = bottomEl.getBoundingClientRect().top
