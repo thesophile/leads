@@ -14,6 +14,11 @@ import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
 import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 
+// Window scroll position saved just before opening a quotation preview, so
+// returning here from the preview restores exactly where the user was in the
+// list instead of landing at the top or at some stale offset.
+let pivotScrollY = null
+
 const QUILL_MODULES = {
   toolbar: [
     ['bold', 'italic', 'underline', 'strike'],
@@ -343,6 +348,15 @@ export default function Managequotation() {
 
   const searchDebounced = useDebouncedValue(searchQuery)
 
+  // If we returned here from the quotation preview, restore the list scroll
+  // position saved just before navigating away.
+  useLayoutEffect(() => {
+    if (pivotScrollY !== null) {
+      window.scrollTo(0, pivotScrollY)
+      pivotScrollY = null
+    }
+  }, [])
+
   const listParams = useMemo(
     () => ({
       ...(selectedStaff !== 'All Staff' ? { staff: selectedStaff } : {}),
@@ -539,6 +553,7 @@ export default function Managequotation() {
   }
 
   function handleViewProposal(quote) {
+    pivotScrollY = window.scrollY
     navigate(`/quotations/preview/${quote.id}`, { state: { proposal: quote } })
   }
 

@@ -107,10 +107,6 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
 
     check()
 
-    // Re-measure on a short polling loop so content that loads asynchronously
-    // (network fetch, navigation state) is captured as soon as it renders.
-    const interval = setInterval(check, 250)
-
     window.addEventListener('resize', check)
     const onFonts = () => check()
     if (typeof document !== 'undefined' && document.fonts) {
@@ -130,7 +126,6 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     }
 
     return () => {
-      clearInterval(interval)
       window.removeEventListener('resize', check)
       if (observer) observer.disconnect()
     }

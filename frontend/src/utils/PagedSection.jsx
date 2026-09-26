@@ -70,8 +70,11 @@ export default function PagedSection({
               </div>
             </div>
           </div>
-          {showEnd ? (
-            <div ref={endBlockRef} className={`mt-auto pt-4 ${endBlockClass}`}>
+          {endBlock ? (
+            <div
+              ref={endBlockRef}
+              className={`mt-auto pt-4 ${endBlockClass} ${showEnd ? '' : 'invisible'}`}
+            >
               {endBlock}
             </div>
           ) : null}
