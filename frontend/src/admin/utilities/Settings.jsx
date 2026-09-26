@@ -1234,7 +1234,7 @@ export default function Settings() {
                       onChange={(e) => handleTermsSummaryChange(e.target.value)}
                       rows={TERMS_SUMMARY_MAX_LINES}
                       maxLength={TERMS_SUMMARY_MAX_CHARS}
-                      className={'resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-xs transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/15'}
+                      className={'resize-none overflow-hidden rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-xs transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/15'}
                       style={{ width: termsSummaryMaxLinePx() + 30 }}
                       placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
                     />
