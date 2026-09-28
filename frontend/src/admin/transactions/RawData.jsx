@@ -658,6 +658,15 @@ export default function RawData() {
     city: '',
     sublocation: '',
   })
+  // Field-level validation errors shown under each field (key = formData field).
+  const [formErrors, setFormErrors] = useState({})
+  // Form-level (generic) error shown at the bottom of the drawer form.
+  const [formError, setFormError] = useState('')
+
+  function updateField(field, value, errorKey = field) {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormErrors((prev) => (prev[errorKey] ? { ...prev, [errorKey]: '' } : prev))
+  }
 
   function openDrawer() {
     setIsSaving(false)
@@ -681,6 +690,8 @@ export default function RawData() {
   function handleOpenAdd() {
     setEditingId(null)
     setDrawerHistory([])
+    setFormErrors({})
+    setFormError('')
     setFormData({
       company: '',
       contact: '',
@@ -697,6 +708,8 @@ export default function RawData() {
   function handleEditClick(item) {
     setEditingId(item.id)
     setDrawerHistory(item.contactHistory || [])
+    setFormErrors({})
+    setFormError('')
     setFormData({
       company: item.company || '',
       contact: item.contact || '',
@@ -713,38 +726,30 @@ export default function RawData() {
   async function handleSave(e) {
     e.preventDefault()
     if (isSaving) return
-    setError('')
+    setFormError('')
+    const errors = {}
     const company = formData.company.trim()
     const phone = formData.phone.trim()
     const category = formData.category.trim()
     const location = formData.city.trim()
-    if (!company) {
-      setError('Company / Organization Name is required.')
-      return
+    if (!company) errors.company = 'Company / Organization Name is required.'
+    if (!phone) errors.phone = 'Phone number is required.'
+    else {
+      const phoneError = validateRawPhone(phone)
+      if (phoneError) errors.phone = phoneError
     }
-    if (!phone) {
-      setError('Phone number is required.')
-      return
-    }
-    const phoneError = validateRawPhone(phone)
-    if (phoneError) {
-      setError(phoneError)
-      return
-    }
-    if (!category) {
-      setError('Category is required.')
-      return
-    }
-    if (!location) {
-      setError('Location is required.')
-      return
-    }
+    if (!category) errors.category = 'Category is required.'
+    if (!location) errors.location = 'Location is required.'
+    setFormErrors(errors)
+    if (Object.keys(errors).length > 0) return
 
     setIsSaving(true)
     try {
       if (editingId) {
         const updated = await api.patch(`/transactions/leads/${editingId}/`, formData)
         if (updated && updated.contactChanged && updated.wasGenerated) {
+          // Persistent notice (outlives the drawer closing) — keep on the
+          // page-level banner, not the ephemeral in-form error box.
           setError(
             'Warning: this lead already has a sent/approved quotation. The contact details were updated and synced automatically — please inform the client if needed.',
           )
@@ -764,7 +769,7 @@ export default function RawData() {
       if (err.status === 409 && err.data?.existing) {
         setDuplicateRecord(err.data.existing)
       } else {
-        setError(err.message)
+        setFormError(err.message || 'Something went wrong. Please try again.')
       }
     } finally {
       setIsSaving(false)
@@ -2232,9 +2237,14 @@ async function handleBulkImport(e) {
                     type="text"
                     placeholder="Company Name"
                     value={formData.company}
-                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                    onChange={(e) => updateField('company', e.target.value)}
                     required
-                    className="peer relative z-0 w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder-transparent transition-all focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+                    aria-invalid={Boolean(formErrors.company)}
+                    className={`peer relative z-0 w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder-transparent transition-all focus:outline-none focus:ring-4 ${
+                      formErrors.company
+                        ? 'border-red-400 bg-red-50/30 focus:border-red-500 focus:ring-red-500/10'
+                        : 'border-slate-200 focus:border-brand-500 focus:ring-brand-500/10'
+                    }`}
                   />
                   <label
                     htmlFor="drawer_company"
@@ -2242,10 +2252,17 @@ async function handleBulkImport(e) {
                       formData.company
                         ? '-top-2 text-slate-500'
                         : 'top-2 text-xs text-slate-400 peer-placeholder-shown:text-xs peer-placeholder-shown:top-2'
-                    } peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600`}
+                    } peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600 ${
+                      formErrors.company ? 'text-red-500' : ''
+                    }`}
                   >
                     Company / Organization Name *
                   </label>
+                  {formErrors.company && (
+                    <p className="mt-1.5 pl-3 text-[11px] font-semibold text-red-600">
+                      {formErrors.company}
+                    </p>
+                  )}
                 </div>
 
                 {/* Contact Person */}
@@ -2280,25 +2297,37 @@ async function handleBulkImport(e) {
                     <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-slate-400">
                       <PhoneIcon className="h-3.5 w-3.5" />
                     </span>
-                    <input
-                      id="drawer_phone"
-                      type="text"
-                      placeholder="Mobile Phone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      required
-                      className="peer relative z-0 w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder-transparent transition-all focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
-                    />
-                    <label
-                      htmlFor="drawer_phone"
-                      className={`absolute left-8 bg-white px-1 text-[10px] font-medium transition-all z-10 cursor-text ${
-                        formData.phone
-                          ? '-top-2 text-slate-500'
-                          : 'top-2 text-xs text-slate-400 peer-placeholder-shown:text-xs peer-placeholder-shown:top-2'
-                      } peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600`}
-                    >
-                      Primary Mobile *
-                    </label>
+<input
+                    id="drawer_phone"
+                    type="text"
+                    placeholder="Mobile Phone"
+                    value={formData.phone}
+                    onChange={(e) => updateField('phone', e.target.value)}
+                    required
+                    aria-invalid={Boolean(formErrors.phone)}
+                    className={`peer relative z-0 w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder-transparent transition-all focus:outline-none focus:ring-4 ${
+                      formErrors.phone
+                        ? 'border-red-400 bg-red-50/30 focus:border-red-500 focus:ring-red-500/10'
+                        : 'border-slate-200 focus:border-brand-500 focus:ring-brand-500/10'
+                    }`}
+                  />
+                  <label
+                    htmlFor="drawer_phone"
+                    className={`absolute left-8 bg-white px-1 text-[10px] font-medium transition-all z-10 cursor-text ${
+                      formData.phone
+                        ? '-top-2 text-slate-500'
+                        : 'top-2 text-xs text-slate-400 peer-placeholder-shown:text-xs peer-placeholder-shown:top-2'
+                    } peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600 ${
+                      formErrors.phone ? 'text-red-500' : ''
+                    }`}
+                  >
+                    Primary Mobile *
+                  </label>
+                  {formErrors.phone && (
+                    <p className="mt-1.5 pl-3 text-[11px] font-semibold text-red-600">
+                      {formErrors.phone}
+                    </p>
+                  )}
                   </div>
 
                   {/* Email */}
@@ -2335,9 +2364,14 @@ async function handleBulkImport(e) {
                   <select
                     id="drawer_category"
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e) => updateField('category', e.target.value)}
                     required
-                    className="peer relative z-0 w-full cursor-pointer rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 transition-all focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+                    aria-invalid={Boolean(formErrors.category)}
+                    className={`peer relative z-0 w-full cursor-pointer rounded-lg border bg-white py-2 pl-9 pr-3 text-xs text-slate-800 transition-all focus:outline-none focus:ring-4 ${
+                      formErrors.category
+                        ? 'border-red-400 bg-red-50/30 focus:border-red-500 focus:ring-red-500/10'
+                        : 'border-slate-200 focus:border-brand-500 focus:ring-brand-500/10'
+                    }`}
                   >
                     <option value="" disabled hidden>
                       Select Category
@@ -2350,10 +2384,17 @@ async function handleBulkImport(e) {
                   </select>
                   <label
                     htmlFor="drawer_category"
-                    className="absolute left-8 -top-2 z-10 bg-white px-1 text-[10px] font-medium text-slate-500 cursor-pointer peer-focus:text-brand-600"
+                    className={`absolute left-8 -top-2 z-10 bg-white px-1 text-[10px] font-medium cursor-pointer peer-focus:text-brand-600 ${
+                      formErrors.category ? 'text-red-500' : 'text-slate-500'
+                    }`}
                   >
                     Category *
                   </label>
+                  {formErrors.category && (
+                    <p className="mt-1.5 pl-3 text-[11px] font-semibold text-red-600">
+                      {formErrors.category}
+                    </p>
+                  )}
                 </div>
 
                 {/* Source Selection in Drawer */}
@@ -2392,9 +2433,14 @@ async function handleBulkImport(e) {
                   <select
                     id="drawer_location"
                     value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    onChange={(e) => updateField('city', e.target.value, 'location')}
                     required
-                    className="peer relative z-0 w-full cursor-pointer rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 transition-all focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+                    aria-invalid={Boolean(formErrors.location)}
+                    className={`peer relative z-0 w-full cursor-pointer rounded-lg border bg-white py-2 pl-9 pr-3 text-xs text-slate-800 transition-all focus:outline-none focus:ring-4 ${
+                      formErrors.location
+                        ? 'border-red-400 bg-red-50/30 focus:border-red-500 focus:ring-red-500/10'
+                        : 'border-slate-200 focus:border-brand-500 focus:ring-brand-500/10'
+                    }`}
                   >
                     <option value="" disabled hidden>
                       Select Location
@@ -2407,10 +2453,17 @@ async function handleBulkImport(e) {
                   </select>
                   <label
                     htmlFor="drawer_location"
-                    className="absolute left-8 -top-2 z-10 bg-white px-1 text-[10px] font-medium text-slate-500 cursor-pointer peer-focus:text-brand-600"
+                    className={`absolute left-8 -top-2 z-10 bg-white px-1 text-[10px] font-medium cursor-pointer peer-focus:text-brand-600 ${
+                      formErrors.location ? 'text-red-500' : 'text-slate-500'
+                    }`}
                   >
                     Location *
                   </label>
+                  {formErrors.location && (
+                    <p className="mt-1.5 pl-3 text-[11px] font-semibold text-red-600">
+                      {formErrors.location}
+                    </p>
+                  )}
                 </div>
 
                 {/* Sublocation */}
@@ -2462,6 +2515,13 @@ async function handleBulkImport(e) {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+
+                {/* Generic / network errors at the bottom of the form */}
+                {formError && (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700 animate-in fade-in">
+                    {formError}
                   </div>
                 )}
               </form>
