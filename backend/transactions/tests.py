@@ -722,23 +722,27 @@ class LeadDuplicateScopingTests(APITestCase):
     def test_same_tenant_duplicate_is_rejected(self):
         self.client.force_authenticate(self.manager)
         first = self.client.post('/api/transactions/leads/', {
-            'company': 'Cafe Day', 'phone': '111',
+            'company': 'Cafe Day', 'phone': '9998887776',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         self.assertEqual(first.status_code, 201)
         duplicate = self.client.post('/api/transactions/leads/', {
-            'company': 'CAFE DAY', 'phone': '222',
+            'company': 'CAFE DAY', 'phone': '8887776665',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         self.assertEqual(duplicate.status_code, 409)
 
     def test_cross_tenant_same_company_name_is_allowed(self):
         self.client.force_authenticate(self.manager)
         first = self.client.post('/api/transactions/leads/', {
-            'company': 'State Bank of India', 'phone': '111',
+            'company': 'State Bank of India', 'phone': '9998887776',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         self.assertEqual(first.status_code, 201)
         self.client.force_authenticate(self.other_manager)
         second = self.client.post('/api/transactions/leads/', {
-            'company': 'STATE BANK OF INDIA', 'phone': '222',
+            'company': 'STATE BANK OF INDIA', 'phone': '8887776665',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         self.assertEqual(second.status_code, 201)
         self.assertEqual(
@@ -752,13 +756,37 @@ class LeadDuplicateScopingTests(APITestCase):
         Category.objects.get_or_create(name='Hospital', company=self.manager.company)
         self.client.force_authenticate(self.manager)
         bad = self.client.post('/api/transactions/leads/', {
-            'company': 'Some Co', 'category': 'Not A Category',
+            'company': 'Some Co', 'phone': '9998887776', 'category': 'Not A Category',
+            'city': 'Kochi',
         }, format='json')
         self.assertEqual(bad.status_code, 400)
         ok = self.client.post('/api/transactions/leads/', {
-            'company': 'Some Co', 'category': 'Hospital',
+            'company': 'Some Co', 'phone': '9998887776', 'category': 'Hospital',
+            'city': 'Kochi',
         }, format='json')
         self.assertEqual(ok.status_code, 201)
+
+    def test_create_requires_phone_category_and_location(self):
+        self.client.force_authenticate(self.manager)
+        base = {'company': 'Fields Co', 'category': 'COSMETICS STORE', 'city': 'Kochi'}
+        resp = self.client.post('/api/transactions/leads/', base, format='json')
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.post('/api/transactions/leads/', {
+            **base, 'phone': '9998887776', 'category': '',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.post('/api/transactions/leads/', {
+            **base, 'phone': '9998887776', 'city': '',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_create_rejects_invalid_phone(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/', {
+            'company': 'Bad Phone Co', 'phone': '123',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
 
 
 class LeadImportTests(APITestCase):
@@ -774,6 +802,7 @@ class LeadImportTests(APITestCase):
         self.client.force_authenticate(self.manager)
         resp = self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'contact': 'Ann', 'phone': '9998887776',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertFalse(resp.data['updated'])
@@ -787,13 +816,28 @@ class LeadImportTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
+    def test_import_requires_category_and_location(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Missing Fields Co', 'phone': '9998887776',
+            'category': 'COSMETICS STORE',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Missing Fields Co', 'phone': '9998887776',
+            'city': 'Kochi',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
     def test_reimport_updates_existing_lead(self):
         self.client.force_authenticate(self.manager)
         self.client.post('/api/transactions/leads/import/', {
-            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '111',
+            'company': 'Cafe Day', 'contact': 'Ann', 'phone': '1112223334',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         resp = self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'contact': 'Ann', 'phone': '9998887776',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['updated'])
@@ -806,19 +850,21 @@ class LeadImportTests(APITestCase):
     def test_reimport_rejects_blank_phone(self):
         self.client.force_authenticate(self.manager)
         self.client.post('/api/transactions/leads/import/', {
-            'company': 'Cafe Day', 'phone': '111',
+            'company': 'Cafe Day', 'phone': '1112223334',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         resp = self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'phone': '',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
         lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
-        self.assertEqual(lead.phone, '111')
+        self.assertEqual(lead.phone, '1112223334')
 
     def test_import_does_not_touch_pipeline_fields(self):
         self.client.force_authenticate(self.manager)
         self.client.post('/api/transactions/leads/import/', {
-            'company': 'Cafe Day', 'phone': '111',
+            'company': 'Cafe Day', 'phone': '1112223334',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
         lead.status = Lead.STATUS_ASSIGNED
@@ -826,18 +872,20 @@ class LeadImportTests(APITestCase):
         lead.remarks = 'keep me'
         lead.save()
         self.client.post('/api/transactions/leads/import/', {
-            'company': 'Cafe Day', 'phone': '222',
+            'company': 'Cafe Day', 'phone': '2223334445',
+            'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
         lead.refresh_from_db()
         self.assertEqual(lead.status, Lead.STATUS_ASSIGNED)
         self.assertEqual(lead.assigned_to, 'Manager I')
         self.assertEqual(lead.remarks, 'keep me')
-        self.assertEqual(lead.phone, '222')
+        self.assertEqual(lead.phone, '2223334445')
 
     def test_import_rejects_unknown_category(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.post('/api/transactions/leads/import/', {
-            'company': 'Some Co', 'phone': '123', 'category': 'Not A Category',
+            'company': 'Some Co', 'phone': '9998887776', 'category': 'Not A Category',
+            'city': 'Kochi',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
@@ -1583,14 +1631,14 @@ class ContactEditSyncTests(APITestCase):
     def test_lead_change_records_history_and_flags(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.patch('/api/transactions/leads/RL-SYNC/', {
-            'phone': '222', 'city': 'Trivandrum',
+            'phone': '9888777666', 'city': 'Trivandrum',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['contactChanged'])
         self.assertFalse(resp.data['wasGenerated'])
         rows = {h['field']: h for h in resp.data['contactHistory']}
         self.assertEqual(rows['phone']['fromValue'], '111')
-        self.assertEqual(rows['phone']['toValue'], '222')
+        self.assertEqual(rows['phone']['toValue'], '9888777666')
         self.assertEqual(rows['phone']['changedBy'], 'Manager A')
         self.assertEqual(rows['city']['fromValue'], 'Kochi')
         self.assertEqual(LeadContactHistory.objects.count(), 2)
@@ -1681,13 +1729,13 @@ class ContactEditSyncTests(APITestCase):
     def test_contact_history_rides_on_lead_list(self):
         self.client.force_authenticate(self.manager)
         self.client.patch('/api/transactions/leads/RL-SYNC/', {
-            'phone': '444',
+            'phone': '9222000000',
         }, format='json')
         resp = self.client.get('/api/transactions/leads/?status=raw')
         self.assertEqual(resp.status_code, 200)
         row = next(l for l in resp.data['results'] if l['id'] == 'RL-SYNC')
         self.assertEqual(row['contactHistory'][0]['field'], 'phone')
-        self.assertEqual(row['contactHistory'][0]['toValue'], '444')
+        self.assertEqual(row['contactHistory'][0]['toValue'], '9222000000')
 
 
 class OrderSendToClientTests(APITestCase):

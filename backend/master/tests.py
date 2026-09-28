@@ -3,7 +3,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import Company
 
-from .models import Branch, Category, Source
+from .models import Branch, Category, Location, Source
 
 User = get_user_model()
 
@@ -73,3 +73,43 @@ class MasterNameUniquenessTests(APITestCase):
             'name': 'Main Office',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
+
+
+class LocationMasterTests(APITestCase):
+    def setUp(self):
+        self.admin = make_admin('Admin A', 'Acme')
+        self.other_admin = make_admin('Admin B', 'Globex')
+
+    def test_create_location_and_list(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/master/locations/', {
+            'name': 'Kochi',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(resp.data['code'])
+        listed = self.client.get('/api/master/locations/')
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual([l['name'] for l in listed.data], ['Kochi'])
+
+    def test_duplicate_location_is_rejected_in_same_company(self):
+        Location.objects.create(name='Kochi', code='K01', company=self.admin.company)
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/master/locations/', {
+            'name': 'kochi',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_same_location_in_other_company_is_allowed(self):
+        Location.objects.create(name='Kochi', code='K01', company=self.admin.company)
+        self.client.force_authenticate(self.other_admin)
+        resp = self.client.post('/api/master/locations/', {
+            'name': 'Kochi',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+
+    def test_delete_location(self):
+        loc = Location.objects.create(name='Trivandrum', code='T01', company=self.admin.company)
+        self.client.force_authenticate(self.admin)
+        resp = self.client.delete(f'/api/master/locations/{loc.pk}/')
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(Location.objects.filter(pk=loc.pk).exists())

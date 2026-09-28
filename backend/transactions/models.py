@@ -118,6 +118,8 @@ class Lead(models.Model):
     category = models.CharField(max_length=100, blank=True)
     source = models.CharField(max_length=120, blank=True)
     city = models.CharField(max_length=100, blank=True)
+    # Free-text area below the Location master dropdown (e.g. street / area).
+    sublocation = models.CharField(max_length=150, blank=True)
     date = models.DateField(null=True, blank=True)
     display_date = models.CharField(max_length=50, blank=True)
     added_by = models.CharField(max_length=120, blank=True)

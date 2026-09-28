@@ -5,6 +5,8 @@ from .views import (
     BranchListView,
     CategoryDetailView,
     CategoryListView,
+    LocationDetailView,
+    LocationListView,
     SourceDetailView,
     SourceListView,
 )
@@ -16,4 +18,6 @@ urlpatterns = [
     path('categories/<int:pk>/', CategoryDetailView.as_view(), name='master-category-detail'),
     path('sources/', SourceListView.as_view(), name='master-sources-list'),
     path('sources/<int:pk>/', SourceDetailView.as_view(), name='master-source-detail'),
+    path('locations/', LocationListView.as_view(), name='master-locations-list'),
+    path('locations/<int:pk>/', LocationDetailView.as_view(), name='master-location-detail'),
 ]

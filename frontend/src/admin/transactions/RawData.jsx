@@ -99,20 +99,22 @@ function parseCSV(text) {
   return rows
 }
 
-// Canonical table columns for CSV import. Every one of these must exist as a
-// header in the uploaded CSV (matched via aliases). CSV columns that do not
-// match any known column are ignored with a warning.
-// The Company Name header must exist. On every data row, Company Name and
-// Phone are required; rows missing either are skipped with a reason and
-// downloaded back for correction.
+// Canonical table columns for CSV import. Mandatory columns (Company Name,
+// Phone, Category, Location) must exist as a header in the uploaded CSV
+// (matched via aliases). CSV columns that do not match any known column are
+// ignored with a warning.
+// On every data row, Company Name, Phone, Category and Location are required;
+// rows missing any are skipped with a reason and downloaded back for
+// correction.
 const REQUIRED_IMPORT_COLUMNS = [
   { key: 'company', label: 'Company Name', required: true, aliases: ['Company Name', 'Company', 'Organization', 'Lead Company', 'Business Name', 'Client', 'Client Name', 'Customer', 'Customer Name', 'Company/Organization'] },
   { key: 'contact', label: 'Contact Person', required: false, aliases: ['Contact Person', 'Contact Name', 'Contact', 'Name', 'Contact Details', 'Person', 'Full Name'] },
-  { key: 'phone', label: 'Phone', required: false, aliases: ['Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number', 'Tel', 'Telephone', 'Cell', 'Mobile No', 'Phone No'] },
+  { key: 'phone', label: 'Phone', required: true, aliases: ['Mobile', 'Mobille', 'Phone', 'Mobile Number', 'Phone Number', 'Contact Number', 'Tel', 'Telephone', 'Cell', 'Mobile No', 'Phone No'] },
   { key: 'email', label: 'Email', required: false, aliases: ['Email', 'Email Address', 'Mail', 'E-Mail', 'Email ID', 'E-Mail ID'] },
-  { key: 'category', label: 'Category', required: false, aliases: ['Category', 'Business Type', 'Segmentation', 'Industry', 'Lead Category'] },
+  { key: 'category', label: 'Category', required: true, aliases: ['Category', 'Business Type', 'Segmentation', 'Industry', 'Lead Category'] },
   { key: 'source', label: 'Lead Source', required: false, aliases: ['Lead Source', 'Source', 'Source Name', 'Lead Sources', 'LeadSource', 'Lead_Source', 'Sources', 'Lead Source Name', 'Source of Lead', 'Lead Origin', 'Origin', 'Platform', 'Channel', 'Media Source'] },
-  { key: 'city', label: 'City', required: false, aliases: ['City', 'Location', 'City / Location', 'Region', 'State', 'Address', 'Place'] },
+  { key: 'city', label: 'Location', required: true, aliases: ['Location', 'City', 'City / Location', 'Region', 'State', 'Address', 'Place'] },
+  { key: 'sublocation', label: 'Sublocation', required: false, aliases: ['Sublocation', 'Sub Location', 'Sub-Location', 'Area', 'Area / Location', 'Street', 'Sublocation / Area'] },
 ]
 
 function escapeCSVField(value) {
@@ -178,13 +180,16 @@ function csvRowsToLeads(text, master = {}) {
     .filter(({ h, i }) => String(h || '').trim() !== '' && !matchedCols.has(i))
     .map(({ h }) => String(h).trim())
 
-  // Category / Source master validation (mirrors the backend rules). When the
-  // master lists have not loaded yet, skip the frontend check and let the
-  // backend remain the authority — its failures are still collected per row.
+  // Category / Source / Location master validation (mirrors the backend
+  // rules). When a master list has not loaded yet, skip the frontend check and
+  // let the backend remain the authority — its failures are still collected
+  // per row.
   const categorySet =
     master.categoryNames instanceof Set && master.categoryNames.size > 0 ? master.categoryNames : null
   const sourceSet =
     master.sourceNames instanceof Set && master.sourceNames.size > 0 ? master.sourceNames : null
+  const locationSet =
+    master.locationNames instanceof Set && master.locationNames.size > 0 ? master.locationNames : null
 
   const validLeads = []
   const invalidRows = []
@@ -195,14 +200,24 @@ function csvRowsToLeads(text, master = {}) {
     const phone = cell('phone')
     const category = cell('category')
     const source = cell('source')
+    const location = cell('city')
     const errors = []
     if (!company) errors.push('Company Name is required.')
     if (!phone) errors.push('Phone Number is required.')
-    if (category && categorySet && !categorySet.has(category)) {
+    else {
+      const phoneError = validateRawPhone(phone)
+      if (phoneError) errors.push(phoneError)
+    }
+    if (!category) errors.push('Category is required.')
+    else if (categorySet && !categorySet.has(category)) {
       errors.push(`Category "${category}" does not exist.`)
     }
     if (source && sourceSet && !sourceSet.has(source)) {
       errors.push(`Source "${source}" does not exist.`)
+    }
+    if (!location) errors.push('Location is required.')
+    else if (locationSet && !locationSet.has(location)) {
+      errors.push(`Location "${location}" does not exist.`)
     }
     // Preserve the original CSV data for this row (padded to header width).
     const originalRow = rows[0].map((_, idx) => r[idx] ?? '')
@@ -218,7 +233,8 @@ function csvRowsToLeads(text, master = {}) {
         email: cell('email'),
         category,
         source,
-        city: cell('city'),
+        city: location,
+        sublocation: cell('sublocation'),
       },
       originalRow,
     })
@@ -363,6 +379,32 @@ function TagIcon({ className = 'w-3.5 h-3.5' }) {
   )
 }
 
+function MapPinIcon({ className = 'w-3.5 h-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  )
+}
+
+// Mirrors the backend validate_phone(): accepts mobile and landline numbers
+// from any country (E.164 international, area codes, spaces/hyphens/parens).
+// Returns an error message or '' when the value is a plausible phone number.
+function validateRawPhone(value) {
+  const text = (value || '').replace(/\s+/g, '')
+  if (!text) return 'Phone number is required.'
+  if (!/^[\d+()\-.\s]+$/.test(text)) {
+    return 'Phone number may only contain digits, spaces, +, - and parentheses.'
+  }
+  const digits = text.replace(/[^0-9]/g, '')
+  if (!digits) return 'Please enter a valid phone number.'
+  if (digits.length < 5 || digits.length > 16) {
+    return 'Phone number must contain between 5 and 16 digits.'
+  }
+  return ''
+}
+
 export default function RawData() {
   const { user } = useAuth()
   const isManager = can(user, 'leads.view_all')
@@ -404,6 +446,7 @@ export default function RawData() {
     : ['My entries', 'All Employees']
   const [categoryOptions, setCategoryOptions] = useState([])
   const [sourceOptions, setSourceOptions] = useState([])
+  const [locationOptions, setLocationOptions] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assignStaffList, setAssignStaffList] = useState([])
   const [assignStaffOpen, setAssignStaffOpen] = useState(false)
@@ -576,6 +619,24 @@ export default function RawData() {
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchLocations() {
+      try {
+        const data = await api.get('/master/locations/')
+        if (!cancelled) setLocationOptions(data)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }
+
+    fetchLocations()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   function showToast(msg) {
     setToast(msg)
     setTimeout(() => setToast(''), 3000)
@@ -595,6 +656,7 @@ export default function RawData() {
     category: '',
     source: '',
     city: '',
+    sublocation: '',
   })
 
   function openDrawer() {
@@ -627,6 +689,7 @@ export default function RawData() {
       category: '',
       source: '',
       city: '',
+      sublocation: '',
     })
     openDrawer()
   }
@@ -642,6 +705,7 @@ export default function RawData() {
       category: item.category || '',
       source: item.source || '',
       city: item.city || '',
+      sublocation: item.sublocation || '',
     })
     openDrawer()
   }
@@ -650,7 +714,31 @@ export default function RawData() {
     e.preventDefault()
     if (isSaving) return
     setError('')
-    if (!formData.company.trim()) return
+    const company = formData.company.trim()
+    const phone = formData.phone.trim()
+    const category = formData.category.trim()
+    const location = formData.city.trim()
+    if (!company) {
+      setError('Company / Organization Name is required.')
+      return
+    }
+    if (!phone) {
+      setError('Phone number is required.')
+      return
+    }
+    const phoneError = validateRawPhone(phone)
+    if (phoneError) {
+      setError(phoneError)
+      return
+    }
+    if (!category) {
+      setError('Category is required.')
+      return
+    }
+    if (!location) {
+      setError('Location is required.')
+      return
+    }
 
     setIsSaving(true)
     try {
@@ -704,11 +792,12 @@ async function handleBulkImport(e) {
       const parsed = csvRowsToLeads(text, {
         categoryNames: toNameSet(categoryOptions),
         sourceNames: toNameSet(sourceOptions),
+        locationNames: toNameSet(locationOptions),
       })
 
       if (parsed.empty) {
         setError(
-          'No importable rows found. Make sure the first row has headers such as Company Name, Contact Person, Phone, Email, Category, Lead Source, City.'
+          'No importable rows found. Make sure the first row has headers such as Company Name, Contact Person, Phone, Email, Category, Lead Source, Location, Sublocation.'
         )
         setImportNeedsAck(true)
         return
@@ -1484,7 +1573,12 @@ async function handleBulkImport(e) {
 
                       {/* Location */}
                       <td className="py-0.5 pr-2 text-slate-600 text-xs">
-                        {item.city}
+                        <span className="block truncate max-w-[140px]">{item.city}</span>
+                        {item.sublocation && (
+                          <span className="block text-[10px] text-slate-400 truncate max-w-[140px]">
+                            {item.sublocation}
+                          </span>
+                        )}
                       </td>
 
                       {/* Date */}
@@ -2242,6 +2336,7 @@ async function handleBulkImport(e) {
                     id="drawer_category"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    required
                     className="peer relative z-0 w-full cursor-pointer rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 transition-all focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
                   >
                     <option value="" disabled hidden>
@@ -2257,7 +2352,7 @@ async function handleBulkImport(e) {
                     htmlFor="drawer_category"
                     className="absolute left-8 -top-2 z-10 bg-white px-1 text-[10px] font-medium text-slate-500 cursor-pointer peer-focus:text-brand-600"
                   >
-                    Category
+                    Category *
                   </label>
                 </div>
 
@@ -2289,25 +2384,54 @@ async function handleBulkImport(e) {
                   </label>
                 </div>
 
-                {/* City */}
+                {/* Location Selection (from master) */}
                 <div className="relative mt-2">
-                  <input
-                    id="drawer_city"
-                    type="text"
-                    placeholder="City / Region"
+                  <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-slate-400">
+                    <MapPinIcon className="h-3.5 w-3.5" />
+                  </span>
+                  <select
+                    id="drawer_location"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    className="peer relative z-0 w-full rounded-lg border border-slate-200 bg-white py-2 px-3 text-xs text-slate-800 placeholder-transparent transition-all focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+                    required
+                    className="peer relative z-0 w-full cursor-pointer rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 transition-all focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+                  >
+                    <option value="" disabled hidden>
+                      Select Location
+                    </option>
+                    {locationOptions.map((loc) => (
+                      <option key={loc.id} value={loc.name}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </select>
+                  <label
+                    htmlFor="drawer_location"
+                    className="absolute left-8 -top-2 z-10 bg-white px-1 text-[10px] font-medium text-slate-500 cursor-pointer peer-focus:text-brand-600"
+                  >
+                    Location *
+                  </label>
+                </div>
+
+                {/* Sublocation */}
+                <div className="relative mt-2">
+                  <input
+                    id="drawer_sublocation"
+                    type="text"
+                    placeholder="Sublocation"
+                    value={formData.sublocation}
+                    onChange={(e) => setFormData({ ...formData, sublocation: e.target.value })}
+                    className="peer relative z-0 w-full rounded-lg border border-slate-200 bg-white py-2 px-3 pl-9 text-xs text-slate-800 placeholder-transparent transition-all focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
                   />
                   <label
-                    htmlFor="drawer_city"
-                    className={`absolute left-3 bg-white px-1 text-[10px] font-medium transition-all z-10 cursor-text ${
-                      formData.city
+                    htmlFor="drawer_sublocation"
+                    className={`absolute left-8 bg-white px-1 text-[10px] font-medium transition-all z-10 cursor-text ${
+                      formData.sublocation
                         ? '-top-2 text-slate-500'
                         : 'top-2 text-xs text-slate-400 peer-placeholder-shown:text-xs peer-placeholder-shown:top-2'
                     } peer-focus:-top-2 peer-focus:text-[10px] peer-focus:text-brand-600`}
                   >
-                    City / Location
+                    Sublocation
                   </label>
                 </div>
 

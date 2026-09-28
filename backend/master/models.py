@@ -97,6 +97,10 @@ class Source(CommonMaster):
     pass
 
 
+class Location(CommonMaster):
+    """Master list of locations used by the Raw Data "Location" dropdown."""
+
+
 class Branch(CommonMaster):
     name = models.CharField(max_length=50)
     address = models.CharField(max_length=200, blank=True)

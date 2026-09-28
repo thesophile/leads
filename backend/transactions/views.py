@@ -572,6 +572,7 @@ def apply_lead_search(queryset, search):
         | Q(category__icontains=search)
         | Q(source__icontains=search)
         | Q(city__icontains=search)
+        | Q(sublocation__icontains=search)
     )
 
 
@@ -660,6 +661,27 @@ def validate_master_values(tenant_company, category, source):
     return invalid
 
 
+PHONE_ALLOWED_CHARS = set('+0123456789- ().')
+
+
+def validate_phone(value):
+    """Return an error message when ``value`` is not a plausible phone number,
+    else None. Accepts mobile and landline numbers from any country: E.164
+    international numbers (with leading ``+``), country/area codes, extensions,
+    and common formatting (spaces, hyphens, parentheses) are all allowed."""
+    text = ''.join((value or '').split())
+    if not text:
+        return 'phone: Phone number is required.'
+    if any(ch not in PHONE_ALLOWED_CHARS for ch in text):
+        return 'phone: Phone number may only contain digits, spaces, +, - and parentheses.'
+    digits = re.sub(r'[^0-9]', '', text)
+    if not digits:
+        return 'phone: Please enter a valid phone number.'
+    if len(digits) < 5 or len(digits) > 16:
+        return 'phone: Phone number must contain between 5 and 16 digits.'
+    return None
+
+
 class LeadListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -706,12 +728,26 @@ class LeadListView(APIView):
         existing = find_duplicate_lead(request.user, company)
         if existing is not None:
             return duplicate_response(existing)
+        phone = request.data.get('phone', '').strip()
+        phone_error = validate_phone(phone)
+        if phone_error:
+            return Response({'detail': phone_error}, status=status.HTTP_400_BAD_REQUEST)
         category = request.data.get('category', '').strip()
+        if not category:
+            return Response(
+                {'detail': 'category: This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         source = request.data.get('source', '').strip()
+        location = request.data.get('city', '').strip()
+        if not location:
+            return Response(
+                {'detail': 'location (City): This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         invalid = validate_master_values(request.user.company, category, source)
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
-        phone = request.data.get('phone', '').strip()
         lead_date = date.today()
         saved = None
         last_error = None
@@ -726,7 +762,8 @@ class LeadListView(APIView):
                     email=request.data.get('email', '').strip(),
                     category=category,
                     source=source,
-                    city=request.data.get('city', '').strip(),
+                    city=location,
+                    sublocation=request.data.get('sublocation', '').strip(),
                     date=lead_date,
                     display_date=format_display_date(lead_date),
                     added_by=request.user.name,
@@ -756,8 +793,9 @@ class LeadListView(APIView):
 class LeadImportView(APIView):
     """Create-or-update a single raw lead row from a CSV import.
 
-    Every row must carry a company and a phone number; a row missing either is
-    rejected so the frontend can report it and hand it back for correction.
+    Every row must carry a company, a phone number, a category and a location;
+    a row missing any is rejected so the frontend can report it and hand it
+    back for correction.
 
     When a lead with the same (tenant, company) already exists, the incoming
     row overwrites its contact fields instead of being skipped as a duplicate,
@@ -779,20 +817,29 @@ class LeadImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         phone = request.data.get('phone', '').strip()
-        if not phone:
+        phone_error = validate_phone(phone)
+        if phone_error:
+            return Response({'detail': phone_error}, status=status.HTTP_400_BAD_REQUEST)
+        category = request.data.get('category', '').strip()
+        if not category:
             return Response(
-                {'detail': 'phone: This field is required.'},
+                {'detail': 'category: This field is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        category = request.data.get('category', '').strip()
         source = request.data.get('source', '').strip()
+        location = request.data.get('city', '').strip()
+        if not location:
+            return Response(
+                {'detail': 'location (City): This field is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         invalid = validate_master_values(request.user.company, category, source)
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
 
         existing = find_duplicate_lead(request.user, company)
         if existing is not None:
-            return self._update(request, existing, company, category, source)
+            return self._update(request, existing, company, category, source, location)
 
         saved = None
         last_error = None
@@ -808,7 +855,8 @@ class LeadImportView(APIView):
                     email=request.data.get('email', '').strip(),
                     category=category,
                     source=source,
-                    city=request.data.get('city', '').strip(),
+                    city=location,
+                    sublocation=request.data.get('sublocation', '').strip(),
                     date=lead_date,
                     display_date=format_display_date(lead_date),
                     added_by=request.user.name,
@@ -821,7 +869,7 @@ class LeadImportView(APIView):
                 last_error = exc
                 existing = find_duplicate_lead(request.user, company)
                 if existing is not None:
-                    return self._update(request, existing, company, category, source)
+                    return self._update(request, existing, company, category, source, location)
         if saved is None:
             raise last_error
         log_activity(
@@ -837,7 +885,7 @@ class LeadImportView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
-    def _update(self, request, lead, company, category, source):
+    def _update(self, request, lead, company, category, source, location):
         changed_fields = []
         fields = (
             ('company', company),
@@ -846,7 +894,8 @@ class LeadImportView(APIView):
             ('email', request.data.get('email', '').strip()),
             ('category', category),
             ('source', source),
-            ('city', request.data.get('city', '').strip()),
+            ('city', location),
+            ('sublocation', request.data.get('sublocation', '').strip()),
         )
         for field, new_value in fields:
             new_value = '' if new_value is None else new_value
@@ -922,7 +971,7 @@ class LeadDetailView(APIView):
                 if conflict is not None and conflict.id != lead.id:
                     return duplicate_response(conflict)
             lead.company = company
-        for field in ('contact', 'phone', 'category', 'source', 'city'):
+        for field in ('contact', 'phone', 'category', 'source', 'city', 'sublocation'):
             if field in request.data:
                 value = request.data.get(field)
                 if isinstance(value, str):
@@ -941,6 +990,24 @@ class LeadDetailView(APIView):
                 setattr(lead, field, value)
         invalid = []
         submitted = set(request.data)
+        # Phone must always be a plausible number whenever it is submitted.
+        if 'phone' in submitted:
+            phone_error = validate_phone(lead.phone or '')
+            if phone_error:
+                invalid.append(phone_error)
+        # Raw data entry requires phone, category and location. Enforce these
+        # whenever a raw lead's contact fields are edited so a record can never
+        # be saved without them.
+        if lead.status == Lead.STATUS_RAW and any(
+            f in submitted for f in ('phone', 'category', 'city')
+        ):
+            for field, label in (
+                ('phone', 'Phone'),
+                ('category', 'Category'),
+                ('city', 'Location (City)'),
+            ):
+                if not (getattr(lead, field) or '').strip():
+                    invalid.append(f'{field}: {label} is required.')
         # Reassigning a lead to another staff member is an assign action: only
         # users with an assign permission may change who owns a lead. This keeps
         # the per-lead edit path consistent with the bulk-assign gate. When the

@@ -358,6 +358,7 @@ class LeadSerializer(serializers.ModelSerializer):
             'category',
             'source',
             'city',
+            'sublocation',
             'date',
             'displayDate',
             'addedBy',

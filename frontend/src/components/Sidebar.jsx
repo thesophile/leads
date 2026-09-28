@@ -55,6 +55,7 @@ const MENU_BASE = [
       { id: 'branches', label: 'Branches', path: '/branches', perm: 'branch.view' },
       { id: 'categories', label: 'Categories', path: '/categories', perm: 'category.view' },
       { id: 'sources', label: 'Sources', path: '/sources', perm: 'source.view' },
+      { id: 'locations', label: 'Locations', path: '/locations', perm: 'location.view' },
       { id: 'staff', label: 'Staff', path: '/staff', perm: 'staff.manage' },
     ],
   },

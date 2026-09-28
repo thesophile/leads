@@ -4,7 +4,7 @@ from django import forms
 
 from common.admin import CompanyScopedAdminMixin
 
-from .models import Branch, Category, Source, Staff
+from .models import Branch, Category, Location, Source, Staff
 
 
 class BranchAdminForm(forms.ModelForm):
@@ -28,6 +28,12 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Source)
 class SourceAdmin(admin.ModelAdmin):
     list_display = ('code', 'name')
+
+
+@admin.register(Location)
+class LocationAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+    list_display = ('code', 'name', 'company')
+    search_fields = ('name', 'code')
 
 
 @admin.register(Branch)
