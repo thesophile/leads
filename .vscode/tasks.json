@@ -42,7 +42,7 @@
     {
       "label": "Deploy Frontend",
       "type": "shell",
-      "command": "cd \"$env:USERPROFILE\\Desktop\\Codebase\\leads\\frontend\"; npm run build -- --mode prod; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads 'rm -rf ~/public_html/assets'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp -r .\\dist\\* leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp .\\dist\\.htaccess leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads 'chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1'",
+      "command": "cd \"$env:USERPROFILE\\Desktop\\Codebase\\leads\\frontend\"; npm run build -- --mode prod; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Write-Host '=== Removing old assets ==='; ssh leads 'rm -rf ~/public_html/assets'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Uploading frontend ==='; $attempt = 0; do { $attempt++; Write-Host \"SCP attempt $attempt of 3\"; scp -r .\\dist\\* leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -eq 0) { break }; Write-Host 'SCP failed, retrying in 5 seconds...'; Start-Sleep -Seconds 5 } while ($attempt -lt 3); if ($LASTEXITCODE -ne 0) { Write-Host '=== Frontend upload failed ==='; exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Uploading .htaccess ==='; $attempt = 0; do { $attempt++; Write-Host \"SCP .htaccess attempt $attempt of 3\"; scp .\\dist\\.htaccess leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -eq 0) { break }; Write-Host 'SCP failed, retrying in 5 seconds...'; Start-Sleep -Seconds 5 } while ($attempt -lt 3); if ($LASTEXITCODE -ne 0) { Write-Host '=== .htaccess upload failed ==='; exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Setting permissions ==='; ssh leads 'chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Write-Host '=== Frontend deployment completed ==='",
       "options": {
         "shell": {
           "executable": "powershell.exe"
@@ -53,7 +53,7 @@
     {
       "label": "Deploy Backend",
       "type": "shell",
-      "command": "cd \"$env:USERPROFILE\\Desktop\\Codebase\\leads\"; git archive HEAD backend -o backend.zip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; scp backend.zip leads:/home/newleadsprograme/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads 'cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ssh leads 'source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate && cd /home/newleadsprograme/backend && python manage.py migrate'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Remove-Item .\\backend.zip -ErrorAction SilentlyContinue",
+      "command": "cd \"$env:USERPROFILE\\Desktop\\Codebase\\leads\"; Write-Host '=== Creating backend.zip ==='; git archive HEAD backend -o backend.zip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Write-Host '=== Uploading backend.zip ==='; $attempt = 0; do { $attempt++; Write-Host \"SCP attempt $attempt of 3\"; scp backend.zip leads:/home/newleadsprograme/; if ($LASTEXITCODE -eq 0) { break }; Write-Host 'SCP failed, retrying in 5 seconds...'; Start-Sleep -Seconds 5 } while ($attempt -lt 3); if ($LASTEXITCODE -ne 0) { Write-Host '=== Backend upload failed ==='; exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Extracting backend ==='; ssh leads 'cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Running migrations ==='; ssh leads 'source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate && cd /home/newleadsprograme/backend && python manage.py migrate'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Remove-Item .\\backend.zip -ErrorAction SilentlyContinue; Write-Host '=== Backend deployment completed ==='",
       "options": {
         "shell": {
           "executable": "powershell.exe"
@@ -69,7 +69,7 @@
       ],
       "dependsOrder": "sequence",
       "type": "shell",
-      "command": "Write-Host 'Full deployment completed.'",
+      "command": "Write-Host '=== Full deployment completed ==='",
       "options": {
         "shell": {
           "executable": "powershell.exe"
