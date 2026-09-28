@@ -43,6 +43,7 @@ const EMPTY = {
   pipeline: [],
   team: [],
   hot_leads_list: [],
+  follow_ups_due_leads: [],
 }
 
 function toISODate(d) {
@@ -57,6 +58,26 @@ function leadPathByStatus(status) {
   if (status === 'Order' || status === 'order') return '/orders'
   if (status === 'Client' || status === 'client') return '/client-details'
   return '/tele-calling'
+}
+
+const FOLLOW_UPS_DISMISSED_KEY = 'leads.followUpsDismissed'
+
+function readDismissedFollowUps() {
+  try {
+    const raw = sessionStorage.getItem(FOLLOW_UPS_DISMISSED_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return new Set(Array.isArray(arr) ? arr : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function persistDismissedFollowUps(ids) {
+  try {
+    sessionStorage.setItem(FOLLOW_UPS_DISMISSED_KEY, JSON.stringify(Array.from(ids)))
+  } catch {
+    // Storage unavailable — dismissal just won't survive a refresh.
+  }
 }
 
 function ActivityIcon() {
@@ -106,6 +127,32 @@ export default function Dashboard() {
   const [stats, setStats] = useState(EMPTY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [followUpModalOpen, setFollowUpModalOpen] = useState(false)
+  const followUpModalShownRef = useRef(false)
+
+  function dismissLeadFollowUp(id) {
+    const dismissed = readDismissedFollowUps()
+    dismissed.add(id)
+    persistDismissedFollowUps(dismissed)
+  }
+
+  function handleFollowUpRowClick(lead) {
+    dismissLeadFollowUp(lead.id)
+    navigate('/tele-calling?call_status=Follow Up')
+  }
+
+  function dismissFollowUps() {
+    const dismissed = readDismissedFollowUps()
+    stats.follow_ups_due_leads.forEach((l) => dismissed.add(l.id))
+    persistDismissedFollowUps(dismissed)
+    setFollowUpModalOpen(false)
+  }
+
+  function viewAllFollowUps() {
+    dismissFollowUps()
+    navigate('/tele-calling?call_status=Follow Up')
+  }
 
   const chipTones = {
     blue: 'bg-blue-50 text-blue-600',
@@ -169,6 +216,13 @@ export default function Dashboard() {
       })
       if (requestId !== requestIdRef.current) return
       setStats(data || EMPTY)
+      const dueList = (data && data.follow_ups_due_leads) || []
+      const dismissed = readDismissedFollowUps()
+      const pending = dueList.filter((l) => !dismissed.has(l.id))
+      if (pending.length && !followUpModalShownRef.current) {
+        followUpModalShownRef.current = true
+        setFollowUpModalOpen(true)
+      }
     } catch (err) {
       if (requestId !== requestIdRef.current) return
       setError(err?.message || 'Failed to load dashboard data.')
@@ -321,7 +375,16 @@ export default function Dashboard() {
               {kpis.map((kpi) => (
                 <div
                   key={kpi.label}
+                  onClick={
+                    kpi.key === 'follow_ups_due' && stats.follow_ups_due_leads.length
+                      ? () => setFollowUpModalOpen(true)
+                      : undefined
+                  }
                   className={`group relative overflow-hidden rounded-2xl border bg-white p-3.5 shadow-sm transition-all duration-200 sm:p-4 ${
+                    kpi.key === 'follow_ups_due' && stats.follow_ups_due_leads.length
+                      ? 'cursor-pointer'
+                      : ''
+                  } ${
                     kpi.isHighlight
                       ? 'border-brand-200 ring-1 ring-brand-100'
                       : 'border-slate-200/80 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md'
@@ -702,6 +765,106 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* Follow-ups Due reminder modal */}
+      {followUpModalOpen && stats.follow_ups_due_leads.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setFollowUpModalOpen(false)
+          }}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Follow-ups Due</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {stats.follow_ups_due_leads.length} lead{stats.follow_ups_due_leads.length === 1 ? '' : 's'}{' '}
+                    {stats.follow_ups_due_leads.length === 1 ? 'is' : 'are'} due today or overdue
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFollowUpModalOpen(false)}
+                aria-label="Close reminder"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Due leads list */}
+            <div className="flex-1 space-y-2.5 overflow-y-auto px-5 py-4">
+              {stats.follow_ups_due_leads.map((lead) => (
+                <button
+                  key={lead.id}
+                  type="button"
+                  onClick={() => handleFollowUpRowClick(lead)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition cursor-pointer ${
+                    lead.isDueToday
+                      ? 'border-amber-300 bg-amber-50/70 hover:border-amber-400 hover:bg-amber-50'
+                      : 'border-slate-200 bg-slate-50/60 hover:border-amber-300 hover:bg-white hover:shadow-sm'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-900">{lead.company}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {[lead.category, lead.phone].filter(Boolean).join(' • ')}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    {lead.isDueToday ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                        Due Today
+                      </span>
+                    ) : (
+                      <span className="inline-block rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                        Due {lead.due || 'Today'}
+                      </span>
+                    )}
+                    <p className="mt-1 text-[11px] text-slate-400">{lead.assignedTo || 'Unassigned'}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2.5 border-t border-slate-200 bg-slate-50/60 px-5 py-3">
+              <button
+                type="button"
+                onClick={dismissFollowUps}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={viewAllFollowUps}
+                className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm"
+              >
+                View All
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

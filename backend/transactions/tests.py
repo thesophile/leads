@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
+from datetime import date, timedelta
 
 from transactions.models import (
     Attachment,
@@ -2807,5 +2808,88 @@ class ExternalOrdersFeedTests(APITestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data['results']), 3)
+
+
+class FollowUpReminderTests(APITestCase):
+    """Due follow-up leads surface as one-time in-app notifications for the
+    viewer, are listed on the dashboard, and retire once handled."""
+
+    def setUp(self):
+        self.today = date.today()
+        company = make_company('Followup Co')
+        Lead.objects.filter(tenant__isnull=True).delete()
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@followup.com', password='x', name='Manager F',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='owner@followup.com', password='x', name='Owner S',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.due_lead = Lead.objects.create(
+            id='FU-DUE', company='Due Co', contact='D', phone='444',
+            category='Hospital', city='Kochi', tenant=company,
+            status='assigned', assigned_to='Owner S', call_status='Follow Up',
+            has_follow_up=True, next_follow_up_date=self.today.isoformat(),
+            next_follow_up_time='10:00 AM',
+        )
+        self.future_lead = Lead.objects.create(
+            id='FU-FUT', company='Future Co', contact='F', phone='555',
+            category='School', city='Trivandrum', tenant=company,
+            status='assigned', assigned_to='Owner S', call_status='Follow Up',
+            has_follow_up=True,
+            next_follow_up_date=(self.today + timedelta(days=5)).isoformat(),
+        )
+
+    def test_unread_count_creates_one_notification_per_due_lead(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.get('/api/notifications/unread-count/')
+        self.assertEqual(resp.status_code, 200)
+        notes = Notification.objects.filter(
+            user=self.staff, type='Follow-up', entity_type='lead',
+        )
+        self.assertEqual({n.entity_id for n in notes}, {str(self.due_lead.id)})
+        n = notes.get(entity_id=str(self.due_lead.id))
+        self.assertFalse(n.read)
+        self.assertEqual(n.url, '/tele-calling?call_status=Follow Up')
+        # Idempotent: polling again does not duplicate the reminder.
+        self.client.get('/api/notifications/unread-count/')
+        self.assertEqual(notes.count(), 1)
+
+    def test_future_dated_follow_up_gets_no_reminder(self):
+        self.client.force_authenticate(self.staff)
+        self.client.get('/api/notifications/unread-count/')
+        self.assertFalse(Notification.objects.filter(
+            user=self.staff, entity_id=str(self.future_lead.id),
+        ).exists())
+
+    def test_dashboard_lists_due_follow_ups_and_flags_today(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/dashboard/stats/')
+        self.assertEqual(resp.status_code, 200)
+        row = {r['id']: r for r in resp.data['follow_ups_due_leads']}[self.due_lead.id]
+        self.assertTrue(row['isDueToday'])
+        self.assertEqual(row['company'], 'Due Co')
+        self.assertEqual(row['due'], f'{self.today.isoformat()} 10:00 AM')
+        self.assertNotIn(self.future_lead.id, {
+            r['id'] for r in resp.data['follow_ups_due_leads']
+        })
+
+    def test_logging_the_follow_up_retires_the_reminder(self):
+        Notification.objects.create(
+            user=self.staff, type='Follow-up', title='Follow-up due',
+            message='Due', url='/tele-calling', entity_type='lead',
+            entity_id=str(self.due_lead.id),
+        )
+        self.client.force_authenticate(self.staff)
+        resp = self.client.patch(f'/api/transactions/leads/{self.due_lead.id}/', {
+            'call_status': 'Called',
+            'has_follow_up': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Notification.objects.filter(
+            user=self.staff, entity_id=str(self.due_lead.id), read=False,
+        ).exists())
 
 

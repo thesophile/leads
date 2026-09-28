@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
@@ -18,6 +19,31 @@ const STATUSES = [
   'For Future',
   'Called',
 ]
+
+function parseLooseDate(value) {
+  if (!value) return null
+  const s = String(value).trim()
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T]|$)/)
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3])
+  m = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/)
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1])
+  return null
+}
+
+function isSameDay(a, b) {
+  return (
+    !!a &&
+    !!b &&
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
+}
+
+function followUpDueToday(lead) {
+  if (!lead || !lead.hasFollowUp || !lead.nextFollowUpDate) return false
+  return isSameDay(parseLooseDate(lead.nextFollowUpDate), new Date())
+}
 
 function PhoneCallIcon({ className = 'h-4 w-4' }) {
   return (
@@ -116,6 +142,8 @@ function UsersIcon({ className = 'h-4 w-4' }) {
 export default function Telecall() {
   const { user } = useAuth()
   const [error, setError] = useState('')
+  const [searchParams] = useSearchParams()
+  const urlCallStatus = searchParams.get('call_status')
 
   const canViewAll = !!user && (can(user, 'leads.view_all') || user.is_superuser)
   const canAssign = !!user && (can(user, 'leads.assign') || user.is_superuser)
@@ -167,7 +195,9 @@ export default function Telecall() {
   }
 
   const [selectedCaller, setSelectedCaller] = useState('All Callers')
-  const [selectedStatus, setSelectedStatus] = useState('Pending Call')
+  const [selectedStatus, setSelectedStatus] = useState(
+    urlCallStatus && urlCallStatus !== 'All Status' ? urlCallStatus : 'Pending Call'
+  )
   const [selectedPriority, setSelectedPriority] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -749,11 +779,15 @@ export default function Telecall() {
               <tbody className="divide-y divide-slate-100">
                 {filteredLeads.length > 0 ? (
                   filteredLeads.map((lead) => {
+                    const dueToday = followUpDueToday(lead)
                     return (
                       <tr
                         key={lead.id}
                         onClick={() => openHistoryPanel(lead)}
-                        className={`transition-colors cursor-pointer text-slate-600 hover:bg-slate-50/60`}
+                        className={`transition-colors cursor-pointer text-slate-600 hover:bg-slate-50/60 ${
+                          dueToday ? 'bg-amber-50/70 hover:bg-amber-50' : ''
+                        }`}
+                        style={dueToday ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}
                       >
                         {/* Select Checkbox (locked leads require an admin) */}
                         {canAssign && (
@@ -789,6 +823,12 @@ export default function Telecall() {
                             <p className="font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={lead.company}>
                               {lead.company}
                             </p>
+                            {dueToday && (
+                              <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                                <span className="h-1 w-1 rounded-full bg-white" />
+                                Due today
+                              </span>
+                            )}
                           </div>
                         </td>
 

@@ -487,6 +487,66 @@ def parse_due_date(value):
     return None
 
 
+def is_follow_up_due(lead):
+    """True when a lead is flagged for follow-up and its due date has already
+    arrived (or is unparseable — treat as overdue so it still surfaces)."""
+    if not lead.has_follow_up:
+        return False
+    due = parse_due_date(lead.next_follow_up_date)
+    return due is None or due <= date.today()
+
+
+def create_due_follow_up_notifications(user):
+    """Create one in-app 'Follow-up' reminder per due lead the user can see.
+
+    Idempotent: a lead never generates more than one reminder, so polling this
+    lazily on the notifications endpoints is safe.
+    """
+    if user is None or not getattr(user, 'pk', None):
+        return
+    due_leads = scoped_queryset(user).filter(has_follow_up=True).only(
+        'company', 'phone', 'next_follow_up_date', 'next_follow_up_time',
+    )
+    for lead in due_leads:
+        if not is_follow_up_due(lead):
+            continue
+        if Notification.objects.filter(
+            user=user,
+            type='Follow-up',
+            entity_type='lead',
+            entity_id=str(lead.id),
+        ).exists():
+            continue
+        when = lead.next_follow_up_date or 'today'
+        if lead.next_follow_up_time:
+            when = f'{when} {lead.next_follow_up_time}'
+        notify(
+            user,
+            'Follow-up',
+            'Follow-up due',
+            f'Follow-up for {lead.company} ({lead.phone}) is due {when}.',
+            url='/tele-calling?call_status=Follow Up',
+            entity_type='lead',
+            entity_id=str(lead.id),
+        )
+
+
+def clear_follow_up_notifications(lead):
+    """Delete pending (unread) follow-up reminders for a lead once it is no
+    longer due, e.g. the follow-up was completed or rescheduled."""
+    pending = Notification.objects.filter(
+        entity_type='lead',
+        entity_id=str(lead.id),
+        type='Follow-up',
+        read=False,
+    )
+    if lead.tenant_id:
+        pending = pending.filter(user__company_id=lead.tenant_id)
+    else:
+        pending = pending.filter(user__is_superuser=True)
+    pending.delete()
+
+
 def find_duplicate_lead(user, company):
     """Return an existing Lead with the same normalized company name, from
     within the caller's own company (not just the current user's records) and
@@ -1146,6 +1206,10 @@ class LeadDetailView(APIView):
                 entity_type='lead',
                 entity_id=lead.id,
             )
+        # Follow-up reminders are retired once the lead is no longer due
+        # (follow-up completed or rescheduled to a future date).
+        if not is_follow_up_due(lead):
+            clear_follow_up_notifications(lead)
         data = LeadSerializer(lead).data
         data['contactChanged'] = contact_changed
         data['wasGenerated'] = was_generated
@@ -4035,6 +4099,8 @@ class DashboardStatsView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        create_due_follow_up_notifications(request.user)
+
         try:
             start_date = date.fromisoformat(request.query_params.get('start_date'))
             end_date = date.fromisoformat(request.query_params.get('end_date'))
@@ -4104,11 +4170,28 @@ class DashboardStatsView(APIView):
         # Follow-up due = flagged for follow-up AND the due date is today/past
         # (or no parseable date was stored). Future-dated follow-ups are not due.
         follow_ups_due = 0
-        due_leads = scoped.filter(has_follow_up=True).only('next_follow_up_date')
+        follow_ups_due_leads = []
+        due_leads = scoped.filter(has_follow_up=True).only(
+            'company', 'phone', 'category', 'assigned_to',
+            'next_follow_up_date', 'next_follow_up_time', 'status',
+        )
         for lead in due_leads:
             due_date = parse_due_date(lead.next_follow_up_date)
             if due_date is None or due_date <= date.today():
                 follow_ups_due += 1
+                due_display = lead.next_follow_up_date or ''
+                if due_display and lead.next_follow_up_time:
+                    due_display = f'{due_display} {lead.next_follow_up_time}'
+                follow_ups_due_leads.append({
+                    'id': lead.id,
+                    'company': lead.company,
+                    'phone': lead.phone,
+                    'category': lead.category,
+                    'assignedTo': lead.assigned_to,
+                    'due': due_display,
+                    'isDueToday': due_date is not None and due_date == date.today(),
+                    'status': dict(Lead.STATUS_CHOICES).get(lead.status, lead.status),
+                })
 
         # Open quotations = leads in the quotation stage that have NOT had a
         # proposal declined (declined proposals are no longer open pipeline).
@@ -4231,6 +4314,7 @@ class DashboardStatsView(APIView):
             'sources': source_data,
             'funnel': funnel,
             'pipeline': pipeline,
+            'follow_ups_due_leads': follow_ups_due_leads,
             'team': team,
             'hot_leads_list': hot_leads_list,
         })

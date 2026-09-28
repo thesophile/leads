@@ -23,6 +23,8 @@ from accounts.models import Role, User as AuthUser
 
 from accounts.permissions import can, require_permission
 
+from transactions.views import create_due_follow_up_notifications
+
 from .models import ActivityLog, Notification, StaffTarget, log_activity
 from .serializers import (
     NotificationWriteSerializer,
@@ -103,6 +105,7 @@ class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        create_due_follow_up_notifications(request.user)
         notifications = Notification.objects.filter(user=request.user).order_by('-created_at')[:100]
         return Response(NotificationSerializer(notifications, many=True).data)
 
@@ -111,6 +114,7 @@ class NotificationUnreadCountView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        create_due_follow_up_notifications(request.user)
         count = Notification.objects.filter(user=request.user, read=False).count()
         return Response({'count': count})
 
