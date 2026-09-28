@@ -395,6 +395,7 @@ export default function RawData() {
 
   const canAssignLeads = !!user && (can(user, 'leads.assign') || user.is_superuser)
   const canDeleteLeads = !!user && (can(user, 'leads.delete') || can(user, 'leads.delete_all'))
+  const canBulkSelect = canAssignLeads || canDeleteLeads
 
   const [assignableStaff, setAssignableStaff] = useState([])
   const employeeNames = isManager ? assignableStaff.map((s) => s.name) : []
@@ -1408,6 +1409,7 @@ async function handleBulkImport(e) {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-black text-slate-800 font-bold uppercase tracking-wider text-[11px]">
+                  {canBulkSelect && (
                   <th className="pb-2 font-semibold w-8 pr-2">
                     <label className="flex cursor-pointer items-center justify-center px-3 -mx-3 -my-2 py-2">
                       <input
@@ -1421,6 +1423,7 @@ async function handleBulkImport(e) {
                       />
                     </label>
                   </th>
+                  )}
                   <th className="pb-2 font-semibold w-64">Company Name</th>
                   <th className="pb-2 font-semibold w-44">Contact Person</th>
                   <th className="pb-2 font-semibold w-32">Mobile</th>
@@ -1436,6 +1439,7 @@ async function handleBulkImport(e) {
                   rawDataList.map((item) => (
                     <tr key={item.id} onClick={() => handleEditClick(item)} className="text-slate-600 hover:bg-slate-50/50 transition-colors cursor-pointer">
                       {/* Select Checkbox */}
+                      {canBulkSelect && (
                       <td className="py-0.5 pr-2">
                         <label
                           onClick={(e) => e.stopPropagation()}
@@ -1451,6 +1455,7 @@ async function handleBulkImport(e) {
                           />
                         </label>
                       </td>
+                      )}
 
                       {/* Company Name */}
                       <td className="py-0.5 pr-2 font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={item.company}>
@@ -1501,6 +1506,7 @@ async function handleBulkImport(e) {
                           >
                             <EditIcon />
                           </button>
+                          {canDeleteLeads && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1512,19 +1518,20 @@ async function handleBulkImport(e) {
                           >
                             <TrashIcon />
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ))
                 ) : isLoading ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={canBulkSelect ? 9 : 8} className="py-8 text-center text-xs text-slate-400">
                       Loading raw data...
                     </td>
                   </tr>
                 ) : (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={canBulkSelect ? 9 : 8} className="py-8 text-center text-xs text-slate-400">
                       No raw data records found matching criteria.
                     </td>
                   </tr>
