@@ -167,7 +167,7 @@ export default function Telecall() {
   }
 
   const [selectedCaller, setSelectedCaller] = useState('All Callers')
-  const [selectedStatus, setSelectedStatus] = useState('All Status')
+  const [selectedStatus, setSelectedStatus] = useState('Pending Call')
   const [selectedPriority, setSelectedPriority] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
 
