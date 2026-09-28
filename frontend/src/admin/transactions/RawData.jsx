@@ -1164,7 +1164,8 @@ async function handleBulkImport(e) {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               {/* Left Controls: Filter by Employee, Source, and Date */}
               <div className="flex flex-wrap items-center gap-2.5">
-                {/* Employee Filter Dropdown */}
+                {/* Employee Filter Dropdown - only for managers */}
+                {isManager && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                     <UserFilterIcon />
@@ -1182,6 +1183,7 @@ async function handleBulkImport(e) {
                     ))}
                   </select>
                 </div>
+                )}
 
                 {/* Source Filter Dropdown */}
                 <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">

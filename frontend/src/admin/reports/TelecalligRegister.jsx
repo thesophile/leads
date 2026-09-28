@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
@@ -60,14 +62,20 @@ function leadToRow(item) {
 }
 
 export default function TelecalligRegister() {
+  const { user } = useAuth()
+  const isManager = can(user, 'leads.view_all')
   const [categoryOptions, setCategoryOptions] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
-  const [staff, setStaff] = useState('All Staff')
+  const [staff, setStaff] = useState(isManager ? 'All Staff' : (user?.name || ''))
   const [status, setStatus] = useState('All Status')
   const [location, setLocation] = useState('All Locations')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    if (!isManager && user?.name) setStaff(user.name)
+  }, [user, isManager])
 
   // Load every lead in the telecalling pipeline plus category options.
   // Categories are loaded independently so a leads failure does not hide them.
@@ -138,7 +146,7 @@ export default function TelecalligRegister() {
     fromDate !== '' ||
     toDate !== '' ||
     category !== 'All Category' ||
-    staff !== 'All Staff' ||
+    (isManager && staff !== 'All Staff') ||
     status !== 'All Status' ||
     location !== 'All Locations' ||
     searchQuery.trim() !== ''
@@ -147,7 +155,7 @@ export default function TelecalligRegister() {
     setFromDate('')
     setToDate('')
     setCategory('All Category')
-    setStaff('All Staff')
+    if (isManager) setStaff('All Staff')
     setStatus('All Status')
     setLocation('All Locations')
     setSearchQuery('')
@@ -190,7 +198,7 @@ export default function TelecalligRegister() {
         rows,
         filters: {
           Category: category !== 'All Category' ? category : '',
-          Staff: staff !== 'All Staff' ? staff : '',
+          Staff: isManager && staff !== 'All Staff' ? staff : '',
           Status: status !== 'All Status' ? status : '',
           Location: location !== 'All Locations' ? location : '',
           From: fromDate || '',
@@ -308,6 +316,7 @@ export default function TelecalligRegister() {
             </div>
 
             {/* Staff */}
+            {isManager && (
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">
                 Staff
@@ -324,6 +333,7 @@ export default function TelecalligRegister() {
                 ))}
               </select>
             </div>
+            )}
 
             {/* Status */}
             <div>
@@ -398,8 +408,12 @@ export default function TelecalligRegister() {
           {/* Applied Filter Tags */}
           <div className="mt-2 flex flex-wrap gap-2 text-[9px] bg-slate-100 p-1.5 rounded border border-slate-300 font-medium">
             <span><strong>Category:</strong> {category}</span>
+            {isManager && (
+            <>
             <span>&bull;</span>
             <span><strong>Staff:</strong> {staff}</span>
+            </>
+            )}
             <span>&bull;</span>
             <span><strong>Status:</strong> {status}</span>
             <span>&bull;</span>

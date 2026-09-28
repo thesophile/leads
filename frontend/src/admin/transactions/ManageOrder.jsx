@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
@@ -134,11 +134,16 @@ export default function ManageOrder() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const canSendToClient = !!user && (can(user, 'order.edit') || user.is_superuser)
+  const canFilterByStaff = !!user && (can(user, 'leads.view_all') || user.is_superuser)
   const [ordersList, setOrdersList] = useState([])
   const [loadError, setLoadError] = useState('')
-  const [selectedStaff, setSelectedStaff] = useState('All Staff')
+  const [selectedStaff, setSelectedStaff] = useState(canFilterByStaff ? 'All Staff' : (user?.name || ''))
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    if (!canFilterByStaff && user?.name) setSelectedStaff(user.name)
+  }, [user, canFilterByStaff])
   const [openDropdownId, setOpenDropdownId] = useState(null)
   const [menuOffset, setMenuOffset] = useState(null)
   const [activeMenuOrder, setActiveMenuOrder] = useState(null)
@@ -566,6 +571,7 @@ export default function ManageOrder() {
               {/* Left Controls */}
               <div className="flex flex-wrap items-center gap-2.5">
                 {/* Staff Filter */}
+                {canFilterByStaff && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11px] font-semibold text-slate-500">
                     Staff:
@@ -582,6 +588,7 @@ export default function ManageOrder() {
                     ))}
                   </select>
                 </div>
+                )}
 
                 {/* Status Filter */}
                 <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">

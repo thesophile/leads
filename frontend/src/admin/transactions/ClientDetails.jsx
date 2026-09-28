@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
@@ -216,15 +218,21 @@ function formatSize(bytes) {
 }
 
 export default function ClientDetails() {
+  const { user } = useAuth()
+  const isManager = can(user, 'leads.view_all')
   const location = useLocation()
   const prefilledOrder = location.state?.order
 
   const [records, setRecords] = useState([])
   const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedStaff, setSelectedStaff] = useState('All Staff')
+  const [selectedStaff, setSelectedStaff] = useState(isManager ? 'All Staff' : (user?.name || ''))
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [activeTab, setActiveTab] = useState('active')
+
+  useEffect(() => {
+    if (!isManager && user?.name) setSelectedStaff(user.name)
+  }, [user, isManager])
 
   const [modalOpen, setModalOpen] = useState(() => Boolean(prefilledOrder))
   const [editingId, setEditingId] = useState(null)
@@ -633,20 +641,22 @@ export default function ClientDetails() {
         <div ref={cardRef} className="relative rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-slate-500">Staff:</span>
-                <select
-                  value={selectedStaff}
-                  onChange={(e) => setSelectedStaff(e.target.value)}
-                  className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none cursor-pointer"
-                >
-                  {STAFF_LIST.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
+               {isManager && (
+               <div className="flex items-center gap-1.5">
+                 <span className="text-[11px] font-semibold text-slate-500">Staff:</span>
+                 <select
+                   value={selectedStaff}
+                   onChange={(e) => setSelectedStaff(e.target.value)}
+                   className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none cursor-pointer"
+                 >
+                   {STAFF_LIST.map((s) => (
+                     <option key={s} value={s}>
+                       {s}
+                     </option>
+                   ))}
+                 </select>
+               </div>
+               )}
 
               <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">
                 <span className="text-[11px] font-semibold text-slate-500">Status:</span>

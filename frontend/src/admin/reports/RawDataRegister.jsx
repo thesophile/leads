@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
@@ -29,13 +31,19 @@ function leadToRow(item) {
 }
 
 export default function RawDataRegister() {
+  const { user } = useAuth()
+  const isManager = can(user, 'leads.view_all')
   const [categoryOptions, setCategoryOptions] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
-  const [staff, setStaff] = useState('All Staff')
+  const [staff, setStaff] = useState(isManager ? 'All Staff' : (user?.name || ''))
   const [location, setLocation] = useState('All Locations')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    if (!isManager && user?.name) setStaff(user.name)
+  }, [user, isManager])
 
   // Load the real raw leads (status=raw) and the category options.
   // Categories are loaded independently so a leads failure does not hide them.
@@ -99,7 +107,7 @@ export default function RawDataRegister() {
     fromDate !== '' ||
     toDate !== '' ||
     category !== 'All Category' ||
-    staff !== 'All Staff' ||
+    (isManager && staff !== 'All Staff') ||
     location !== 'All Locations' ||
     searchQuery.trim() !== ''
 
@@ -107,7 +115,7 @@ export default function RawDataRegister() {
     setFromDate('')
     setToDate('')
     setCategory('All Category')
-    setStaff('All Staff')
+    if (isManager) setStaff('All Staff')
     setLocation('All Locations')
     setSearchQuery('')
   }
@@ -253,6 +261,7 @@ export default function RawDataRegister() {
             </div>
 
             {/* Staff */}
+            {isManager && (
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">
                 Staff
@@ -269,6 +278,7 @@ export default function RawDataRegister() {
                 ))}
               </select>
             </div>
+            )}
 
             {/* Location */}
             <div>
@@ -326,8 +336,12 @@ export default function RawDataRegister() {
           {/* Applied Filter Tags */}
           <div className="mt-2 flex flex-wrap gap-2 text-[9px] bg-slate-100 p-1.5 rounded border border-slate-300 font-medium">
             <span><strong>Category:</strong> {category}</span>
+            {isManager && (
+            <>
             <span>&bull;</span>
             <span><strong>Staff:</strong> {staff}</span>
+            </>
+            )}
             <span>&bull;</span>
             <span><strong>Location:</strong> {location}</span>
             {fromDate && (

@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
@@ -48,13 +50,19 @@ function CloseIcon({ className = 'h-4 w-4' }) {
 
 export default function OrderReceived() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isManager = can(user, 'leads.view_all')
 
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [category, setCategory] = useState('All Category')
-  const [staff, setStaff] = useState('All Staff')
+  const [staff, setStaff] = useState(isManager ? 'All Staff' : (user?.name || ''))
   const [detailsStatus, setDetailsStatus] = useState('All Details')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    if (!isManager && user?.name) setStaff(user.name)
+  }, [user, isManager])
 
   const [selectedOrder, setSelectedOrder] = useState(null)
 
@@ -108,7 +116,7 @@ export default function OrderReceived() {
     fromDate !== '' ||
     toDate !== '' ||
     category !== 'All Category' ||
-    staff !== 'All Staff' ||
+    (isManager && staff !== 'All Staff') ||
     detailsStatus !== 'All Details' ||
     searchQuery.trim() !== ''
 
@@ -116,7 +124,7 @@ export default function OrderReceived() {
     setFromDate('')
     setToDate('')
     setCategory('All Category')
-    setStaff('All Staff')
+    if (isManager) setStaff('All Staff')
     setDetailsStatus('All Details')
     setSearchQuery('')
   }
@@ -148,9 +156,9 @@ export default function OrderReceived() {
         fileNamePrefix: 'Converted_Clients_Register',
         columns: ['Order No', 'Date', 'Company', 'Customer', 'Phone', 'Location', 'Staff', 'BDM', 'Category', 'Client Details'],
         rows: rowsForPdf,
-        filters: {
+          filters: {
           Category: category !== 'All Category' ? category : '',
-          Staff: staff !== 'All Staff' ? staff : '',
+          Staff: isManager && staff !== 'All Staff' ? staff : '',
           Details: detailsStatus !== 'All Details' ? detailsStatus : '',
           From: fromDate || '',
           To: toDate || '',
@@ -332,6 +340,8 @@ export default function OrderReceived() {
               </select>
             </div>
 
+            {/* Staff */}
+            {isManager && (
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">Staff / Executive</label>
               <select
@@ -344,6 +354,9 @@ export default function OrderReceived() {
                     {s}
                   </option>
                 ))}
+              </select>
+            </div>
+            )}
               </select>
             </div>
 
