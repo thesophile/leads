@@ -1599,17 +1599,20 @@ export default function Telecall() {
                         ? 'Select staff members…'
                         : formatReassignStaffSummary(reassignStaffList)}
                     </span>
-                    <svg
-                      viewBox="0 0 24 24"
-                      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${reassignStaffOpen ? 'rotate-180' : ''}`}
-                      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                      {reassignStaffOpen && <span className="shrink-0 rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold text-white cursor-pointer" onClick={(e) => { e.stopPropagation(); setReassignStaffOpen(false); }}>OK</span>}
+                      <svg
+                         viewBox="0 0 24 24"
+                         className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${reassignStaffOpen ? 'rotate-180' : ''}`}
+                         fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                       >
+                         <polyline points="6 9 12 15 18 9" />
+                       </svg>
+                    </span>
+                   </button>
 
-                  {/* Checkbox dropdown panel */}
-                  {reassignStaffOpen && (
+                   {/* Checkbox dropdown panel */}
+                   {reassignStaffOpen && (
                     <>
                       <div
                         className="fixed inset-0 z-10"
@@ -1646,9 +1649,9 @@ export default function Telecall() {
                                   className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                                 />
                                 <span className="font-semibold text-slate-800">{staff.name}</span>
-                                {staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
+{staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
                               </label>
-                            )),
+                            ))
                           ]
                         )}
                       </div>

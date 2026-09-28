@@ -1200,13 +1200,13 @@ async function handleBulkImport(e) {
                       }`}
                     >
                       <span className="truncate">{selectedSource}</span>
-                      <svg
-                        viewBox="0 0 24 24"
-                        className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${sourceDropdownOpen ? 'rotate-180' : ''}`}
-                        fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
+                     <svg
+                       viewBox="0 0 24 24"
+                       className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${assignStaffOpen ? 'rotate-180' : ''}`}
+                       fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                     >
+                       <polyline points="6 9 12 15 18 9" />
+                     </svg>
                     </button>
 
                     {sourceDropdownOpen && (
@@ -1614,17 +1614,20 @@ async function handleBulkImport(e) {
                         ? 'Select staff members…'
                         : formatAssignStaffSummary(assignStaffList)}
                     </span>
-                    <svg
-                      viewBox="0 0 24 24"
-                      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${assignStaffOpen ? 'rotate-180' : ''}`}
-                      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                      {assignStaffOpen && <span className="shrink-0 rounded bg-brand-600 px-1.5 py-0.5 text-[11px] font-bold text-white cursor-pointer" onClick={(e) => { e.stopPropagation(); setAssignStaffOpen(false); }}>OK</span>}
+                      <svg
+                         viewBox="0 0 24 24"
+                         className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${assignStaffOpen ? 'rotate-180' : ''}`}
+                         fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                       >
+                         <polyline points="6 9 12 15 18 9" />
+                       </svg>
+                    </span>
+                   </button>
 
-                  {/* Checkbox dropdown panel */}
-                  {assignStaffOpen && (
+                   {/* Checkbox dropdown panel */}
+                   {assignStaffOpen && (
                     <>
                       <div
                         className="fixed inset-0 z-10"
@@ -1654,25 +1657,25 @@ async function handleBulkImport(e) {
                                 key={staff.name}
                                 className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={assignStaffList.includes(staff.name)}
-                                  onChange={() => toggleAssignStaff(staff.name)}
-                                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                                />
-                                <span className="font-semibold text-slate-800">{staff.name}</span>
-                                {staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
-                              </label>
-                            )),
-                          ]
-                        )}
+                                  <input
+                                    type="checkbox"
+                                    checked={assignStaffList.includes(staff.name)}
+                                    onChange={() => toggleAssignStaff(staff.name)}
+                                    className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                                  />
+                                  <span className="font-semibold text-slate-800">{staff.name}</span>
+{staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
+                                 </label>
+                               ))
+                             ]
+                           )}
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
+                      </>
+                     )}
+                   </div>
+                 </div>
 
-              {/* Step 2: Filter Records & Set Volume */}
+               {/* Step 2: Filter Records & Set Volume */}
               <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-2xs">
                 <div className="flex items-center gap-2">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-white">
@@ -1878,17 +1881,20 @@ async function handleBulkImport(e) {
                         ? 'Select staff members…'
                         : formatAssignStaffSummary(assignSelectedStaffList)}
                     </span>
-                    <svg
-                      viewBox="0 0 24 24"
-                      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${assignSelectedStaffOpen ? 'rotate-180' : ''}`}
-                      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                      {assignSelectedStaffOpen && <span className="shrink-0 rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold text-white cursor-pointer" onClick={(e) => { e.stopPropagation(); setAssignSelectedStaffOpen(false); }}>OK</span>}
+                      <svg
+                         viewBox="0 0 24 24"
+                         className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${assignSelectedStaffOpen ? 'rotate-180' : ''}`}
+                         fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                       >
+                         <polyline points="6 9 12 15 18 9" />
+                       </svg>
+                    </span>
+                   </button>
 
-                  {/* Checkbox dropdown panel */}
-                  {assignSelectedStaffOpen && (
+                   {/* Checkbox dropdown panel */}
+                   {assignSelectedStaffOpen && (
                     <>
                       <div
                         className="fixed inset-0 z-10"
@@ -1920,23 +1926,23 @@ async function handleBulkImport(e) {
                               >
                                 <input
                                   type="checkbox"
-                                  checked={assignSelectedStaffList.includes(staff.name)}
-                                  onChange={() => toggleAssignSelectedStaff(staff.name)}
-                                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                />
-                                <span className="font-semibold text-slate-800">{staff.name}</span>
-                                {staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
-                              </label>
-                            )),
-                          ]
-                        )}
+                                   checked={assignSelectedStaffList.includes(staff.name)}
+                                   onChange={() => toggleAssignSelectedStaff(staff.name)}
+                                   className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                 />
+                                 <span className="font-semibold text-slate-800">{staff.name}</span>
+{staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
+                                </label>
+                              ))
+                            ]
+                          )}
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
+                     </>
+                   )}
+                 </div>
+               </div>
 
-              {/* Live Info Banner */}
+               {/* Live Info Banner */}
               <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 flex items-center justify-between text-xs">
                 <span className="text-slate-600">
                   Assigning <strong className="text-emerald-700">{selectedIds.size}</strong> selected raw lead(s).
