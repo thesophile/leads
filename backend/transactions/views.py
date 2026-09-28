@@ -12,7 +12,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.mail import send_mail
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Max, Q, OuterRef, Subquery
 from django.db.models.functions import TruncDay, TruncMonth, TruncYear
 from django.http import HttpResponse
@@ -499,8 +499,9 @@ def is_follow_up_due(lead):
 def create_due_follow_up_notifications(user):
     """Create one in-app 'Follow-up' reminder per due lead the user can see.
 
-    Idempotent: a lead never generates more than one reminder, so polling this
-    lazily on the notifications endpoints is safe.
+    Idempotent under concurrency: the existence check and insert run inside a
+    transaction that locks the lead row, so simultaneous polls (bell, dashboard,
+    notifications page) can never create two reminders for the same lead.
     """
     if user is None or not getattr(user, 'pk', None):
         return
@@ -510,25 +511,34 @@ def create_due_follow_up_notifications(user):
     for lead in due_leads:
         if not is_follow_up_due(lead):
             continue
-        if Notification.objects.filter(
-            user=user,
-            type='Follow-up',
-            entity_type='lead',
-            entity_id=str(lead.id),
-        ).exists():
-            continue
-        when = lead.next_follow_up_date or 'today'
-        if lead.next_follow_up_time:
-            when = f'{when} {lead.next_follow_up_time}'
-        notify(
-            user,
-            'Follow-up',
-            'Follow-up due',
-            f'Follow-up for {lead.company} ({lead.phone}) is due {when}.',
-            url='/tele-calling?call_status=Follow Up',
-            entity_type='lead',
-            entity_id=str(lead.id),
-        )
+        # Serialize on the lead row so a second request blocks until the first
+        # commits, then sees the existing reminder and skips creation.
+        with transaction.atomic():
+            Lead.objects.select_for_update().only('pk').get(pk=lead.id)
+            existing = Notification.objects.filter(
+                user=user,
+                type='Follow-up',
+                entity_type='lead',
+                entity_id=str(lead.id),
+            )
+            if existing.exists():
+                # One reminder per lead — keep the newest and drop any stale
+                # duplicates (self-heals rows created before this guard).
+                keep = existing.order_by('-id').first()
+                existing.exclude(pk=keep.pk).delete()
+                continue
+            when = lead.next_follow_up_date or 'today'
+            if lead.next_follow_up_time:
+                when = f'{when} {lead.next_follow_up_time}'
+            notify(
+                user,
+                'Follow-up',
+                'Follow-up due',
+                f'Follow-up for {lead.company} ({lead.phone}) is due {when}.',
+                url='/tele-calling?call_status=Follow Up',
+                entity_type='lead',
+                entity_id=str(lead.id),
+            )
 
 
 def clear_follow_up_notifications(lead):

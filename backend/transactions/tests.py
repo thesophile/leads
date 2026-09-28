@@ -2892,4 +2892,22 @@ class FollowUpReminderTests(APITestCase):
             user=self.staff, entity_id=str(self.due_lead.id), read=False,
         ).exists())
 
+    def test_poll_collapses_existing_duplicate_reminders(self):
+        Notification.objects.create(
+            user=self.staff, type='Follow-up', title='Follow-up due',
+            message='Due', url='/tele-calling', entity_type='lead',
+            entity_id=str(self.due_lead.id),
+        )
+        Notification.objects.create(
+            user=self.staff, type='Follow-up', title='Follow-up due',
+            message='Due', url='/tele-calling', entity_type='lead',
+            entity_id=str(self.due_lead.id),
+        )
+        self.client.force_authenticate(self.staff)
+        self.client.get('/api/notifications/unread-count/')
+        self.assertEqual(Notification.objects.filter(
+            user=self.staff, type='Follow-up', entity_type='lead',
+            entity_id=str(self.due_lead.id),
+        ).count(), 1)
+
 
