@@ -314,10 +314,12 @@ function approvalCountBy(approvals, status) {
 }
 
 // The Approved By box keeps one fixed height so it never grows or shrinks with
-// the approval state. The value fits a fully approved signature block; short
-// content (no approvers / pending) leaves empty space below, which is fine for
-// PDF export.
-const APPROVED_BY_CONTENT_HEIGHT = 152
+// the approval state. The height is derived from the number of approvers so the
+// box always fits its content (status row + one card per approver + the fully
+// approved signature block) without clipping, while leaving stable empty space
+// when there is less content, which is fine for PDF export.
+const APPROVED_BY_BASE_HEIGHT = 110
+const APPROVED_BY_ROW_HEIGHT = 54
 
 export default function ProposalPreview() {
   const navigate = useNavigate()
@@ -505,8 +507,8 @@ const approvedByRef = useRef(null)
   const termsContentRef = useRef(null)
   const summaryContentRef = useRef(null)
   const approvalRefetchedRef = useRef(false)
-  const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 48)
-  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 44)
+  const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 16)
+  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 16)
 
 
   function handlePrint() {
@@ -788,7 +790,7 @@ const approvedByRef = useRef(null)
                   {proposalData.termsHtml ? (
                     <div
                       ref={termsContentRef}
-                      className="text-[12.5px] leading-snug text-slate-700"
+                      className="text-[11px] leading-snug text-slate-700"
                       style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
                       {htmlToPlainLines(proposalData.termsHtml).map((line, i) => (
@@ -798,7 +800,7 @@ const approvedByRef = useRef(null)
                   ) : (
                     <div
                       ref={termsContentRef}
-                      className="text-[12.5px] leading-snug text-slate-700"
+                      className="text-[11px] leading-snug text-slate-700"
                       style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
                       {Array.isArray(proposalData.termsConditions) ? (
@@ -818,7 +820,7 @@ const approvedByRef = useRef(null)
 
                 <div ref={approvedByRef}>
                   <SectionBox title="Approved By">
-                  <div style={{ height: APPROVED_BY_CONTENT_HEIGHT }}>
+                  <div style={{ height: APPROVED_BY_BASE_HEIGHT + approvals.length * APPROVED_BY_ROW_HEIGHT }}>
                   {approvals.length === 0 ? (
                     <p className="text-[11px] text-slate-400 py-0.5">No approvers selected yet.</p>
                   ) : (

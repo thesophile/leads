@@ -41,7 +41,7 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
-const SCOPE_MAX_CHARS = 800
+const SCOPE_MAX_CHARS = 1500
 const SCOPE_MAX_LINES = 30
 
 const BLOCKED_PREFIXES = new Set([

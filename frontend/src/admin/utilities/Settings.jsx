@@ -72,8 +72,8 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
-const TERMS_SUMMARY_MAX_CHARS = 550
-const TERMS_SUMMARY_MAX_LINES = 20
+const TERMS_SUMMARY_MAX_CHARS = 650
+const TERMS_SUMMARY_MAX_LINES = 27
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
