@@ -356,11 +356,9 @@ export default function OrderReceived() {
                 ))}
               </select>
             </div>
-            )}
-              </select>
-            </div>
+             )}
 
-            <div>
+             <div>
               <label className="block text-[11px] font-semibold text-slate-500 mb-1">Client Details</label>
               <select
                 value={detailsStatus}
