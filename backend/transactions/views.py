@@ -499,33 +499,57 @@ def is_follow_up_due(lead):
 def create_due_follow_up_notifications(user):
     """Create one in-app 'Follow-up' reminder per due lead the user can see.
 
-    Idempotent under concurrency: the existence check and insert run inside a
-    transaction that locks the lead row, so simultaneous polls (bell, dashboard,
-    notifications page) can never create two reminders for the same lead.
+    Cheap in the steady state: reminders that already exist are read in a small
+    number of queries, so the per-lead locking/insert path only runs for leads
+    that still need one. Legacy duplicate reminders are collapsed to the newest
+    row per lead (set-based, no per-lead row locks).
     """
     if user is None or not getattr(user, 'pk', None):
         return
-    due_leads = scoped_queryset(user).filter(has_follow_up=True).only(
-        'company', 'phone', 'next_follow_up_date', 'next_follow_up_time',
+
+    due_leads = [
+        lead
+        for lead in scoped_queryset(user).filter(has_follow_up=True).only(
+            'id', 'company', 'phone', 'has_follow_up',
+            'next_follow_up_date', 'next_follow_up_time',
+        )
+        if is_follow_up_due(lead)
+    ]
+    if not due_leads:
+        return
+
+    due_ids = {str(lead.id) for lead in due_leads}
+    follow_up_qs = Notification.objects.filter(
+        user=user,
+        type='Follow-up',
+        entity_type='lead',
+        entity_id__in=due_ids,
     )
+
+    # Collapse legacy duplicates: keep the newest reminder per lead.
+    keep_ids = list(
+        follow_up_qs
+        .values('entity_id')
+        .annotate(keep=Max('id'))
+        .values_list('keep', flat=True)
+    )
+    follow_up_qs.exclude(pk__in=keep_ids).delete()
+
+    existing_ids = set(follow_up_qs.values_list('entity_id', flat=True))
+
     for lead in due_leads:
-        if not is_follow_up_due(lead):
+        if str(lead.id) in existing_ids:
             continue
         # Serialize on the lead row so a second request blocks until the first
         # commits, then sees the existing reminder and skips creation.
         with transaction.atomic():
             Lead.objects.select_for_update().only('pk').get(pk=lead.id)
-            existing = Notification.objects.filter(
+            if Notification.objects.filter(
                 user=user,
                 type='Follow-up',
                 entity_type='lead',
                 entity_id=str(lead.id),
-            )
-            if existing.exists():
-                # One reminder per lead — keep the newest and drop any stale
-                # duplicates (self-heals rows created before this guard).
-                keep = existing.order_by('-id').first()
-                existing.exclude(pk=keep.pk).delete()
+            ).exists():
                 continue
             when = lead.next_follow_up_date or 'today'
             if lead.next_follow_up_time:

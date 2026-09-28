@@ -18,6 +18,7 @@ export default function NotificationBell({ asButtonClassName = '' }) {
   useEffect(() => {
     let cancelled = false
     async function load() {
+      if (document.hidden) return
       try {
         const data = await api.get('/notifications/unread-count/', { cache: false })
         if (!cancelled && data && typeof data.count === 'number') setCount(data.count)
@@ -26,10 +27,15 @@ export default function NotificationBell({ asButtonClassName = '' }) {
       }
     }
     load()
-    const timer = setInterval(load, 30000)
+    const timer = setInterval(load, 60000)
+    const onVisible = () => {
+      if (!document.hidden) load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
       clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [])
 
