@@ -433,6 +433,9 @@ class BulkDeleteLeadsTests(APITestCase):
         self.assertFalse(Lead.objects.filter(pk__in=[self.own.id, self.other.id]).exists())
 
     def test_staff_with_delete_can_bulk_delete_own_entries(self):
+        staff_role = self.staff.role
+        staff_role.permissions = [*staff_role.permissions, 'leads.delete']
+        staff_role.save(update_fields=['permissions'])
         self.client.force_authenticate(self.staff)
         resp = self.client.post('/api/transactions/leads/bulk-delete/', {
             'lead_ids': [self.other.id, self.own.id],

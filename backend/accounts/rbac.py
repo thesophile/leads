@@ -112,7 +112,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'reports.view', 'reports.export',
     ],
     'staff': [
-        'leads.view', 'leads.create', 'leads.edit_own', 'leads.delete',
+        'leads.view', 'leads.create', 'leads.edit_own',
         'telecall.view',
     ],
 }
