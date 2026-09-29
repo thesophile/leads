@@ -508,6 +508,8 @@ export default function ProposalPreview() {
         net: p.netAmount || '',
         termsHtml: p.companyTerms || '',
         termsConditions: p.termsConditions || '',
+        termsSummaryHtml: p.termsSummaryHtml || '',
+        termsFullHtml: p.termsFullHtml || '',
         proposalSummaryHtml: p.proposalScope || '',
         proposalInDetailsHtml: p.termsConditions || '',
         status: p.status || '',
@@ -982,15 +984,31 @@ const approvedByRef = useRef(null)
               <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
             }
             pageFooter={<PageFooter company={company} />}
-            endBlock={
-              <div className="space-y-2">
-                <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
-                <p className="text-right text-[11px] font-bold text-slate-400">
-                  --- End of proposal ---
-                </p>
-              </div>
-            }
           />
+
+          {/* -------------------- PAGE 3 (DETAILED TERMS & CONDITIONS) -------------------- */}
+          {htmlToPlainLines(proposalData.termsFullHtml).length > 0 && (
+            <PagedSection
+              html={linesToHtml(htmlToPlainLines(proposalData.termsFullHtml))}
+              reserve={64}
+              contentClass="text-[13px] leading-snug text-slate-800"
+              sectionTitle="Detailed Terms &amp; Conditions"
+              boxClass="rounded-xl border border-slate-300 bg-white"
+              titleClass="text-left"
+              pageHeader={
+                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - B" company={company} clientToken={liveToken} />
+              }
+              pageFooter={<PageFooter company={company} />}
+              endBlock={
+                <div className="space-y-2">
+                  <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
+                  <p className="text-right text-[11px] font-bold text-slate-400">
+                    --- End of proposal ---
+                  </p>
+                </div>
+              }
+            />
+          )}
 
         </div>
       </div>

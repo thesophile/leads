@@ -164,6 +164,8 @@ class QuotationSerializer(serializers.ModelSerializer):
     rejectionReason = serializers.CharField(source='rejection_reason', required=False, allow_blank=True)
     approvalNote = serializers.CharField(source='approval_note', required=False, allow_blank=True)
     companyTerms = serializers.SerializerMethodField()
+    termsSummaryHtml = serializers.SerializerMethodField()
+    termsFullHtml = serializers.SerializerMethodField()
     approvals = serializers.SerializerMethodField()
     approvalsTotal = serializers.SerializerMethodField()
     approvalsApproved = serializers.SerializerMethodField()
@@ -199,6 +201,8 @@ class QuotationSerializer(serializers.ModelSerializer):
             'proposalScope',
             'termsConditions',
             'companyTerms',
+            'termsSummaryHtml',
+            'termsFullHtml',
             'remarks',
             'submittedBy',
             'approver',
@@ -263,6 +267,18 @@ class QuotationSerializer(serializers.ModelSerializer):
         if tenant is None:
             return ''
         return tenant.terms_summary_html or tenant.terms_full_html
+
+    def get_termsSummaryHtml(self, obj):
+        tenant = getattr(obj, 'tenant', None)
+        if tenant is None:
+            return ''
+        return tenant.terms_summary_html or ''
+
+    def get_termsFullHtml(self, obj):
+        tenant = getattr(obj, 'tenant', None)
+        if tenant is None:
+            return ''
+        return tenant.terms_full_html or ''
 
 
 class OrderSerializer(serializers.ModelSerializer):
