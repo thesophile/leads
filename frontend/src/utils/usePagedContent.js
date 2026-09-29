@@ -23,14 +23,17 @@ import { useCallback, useLayoutEffect, useState, useRef } from 'react'
  *  - cap: max-height (px) to apply to the content element so it stays on-page
  *  - part2Html: HTML of the overflowing blocks to render on a continuation page
  *  - showEnd: whether the end block should be visible on this page
+ *  - freePx: px of unused height between the last content line and the page
+ *    boundary, measured only on the settled (final) page; 0 elsewhere
  */
 export default function usePagedContent(contentRef, bottomRef, belowBlocks = [], reserve = 48, endBlockRef = null) {
   const [cap, setCap] = useState(undefined)
   const [part2Html, setPart2Html] = useState('')
   const [showEnd, setShowEnd] = useState(true)
+  const [freePx, setFreePx] = useState(0)
 
   // Guard against re-render churn: only commit state when values actually change.
-  const committed = useRef({ cap: undefined, part2Html: '', showEnd: true })
+  const committed = useRef({ cap: undefined, part2Html: '', showEnd: true, freePx: 0 })
 
   // Measured height of the optional end block, captured while it is visible so
   // the page-fitting decision below doesn't depend on its live display state.
@@ -78,7 +81,22 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     }
 
     const contentTop = contentEl.getBoundingClientRect().top
-    const bottom = bottomEl.getBoundingClientRect().top
+    // The footer element normally marks the lower boundary, but overflowing
+    // flex content can push it down and balloon the cap (making pagination
+    // think everything fits). Anchor the boundary to the fixed `.print-page`
+    // edge instead — the footer's pinned position — so measurements are stable
+    // regardless of what is mounted beneath the content.
+    let bottom = bottomEl.getBoundingClientRect().top
+    try {
+      const pageEl = bottomEl && bottomEl.closest ? bottomEl.closest('.print-page') : null
+      if (pageEl) {
+        const pr = pageEl.getBoundingClientRect()
+        const pinned = pr.bottom - 38 - (bottomEl.offsetHeight || 0)
+        if (pinned < bottom) bottom = pinned
+      }
+    } catch {
+      // measurement is best-effort; fall back to the raw footer position
+    }
     const below = (belowRef.current || []).reduce((sum, r) => {
       const el = r && r.current
       return sum + (el && el.offsetHeight ? el.offsetHeight : 0)
@@ -110,6 +128,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     let nextCap = c
     let nextPart2 = ''
     let nextShowEnd = true
+    let nextFreePx = 0
 
     if (endEl && endCapHRef.current > 0) {
       // Phase 1 — available height with the end block excluded. Pages that
@@ -154,17 +173,27 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
           nextCap = Math.max(48, last)
           nextPart2 = over.map((o) => o.html).join('')
         }
+      } else {
+        // Settled final page — expose how many px are left over after the last
+        // line, so callers can (for example) place an inset section inline.
+        nextFreePx = Math.max(0, c - last)
       }
     }
 
     // A once-final page stays final.
     const prev = committed.current
-    if (prev.cap !== nextCap || prev.part2Html !== nextPart2 || prev.showEnd !== nextShowEnd) {
-      committed.current = { cap: nextCap, part2Html: nextPart2, showEnd: nextShowEnd }
+    if (
+      prev.cap !== nextCap ||
+      prev.part2Html !== nextPart2 ||
+      prev.showEnd !== nextShowEnd ||
+      prev.freePx !== nextFreePx
+    ) {
+      committed.current = { cap: nextCap, part2Html: nextPart2, showEnd: nextShowEnd, freePx: nextFreePx }
       if (nextPart2 === '') finalLatchRef.current = true
       setCap(nextCap)
       setPart2Html(nextPart2)
       setShowEnd(nextShowEnd)
+      setFreePx(nextFreePx)
     }
   }, [contentRef, bottomRef])
 
@@ -210,5 +239,5 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     }
   }, [check, contentRef])
 
-  return { cap, part2Html, showEnd }
+  return { cap, part2Html, showEnd, freePx }
 }
