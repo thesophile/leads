@@ -37,8 +37,8 @@ export default function PagedSection({
   const contentRef = useRef(null)
   const footerRef = useRef(null)
   const endBlockRef = useRef(null)
-  const paged = usePagedContent(contentRef, footerRef, endBlock ? [endBlockRef] : [], reserve)
-  const showEnd = endBlock && !paged.part2Html
+  const paged = usePagedContent(contentRef, footerRef, [], reserve, endBlock ? endBlockRef : null)
+  const showEnd = endBlock && paged.showEnd
   const atLimit = pageIndex >= MAX_CONTINUATION_PAGES
   const showContinue = continueNote && paged.part2Html && !atLimit
 
@@ -73,7 +73,7 @@ export default function PagedSection({
           {endBlock ? (
             <div
               ref={endBlockRef}
-              className={`mt-auto pt-4 ${endBlockClass} ${showEnd ? '' : 'invisible'}`}
+              className={`mt-auto pt-4 ${endBlockClass} ${showEnd ? '' : 'hidden'}`}
             >
               {endBlock}
             </div>

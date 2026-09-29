@@ -12,23 +12,36 @@ import { useCallback, useLayoutEffect, useState, useRef } from 'react'
  *   bottom boundary (e.g. an Approved By box / financial banner). Their
  *   intrinsic heights are reserved above the boundary.
  * - `reserve`: extra px of breathing room.
+ * - `endBlockRef` (optional): a block that only belongs on the LAST page (e.g.
+ *   a client acceptance / signature box). It is never reserved on pages that
+ *   are still overflowing — those pages fill to the footer — so content no
+ *   longer jumps to the next page while the current page still has blank
+ *   space. Its height is measured while visible and stored so the decision
+ *   never depends on its toggling display state (which would oscillate).
  *
  * Returns:
  *  - cap: max-height (px) to apply to the content element so it stays on-page
  *  - part2Html: HTML of the overflowing blocks to render on a continuation page
+ *  - showEnd: whether the end block should be visible on this page
  */
-export default function usePagedContent(contentRef, bottomRef, belowBlocks = [], reserve = 48) {
+export default function usePagedContent(contentRef, bottomRef, belowBlocks = [], reserve = 48, endBlockRef = null) {
   const [cap, setCap] = useState(undefined)
   const [part2Html, setPart2Html] = useState('')
+  const [showEnd, setShowEnd] = useState(true)
 
   // Guard against re-render churn: only commit state when values actually change.
-  const committed = useRef({ cap: undefined, part2Html: '' })
+  const committed = useRef({ cap: undefined, part2Html: '', showEnd: true })
+
+  // Measured height of the optional end block, captured while it is visible so
+  // the page-fitting decision below doesn't depend on its live display state.
+  const endCapHRef = useRef(0)
 
   // `belowBlocks` / `reserve` are read through refs so the `check` callback
   // (and therefore the measuring layout effect) keeps a stable identity even
   // when the caller passes a fresh array literal on every render.
   const belowRef = useRef(belowBlocks)
   const reserveRef = useRef(reserve)
+  const endBlockRefRef = useRef(endBlockRef)
 
   // Once a page commits as the final page (no continuation), keep it final.
   // Incidental re-measures (font loads, async heights) must not re-spawn a
@@ -39,6 +52,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
   useLayoutEffect(() => {
     belowRef.current = belowBlocks
     reserveRef.current = reserve
+    endBlockRefRef.current = endBlockRef
   })
 
   const check = useCallback(() => {
@@ -73,43 +87,84 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     const reserve = typeof reserveRef.current === 'number' ? reserveRef.current : 48
     const c = Math.max(48, bottom - 16 - contentTop - below - gaps - reserve)
 
+    // Measure the end block's real height while it is visible (it mounts
+    // visible on every page, so the first pass always captures it). Stored so
+    // later passes keep the same math even once the block is display:none.
+    const endEl = endBlockRefRef.current && endBlockRefRef.current.current
+    if (endEl && endEl.offsetHeight > 0) endCapHRef.current = endEl.offsetHeight
+
     const base = contentEl.getBoundingClientRect().top
-    let lastFit = 0
-    const overflowing = []
-    for (const child of contentEl.children) {
-      const rect = child.getBoundingClientRect()
-      const childBottom = rect.top + rect.height - base
-      if (childBottom > c) {
-        overflowing.push({ html: child.outerHTML, height: rect.height })
-      } else {
-        lastFit = childBottom
+    // `limit` is the max distance from the content top a block may reach.
+    const splitAt = (limit) => {
+      let last = 0
+      const over = []
+      for (const child of contentEl.children) {
+        const rect = child.getBoundingClientRect()
+        const cb = rect.top + rect.height - base
+        if (cb > limit) over.push({ html: child.outerHTML, height: rect.height })
+        else last = cb
       }
+      return { last, over }
     }
 
-    // A continuation page only helps when the overflow can be split into blocks
-    // smaller than the available area. A single block taller than the whole
-    // page can never fit any continuation page, so stop paginating here — this
-    // is what keeps recursive continuation pages from looping forever and
-    // throwing React's "Maximum update depth exceeded".
     let nextCap = c
     let nextPart2 = ''
-    if (overflowing.length) {
-      const singleUnsplitBlock = overflowing.length === 1 && overflowing[0].height > c
-      if (!singleUnsplitBlock) {
-        // Snap the cap to the bottom of the last fully-fitted block so no block
-        // is partially clipped on this page.
-        nextCap = Math.max(48, lastFit)
-        nextPart2 = overflowing.map((o) => o.html).join('')
+    let nextShowEnd = true
+
+    if (endEl && endCapHRef.current > 0) {
+      // Phase 1 — available height with the end block excluded. Pages that
+      // still overflow are plain fill pages: full height, no end block.
+      const full = splitAt(c)
+      if (full.over.length) {
+        const unsplit = full.over.length === 1 && full.over[0].height > c
+        if (!unsplit) {
+          nextCap = Math.max(48, full.last)
+          nextPart2 = full.over.map((o) => o.html).join('')
+          nextShowEnd = false
+        } else {
+          // Single block taller than the whole page can never be split; never
+          // let the end block overlap it on top of the unavoidable clipping.
+          nextShowEnd = false
+        }
+      } else {
+        // Phase 2 — content fits free space; can the end block fit too?
+        const cEnd = Math.max(48, c - endCapHRef.current - 8)
+        const withEnd = splitAt(cEnd)
+        if (withEnd.over.length) {
+          // Content + end block don't fit together: keep the end block for the
+          // last page and push the overflow lines onto a continuation page.
+          const unsplit = withEnd.over.length === 1 && withEnd.over[0].height > cEnd
+          if (!unsplit) {
+            nextCap = Math.max(48, withEnd.last)
+            nextPart2 = withEnd.over.map((o) => o.html).join('')
+            nextShowEnd = false
+          } else {
+            nextShowEnd = false
+          }
+        } else {
+          nextShowEnd = true
+        }
+      }
+    } else {
+      // No end block: plain overflow split (existing behaviour).
+      const { last, over } = splitAt(c)
+      if (over.length) {
+        const unsplit = over.length === 1 && over[0].height > c
+        if (!unsplit) {
+          nextCap = Math.max(48, last)
+          nextPart2 = over.map((o) => o.html).join('')
+        }
       }
     }
 
     // A once-final page stays final.
     const prev = committed.current
-    if (prev.cap !== nextCap || prev.part2Html !== nextPart2) {
-      committed.current = { cap: nextCap, part2Html: nextPart2 }
+    if (prev.cap !== nextCap || prev.part2Html !== nextPart2 || prev.showEnd !== nextShowEnd) {
+      committed.current = { cap: nextCap, part2Html: nextPart2, showEnd: nextShowEnd }
       if (nextPart2 === '') finalLatchRef.current = true
       setCap(nextCap)
       setPart2Html(nextPart2)
+      setShowEnd(nextShowEnd)
     }
   }, [contentRef, bottomRef])
 
@@ -135,12 +190,25 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       })
       observer.observe(contentEl, { childList: true, subtree: true, characterData: true })
     }
+    // Watch the end block too: toggling its visibility must re-run the check
+    // (the decision is deterministic, so this never oscillates) and feeding
+    // fresh fonts/async heights keeps its stored height current.
+    let endObserver
+    const endEl = endBlockRefRef.current && endBlockRefRef.current.current
+    if (endEl && typeof MutationObserver !== 'undefined') {
+      endObserver = new MutationObserver(() => {
+        finalLatchRef.current = false
+        check()
+      })
+      endObserver.observe(endEl, { attributes: true, childList: true, subtree: true, characterData: true })
+    }
 
     return () => {
       window.removeEventListener('resize', check)
       if (observer) observer.disconnect()
+      if (endObserver) endObserver.disconnect()
     }
   }, [check, contentRef])
 
-  return { cap, part2Html }
+  return { cap, part2Html, showEnd }
 }
