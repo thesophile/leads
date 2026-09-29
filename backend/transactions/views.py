@@ -1291,6 +1291,7 @@ class LeadDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         label = f'{lead.id} - {lead.company}'
+        lead_id = lead.id
         lead.delete()
         log_activity(
             user,
@@ -1298,7 +1299,7 @@ class LeadDetailView(APIView):
             'deleted lead',
             f'{user.name} deleted lead {label}.',
             entity_type='lead',
-            entity_id=lead.id,
+            entity_id=lead_id,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
 

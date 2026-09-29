@@ -16,7 +16,7 @@ from transactions.models import (
     Quotation,
     QuotationApproval,
 )
-from utilities.models import Notification
+from utilities.models import ActivityLog, Notification
 from master.models import Location
 
 User = get_user_model()
@@ -447,6 +447,27 @@ class BulkDeleteLeadsTests(APITestCase):
         self.assertEqual(resp.data['skipped'], 1)
         self.assertFalse(Lead.objects.filter(pk=self.other.id).exists())
         self.assertTrue(Lead.objects.filter(pk=self.own.id).exists())
+
+    def test_single_delete_own_lead_writes_activity_log(self):
+        """The inline (per-row) delete must succeed and audit the removal."""
+        self.client.force_authenticate(self.manager)
+        resp = self.client.delete(f'/api/transactions/leads/{self.own.id}/')
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(Lead.objects.filter(pk=self.own.id).exists())
+        self.assertTrue(
+            ActivityLog.objects.filter(
+                action='deleted lead',
+                entity_type='lead',
+                entity_id=str(self.own.id),
+            ).exists()
+        )
+
+    def test_single_delete_other_lead_is_forbidden(self):
+        """A user with only leads.delete cannot remove another user's entry."""
+        self.client.force_authenticate(self.manager)
+        resp = self.client.delete(f'/api/transactions/leads/{self.other.id}/')
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(Lead.objects.filter(pk=self.other.id).exists())
 
 
 class LeadVisibilityTests(APITestCase):
