@@ -182,12 +182,22 @@ function SectionBox({ title, children, className = '', overflowVisible = false }
   )
 }
 
-function PageHeader({ proposal, annexLabel, company }) {
+function PageHeader({ proposal, annexLabel, company, clientToken = '' }) {
+  const token = clientToken || proposal.clientToken || ''
+  const proposalLink = token ? `${window.location.origin}/quotation/${token}` : ''
   return (
     <div className="flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-4">
       <div className="flex items-center gap-3">
         <div className="h-16 w-16 shrink-0 rounded-lg border border-slate-300 bg-white p-1">
-          <QRCodeVisual value={`${window.location.origin}/quotation/${proposal.clientToken || ''}`} />
+          {proposalLink ? (
+            <QRCodeVisual value={proposalLink} />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-white p-0.5">
+              <span className="text-center text-[7px] font-semibold leading-tight text-slate-400">
+                Link unavailable
+              </span>
+            </div>
+          )}
         </div>
         <div className="space-y-2.5">
           <InfoBlock label="Quotation #" value={proposal.id} />
@@ -331,6 +341,7 @@ export default function ProposalPreview() {
 
   const [company, setCompany] = useState({})
   const [proposal, setProposal] = useState(() => location.state?.proposal || null)
+  const [clientToken, setClientToken] = useState(() => location.state?.proposal?.clientToken || '')
   const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.proposal)
   const [refreshing, setRefreshing] = useState(false)
   const [notFound, setNotFound] = useState(false)
@@ -446,6 +457,35 @@ export default function ProposalPreview() {
       }
     }
   }, [params.id, proposal])
+
+  // Live token for the printed QR: prefer the one attached to the proposal,
+  // falling back to one we generated ourselves (never-sent or revoked after a
+  // client response).
+  const liveToken = proposal?.clientToken || clientToken
+
+  // The printed proposal form's QR embeds /quotation/<token>, so a live token
+  // must exist even before the quotation is shared. If the API data has no
+  // token (or it was revoked after a client response), ask the backend to hand
+  // out / create a fresh one.
+  useEffect(() => {
+    if (!proposal || liveToken || !params.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get(
+          `/transactions/quotations/${encodeURIComponent(params.id)}/client-link/`
+        )
+        if (!cancelled && data?.clientToken && data.clientToken !== liveToken) {
+          setClientToken(data.clientToken)
+        }
+      } catch {
+        // keep the gentle "Link unavailable" placeholder
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [proposal, liveToken, params.id])
 
   const proposalData = useMemo(() => {
     if (proposal) {
@@ -730,7 +770,7 @@ const approvedByRef = useRef(null)
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
           <div className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">
-            <PageHeader proposal={proposalData} company={company} />
+            <PageHeader proposal={proposalData} company={company} clientToken={liveToken} />
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <SectionBox title="Customer Details">
@@ -939,7 +979,7 @@ const approvedByRef = useRef(null)
             boxClass="rounded-xl border border-slate-300 bg-white"
             titleClass="text-left"
             pageHeader={
-              <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} />
+              <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
             }
             pageFooter={<PageFooter company={company} />}
             endBlock={

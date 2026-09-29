@@ -2396,6 +2396,46 @@ class QuotationSendToClientView(APIView):
         )
 
 
+class QuotationClientLinkView(APIView):
+    """Return (creating if needed) the signed client token for a quotation.
+
+    The printed proposal form's QR code embeds ``/quotation/<token>``, so a
+    live token must exist whenever the preview is opened — not only after the
+    quotation has been shared. This view reuses the current token while it is
+    still valid and otherwise generates a fresh 30-day one. It never changes
+    the status and never emails.
+    """
+
+    permission_classes = [IsAuthenticated]
+    CLIENT_TOKEN_DAYS = QuotationSendToClientView.CLIENT_TOKEN_DAYS
+
+    def get(self, request, lead_id):
+        if not can(request.user, 'quotation.view'):
+            return Response(
+                {'detail': 'You do not have permission to view quotations.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        quotation = find_quotation(lead_id)
+        if quotation is None:
+            return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not request.user.is_superuser:
+            lead_in_scope = scoped_queryset(request.user).filter(pk=quotation.lead_id).first() is not None
+            same_company = quotation.tenant is not None and quotation.tenant == request.user.company
+            if not lead_in_scope and not same_company:
+                return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        now = timezone.now()
+        if not quotation.client_token or (
+            quotation.client_token_expires_at
+            and quotation.client_token_expires_at < now
+        ):
+            quotation.client_token = secrets.token_urlsafe(32)
+            quotation.client_token_expires_at = now + timedelta(days=self.CLIENT_TOKEN_DAYS)
+            quotation.save(update_fields=['client_token', 'client_token_expires_at', 'updated_at'])
+
+        return Response({'clientToken': quotation.client_token})
+
+
 def public_quotation_payload(quotation):
     """Safe summary of a quotation for the public client page."""
     tenant = quotation.tenant

@@ -1640,6 +1640,74 @@ class QuotationSendWithoutApprovalTests(APITestCase):
         self.assertEqual(resp.status_code, 400)
 
 
+class QuotationClientLinkTests(APITestCase):
+    """The printed proposal QR embeds ``/quotation/<token>``, so a live token
+    must exist on demand even before the quotation is shared."""
+
+    def setUp(self):
+        company = make_company('LinkCo')
+        self.company = company
+        self.viewer = User.objects.create_user(
+            email='viewer@linkco.com', password='x', name='Viewer One',
+            role=company.roles.create(
+                code='viewer', name='Viewer',
+                permissions=['quotation.view'],
+            ),
+            company=company,
+        )
+        self.lead = make_raw_lead(company, 'Link Ltd', assigned_to='Viewer One')
+        self.lead.status = Lead.STATUS_QUOTATION
+        self.lead.save(update_fields=['status', 'updated_at'])
+        self.quote = Quotation.objects.create(
+            id=self.lead.id, lead_id=self.lead.id, company=self.lead.company,
+            tenant=company, staff='Viewer One', status='Approved',
+            client_token='', client_token_expires_at=None,
+        )
+        self.url = f'/api/transactions/quotations/{self.quote.id}/client-link/'
+
+    def test_creates_token_when_missing(self):
+        self.client.force_authenticate(self.viewer)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        token = resp.data['clientToken']
+        self.assertTrue(token)
+        record = Quotation.objects.get(id=self.quote.id)
+        self.assertEqual(record.client_token, token)
+        self.assertIsNotNone(record.client_token_expires_at)
+        # Read-only: no status change.
+        self.assertEqual(record.status, 'Approved')
+
+    def test_reuses_unexpired_token(self):
+        self.quote.client_token = 'tok-stable'
+        self.quote.client_token_expires_at = timezone.now() + timedelta(days=10)
+        self.quote.save(update_fields=['client_token', 'client_token_expires_at'])
+        self.client.force_authenticate(self.viewer)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['clientToken'], 'tok-stable')
+
+    def test_regenerates_expired_token(self):
+        self.quote.client_token = 'tok-expired'
+        self.quote.client_token_expires_at = timezone.now() - timedelta(seconds=1)
+        self.quote.save(update_fields=['client_token', 'client_token_expires_at'])
+        self.client.force_authenticate(self.viewer)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        token = resp.data['clientToken']
+        self.assertNotEqual(token, 'tok-expired')
+        self.assertTrue(token)
+
+    def test_without_permission_cannot_get_token(self):
+        outsider = User.objects.create_user(
+            email='outsider@linkco.com', password='x', name='Outsider',
+            role=self.company.roles.create(code='noaccess', name='No Access', permissions=[]),
+            company=self.company,
+        )
+        self.client.force_authenticate(outsider)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 403)
+
+
 class ContactEditSyncTests(APITestCase):
     """Company/contact details stay in sync and audited from any screen."""
 
