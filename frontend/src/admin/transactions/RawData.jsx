@@ -321,6 +321,19 @@ function CalendarIcon() {
   )
 }
 
+function SortTriangleIcon({ direction }) {
+  const ascending = direction === 'asc'
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`h-3 w-3 fill-current text-slate-500 ${ascending ? '' : 'rotate-180'}`}
+      aria-hidden="true"
+    >
+      <polygon points="12 5 19 17 5 17" />
+    </svg>
+  )
+}
+
 function GlobeIcon({ className = 'h-3.5 w-3.5 text-slate-500' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -445,6 +458,9 @@ export default function RawData() {
   const [dateFilterType, setDateFilterType] = useState('All Time')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  // Sorting for the DATE column: '-date' = latest first (triangle down, default),
+  // 'date' = oldest first (triangle up).
+  const [dateSort, setDateSort] = useState('-date')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
@@ -567,6 +583,7 @@ export default function RawData() {
   const listParams = useMemo(
     () => ({
       status: 'raw',
+      ordering: dateSort,
       ...(selectedStaff !== 'All Employees' && selectedStaff !== 'My entries'
         ? { added_by: selectedStaff === 'Owner-less' ? '__none__' : selectedStaff }
         : {}),
@@ -574,7 +591,7 @@ export default function RawData() {
       ...rawDateParams(dateFilterType, startDate, endDate),
       ...(searchDebounced ? { search: searchDebounced } : {}),
     }),
-    [selectedStaff, selectedSource, dateFilterType, startDate, endDate, searchDebounced]
+    [selectedStaff, selectedSource, dateFilterType, startDate, endDate, searchDebounced, dateSort]
   )
 
   const {
@@ -1552,7 +1569,17 @@ async function handleBulkImport(e) {
                   <th className="pb-2 font-semibold w-48">Email</th>
                   <th className="pb-2 font-semibold w-36">Category</th>
                   <th className="pb-2 font-semibold w-32">Location</th>
-                  <th className="pb-2 font-semibold w-28">Date</th>
+                  <th className="pb-2 font-semibold w-28">
+                    <button
+                      type="button"
+                      onClick={() => setDateSort(dateSort === '-date' ? 'date' : '-date')}
+                      className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-brand-600 transition-colors cursor-pointer"
+                      title={dateSort === '-date' ? 'Sort by date (newest first)' : 'Sort by date (oldest first)'}
+                    >
+                      Date
+                      <SortTriangleIcon direction={dateSort === '-date' ? 'desc' : 'asc'} />
+                    </button>
+                  </th>
                   <th className="pb-2 font-semibold text-left w-16">Actions</th>
                 </tr>
               </thead>

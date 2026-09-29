@@ -803,7 +803,13 @@ class LeadListView(APIView):
         status_filter = request.query_params.get('status') or 'raw'
         leads = scoped_queryset(request.user, status_filter)
         leads = filter_leads_by_params(leads, request.query_params)
-        leads = leads.order_by('-created_at')
+        ordering = request.query_params.get('ordering')
+        if ordering == 'date':
+            leads = leads.order_by('date', '-created_at')
+        elif ordering == '-date':
+            leads = leads.order_by('-date', '-created_at')
+        else:
+            leads = leads.order_by('-created_at')
         page_leads, envelope = paginated_queryset(leads, request)
         page_leads = page_leads.prefetch_related('history', 'contact_history')
         lead_ids = list(page_leads.values_list('id', flat=True))
