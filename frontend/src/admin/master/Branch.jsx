@@ -263,7 +263,7 @@ export default function Branch() {
           </div>
         )}
 
-        {error && (
+        {error && !deleteModalId && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             {error}
           </div>
@@ -539,6 +539,11 @@ export default function Branch() {
             <p className="mt-2 text-sm text-slate-500">
               Are you sure you want to delete this branch? This action cannot be undone.
             </p>
+            {error && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                {error}
+              </div>
+            )}
             <div className="mt-5 flex justify-end gap-2.5">
               <button
                 type="button"

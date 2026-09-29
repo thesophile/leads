@@ -127,6 +127,7 @@ export default function Sidebar({
   const navRef = useRef(null)
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
 
   useLayoutEffect(() => {
     if (navRef.current) navRef.current.scrollTop = persistedNavScrollTop
@@ -170,14 +171,20 @@ export default function Sidebar({
   }
 
   function handleLogout() {
+    setLogoutError('')
     setConfirmLogoutOpen(true)
   }
 
   async function confirmLogout() {
     if (loggingOut) return
     setLoggingOut(true)
+    setLogoutError('')
     try {
       await logout()
+    } catch (err) {
+      setLogoutError(err.message || 'Could not sign out. Please try again.')
+      setLoggingOut(false)
+      return
     } finally {
       setLoggingOut(false)
     }
@@ -349,7 +356,11 @@ export default function Sidebar({
         confirmLabel="Logout"
         saving={loggingOut}
         savingLabel="Logging out…"
-        onCancel={() => setConfirmLogoutOpen(false)}
+        error={logoutError}
+        onCancel={() => {
+          setConfirmLogoutOpen(false)
+          setLogoutError('')
+        }}
         onConfirm={confirmLogout}
       />
     </>

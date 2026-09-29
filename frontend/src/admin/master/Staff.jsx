@@ -570,7 +570,7 @@ export default function Staff() {
           </div>
         )}
 
-        {error && (
+        {error && !resetModal && !selfEmailModal && !showCredentials && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             {error}
           </div>
@@ -886,6 +886,11 @@ export default function Staff() {
             <p className="mt-2 text-sm text-slate-500">
               Set a new password for <span className="font-semibold text-slate-700">{resetModal.name}</span>.
             </p>
+            {error && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                {error}
+              </div>
+            )}
             <form onSubmit={handleResetPassword} className="mt-4 space-y-3">
               <PasswordInput
                 id="reset_pw"

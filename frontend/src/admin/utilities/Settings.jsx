@@ -339,6 +339,7 @@ export default function Settings() {
   const [logoFile, setLogoFile] = useState(null)
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoWarning, setLogoWarning] = useState(null)
+  const [logoModalError, setLogoModalError] = useState('')
   const [termsSummaryHtml, setTermsSummaryHtml] = useState('')
   const [termsFullHtml, setTermsFullHtml] = useState('')
   const [gstNo, setGstNo] = useState('')
@@ -354,6 +355,7 @@ export default function Settings() {
   const [targetQuotations, setTargetQuotations] = useState(0)
   const [targetSales, setTargetSales] = useState(0)
   const [savingTarget, setSavingTarget] = useState(false)
+  const [targetError, setTargetError] = useState('')
 
   const [targetDrawerOpen, setTargetDrawerOpen] = useState(false)
   const [targetDrawerVisible, setTargetDrawerVisible] = useState(false)
@@ -484,11 +486,13 @@ export default function Settings() {
 
   function openTargetDrawer() {
     resetTargetForm()
+    setTargetError('')
     setTargetDrawerVisible(true)
     requestAnimationFrame(() => setTargetDrawerOpen(true))
   }
 
   function closeTargetDrawer() {
+    setTargetError('')
     setTargetDrawerOpen(false)
     setTimeout(() => setTargetDrawerVisible(false), 300)
   }
@@ -584,6 +588,7 @@ export default function Settings() {
     if (!logoFile) return
     setLogoUploading(true)
     setLogoWarning(null)
+    setLogoModalError('')
     try {
       const fd = new FormData()
       fd.append('logo', logoFile)
@@ -597,7 +602,8 @@ export default function Settings() {
       setLogoFile(null)
       showToast('Company logo updated successfully.')
     } catch (err) {
-      showToast(`Failed to upload logo: ${err.message}`)
+      if (confirm) setLogoModalError(err.message || 'Failed to upload logo.')
+      else showToast(`Failed to upload logo: ${err.message}`)
     } finally {
       setLogoUploading(false)
     }
@@ -610,6 +616,7 @@ export default function Settings() {
   function handleCancelLogoWarning() {
     if (logoUploading) return
     setLogoWarning(null)
+    setLogoModalError('')
     setLogoFile(null)
   }
 
@@ -636,10 +643,11 @@ export default function Settings() {
     if (savingTarget) return
     const name = targetStaffName.trim()
     if (!name) {
-      showToast('Enter an employee name.')
+      setTargetError('Enter an employee name.')
       return
     }
     setSavingTarget(true)
+    setTargetError('')
     const body = {
       name,
       role: targetStaffRole.trim(),
@@ -663,7 +671,7 @@ export default function Settings() {
       resetTargetForm()
       await loadTargets(selectedMonth, selectedYear)
     } catch (err) {
-      showToast(`Failed to save target: ${err.message}`)
+      setTargetError(`Failed to save target: ${err.message}`)
     } finally {
       setSavingTarget(false)
     }
@@ -1439,6 +1447,11 @@ export default function Settings() {
               </div>
             </div>
             <p className="mt-4 text-xs leading-relaxed text-slate-600">{logoWarning.detail}</p>
+            {logoModalError && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                {logoModalError}
+              </div>
+            )}
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
@@ -1555,6 +1568,11 @@ export default function Settings() {
 
               <div className="flex-1 overflow-y-auto px-5 py-4">
                 <form onSubmit={handleUpdateTarget} className="space-y-4 text-xs">
+                  {targetError && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                      {targetError}
+                    </div>
+                  )}
                   <div className="rounded-xl border border-brand-100 bg-brand-50/60 px-3.5 py-2.5 text-[11px] font-semibold text-brand-700">
                     {monthLabel}
                   </div>

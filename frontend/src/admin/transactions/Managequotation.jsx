@@ -504,6 +504,7 @@ export default function Managequotation() {
   const [approvalQuoteId, setApprovalQuoteId] = useState(null)
   const [selectedApprovers, setSelectedApprovers] = useState([])
   const [approvalSent, setApprovalSent] = useState('')
+  const [approvalError, setApprovalError] = useState('')
   const [sendingApproval, setSendingApproval] = useState(false)
   const [submittingProposal, setSubmittingProposal] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
@@ -613,12 +614,14 @@ export default function Managequotation() {
     setApprovalQuoteId(quoteId)
     setSelectedApprovers([])
     setApprovalSent('')
+    setApprovalError('')
     setOpenDropdownId(null)
     setApprovalModalOpen(true)
   }
 
   async function handleConfirmSendForApproval() {
     if (selectedApprovers.length === 0 || sendingApproval) return
+    setApprovalError('')
     const quote = quotationsList.find((item) => item.id === approvalQuoteId)
     const chosen = approverOptions.filter((a) => selectedApprovers.includes(a.id))
     const approverNames = chosen.map((a) => a.name).join(', ')
@@ -635,7 +638,6 @@ export default function Managequotation() {
           : item
       )
     )
-    setApprovalSent(`✓ Proposal sent to ${approverNames} for approval`)
     resetApprovalDirty()
     if (quote?.id) {
       let updated = null
@@ -647,7 +649,9 @@ export default function Managequotation() {
           remarks: `Sent to ${approverNames} for approval`,
         })
       } catch (err) {
-        console.error('Failed to persist approval status', err)
+        setApprovalError(err.message || 'Failed to send for approval.')
+        setSendingApproval(false)
+        return
       } finally {
         setSendingApproval(false)
       }
@@ -666,9 +670,11 @@ export default function Managequotation() {
         )
       }
     }
+    setApprovalSent(`✓ Proposal sent to ${approverNames} for approval`)
     setTimeout(() => {
       setApprovalModalOpen(false)
       setApprovalSent('')
+      setApprovalError('')
     }, 1100)
   }
 
@@ -711,6 +717,7 @@ export default function Managequotation() {
   const [toastType, setToastType] = useState('success')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [discardProposalOpen, setDiscardProposalOpen] = useState(false)
+  const [discardError, setDiscardError] = useState('')
   const [discardApprovalOpen, setDiscardApprovalOpen] = useState(false)
 
   const [savedTemplates, setSavedTemplates] = useState([])
@@ -815,7 +822,10 @@ export default function Managequotation() {
   }, [proposalModalOpen])
 
   function requestCloseProposal() {
-    if (proposalDirty) setDiscardProposalOpen(true)
+    if (proposalDirty) {
+      setDiscardError('')
+      setDiscardProposalOpen(true)
+    }
     else setProposalModalOpen(false)
   }
 
@@ -1249,23 +1259,27 @@ export default function Managequotation() {
     try {
       await api.put('/transactions/proposal-drafts/', payload)
       showToast('✓ Draft saved.')
-      return true
+      return { ok: true }
     } catch (err) {
-      setSubmitMessage(`Failed to save draft: ${err.message}`)
-      return false
+      const msg = `Failed to save draft: ${err.message}`
+      setSubmitMessage(msg)
+      return { ok: false, error: msg }
     } finally {
       setSavingDraft(false)
     }
   }
 
   async function handleSaveDraft() {
-    const ok = await saveDraft()
+    const { ok } = await saveDraft()
     if (ok) resetProposalDirty()
   }
 
   async function handleSaveDraftAndClose() {
-    const ok = await saveDraft()
-    if (!ok) return
+    const { ok, error } = await saveDraft()
+    if (!ok) {
+      setDiscardError(error)
+      return
+    }
     setDiscardProposalOpen(false)
     setProposalModalOpen(false)
     resetProposalDirty()
@@ -2546,6 +2560,13 @@ export default function Managequotation() {
                   {approvalSent}
                 </div>
               )}
+
+              {/* Error Message */}
+              {approvalError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                  {approvalError}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -2765,10 +2786,15 @@ export default function Managequotation() {
         confirmLabel="Discard"
         extraLabel="Save Draft"
         saving={savingDraft}
+        error={discardError}
         onExtra={handleSaveDraftAndClose}
-        onCancel={() => setDiscardProposalOpen(false)}
+        onCancel={() => {
+          setDiscardProposalOpen(false)
+          setDiscardError('')
+        }}
         onConfirm={() => {
           setDiscardProposalOpen(false)
+          setDiscardError('')
           setProposalModalOpen(false)
           resetProposalDirty()
         }}

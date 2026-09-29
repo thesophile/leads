@@ -59,8 +59,14 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
   const [sending, setSending] = useState(false)
   const [copying, setCopying] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [error, setError] = useState('')
 
   const toast = onToast || (() => {})
+
+  function close() {
+    setError('')
+    onClose()
+  }
 
   if (!open || !item) return null
 
@@ -97,9 +103,10 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
   async function handleConfirmSend() {
     if (channels.length === 0) return
     if (channels.includes('email') && toAddresses.length === 0) {
-      toast('Add at least one recipient email address to send to.', 'error')
+      setError('Add at least one recipient email address to send to.')
       return
     }
+    setError('')
     setSending(true)
     try {
       const data = await api.post(
@@ -129,11 +136,12 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
       onClose()
     } catch (err) {
       setSending(false)
-      toast(err.message)
+      setError(err.message)
     }
   }
 
   async function handleCopyLink() {
+    setError('')
     setCopying(true)
     try {
       const data = await api.post(
@@ -147,7 +155,7 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
         toast(`Could not copy automatically. Link: ${data.link}`)
       }
     } catch (err) {
-      toast(err.message)
+      setError(err.message)
     } finally {
       setCopying(false)
     }
@@ -155,6 +163,7 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
 
   async function handleDownloadPdf() {
     if (downloading) return
+    setError('')
     setDownloading(true)
     try {
       await api.download(
@@ -163,7 +172,7 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
       )
       toast('✓ Order form PDF downloaded.')
     } catch (err) {
-      toast(err.message)
+      setError(err.message)
     } finally {
       setDownloading(false)
     }
@@ -173,7 +182,7 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !sending) onClose()
+        if (e.target === e.currentTarget && !sending) close()
       }}
     >
       <div className="w-full max-w-md my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
@@ -186,7 +195,7 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
           </div>
           <button
             type="button"
-            onClick={() => onClose()}
+            onClick={() => close()}
             className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
             aria-label="Close"
           >
@@ -415,10 +424,18 @@ export default function SendToClientModal({ item, open, onClose, onSent, onToast
           </div>
         </div>
 
+        {error && (
+          <div className="px-5 pb-3.5 border-t border-slate-100 bg-slate-50/60">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+              {error}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
           <button
             type="button"
-            onClick={() => onClose()}
+            onClick={() => close()}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
           >
             Cancel

@@ -1713,6 +1713,12 @@ export default function Telecall() {
                 </div>
               )}
 
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                  {error}
+                </div>
+              )}
+
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"

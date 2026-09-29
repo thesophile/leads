@@ -1184,7 +1184,7 @@ async function handleBulkImport(e) {
           </div>
         )}
 
-        {error && !importModalOpen && (
+        {error && !importModalOpen && !assignModalOpen && !assignSelectedOpen && !deleteModalId && !deleteSelectedOpen && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             {error}
           </div>
@@ -1898,6 +1898,12 @@ async function handleBulkImport(e) {
                 </div>
               )}
 
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                  {error}
+                </div>
+              )}
+
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -2061,6 +2067,12 @@ async function handleBulkImport(e) {
               {assignSelectedSuccessMessage && (
                 <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
                   {assignSelectedSuccessMessage}
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                  {error}
                 </div>
               )}
 
@@ -2652,6 +2664,11 @@ async function handleBulkImport(e) {
             <p className="mt-2 text-sm text-slate-500">
               Are you sure you want to remove this raw contact record? This action cannot be undone.
             </p>
+            {error && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                {error}
+              </div>
+            )}
             <div className="mt-5 flex justify-end gap-2.5">
               <button
                 type="button"
@@ -2684,6 +2701,7 @@ async function handleBulkImport(e) {
         confirmLabel="Delete"
         saving={deletingSelected}
         savingLabel="Deleting…"
+        error={error}
         onCancel={() => setDeleteSelectedOpen(false)}
         onConfirm={confirmDeleteSelected}
       />
