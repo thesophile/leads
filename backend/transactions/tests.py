@@ -17,6 +17,7 @@ from transactions.models import (
     QuotationApproval,
 )
 from utilities.models import Notification
+from master.models import Location
 
 User = get_user_model()
 
@@ -889,6 +890,28 @@ class LeadImportTests(APITestCase):
             'city': 'Kochi',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
+
+    def test_import_matches_master_ignoring_case(self):
+        self.client.force_authenticate(self.manager)
+        Location.objects.create(company=self.company, name='KOCHI', code='LC001')
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Lower Case Co', 'contact': 'Ann', 'phone': '9998887776',
+            'category': 'cosmetics store', 'city': 'kochi',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get(company='Lower Case Co', tenant=self.company)
+        self.assertEqual(lead.category, 'COSMETICS STORE')
+        self.assertEqual(lead.city, 'KOCHI')
+
+    def test_import_missing_master_value_keeps_typed_spelling(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/import/', {
+            'company': 'Other Loc Co', 'contact': 'Ann', 'phone': '9998887776',
+            'category': 'COSMETICS STORE', 'city': 'Other',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get(company='Other Loc Co', tenant=self.company)
+        self.assertEqual(lead.city, 'Other')
 
     def test_import_requires_permission(self):
         viewer = User.objects.create_user(

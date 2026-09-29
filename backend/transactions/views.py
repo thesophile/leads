@@ -23,7 +23,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import can
-from master.models import Category, Source
+from master.models import Category, Location, Source
 from utilities.models import Notification, log_activity
 
 from .models import (
@@ -739,16 +739,28 @@ def to_iso_order_date(value):
     return ''
 
 
+def canon_master(model, tenant_company, value):
+    """Resolve ``value`` to the exact spelling of the company's master row
+    via a case-insensitive match, or return the original value unchanged when
+    no master row matches."""
+    if not value:
+        return value
+    row = model.objects.filter(company=tenant_company, name__iexact=value).first()
+    return row.name if row else value
+
+
 def validate_master_values(tenant_company, category, source):
     """Return validation errors for category/source against the company's
-    master catalog (empty list when both are valid)."""
+    master catalog (empty list when both are valid). Matching is
+    case-insensitive so CSV values like ``Auto Wash`` map onto master rows
+    stored as ``AUTO WASH``."""
     invalid = []
     if category and not Category.objects.filter(
-        company=tenant_company, name=category
+        company=tenant_company, name__iexact=category
     ).exists():
         invalid.append(f'category: Unknown category "{category}".')
     if source and not Source.objects.filter(
-        company=tenant_company, name=source
+        company=tenant_company, name__iexact=source
     ).exists():
         invalid.append(f'source: Unknown source "{source}".')
     return invalid
@@ -841,6 +853,8 @@ class LeadListView(APIView):
         invalid = validate_master_values(request.user.company, category, source)
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
+        category = canon_master(Category, request.user.company, category)
+        source = canon_master(Source, request.user.company, source)
         lead_date = date.today()
         saved = None
         last_error = None
@@ -929,6 +943,9 @@ class LeadImportView(APIView):
         invalid = validate_master_values(request.user.company, category, source)
         if invalid:
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
+        category = canon_master(Category, request.user.company, category)
+        source = canon_master(Source, request.user.company, source)
+        location = canon_master(Location, request.user.company, location)
 
         existing = find_duplicate_lead(request.user, company)
         if existing is not None:

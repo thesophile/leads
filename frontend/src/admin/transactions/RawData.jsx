@@ -183,13 +183,16 @@ function csvRowsToLeads(text, master = {}) {
   // Category / Source / Location master validation (mirrors the backend
   // rules). When a master list has not loaded yet, skip the frontend check and
   // let the backend remain the authority — its failures are still collected
-  // per row.
-  const categorySet =
-    master.categoryNames instanceof Set && master.categoryNames.size > 0 ? master.categoryNames : null
-  const sourceSet =
-    master.sourceNames instanceof Set && master.sourceNames.size > 0 ? master.sourceNames : null
-  const locationSet =
-    master.locationNames instanceof Set && master.locationNames.size > 0 ? master.locationNames : null
+  // per row. Matching is case-insensitive so CSV values like "Auto Wash" map
+  // onto master rows stored as "AUTO WASH"; the master's exact spelling is
+  // applied by the backend on save.
+  const toLowerLookup = (set) =>
+    set instanceof Set && set.size > 0
+      ? new Set([...set].map((n) => String(n ?? '').toLowerCase()).filter(Boolean))
+      : null
+  const categorySet = toLowerLookup(master.categoryNames)
+  const sourceSet = toLowerLookup(master.sourceNames)
+  const locationSet = toLowerLookup(master.locationNames)
 
   const validLeads = []
   const invalidRows = []
@@ -209,14 +212,14 @@ function csvRowsToLeads(text, master = {}) {
       if (phoneError) errors.push(phoneError)
     }
     if (!category) errors.push('Category is required.')
-    else if (categorySet && !categorySet.has(category)) {
+    else if (categorySet && !categorySet.has(category.toLowerCase())) {
       errors.push(`Category "${category}" does not exist.`)
     }
-    if (source && sourceSet && !sourceSet.has(source)) {
+    if (source && sourceSet && !sourceSet.has(source.toLowerCase())) {
       errors.push(`Source "${source}" does not exist.`)
     }
     if (!location) errors.push('Location is required.')
-    else if (locationSet && !locationSet.has(location)) {
+    else if (locationSet && !locationSet.has(location.toLowerCase())) {
       errors.push(`Location "${location}" does not exist.`)
     }
     // Preserve the original CSV data for this row (padded to header width).
