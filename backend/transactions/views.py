@@ -12,7 +12,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.mail import send_mail
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.db.models import Count, Max, Q, OuterRef, Subquery
 from django.db.models.functions import TruncDay, TruncMonth, TruncYear
 from django.http import HttpResponse
@@ -498,12 +498,18 @@ def is_follow_up_due(lead):
 def create_due_follow_up_notifications(user):
     """Create one in-app 'Follow-up' reminder per due lead the user can see.
 
-    Cheap in the steady state: reminders that already exist are read in a small
-    number of queries, so the per-lead locking/insert path only runs for leads
-    that still need one. Legacy duplicate reminders are collapsed to the newest
-    row per lead (set-based, no per-lead row locks).
+    Rate-limited per user (once a minute) and fully set-based so it never sits
+    in a request hot path or contends on row locks. Reminders that already
+    exist are skipped in bulk; missing ones are inserted in a single batch.
+    Legacy duplicate reminders are collapsed to the newest row per lead.
     """
     if user is None or not getattr(user, 'pk', None):
+        return
+
+    # Throttle the sweep so concurrent requests (bell + dashboard) can't both
+    # run it. cache.add is atomic, so only the first requester proceeds.
+    throttle_key = f'follow-up-synced:{user.pk}'
+    if not cache.add(throttle_key, 1, timeout=60):
         return
 
     due_leads = [
@@ -536,32 +542,26 @@ def create_due_follow_up_notifications(user):
 
     existing_ids = set(follow_up_qs.values_list('entity_id', flat=True))
 
+    to_create = []
     for lead in due_leads:
         if str(lead.id) in existing_ids:
             continue
-        # Serialize on the lead row so a second request blocks until the first
-        # commits, then sees the existing reminder and skips creation.
-        with transaction.atomic():
-            Lead.objects.select_for_update().only('pk').get(pk=lead.id)
-            if Notification.objects.filter(
-                user=user,
-                type='Follow-up',
-                entity_type='lead',
-                entity_id=str(lead.id),
-            ).exists():
-                continue
-            when = lead.next_follow_up_date or 'today'
-            if lead.next_follow_up_time:
-                when = f'{when} {lead.next_follow_up_time}'
-            notify(
-                user,
-                'Follow-up',
-                'Follow-up due',
-                f'Follow-up for {lead.company} ({lead.phone}) is due {when}.',
-                url='/tele-calling?call_status=Follow Up',
-                entity_type='lead',
-                entity_id=str(lead.id),
-            )
+        when = lead.next_follow_up_date or 'today'
+        if lead.next_follow_up_time:
+            when = f'{when} {lead.next_follow_up_time}'
+        to_create.append(Notification(
+            user=user,
+            type='Follow-up',
+            title='Follow-up due',
+            message=f'Follow-up for {lead.company} ({lead.phone}) is due {when}.',
+            time='Just now',
+            url='/tele-calling?call_status=Follow Up',
+            entity_type='lead',
+            entity_id=str(lead.id),
+        ))
+
+    if to_create:
+        Notification.objects.bulk_create(to_create)
 
 
 def clear_follow_up_notifications(lead):
@@ -4131,8 +4131,6 @@ class DashboardStatsView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        create_due_follow_up_notifications(request.user)
-
         try:
             start_date = date.fromisoformat(request.query_params.get('start_date'))
             end_date = date.fromisoformat(request.query_params.get('end_date'))
@@ -4149,6 +4147,12 @@ class DashboardStatsView(APIView):
 
         scoped = scoped_queryset(request.user).filter(date__range=(start_date, end_date))
         total_leads = scoped.count()
+
+        # Materialize the scoped lead id lists once so the order/call IN
+        # subqueries below don't re-run them for every aggregate.
+        scoped_ids = list(scoped.values_list('id', flat=True))
+        scoped_all = scoped_queryset(request.user)
+        scoped_all_ids = list(scoped_all.values_list('id', flat=True))
 
         # Contacted: a lead counts as contacted if it has call history rows, a
         # non-default call_status, or has progressed past the assigned stage.
@@ -4239,16 +4243,15 @@ class DashboardStatsView(APIView):
         # the order date in the period (not by lead status, which includes
         # pending/declined orders).
         orders_accepted = Order.objects.filter(
-            lead_id__in=scoped.values_list('id', flat=True),
+            lead_id__in=scoped_ids,
             client_status=Order.CLIENT_ACCEPTED,
             created_at__date__range=(start_date, end_date),
         ).count()
 
         # Calls in period are counted by their own call date across the leads
         # the user can see — a call on an older lead still counts.
-        scoped_all = scoped_queryset(request.user)
         calls_in_period = CallHistory.objects.filter(
-            lead_id__in=scoped_all.values_list('id', flat=True),
+            lead_id__in=scoped_all_ids,
             created_at__date__range=(start_date, end_date),
         ).count()
 
