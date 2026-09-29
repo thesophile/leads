@@ -103,7 +103,7 @@ FLAT_PERMISSIONS = sorted({key for group in PERMISSION_GROUPS for key, _ in grou
 DEFAULT_ROLE_PERMISSIONS = {
     'admin': FLAT_PERMISSIONS,
     'manager': [
-        'leads.view', 'leads.view_all', 'leads.create',
+        'leads.view', 'leads.view_all', 'leads.view_raw_all', 'leads.create',
         'leads.edit_own', 'leads.edit_all', 'leads.delete', 'leads.assign',
         'telecall.view', 'telecall.create', 'telecall.edit', 'telecall.assign',
         'quotation.view', 'quotation.create', 'quotation.edit', 'quotation.send', 'quotation.approve',
