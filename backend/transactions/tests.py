@@ -2594,6 +2594,94 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         builder.assert_not_called()
 
+    def make_sibling_version(self, version_no=2, token='tok-sibling'):
+        return Quotation.objects.create(
+            id=f'Q-CONFIRM-V{version_no}', lead_id=self.lead.id,
+            company='Confirm Ltd', tenant=self.company,
+            customer='Confirm Person', email='client@confirm.com',
+            status='Sent to Client', client_status=Quotation.CLIENT_PENDING,
+            version_no=version_no, client_token=token,
+            total='12000', net_amount='12500', date='2026-09-11',
+        )
+
+    def test_accept_supersedes_sibling_versions(self):
+        from unittest.mock import patch
+
+        sibling = self.make_sibling_version()
+        with patch('transactions.views.build_quotation_accepted_email'):
+            resp = self.client.post(
+                '/api/transactions/public/quotations/tok-confirm/respond/',
+                {'decision': 'accept', 'message': ''}, format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        sibling.refresh_from_db()
+        self.assertIsNotNone(sibling.superseded_at)
+        # Its live link is revoked immediately too.
+        self.assertEqual(sibling.client_token, '')
+        self.assertIsNone(sibling.client_token_expires_at)
+        # The accepted version itself is not tombstoned.
+        self.quotation.refresh_from_db()
+        self.assertIsNone(self.quotation.superseded_at)
+
+    def test_superseded_sibling_cannot_get_client_link(self):
+        from unittest.mock import patch
+
+        sibling = self.make_sibling_version()
+        with patch('transactions.views.build_quotation_accepted_email'):
+            self.client.post(
+                '/api/transactions/public/quotations/tok-confirm/respond/',
+                {'decision': 'accept', 'message': ''}, format='json',
+            )
+        viewer = User.objects.create_user(
+            email='viewer2@confirm.com', password='x', name='Viewer Two',
+            role=self.company.roles.create(
+                code='viewer2', name='Viewer 2',
+                permissions=['quotation.view'],
+            ),
+            company=self.company,
+        )
+        self.client.force_authenticate(viewer)
+        resp = self.client.get(f'/api/transactions/quotations/{sibling.id}/client-link/')
+        self.assertEqual(resp.status_code, 400)
+        sibling.refresh_from_db()
+        self.assertEqual(sibling.client_token, '')
+
+    def test_superseded_sibling_cannot_be_sent(self):
+        from unittest.mock import patch
+
+        sibling = self.make_sibling_version()
+        with patch('transactions.views.build_quotation_accepted_email'):
+            self.client.post(
+                '/api/transactions/public/quotations/tok-confirm/respond/',
+                {'decision': 'accept', 'message': ''}, format='json',
+            )
+        manager = User.objects.create_user(
+            email='mgr2@confirm.com', password='x', name='Manager Two',
+            role=self.company.roles.get(code='manager'), company=self.company,
+        )
+        self.client.force_authenticate(manager)
+        resp = self.client.post(
+            f'/api/transactions/quotations/{sibling.id}/send-to-client/',
+            {'channels': ['copy']}, format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        sibling.refresh_from_db()
+        self.assertEqual(sibling.client_token, '')
+
+    def test_decline_does_not_supersede_siblings(self):
+        sibling = self.make_sibling_version()
+        resp = self.client.post(
+            '/api/transactions/public/quotations/tok-confirm/respond/',
+            {'decision': 'decline', 'message': ''}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        sibling.refresh_from_db()
+        self.assertIsNone(sibling.superseded_at)
+        self.assertEqual(sibling.client_token, 'tok-sibling')
+        self.client.force_authenticate(None)
+        detail = self.client.get('/api/transactions/public/quotations/tok-sibling/')
+        self.assertEqual(detail.status_code, 200)
+
 
 class PaginationAndFilterTests(APITestCase):
     """Server-side pagination (100/page) with database-side filtering."""

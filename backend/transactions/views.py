@@ -2323,6 +2323,11 @@ class QuotationSendToClientView(APIView):
             )
 
         now = timezone.now()
+        if quotation.superseded_at:
+            return Response(
+                {'detail': 'This proposal was superseded by another version already accepted by the client. It can no longer be sent.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         needs_token = not quotation.client_token or (
             quotation.client_token_expires_at
             and quotation.client_token_expires_at < now
@@ -2423,6 +2428,15 @@ class QuotationClientLinkView(APIView):
             same_company = quotation.tenant is not None and quotation.tenant == request.user.company
             if not lead_in_scope and not same_company:
                 return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # A superseded proposal (a sibling version was accepted) must never
+        # regain a live client link, otherwise the QR/preview would silently
+        # reactivate a dead version.
+        if quotation.superseded_at:
+            return Response(
+                {'detail': 'This proposal was superseded by another version already accepted by the client.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         now = timezone.now()
         if not quotation.client_token or (
@@ -2652,15 +2666,24 @@ class ClientQuotationResponseView(APIView):
                         exc,
                     )
             # Once any version is accepted, no other live version of the same
-            # lead may be accepted later: revoke sibling links so we never end
-            # up with a second order for the same deal.
+            # lead may be accepted later. The durable guard is the tombstone:
+            # superseded versions can never mint a new client token or be
+            # re-sent, so we never end up with a second order for the same
+            # deal. Live sibling links are also revoked right away so a printed
+            # or shared link goes dead immediately.
             if quotation.lead_id:
+                now = timezone.now()
                 Quotation.objects.filter(
                     lead_id=quotation.lead_id,
                     client_token__gt='',
                 ).exclude(pk=quotation.pk).update(
                     client_token='',
                     client_token_expires_at=None,
+                )
+                Quotation.objects.filter(
+                    lead_id=quotation.lead_id,
+                ).exclude(pk=quotation.pk).update(
+                    superseded_at=now,
                 )
         if quotation.submitted_by_id:
             notify(
