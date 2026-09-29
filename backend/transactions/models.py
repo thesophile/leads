@@ -118,6 +118,12 @@ class Lead(models.Model):
     category = models.CharField(max_length=100, blank=True)
     source = models.CharField(max_length=120, blank=True)
     city = models.CharField(max_length=100, blank=True)
+    # Stable identity of the company's master rows this record was saved under.
+    # The name strings above are snapshots for display/search; these codes let
+    # records stay grouped with their master when it is renamed.
+    category_code = models.CharField(max_length=20, blank=True, db_index=True)
+    source_code = models.CharField(max_length=20, blank=True, db_index=True)
+    location_code = models.CharField(max_length=20, blank=True, db_index=True)
     # Free-text area below the Location master dropdown (e.g. street / area).
     sublocation = models.CharField(max_length=150, blank=True)
     date = models.DateField(null=True, blank=True)
@@ -233,6 +239,9 @@ class Quotation(models.Model):
     email = models.EmailField(blank=True)
     category = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100, blank=True)
+    category_code = models.CharField(max_length=20, blank=True, db_index=True)
+    source_code = models.CharField(max_length=20, blank=True, db_index=True)
+    location_code = models.CharField(max_length=20, blank=True, db_index=True)
     bdm = models.CharField(max_length=120, blank=True)
     qtn_by = models.CharField(max_length=120, blank=True)
     staff = models.CharField(max_length=120, blank=True)
@@ -388,6 +397,8 @@ class Order(models.Model):
     net_amount = models.CharField(max_length=40, blank=True)
     currency = models.CharField(max_length=30, default='INR (₹)')
     category = models.CharField(max_length=100, blank=True)
+    category_code = models.CharField(max_length=20, blank=True, db_index=True)
+    location_code = models.CharField(max_length=20, blank=True, db_index=True)
     remarks = models.TextField(blank=True)
     scope = models.TextField(blank=True)
     details = models.TextField(blank=True)
@@ -454,6 +465,7 @@ class ClientDetail(models.Model):
     mobile = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     category = models.CharField(max_length=100, blank=True)
+    category_code = models.CharField(max_length=20, blank=True, db_index=True)
     accepted_date = models.CharField(max_length=30, blank=True)
     collected_by = models.CharField(max_length=120, blank=True)
     notes = models.TextField(blank=True)

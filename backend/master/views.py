@@ -305,6 +305,7 @@ class CategoryDetailView(APIView):
         category = self.get_object(pk)
         if category is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        old_name = category.name
         name = request.data.get('name')
         if name is not None:
             name = name.strip()
@@ -322,6 +323,10 @@ class CategoryDetailView(APIView):
                 )
             category.name = name
         category.save()
+        if old_name != category.name:
+            from transactions.master_codes import propagate_master_rename
+
+            propagate_master_rename('Category', category.company, old_name, category.name)
         _log(request, 'updated category', f'{request.user.name} updated category {category.name}.', entity_type='category', entity_id=str(category.pk))
         return Response(CategorySerializer(category).data)
 
@@ -411,6 +416,7 @@ class SourceDetailView(APIView):
         source = self.get_object(pk)
         if source is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        old_name = source.name
         name = request.data.get('name')
         if name is not None:
             name = name.strip()
@@ -428,6 +434,10 @@ class SourceDetailView(APIView):
                 )
             source.name = name
         source.save()
+        if old_name != source.name:
+            from transactions.master_codes import propagate_master_rename
+
+            propagate_master_rename('Source', source.company, old_name, source.name)
         _log(request, 'updated source', f'{request.user.name} updated source {source.name}.', entity_type='source', entity_id=str(source.pk))
         return Response(SourceSerializer(source).data)
 
@@ -517,6 +527,7 @@ class LocationDetailView(APIView):
         location = self.get_object(pk)
         if location is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        old_name = location.name
         name = request.data.get('name')
         if name is not None:
             name = name.strip()
@@ -534,6 +545,10 @@ class LocationDetailView(APIView):
                 )
             location.name = name
         location.save()
+        if old_name != location.name:
+            from transactions.master_codes import propagate_master_rename
+
+            propagate_master_rename('Location', location.company, old_name, location.name)
         _log(request, 'updated location', f'{request.user.name} updated location {location.name}.', entity_type='location', entity_id=str(location.pk))
         return Response(LocationSerializer(location).data)
 

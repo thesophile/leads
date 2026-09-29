@@ -1464,6 +1464,7 @@ def create_client_detail_from_order(order):
         mobile=order.mobile,
         email=order.email,
         category=order.category,
+        category_code=order.category_code,
         accepted_date=date.today().strftime('%Y-%m-%d'),
         collected_by=order.proposal_by or order.staff,
         status=ClientDetail.STATUS_PENDING,

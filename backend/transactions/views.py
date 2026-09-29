@@ -26,6 +26,7 @@ from accounts.permissions import can
 from master.models import Category, Location, Source
 from utilities.models import Notification, log_activity
 
+from .master_codes import codes_for, stamp_codes
 from .models import (
     Attachment,
     CallHistory,
@@ -156,6 +157,7 @@ def sync_contact_from_quotation(user, lead, quotation, old_contact):
     changed_fields = [entry[0] for entry in pending]
     for lead_field, _, new_value in pending:
         setattr(lead, lead_field, new_value)
+    changed_fields += stamp_codes(lead, lead.tenant)
     try:
         lead.save(update_fields=changed_fields + ['updated_at'])
     except IntegrityError:
@@ -184,6 +186,7 @@ def sync_lead_contact_to_quotation(lead, old_contact):
         if getattr(quotation, q_field) != value:
             setattr(quotation, q_field, value)
             changed = True
+    stamp_codes(quotation, quotation.tenant)
     if changed:
         quotation.save()
 
@@ -245,6 +248,7 @@ def duplicate_quotation(source, payload):
         terms_conditions=payload.get('termsConditions') or source.terms_conditions,
         remarks=payload.get('remarks') or source.remarks,
     )
+    stamp_codes(quotation, quotation.tenant)
     quotation.save()
     return quotation
 
@@ -855,6 +859,7 @@ class LeadListView(APIView):
             return Response({'detail': ' '.join(invalid)}, status=status.HTTP_400_BAD_REQUEST)
         category = canon_master(Category, request.user.company, category)
         source = canon_master(Source, request.user.company, source)
+        codes = codes_for(request.user.company, category, source, location)
         lead_date = date.today()
         saved = None
         last_error = None
@@ -875,6 +880,9 @@ class LeadListView(APIView):
                     display_date=format_display_date(lead_date),
                     added_by=request.user.name,
                     status=Lead.STATUS_RAW,
+                    category_code=codes['category_code'],
+                    source_code=codes['source_code'],
+                    location_code=codes['location_code'],
                 )
                 break
             except IntegrityError as exc:
@@ -946,6 +954,7 @@ class LeadImportView(APIView):
         category = canon_master(Category, request.user.company, category)
         source = canon_master(Source, request.user.company, source)
         location = canon_master(Location, request.user.company, location)
+        codes = codes_for(request.user.company, category, source, location)
 
         existing = find_duplicate_lead(request.user, company)
         if existing is not None:
@@ -971,6 +980,9 @@ class LeadImportView(APIView):
                     display_date=format_display_date(lead_date),
                     added_by=request.user.name,
                     status=Lead.STATUS_RAW,
+                    category_code=codes['category_code'],
+                    source_code=codes['source_code'],
+                    location_code=codes['location_code'],
                 )
                 break
             except IntegrityError as exc:
@@ -1014,6 +1026,7 @@ class LeadImportView(APIView):
                 log_contact_change(request.user, lead, field, old_value, new_value)
                 setattr(lead, field, new_value)
                 changed_fields.append(field)
+        changed_fields += stamp_codes(lead, request.user.company)
         if changed_fields:
             lead.save(update_fields=changed_fields + ['updated_at'])
             sync_lead_contact_to_quotation(lead, changed_fields)
@@ -1087,6 +1100,7 @@ class LeadDetailView(APIView):
                 if isinstance(value, str):
                     value = value.strip()
                 setattr(lead, field, value)
+        stamp_codes(lead, user.company)
         if 'email' in request.data:
             lead.email = request.data.get('email', '').strip()
         for field in ('assigned_to', 'call_status', 'priority', 'remarks',
@@ -1883,6 +1897,7 @@ class QuotationView(APIView):
             if camel in request.data:
                 value = request.data.get(camel)
                 setattr(quotation, field, value if value is not None else '')
+        stamp_codes(quotation, request.user.company)
 
         # Audit any company/contact change made here and mirror it to the lead.
         contact_changed = bool(old_contact) and bool(
@@ -2485,6 +2500,8 @@ def create_order_from_quotation(quotation):
         net_amount=quotation.net_amount,
         currency=quotation.currency or 'INR (₹)',
         category=quotation.category,
+        category_code=quotation.category_code,
+        location_code=quotation.location_code,
         remarks=quotation.remarks,
         scope=quotation.proposal_scope,
         details=quotation.terms_conditions,
@@ -3226,6 +3243,9 @@ class ClientDetailListCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         record = serializer.save()
+        changed_codes = stamp_codes(record, request.user.company)
+        if changed_codes:
+            record.save(update_fields=changed_codes + ['updated_at'])
         if created:
             status_code = status.HTTP_201_CREATED
             log_activity(
@@ -3291,6 +3311,9 @@ class ClientDetailDetailView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         record = serializer.save()
+        changed_codes = stamp_codes(record, request.user.company)
+        if changed_codes:
+            record.save(update_fields=changed_codes + ['updated_at'])
         if record.lead_id:
             mark_lead_as_client(record.lead_id)
         log_activity(
@@ -3694,6 +3717,9 @@ class OrderListCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         order = serializer.save(tenant=request.user.company)
+        changed_codes = stamp_codes(order, request.user.company)
+        if changed_codes:
+            order.save(update_fields=changed_codes + ['updated_at'])
         log_activity(
             request.user,
             request.user.company,
@@ -3741,6 +3767,9 @@ class OrderDetailView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         order = serializer.save()
+        changed_codes = stamp_codes(order, request.user.company)
+        if changed_codes:
+            order.save(update_fields=changed_codes + ['updated_at'])
         if order.status == 'Accepted':
             # An accepted order moves out of Manage Orders and into Client
             # Details: create the client record and convert the lead.

@@ -902,6 +902,8 @@ class LeadImportTests(APITestCase):
         lead = Lead.objects.get(company='Lower Case Co', tenant=self.company)
         self.assertEqual(lead.category, 'COSMETICS STORE')
         self.assertEqual(lead.city, 'KOCHI')
+        self.assertEqual(lead.location_code, 'LC001')
+        self.assertEqual(lead.category_code, 'CT000')
 
     def test_import_missing_master_value_keeps_typed_spelling(self):
         self.client.force_authenticate(self.manager)
@@ -912,6 +914,7 @@ class LeadImportTests(APITestCase):
         self.assertEqual(resp.status_code, 201)
         lead = Lead.objects.get(company='Other Loc Co', tenant=self.company)
         self.assertEqual(lead.city, 'Other')
+        self.assertEqual(lead.location_code, '')
 
     def test_import_requires_permission(self):
         viewer = User.objects.create_user(
