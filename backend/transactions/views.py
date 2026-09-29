@@ -343,10 +343,9 @@ def generate_lead_id(company):
     """A proposal reference like ABC-2026-6963 (prefix-year-random)."""
     prefix = company_prefix(company)
     year = date.today().year
-    existing = set(Lead.objects.values_list('id', flat=True))
     for _ in range(200):
         candidate = f'{prefix}-{year}-{random.randint(1000, 9999)}'
-        if candidate not in existing:
+        if not Lead.objects.filter(id=candidate).exists():
             return candidate
     return f'{prefix}-{year}-{random.randint(10000, 99999)}'
 
@@ -2994,10 +2993,9 @@ def scoped_orders(user):
 
 
 def generate_client_detail_id():
-    existing = set(ClientDetail.objects.values_list('id', flat=True))
     for _ in range(200):
         candidate = f'CD-{random.randint(100000, 999999)}'
-        if candidate not in existing:
+        if not ClientDetail.objects.filter(id=candidate).exists():
             return candidate
     return f'CD-{random.randint(1000000, 9999999)}'
 
