@@ -153,6 +153,21 @@ function downloadInvalidRowsCSV(filename, originalHeaders, invalidRows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+function downloadTemplateCSV() {
+  const headers = REQUIRED_IMPORT_COLUMNS.map((c) =>
+    escapeCSVField(c.required ? `${c.label}*` : c.label)
+  )
+  const blob = new Blob([headers.join(',') + '\r\n'], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'lead_import_format.csv'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 function csvRowsToLeads(text, master = {}) {
   const rows = parseCSV(text)
   if (rows.length === 0) return { empty: true }
@@ -261,6 +276,16 @@ function CloseIcon() {
     <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  )
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   )
 }
@@ -2167,7 +2192,17 @@ async function handleBulkImport(e) {
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              <div className="flex items-center justify-between gap-2.5 pt-2">
+                {!importNeedsAck && (
+                  <button
+                    type="button"
+                    onClick={downloadTemplateCSV}
+                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <DownloadIcon />
+                    Download Format
+                  </button>
+                )}
                 {importNeedsAck ? (
                   <button
                     type="button"
