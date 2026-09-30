@@ -1,6 +1,7 @@
 # External Orders API
 
-Read-only endpoint for external systems (ERP / accounting / reporting) to fetch orders.
+Read-only endpoints for external systems (ERP / accounting / reporting) backed
+by the shared API key.
 
 ## Authentication
 
@@ -61,3 +62,48 @@ Field notes:
   often empty because it is free-text).
 - `delivery_date` — internal expected delivery date, manually entered on the Manage Orders screen. It is **not** shown to clients or included in the order form / proposal / PDF.
 - `sales_person` — the telecaller who changed the lead status to "Quotation Requested".
+
+### `GET /api/external/customers/`
+
+Read-only shared customers master (`transactions_clientdetail`), used by
+Account Soft for the Customers section. Returns every client-detail row across
+tenants, newest-first, paginated.
+
+Query params:
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `page` | int | Page number (default `1`). |
+| `page_size` | int | Results per page (default `100`, max `500`). |
+
+Response shape (DRF-style paginated envelope):
+
+```json
+{
+  "count": 12,
+  "page": 1,
+  "page_size": 100,
+  "next": "https://<base>/api/external/customers/?page=2&page_size=100",
+  "previous": null,
+  "results": [
+    {
+      "id": "CD-000123",
+      "company": "Acme Corp",
+      "client_name": "Alice",
+      "mobile": "9447000001",
+      "email": "a@acme.com",
+      "category": "Hospital",
+      "status": "Details Complete"
+    }
+  ]
+}
+```
+
+Field notes:
+
+- `id` — primary key of `transactions_clientdetail`.
+- `company` — the customer's company name.
+- `client_name` — customer contact name (`client_name` column).
+- `mobile` / `email` — customer contact details.
+- `category` — service category (blank when unset).
+- `status` — one of the `transactions_clientdetail.status` values, e.g. `Details Pending`, `Details Complete`, `In Progress`, `Completed`, `Paid`.

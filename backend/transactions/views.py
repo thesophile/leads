@@ -4029,6 +4029,42 @@ def normalize_external_order_id(order_id):
     return f'ORD-{stripped}'
 
 
+def external_key_authorized(request):
+    """True when the request carries the shared external-feed API key.
+
+    Accepts ``Authorization: Bearer <key>`` or ``X-API-Key: <key>`` matched
+    against ``settings.EXTERNAL_ORDERS_API_KEY``. Used by every read-only
+    feed under ``/api/external/`` so external systems share a single secret.
+    """
+    expected = getattr(settings, 'EXTERNAL_ORDERS_API_KEY', '')
+    if not expected:
+        return False
+    header = request.headers.get('Authorization', '')
+    if header.startswith('Bearer '):
+        provided = header[len('Bearer '):]
+    else:
+        provided = request.headers.get('X-API-Key', '')
+    return bool(provided) and hmac.compare_digest(str(provided).strip(), expected)
+
+
+def external_page_links(request, page, page_size, count):
+    """DRF-style ``next``/``previous`` links for the external paginated feeds."""
+    total_pages = (count + page_size - 1) // page_size if count else 1
+
+    def build(target):
+        if target < 1 or target > total_pages:
+            return None
+        params = request.query_params.copy()
+        params['page'] = str(target)
+        params['page_size'] = str(page_size)
+        return request.build_absolute_uri(request.path + '?' + params.urlencode())
+
+    return {
+        'next': build(page + 1),
+        'previous': build(page - 1),
+    }
+
+
 class ExternalOrdersView(APIView):
     """Read-only orders feed for external systems (e.g. ERP / accounting).
 
@@ -4046,17 +4082,6 @@ class ExternalOrdersView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
-    def _authorized(self, request):
-        expected = getattr(settings, 'EXTERNAL_ORDERS_API_KEY', '')
-        if not expected:
-            return False
-        header = request.headers.get('Authorization', '')
-        if header.startswith('Bearer '):
-            provided = header[len('Bearer '):]
-        else:
-            provided = request.headers.get('X-API-Key', '')
-        return bool(provided) and hmac.compare_digest(str(provided).strip(), expected)
-
     @staticmethod
     def _sales_person(order, requesters_by_lead):
         """Telecaller who moved the lead to 'Quotation Requested' first."""
@@ -4067,7 +4092,7 @@ class ExternalOrdersView(APIView):
         return order.bdm or order.proposal_by or order.staff or ''
 
     def get(self, request):
-        if not self._authorized(request):
+        if not external_key_authorized(request):
             return Response(
                 {'detail': 'Invalid or missing API key.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -4098,6 +4123,49 @@ class ExternalOrdersView(APIView):
                 'sales_person': self._sales_person(order, requesters_by_lead),
             }
             for order in page_orders
+        ]
+        return Response(envelope)
+
+
+class ExternalCustomersView(APIView):
+    """Read-only shared customer master (``transactions_clientdetail``) feed.
+
+    Alternate name for the same customers that Account Soft consumes, keyed
+    with the same shared secret as the external orders feed
+    (``Authorization: Bearer <key>`` or ``X-API-Key: <key>`` against
+    ``settings.EXTERNAL_ORDERS_API_KEY``). Returns every client-detail row
+    across tenants, newest-first and paginated, with the snake_case columns
+    of ``transactions_clientdetail`` so the consuming system can show the
+    Customers section.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not external_key_authorized(request):
+            return Response(
+                {'detail': 'Invalid or missing API key.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = ClientDetail.objects.select_related('tenant').order_by('-created_at')
+        page_customers, envelope = paginated_queryset(qs, request)
+        envelope.update(
+            external_page_links(
+                request, envelope['page'], envelope['page_size'], envelope['count']
+            )
+        )
+        envelope['results'] = [
+            {
+                'id': customer.id,
+                'company': customer.company,
+                'client_name': customer.client_name,
+                'mobile': customer.mobile,
+                'email': customer.email,
+                'category': customer.category,
+                'status': customer.status,
+            }
+            for customer in page_customers
         ]
         return Response(envelope)
 

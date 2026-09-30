@@ -3013,6 +3013,85 @@ class ExternalOrdersFeedTests(APITestCase):
         self.assertEqual(len(resp.data['results']), 3)
 
 
+class ExternalCustomersFeedTests(APITestCase):
+    """Read-only shared customers master feed (transactions_clientdetail)."""
+
+    def setUp(self):
+        self.company_a = make_company('Ext Customer Co A')
+        self.company_b = make_company('Ext Customer Co B')
+        Lead.objects.filter(tenant__isnull=True).delete()
+        self.alpha = ClientDetail.objects.create(
+            id='CD-A1', order_no='ORD-A1', company='Acme Corp',
+            client_name='Alice', mobile='9447000001', email='a@acme.com',
+            category='Hospital', tenant=self.company_a, status='Paid',
+        )
+        self.beta = ClientDetail.objects.create(
+            id='CD-B1', order_no='ORD-B1', company='Beta Ltd',
+            client_name='Bob', mobile='9447000002', email='b@beta.com',
+            category='School', tenant=self.company_b, status='Details Complete',
+        )
+
+    def test_requires_valid_api_key(self):
+        self.assertEqual(
+            self.client.get('/api/external/customers/').status_code, 403,
+        )
+        resp = self.client.get(
+            '/api/external/customers/', HTTP_X_API_KEY='bad-key',
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
+    def test_returns_all_tenants_with_requested_fields(self):
+        resp = self.client.get(
+            '/api/external/customers/', HTTP_X_API_KEY='test-key',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 2)
+        by_company = {row['company']: row for row in resp.data['results']}
+        self.assertEqual(by_company['Acme Corp']['id'], 'CD-A1')
+        self.assertEqual(by_company['Acme Corp']['client_name'], 'Alice')
+        self.assertEqual(by_company['Acme Corp']['mobile'], '9447000001')
+        self.assertEqual(by_company['Acme Corp']['email'], 'a@acme.com')
+        self.assertEqual(by_company['Acme Corp']['category'], 'Hospital')
+        self.assertEqual(by_company['Acme Corp']['status'], 'Paid')
+        self.assertEqual(
+            {row['company'] for row in resp.data['results']},
+            {'Acme Corp', 'Beta Ltd'},
+        )
+
+    @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
+    def test_accepts_bearer_key(self):
+        resp = self.client.get(
+            '/api/external/customers/', HTTP_AUTHORIZATION='Bearer test-key',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['results']), 2)
+
+    @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
+    def test_pagination_envelope_with_next_previous(self):
+        for i in range(3, 7):
+            ClientDetail.objects.create(
+                id=f'CD-B{i}', order_no=f'ORD-B{i}', company=f'Extra {i}',
+            )
+        resp = self.client.get(
+            '/api/external/customers/?page=1&page_size=2',
+            HTTP_AUTHORIZATION='Bearer test-key',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 6)
+        self.assertEqual(resp.data['page'], 1)
+        self.assertEqual(resp.data['page_size'], 2)
+        self.assertEqual(len(resp.data['results']), 2)
+        self.assertIsNone(resp.data['previous'])
+        self.assertIn('page=2', resp.data['next'])
+        last = self.client.get(
+            '/api/external/customers/?page=3&page_size=2',
+            HTTP_AUTHORIZATION='Bearer test-key',
+        )
+        self.assertIsNone(last.data['next'])
+        self.assertIn('page=2', last.data['previous'])
+
+
 class FollowUpReminderTests(APITestCase):
     """Due follow-up leads surface as one-time in-app notifications for the
     viewer, are listed on the dashboard, and retire once handled."""
