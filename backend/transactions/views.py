@@ -4065,6 +4065,27 @@ def external_page_links(request, page, page_size, count):
     }
 
 
+CUSTOMER_ID_NONSLUG_RE = re.compile(r'[^a-z0-9]+')
+
+
+def company_customer_id(company):
+    """Stable per-company customer id for the external customers feed.
+
+    Derived deterministically from the exact ``company`` string so every
+    client-detail row of the same company shares one id (one customer across
+    many orders) while differently-spelled companies stay distinct. The
+    normalized name is followed by a short digest of the same string so two
+    lookalike companies can never collide::
+
+        N K BALAKRISHNAN MEMORIAL HOSPITAL -> C-n-k-balakrishnan-memorial-hospital-1f2a9c3d
+    """
+    normalized = str(company or '').strip().lower()
+    slug = CUSTOMER_ID_NONSLUG_RE.sub('-', normalized).strip('-').strip('_')
+    digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:8]
+    core = slug if slug else digest
+    return f'C-{core}-{digest}'
+
+
 class ExternalOrdersView(APIView):
     """Read-only orders feed for external systems (e.g. ERP / accounting).
 
@@ -4155,9 +4176,14 @@ class ExternalCustomersView(APIView):
                 request, envelope['page'], envelope['page_size'], envelope['count']
             )
         )
+        customer_ids = {
+            company: company_customer_id(company)
+            for company in {customer.company for customer in page_customers}
+        }
         envelope['results'] = [
             {
                 'id': customer.id,
+                'customer_id': customer_ids.get(customer.company, company_customer_id(customer.company)),
                 'company': customer.company,
                 'client_name': customer.client_name,
                 'mobile': customer.mobile,

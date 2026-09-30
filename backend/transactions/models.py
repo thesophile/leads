@@ -453,7 +453,7 @@ class ClientDetail(models.Model):
         (STATUS_PAID, STATUS_PAID),
     ]
 
-    id = models.CharField(max_length=20, primary_key=True)
+    id = models.CharField(max_length=50, primary_key=True)
     order_no = models.CharField(max_length=30, blank=True)
     lead_id = models.CharField(max_length=30, blank=True)
     client_name = models.CharField(max_length=120, blank=True)

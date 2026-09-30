@@ -3068,6 +3068,23 @@ class ExternalCustomersFeedTests(APITestCase):
         self.assertEqual(len(resp.data['results']), 2)
 
     @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
+    def test_customer_id_is_stable_per_company(self):
+        ClientDetail.objects.create(
+            id='CD-A2', order_no='ORD-A2', company='Acme Corp',
+            tenant=self.company_a, status='Details Pending',
+        )
+        resp = self.client.get(
+            '/api/external/customers/', HTTP_AUTHORIZATION='Bearer test-key',
+        )
+        rows = resp.data['results']
+        acme = [r for r in rows if r['company'] == 'Acme Corp']
+        beta = [r for r in rows if r['company'] == 'Beta Ltd'][0]
+        self.assertEqual(len(acme), 2)
+        self.assertEqual(acme[0]['customer_id'], acme[1]['customer_id'])
+        self.assertNotEqual(acme[0]['customer_id'], beta['customer_id'])
+        self.assertTrue(acme[0]['customer_id'].startswith('C-acme-corp-'))
+
+    @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
     def test_pagination_envelope_with_next_previous(self):
         for i in range(3, 7):
             ClientDetail.objects.create(
