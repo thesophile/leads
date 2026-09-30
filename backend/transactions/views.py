@@ -4065,25 +4065,20 @@ def external_page_links(request, page, page_size, count):
     }
 
 
-CUSTOMER_ID_NONSLUG_RE = re.compile(r'[^a-z0-9]+')
-
-
 def company_customer_id(company):
     """Stable per-company customer id for the external customers feed.
 
-    Derived deterministically from the exact ``company`` string so every
-    client-detail row of the same company shares one id (one customer across
-    many orders) while differently-spelled companies stay distinct. The
-    normalized name is followed by a short digest of the same string so two
-    lookalike companies can never collide::
+    The id is a 3-letter prefix derived from the company name (vulgar letter
+    combinations avoided, same as lead references) plus a 6-hex digest of the
+    name, so it is unique per exact company string yet compact::
 
-        N K BALAKRISHNAN MEMORIAL HOSPITAL -> C-n-k-balakrishnan-memorial-hospital-1f2a9c3d
+        N K BALAKRISHNAN MEMORIAL HOSPITAL -> NKB-ca756f9
+        AAA company                        -> AAA-9ec799
     """
+    prefix = company_prefix(company)
     normalized = str(company or '').strip().lower()
-    slug = CUSTOMER_ID_NONSLUG_RE.sub('-', normalized).strip('-').strip('_')
-    digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:8]
-    core = slug if slug else digest
-    return f'C-{core}-{digest}'
+    digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:6]
+    return f'{prefix}-{digest}'
 
 
 class ExternalOrdersView(APIView):

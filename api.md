@@ -88,7 +88,7 @@ Response shape (DRF-style paginated envelope):
   "results": [
     {
       "id": "CD-000123",
-      "customer_id": "C-acme-corp-1f2a9c3d",
+      "customer_id": "ACM-1f2a9c",
       "company": "Acme Corp",
       "client_name": "Alice",
       "mobile": "9447000001",
@@ -103,10 +103,11 @@ Response shape (DRF-style paginated envelope):
 Field notes:
 
 - `id` — primary key of `transactions_clientdetail` (one record per order).
-- `customer_id` — stable, unique id **per company** derived from the company
-  name (normalized name + a short digest). All client-detail rows of the same
-  company share one `customer_id`, so the same customer across multiple orders
-  has a single id. Use this as the customer key, not `id`.
+- `customer_id` — stable, unique id **per company**: 3-letter prefix from the
+  company name (inappropriate combinations avoided) + 6 hex chars derived from
+  the name, e.g. `ACM-1f2a9c`. All client-detail rows of the same company
+  share one `customer_id`, so the same customer across multiple orders has a
+  single id. Use this as the customer key, not `id`.
 - `company` — the customer's company name.
 - `client_name` — customer contact name (`client_name` column).
 - `mobile` / `email` — customer contact details.

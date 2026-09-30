@@ -3082,7 +3082,11 @@ class ExternalCustomersFeedTests(APITestCase):
         self.assertEqual(len(acme), 2)
         self.assertEqual(acme[0]['customer_id'], acme[1]['customer_id'])
         self.assertNotEqual(acme[0]['customer_id'], beta['customer_id'])
-        self.assertTrue(acme[0]['customer_id'].startswith('C-acme-corp-'))
+        for row in rows:
+            self.assertRegex(
+                row['customer_id'], r'^[A-Z]{3}-[0-9a-f]{6}$',
+            )
+        self.assertEqual(acme[0]['customer_id'][:4], 'ACM-')
 
     @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
     def test_pagination_envelope_with_next_previous(self):
