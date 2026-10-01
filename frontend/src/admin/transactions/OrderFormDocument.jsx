@@ -281,7 +281,7 @@ export default function OrderFormDocument({ order }) {
               <SectionBox title="TERMS &amp; CONDITIONS" className="h-full">
                 <div
                   ref={termsSummaryContentRef}
-                  className="text-[11px] leading-snug text-slate-700"
+                  className="text-[11px] leading-snug text-slate-700 text-justify"
                   style={termsSummaryPaged.cap ? { maxHeight: termsSummaryPaged.cap, overflow: 'hidden' } : undefined}
                 >
                   {htmlToPlainLines(order.termsSummaryHtml).map((line, i) => (
@@ -345,7 +345,7 @@ export default function OrderFormDocument({ order }) {
         <PagedSection
           html={termsSummaryPaged.part2Html}
           reserve={48}
-          contentClass="text-[11px] leading-snug text-slate-700"
+          contentClass="text-[11px] leading-snug text-slate-700 text-justify"
           sectionTitle="TERMS &amp; CONDITIONS (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
@@ -369,7 +369,7 @@ export default function OrderFormDocument({ order }) {
             <SectionBox title="DETAILED TERMS &amp; CONDITIONS" className="flex-1">
               <div
                 ref={legalTermsContentRef}
-                className="text-[12.5px] leading-snug text-slate-700"
+                className="text-[12.5px] leading-snug text-slate-700 text-justify"
                 style={legalPaged.cap ? { maxHeight: legalPaged.cap, overflow: 'hidden' } : undefined}
               >
                 {htmlToPlainLines(order.legalTermsHtml).map((line, i) => (
@@ -433,7 +433,7 @@ export default function OrderFormDocument({ order }) {
         <PagedSection
           html={legalPaged.part2Html}
           reserve={64}
-          contentClass="text-[12.5px] leading-snug text-slate-700"
+          contentClass="text-[12.5px] leading-snug text-slate-700 text-justify"
           sectionTitle="DETAILED TERMS &amp; CONDITIONS (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"

@@ -853,7 +853,7 @@ const approvedByRef = useRef(null)
                   {proposalData.termsHtml ? (
                     <div
                       ref={termsContentRef}
-                      className="text-[11px] leading-snug text-slate-700"
+                      className="text-[11px] leading-snug text-slate-700 text-justify"
                       style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
                       {htmlToPlainLines(proposalData.termsHtml).map((line, i) => (
@@ -863,7 +863,7 @@ const approvedByRef = useRef(null)
                   ) : (
                     <div
                       ref={termsContentRef}
-                      className="text-[11px] leading-snug text-slate-700"
+                      className="text-[11px] leading-snug text-slate-700 text-justify"
                       style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
                       {Array.isArray(proposalData.termsConditions) ? (
@@ -1011,7 +1011,7 @@ const approvedByRef = useRef(null)
                 ? {
                     title: 'Detailed Terms & Conditions',
                     html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml)),
-                    contentClass: 'text-[13px] leading-snug text-slate-800',
+                    contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
                     boxClass: 'rounded-xl border border-slate-300 bg-white',
                     titleClass: 'text-left',
                     reserve: 64,
