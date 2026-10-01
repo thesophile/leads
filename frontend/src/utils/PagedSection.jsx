@@ -51,7 +51,7 @@ export default function PagedSection({
   const isFinalMain = paged.part2Html === ''
   const usablePx = paged.cap || 0
   const freePx = isFinalMain ? paged.freePx || 0 : 0
-  const endOverflowPage = Boolean(endBlock) && paged.endOverflow && !atLimit
+  const mainEndOverflow = Boolean(endBlock) && paged.endOverflow
   const showInsetInline =
     Boolean(insetSection) &&
     isFinalMain &&
@@ -70,6 +70,9 @@ export default function PagedSection({
     insetSection?.reserve ?? reserve,
     insetSection?.endBlock ? insetAcceptRef : null
   )
+
+  const insetEndOverflow = Boolean(insetSection?.endBlock) && showInsetInline && insetPaged.endOverflow
+  const endOverflowPage = (mainEndOverflow || insetEndOverflow) && !atLimit
 
   const insetBox = insetSection ? (
     <div className={`overflow-hidden ${insetSection.boxClass || boxClass} flex flex-col`}>
@@ -170,23 +173,19 @@ export default function PagedSection({
       ) : null}
 
       {endOverflowPage ? (
-        <PagedSection
-          html=""
-          reserve={reserve}
-          contentClass={contentClass}
-          sectionTitle={sectionTitle}
-          boxClass={boxClass}
-          titleClass={titleClass}
-          paddingClass={paddingClass}
-          pageHeader={pageHeader}
-          pageFooter={pageFooter}
-          pageFooterWrapClass={pageFooterWrapClass}
-          pageClassName={pageClassName}
-          continueNote={false}
-          endBlock={endBlock}
-          endBlockClass={endBlockClass}
-          pageIndex={pageIndex + 1}
-        />
+        <div className={pageClassName} style={{ boxSizing: 'border-box' }}>
+          <div className="flex flex-1 flex-col">
+            {insetEndOverflow ? insetSection.pageHeader : pageHeader}
+            <div className="flex flex-1 flex-col justify-end">
+              <div className={`pt-4 ${endBlockClass}`}>
+                {insetEndOverflow ? insetSection.endBlock : endBlock}
+              </div>
+            </div>
+          </div>
+          <div className={pageFooterWrapClass}>
+            {insetEndOverflow ? insetSection.pageFooter : pageFooter}
+          </div>
+        </div>
       ) : null}
 
       {showInsetInline && insetPaged.part2Html && !atLimit ? (
