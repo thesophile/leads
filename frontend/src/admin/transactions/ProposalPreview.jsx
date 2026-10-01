@@ -710,7 +710,7 @@ const approvedByRef = useRef(null)
 
   return (
     <Layout>
-      <div className="space-y-6 pb-16">
+      <div className="space-y-6 pb-16 print:space-y-0 print:pb-0">
         {/* Top Sticky Action Bar */}
         <div className="sticky top-4 z-40 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-md backdrop-blur-md print:hidden">
           <div className="flex items-center gap-3">
