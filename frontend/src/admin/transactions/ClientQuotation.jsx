@@ -281,7 +281,9 @@ export default function ClientQuotation() {
                   <p className="text-xs text-slate-500">{d.category}{d.city ? ` • ${d.city}` : ''}</p>
                 )}
                 {d.revisionNo && (
-                  <p className="mt-1 font-mono text-[11px] text-slate-400">{d.revisionNo}</p>
+                  <p className="mt-1 font-mono text-[11px] text-slate-400">
+                    {String(d.revisionNo).replace(/\s*\(Rev\s*\d+\)\s*$/i, '').trim()}
+                  </p>
                 )}
               </div>
               <div className="sm:col-span-5">

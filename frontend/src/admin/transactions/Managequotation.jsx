@@ -88,6 +88,11 @@ const stripHtmlText = (html) =>
     .replace(/\s+/g, ' ')
     .trim()
 
+const stripRevSuffix = (value) =>
+  String(value || '')
+    .replace(/\s*\(Rev\s*\d+\)\s*$/i, '')
+    .trim()
+
 const clampRichHtml = (html, limit) => {
   const div = document.createElement('div')
   div.innerHTML = html || ''
@@ -953,7 +958,7 @@ export default function Managequotation() {
     if (!draft || typeof draft !== 'object') return
     if (draft.bdm) setBdm(draft.bdm)
     if (draft.qtnBy) setQtnBy(draft.qtnBy)
-    if (draft.revisionNo !== undefined) setRevisionNo(draft.revisionNo)
+    if (draft.revisionNo !== undefined) setRevisionNo(stripRevSuffix(draft.revisionNo))
     if (draft.customerPerson !== undefined) setCustomerPerson(draft.customerPerson)
     if (draft.companyName !== undefined) setCompanyName(draft.companyName)
     if (draft.mobile !== undefined) setMobileNum(draft.mobile)
@@ -979,11 +984,7 @@ export default function Managequotation() {
       setEditingProposalId(quote.id)
       setBdm(quote.bdm || quote.staff || 'Alex Joseph')
       setQtnBy(quote.qtnBy || quote.staff || 'Priya Sharma')
-      setRevisionNo(
-        asNewVersion
-          ? `${quote.id} (Rev ${(quote.versionNo || 1) + 1})`
-          : quote.revisionNo || `${quote.id} (Rev 1)`
-      )
+      setRevisionNo(asNewVersion ? quote.id : stripRevSuffix(quote.revisionNo) || quote.id)
       setCustomerPerson(quote.customer || '')
       setCompanyName(quote.company || '')
       setMobileNum(quote.mobile || '')
@@ -1003,7 +1004,7 @@ export default function Managequotation() {
       setEditAsNewVersion(false)
       setBdm('Alex Joseph')
       setQtnBy('Priya Sharma')
-      setRevisionNo(`QT-2026-${String(quotationsList.length + 1).padStart(3, '0')} (Rev 1)`)
+      setRevisionNo(`QT-2026-${String(quotationsList.length + 1).padStart(3, '0')}`)
       setCustomerPerson('')
       setCompanyName('')
       setMobileNum('')
@@ -2099,9 +2100,9 @@ export default function Managequotation() {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. QTN403206072026A (Rev 2)"
+                    placeholder="e.g. QTN403206072026A"
                     value={revisionNo}
-                    onChange={(e) => setRevisionNo(e.target.value)}
+                    onChange={(e) => setRevisionNo(stripRevSuffix(e.target.value))}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>

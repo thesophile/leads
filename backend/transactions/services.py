@@ -263,9 +263,17 @@ def render_quotation_pdf(quotation):
         )
 
         # Detail grid.
+        revision_label = (
+            f'Revision {quotation.version_no - 1}:'
+            if getattr(quotation, 'version_no', 1) > 1
+            else 'Revision:'
+        )
+        revision_value = (
+            re.sub(r'\s*\(Rev\s*\d+\)\s*$', '', quotation.revision_no or '').strip() or '—'
+        )
         detail_rows = [
             ('Quotation #', quotation.id, 'Date', quotation.date or '—'),
-            ('Revision', quotation.revision_no or '—', 'Category', quotation.category or '—'),
+            (revision_label, revision_value, 'Category', quotation.category or '—'),
             ('Prepared By', quotation.qtn_by or '—', 'BDM', quotation.bdm or '—'),
             ('Source', quotation.source or '—', 'City', quotation.city or '—'),
         ]

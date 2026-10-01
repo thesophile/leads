@@ -500,6 +500,7 @@ export default function ProposalPreview() {
         bdm: p.bdm || p.staff || '',
         quotationBy: p.qtnBy || p.staff || '',
         revisionNo: p.revisionNo || '',
+        versionNo: p.versionNo || 1,
         category: p.category || '',
         customerType: p.customerType || '',
         sources: p.source || '',
@@ -808,8 +809,14 @@ const approvedByRef = useRef(null)
                     <span className="font-bold text-slate-900">BDM:</span> {proposalData.bdm}
                   </p>
                   <p>
-                    <span className="font-bold text-slate-900">Revision:</span>{' '}
-                    {proposalData.revisionNo || '—'}
+                    <span className="font-bold text-slate-900">
+                      {(proposalData.versionNo || 1) > 1
+                        ? `Revision ${(proposalData.versionNo || 1) - 1}:`
+                        : 'Revision:'}
+                    </span>{' '}
+                    {String(proposalData.revisionNo || '')
+                      .replace(/\s*\(Rev\s*\d+\)\s*$/i, '')
+                      .trim() || '—'}
                   </p>
                   <p>
                     <span className="font-bold text-slate-900">Quotation By:</span>{' '}
