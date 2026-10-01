@@ -1138,11 +1138,6 @@ export default function Managequotation() {
           prev.map((item) => (item.id === editingProposalId ? targetQuote : item))
         )
       }
-      setSubmitMessage(
-        isNewVersion
-          ? '✓ New version created. Now choose an admin to send it for approval.'
-          : '✓ Proposal details saved. Now choose an admin to send for approval.'
-      )
     } else {
       // Create new
       nextApprovalId = `${companyPrefix(companyName)}-${new Date().getFullYear()}-${String(quotationsList.length + 1).padStart(3, '0')}`
@@ -1174,7 +1169,6 @@ export default function Managequotation() {
       }
       targetQuote = newProposal
       setQuotationsList([newProposal, ...quotationsList])
-      setSubmitMessage('✓ New Proposal created. Now choose an admin to send for approval.')
     }
 
     if (persistLeadId) {
@@ -1239,14 +1233,21 @@ export default function Managequotation() {
       setSubmittingProposal(false)
     }
 
+    // Only announce success after the saving step above finishes without error.
+    setSubmitMessage(
+      editingProposalId
+        ? editAsNewVersion
+          ? '✓ New version created. Now choose an admin to send it for approval.'
+          : '✓ Proposal details saved. Now choose an admin to send for approval.'
+        : '✓ New Proposal created. Now choose an admin to send for approval.'
+    )
+
     resetProposalDirty()
     setTimeout(() => {
       setSubmitMessage('')
       setProposalModalOpen(false)
-      setApprovalQuoteId(nextApprovalId)
-      setSelectedApprovers([])
-      setApprovalSent('')
-      setApprovalModalOpen(true)
+      pivotScrollY = window.scrollY
+      navigate(`/quotations/preview/${nextApprovalId}`, { state: { proposal: targetQuote } })
     }, 900)
   }
 
