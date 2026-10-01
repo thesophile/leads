@@ -252,6 +252,16 @@ const CURRENCIES = [
   'SAR (﷼)',
 ]
 
+const CUSTOMER_TYPES = [
+  'Government',
+  'PSU',
+  'Private',
+  'Corporate',
+  'Educational Institution',
+  'Individual',
+  'NGO / Non-Profit',
+]
+
 const CONTACT_FIELD_LABELS = {
   company: 'Company Name',
   contact: 'Contact Person',
@@ -696,6 +706,7 @@ export default function Managequotation() {
   const [mobileNum, setMobileNum] = useState('')
   const [email, setEmail] = useState('')
   const [categoryName, setCategoryName] = useState('Hospital')
+  const [customerType, setCustomerType] = useState('')
   const [cityVal, setCityVal] = useState('')
   
   const [scopeHtml, setScopeHtml] = useState('')
@@ -777,6 +788,7 @@ export default function Managequotation() {
         mobileNum,
         email,
         categoryName,
+        customerType,
         cityVal,
         scopeHtml: normalizeRichText(scopeHtml),
         termsHtml: normalizeRichText(termsHtml),
@@ -787,7 +799,7 @@ export default function Managequotation() {
         remarksVal,
       }),
       [
-        bdm, qtnBy, revisionNo, customerPerson, companyName, mobileNum, email, categoryName, cityVal,
+        bdm, qtnBy, revisionNo, customerPerson, companyName, mobileNum, email, categoryName, customerType, cityVal,
         scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal,
       ]
     )
@@ -963,6 +975,7 @@ export default function Managequotation() {
     if (draft.companyName !== undefined) setCompanyName(draft.companyName)
     if (draft.mobile !== undefined) setMobileNum(draft.mobile)
     if (draft.category) setCategoryName(draft.category)
+    if (draft.customerType !== undefined) setCustomerType(draft.customerType)
     if (draft.scopeHtml !== undefined) setScopeHtml(draft.scopeHtml)
     if (draft.termsHtml !== undefined) setTermsHtml(draft.termsHtml)
     if (draft.total !== undefined) setTotalVal(draft.total)
@@ -990,6 +1003,7 @@ export default function Managequotation() {
       setMobileNum(quote.mobile || '')
       setEmail(quote.email || '')
       setCategoryName(quote.category || 'Hospital')
+      setCustomerType(quote.customerType || '')
       setCityVal(quote.city || '')
       setScopeHtml(quote.proposalScope || '')
       setTermsHtml(quote.termsConditions || '')
@@ -1010,6 +1024,7 @@ export default function Managequotation() {
       setMobileNum('')
       setEmail('')
       setCategoryName('General')
+      setCustomerType('')
       setCityVal('')
       setScopeHtml('')
       setTermsHtml('')
@@ -1103,6 +1118,7 @@ export default function Managequotation() {
         mobile: mobileNum || existing.mobile,
         email: email || existing.email,
         category: categoryName || existing.category,
+        customerType: customerType || existing.customerType,
         city: cityVal || existing.city,
         total: totalVal,
         discount: discountVal,
@@ -1138,6 +1154,7 @@ export default function Managequotation() {
         mobile: mobileNum,
         email: email,
         category: categoryName,
+        customerType,
         city: cityVal,
         bdm,
         qtnBy,
@@ -1169,6 +1186,7 @@ export default function Managequotation() {
           mobile: targetQuote.mobile,
           email: targetQuote.email,
           category: targetQuote.category,
+          customerType: targetQuote.customerType,
           city: targetQuote.city,
           bdm: targetQuote.bdm,
           qtnBy: targetQuote.qtnBy,
@@ -1248,6 +1266,7 @@ export default function Managequotation() {
       companyName,
       mobile: mobileNum,
       category: categoryName,
+      customerType,
       scopeHtml,
       termsHtml,
       total: totalVal,
@@ -2178,6 +2197,23 @@ export default function Managequotation() {
                     onChange={(e) => setCategoryName(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Customer Type
+                  </label>
+                  <select
+                    value={customerType}
+                    onChange={(e) => setCustomerType(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                  >
+                    <option value="">Select Customer Type</option>
+                    {CUSTOMER_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">

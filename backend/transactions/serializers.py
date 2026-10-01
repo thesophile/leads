@@ -79,6 +79,7 @@ class ProposalDraftSerializer(serializers.ModelSerializer):
     proposalId = serializers.CharField(source='proposal_id', required=False, allow_blank=True)
     qtnBy = serializers.CharField(source='qtn_by', required=False, allow_blank=True)
     customerPerson = serializers.CharField(source='customer_person', required=False, allow_blank=True)
+    customerType = serializers.CharField(source='customer_type', required=False, allow_blank=True)
     companyName = serializers.CharField(source='company_name', required=False, allow_blank=True)
     scopeHtml = serializers.CharField(source='scope_html', required=False, allow_blank=True)
     termsHtml = serializers.CharField(source='terms_html', required=False, allow_blank=True)
@@ -93,6 +94,7 @@ class ProposalDraftSerializer(serializers.ModelSerializer):
             'companyName',
             'mobile',
             'category',
+            'customerType',
             'scopeHtml',
             'termsHtml',
             'total',
@@ -147,6 +149,7 @@ class QuotationApprovalSerializer(serializers.ModelSerializer):
 
 class QuotationSerializer(serializers.ModelSerializer):
     leadId = serializers.CharField(source='lead_id', required=False, allow_blank=True)
+    customerType = serializers.CharField(source='customer_type', required=False, allow_blank=True)
     qtnBy = serializers.CharField(source='qtn_by', required=False, allow_blank=True)
     netAmount = serializers.CharField(source='net_amount', required=False, allow_blank=True)
     proposalScope = serializers.CharField(source='proposal_scope', required=False, allow_blank=True)
@@ -185,6 +188,7 @@ class QuotationSerializer(serializers.ModelSerializer):
             'mobile',
             'email',
             'category',
+            'customerType',
             'city',
             'bdm',
             'qtnBy',
