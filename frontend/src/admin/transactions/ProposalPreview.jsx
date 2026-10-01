@@ -789,7 +789,7 @@ const approvedByRef = useRef(null)
             <div className="flex flex-1 flex-col">
             <PageHeader proposal={proposalData} company={company} clientToken={liveToken} />
 
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 print:grid-cols-3">
               <SectionBox title="Customer Details">
                 <div className="space-y-1">
                   <p className="text-[15px] font-bold uppercase leading-snug text-slate-900">
@@ -847,8 +847,8 @@ const approvedByRef = useRef(null)
               intent to proceed with the implementation as per the agreed terms and conditions.
             </p>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 flex-1">
-              <div className="flex flex-col justify-between gap-3 lg:col-span-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 print:grid-cols-12 flex-1">
+              <div className="flex flex-col justify-between gap-3 lg:col-span-4 print:col-span-4">
                 <SectionBox title="Terms &amp; Conditions" className="flex-1">
                   {proposalData.termsHtml ? (
                     <div
@@ -968,7 +968,7 @@ const approvedByRef = useRef(null)
                 </div>
               </div>
 
-              <div className="flex flex-col justify-between gap-3 lg:col-span-8">
+              <div className="flex flex-col justify-between gap-3 lg:col-span-8 print:col-span-8">
                 <SectionBox title="Proposal Summary" className="flex-1">
                   <div
                     ref={summaryContentRef}
