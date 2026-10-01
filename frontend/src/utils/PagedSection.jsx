@@ -51,6 +51,7 @@ export default function PagedSection({
   const isFinalMain = paged.part2Html === ''
   const usablePx = paged.cap || 0
   const freePx = isFinalMain ? paged.freePx || 0 : 0
+  const endOverflowPage = Boolean(endBlock) && paged.endOverflow && !atLimit
   const showInsetInline =
     Boolean(insetSection) &&
     isFinalMain &&
@@ -97,7 +98,7 @@ export default function PagedSection({
     <div className="mt-3 flex flex-1 flex-col">
       {insetBox}
       {insetSection.endBlock ? (
-        <div ref={insetAcceptRef} className={`mt-auto pt-4 ${insetPaged.showEnd ? '' : 'hidden'}`}>
+        <div ref={insetAcceptRef} className={`pt-4 ${insetPaged.showEnd ? '' : 'hidden'}`}>
           {insetSection.endBlock}
         </div>
       ) : null}
@@ -136,7 +137,7 @@ export default function PagedSection({
           {endBlock ? (
             <div
               ref={endBlockRef}
-              className={`mt-auto pt-4 ${endBlockClass} ${showEnd ? '' : 'hidden'}`}
+              className={`pt-4 ${endBlockClass} ${showEnd ? '' : 'hidden'}`}
             >
               {endBlock}
             </div>
@@ -165,6 +166,26 @@ export default function PagedSection({
           endBlockClass={endBlockClass}
           pageIndex={pageIndex + 1}
           insetSection={insetSection}
+        />
+      ) : null}
+
+      {endOverflowPage ? (
+        <PagedSection
+          html=""
+          reserve={reserve}
+          contentClass={contentClass}
+          sectionTitle={sectionTitle}
+          boxClass={boxClass}
+          titleClass={titleClass}
+          paddingClass={paddingClass}
+          pageHeader={pageHeader}
+          pageFooter={pageFooter}
+          pageFooterWrapClass={pageFooterWrapClass}
+          pageClassName={pageClassName}
+          continueNote={false}
+          endBlock={endBlock}
+          endBlockClass={endBlockClass}
+          pageIndex={pageIndex + 1}
         />
       ) : null}
 

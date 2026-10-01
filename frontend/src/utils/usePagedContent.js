@@ -13,11 +13,14 @@ import { useCallback, useLayoutEffect, useState, useRef } from 'react'
  *   intrinsic heights are reserved above the boundary.
  * - `reserve`: extra px of breathing room.
  * - `endBlockRef` (optional): a block that only belongs on the LAST page (e.g.
- *   a client acceptance / signature box). It is never reserved on pages that
- *   are still overflowing — those pages fill to the footer — so content no
- *   longer jumps to the next page while the current page still has blank
- *   space. Its height is measured while visible and stored so the decision
- *   never depends on its toggling display state (which would oscillate).
+ *   a client acceptance / signature box). It flows right after the final
+ *   content line on the page where the content ends — it is never bottom-pinned
+ *   and never reserved on pages where it isn't shown. If the content alone fits
+ *   the page but the end block cannot follow it, the content stays put (no dead
+ *   blank slot) and `endOverflow` tells the caller to place the end block on
+ *   its own continuation page. Its height is measured while visible and stored
+ *   so the decision never depends on its toggling display state (which would
+ *   oscillate).
  *
  * Returns:
  *  - cap: max-height (px) to apply to the content element so it stays on-page
@@ -25,15 +28,18 @@ import { useCallback, useLayoutEffect, useState, useRef } from 'react'
  *  - showEnd: whether the end block should be visible on this page
  *  - freePx: px of unused height between the last content line and the page
  *    boundary, measured only on the settled (final) page; 0 elsewhere
+ *  - endOverflow: true when the end block could not fit after the content and
+ *    needs to render on its own continuation page
  */
 export default function usePagedContent(contentRef, bottomRef, belowBlocks = [], reserve = 48, endBlockRef = null) {
   const [cap, setCap] = useState(undefined)
   const [part2Html, setPart2Html] = useState('')
   const [showEnd, setShowEnd] = useState(true)
   const [freePx, setFreePx] = useState(0)
+  const [endOverflow, setEndOverflow] = useState(false)
 
   // Guard against re-render churn: only commit state when values actually change.
-  const committed = useRef({ cap: undefined, part2Html: '', showEnd: true, freePx: 0 })
+  const committed = useRef({ cap: undefined, part2Html: '', showEnd: true, freePx: 0, endOverflow: false })
 
   // Measured height of the optional end block, captured while it is visible so
   // the page-fitting decision below doesn't depend on its live display state.
@@ -129,6 +135,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     let nextPart2 = ''
     let nextShowEnd = true
     let nextFreePx = 0
+    let nextEndOverflow = false
 
     if (endEl && endCapHRef.current > 0) {
       // Phase 1 — available height with the end block excluded. Pages that
@@ -146,22 +153,18 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
           nextShowEnd = false
         }
       } else {
-        // Phase 2 — content fits free space; can the end block fit too?
-        const cEnd = Math.max(48, c - endCapHRef.current - 8)
-        const withEnd = splitAt(cEnd)
-        if (withEnd.over.length) {
-          // Content + end block don't fit together: keep the end block for the
-          // last page and push the overflow lines onto a continuation page.
-          const unsplit = withEnd.over.length === 1 && withEnd.over[0].height > cEnd
-          if (!unsplit) {
-            nextCap = Math.max(48, withEnd.last)
-            nextPart2 = withEnd.over.map((o) => o.html).join('')
-            nextShowEnd = false
-          } else {
-            nextShowEnd = false
-          }
+        // Phase 2 — the content fits this page, so the end block follows it
+        // naturally. If the block fits under the last content line it renders
+        // here; otherwise the content stays put (no reserved blank slot) and
+        // the end block rolls onto its own continuation page.
+        const contentEnd = full.last
+        const needsEndPage = contentEnd > 0 && contentEnd + endCapHRef.current + 8 > c
+        if (needsEndPage) {
+          nextShowEnd = false
+          nextEndOverflow = true
         } else {
           nextShowEnd = true
+          nextFreePx = Math.max(0, c - contentEnd)
         }
       }
     } else {
@@ -186,14 +189,16 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       prev.cap !== nextCap ||
       prev.part2Html !== nextPart2 ||
       prev.showEnd !== nextShowEnd ||
-      prev.freePx !== nextFreePx
+      prev.freePx !== nextFreePx ||
+      prev.endOverflow !== nextEndOverflow
     ) {
-      committed.current = { cap: nextCap, part2Html: nextPart2, showEnd: nextShowEnd, freePx: nextFreePx }
+      committed.current = { cap: nextCap, part2Html: nextPart2, showEnd: nextShowEnd, freePx: nextFreePx, endOverflow: nextEndOverflow }
       if (nextPart2 === '') finalLatchRef.current = true
       setCap(nextCap)
       setPart2Html(nextPart2)
       setShowEnd(nextShowEnd)
       setFreePx(nextFreePx)
+      setEndOverflow(nextEndOverflow)
     }
   }, [contentRef, bottomRef])
 
@@ -239,5 +244,5 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     }
   }, [check, contentRef])
 
-  return { cap, part2Html, showEnd, freePx }
+  return { cap, part2Html, showEnd, freePx, endOverflow }
 }
