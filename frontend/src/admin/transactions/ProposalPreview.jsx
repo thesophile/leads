@@ -531,14 +531,17 @@ export default function ProposalPreview() {
 
   const hasFullTerms = htmlToPlainLines(proposalData?.termsFullHtml || '').length > 0
 
-  const acceptanceEnd = (
+  // Temporarily hide the client acceptance box. Flip back to true to restore it.
+  const SHOW_CLIENT_ACCEPTANCE = false
+
+  const acceptanceEnd = SHOW_CLIENT_ACCEPTANCE ? (
     <div className="space-y-2">
       <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
       <p className="text-right text-[11px] font-bold text-slate-400">
         --- End of proposal ---
       </p>
     </div>
-  )
+  ) : null
 
   const isSent = proposalData?.status === 'Pending Approval'
 
