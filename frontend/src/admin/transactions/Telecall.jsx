@@ -20,6 +20,70 @@ const STATUSES = [
   'Called',
 ]
 
+// Valid country calling codes (without a leading +). Used to recognise an
+// international number that was typed without a '+'.
+const CALLING_CODES = new Set([
+  '1', '7', '20', '27', '30', '31', '32', '33', '34', '36', '39', '40', '41',
+  '43', '44', '45', '46', '47', '48', '49', '51', '52', '53', '54', '55', '56',
+  '57', '58', '60', '61', '62', '63', '64', '65', '66', '81', '82', '84', '86',
+  '90', '91', '92', '93', '94', '95', '98',
+  '211', '212', '213', '216', '218', '220', '221', '222', '223', '224', '225',
+  '226', '227', '228', '229', '230', '231', '232', '233', '234', '235', '236',
+  '237', '238', '239', '240', '241', '242', '243', '244', '245', '248', '249',
+  '250', '251', '252', '253', '254', '255', '256', '257', '258', '260', '261',
+  '263', '264', '265', '266', '267', '268', '269', '290', '291', '297', '298',
+  '299', '350', '351', '352', '353', '354', '355', '356', '357', '358', '359',
+  '370', '371', '372', '373', '374', '375', '376', '377', '378', '380', '381',
+  '382', '385', '386', '387', '389', '420', '421', '423', '500', '501', '502',
+  '503', '504', '505', '506', '507', '508', '509', '590', '591', '592', '593',
+  '594', '595', '596', '597', '598', '599', '670', '672', '673', '674', '675',
+  '676', '677', '678', '679', '680', '681', '682', '683', '685', '686', '687',
+  '688', '689', '690', '691', '692', '850', '852', '853', '855', '856', '860',
+  '880', '886', '960', '961', '962', '963', '964', '965', '966', '967', '968',
+  '970', '971', '972', '973', '974', '975', '976', '977', '992', '993', '994',
+  '995', '996', '998',
+])
+
+// Build a WhatsApp chat link (https://wa.me/<number>) from a phone number in
+// any common format. Default country is India (+91).
+//
+//   +91 9876543210  ->  https://wa.me/919876543210
+//   91 9876543210   ->  https://wa.me/919876543210
+//   9876543210      ->  https://wa.me/919876543210
+//   09876543210     ->  https://wa.me/919876543210
+function buildWhatsAppLink(phone) {
+  const raw = String(phone ?? '').trim()
+  if (!raw) return null
+  const hadPlus = raw.startsWith('+')
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return null
+  const make = (n) => (n ? `https://wa.me/${n}` : null)
+
+  // 1. A leading '+' marks a clear international number; keep it as-is.
+  if (hadPlus) return make(digits)
+
+  // 2. A leading 0 is an Indian local number (no country code starts with 0),
+  //    so drop the 0 and prepend 91. e.g. 09876543210 -> 919876543210.
+  if (digits.startsWith('0')) return make(`91${digits.slice(1)}`)
+
+  // 3. Without a '+', honour a leading country calling code only when the
+  //    total length rules an Indian national number out (India has 10-digit
+  //    national numbers), so a bare 10-digit mobile like 9876543210 is not
+  //    mistaken for +98 (Iran) or +974 (Qatar).
+  if (digits.length >= 11) {
+    for (const len of [3, 2, 1]) {
+      const code = digits.slice(0, len)
+      const rest = digits.slice(len)
+      if (CALLING_CODES.has(code) && rest.length >= 6 && rest.length <= 11) {
+        return make(digits)
+      }
+    }
+  }
+
+  // 4. No country code present: assume India.
+  return make(`91${digits}`)
+}
+
 function parseLooseDate(value) {
   if (!value) return null
   const s = String(value).trim()
@@ -49,6 +113,14 @@ function PhoneCallIcon({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  )
+}
+
+function WhatsAppIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
     </svg>
   )
 }
@@ -834,15 +906,29 @@ export default function Telecall() {
 
                         {/* Phone */}
                         <td className="py-0.5 pr-3">
-                          <a
-                            href={`tel:${lead.phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="font-mono text-xs text-slate-800 hover:text-brand-600 font-medium inline-flex items-center gap-1"
-                            title="Click to Call"
-                          >
-                            <PhoneCallIcon className="h-3 w-3 text-slate-400" />
-                            <span>{lead.phone}</span>
-                          </a>
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={`tel:${lead.phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="font-mono text-xs text-slate-800 hover:text-brand-600 font-medium inline-flex items-center gap-1"
+                              title="Click to Call"
+                            >
+                              <PhoneCallIcon className="h-3 w-3 text-slate-400" />
+                              <span>{lead.phone}</span>
+                            </a>
+                            {buildWhatsAppLink(lead.phone) && (
+                              <a
+                                href={buildWhatsAppLink(lead.phone)}
+                                onClick={(e) => e.stopPropagation()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center rounded-full bg-emerald-50 p-1 text-emerald-500 ring-1 ring-emerald-100 transition hover:bg-emerald-500 hover:text-white hover:ring-emerald-500"
+                                title="Chat on WhatsApp"
+                              >
+                                <WhatsAppIcon className="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                          </div>
                         </td>
 
                         {/* Category */}
@@ -1086,13 +1172,40 @@ export default function Telecall() {
                       )}
                     </div>
                   </div>
-                  <a
-                    href={`tel:${formData.phone || activeLead.phone}`}
-                    className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                  >
-                    <PhoneCallIcon className="h-3.5 w-3.5" />
-                    Call Now
-                  </a>
+                  {(() => {
+                    const waLink = buildWhatsAppLink(formData.phone || activeLead.phone)
+                    return (
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <a
+                          href={`tel:${formData.phone || activeLead.phone}`}
+                          className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          <PhoneCallIcon className="h-3.5 w-3.5" />
+                          Call Now
+                        </a>
+                        {waLink ? (
+                          <a
+                            href={waLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-500 hover:text-white"
+                          >
+                            <WhatsAppIcon className="h-3.5 w-3.5" />
+                            WhatsApp
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 py-2 text-xs font-semibold text-slate-400 disabled:cursor-not-allowed"
+                          >
+                            <WhatsAppIcon className="h-3.5 w-3.5" />
+                            WhatsApp
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Drawer Form */}
