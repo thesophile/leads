@@ -16,6 +16,7 @@ class CompanySerializer(serializers.ModelSerializer):
     gstNo = serializers.CharField(source='gstin', required=False, allow_blank=True)
     defaultBank = serializers.CharField(source='default_bank', required=False, allow_blank=True)
     logo = serializers.SerializerMethodField()
+    seal = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
@@ -27,6 +28,7 @@ class CompanySerializer(serializers.ModelSerializer):
             'address',
             'website',
             'logo',
+            'seal',
             'termsSummaryHtml',
             'termsFullHtml',
             'currency',
@@ -39,6 +41,14 @@ class CompanySerializer(serializers.ModelSerializer):
             return ''
         try:
             return obj.logo.url
+        except Exception:
+            return ''
+
+    def get_seal(self, obj):
+        if not obj.seal:
+            return ''
+        try:
+            return obj.seal.url
         except Exception:
             return ''
 

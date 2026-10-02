@@ -43,6 +43,7 @@ class Company(models.Model):
     address = models.TextField(blank=True)
     website = models.URLField(blank=True)
     logo = models.ImageField(upload_to='company_logos/', blank=True, null=True)
+    seal = models.ImageField(upload_to='company_seals/', blank=True, null=True)
     terms_summary_html = models.TextField(
         blank=True,
         help_text='Short Terms &amp; Conditions summary shown on proposals and order forms.',

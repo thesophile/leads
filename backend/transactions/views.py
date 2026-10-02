@@ -54,6 +54,7 @@ from .services import (
     build_order_client_email,
     build_quotation_accepted_email,
     create_client_detail_from_order,
+    order_approval_info,
     render_order_pdf,
 )
 
@@ -2367,6 +2368,10 @@ class QuotationSendToClientView(APIView):
             quotation.sent_to_client_at = now
             if bypassing_approval:
                 quotation.approvals.all().delete()
+                # A send without approval counts as a self-approval: remember
+                # who sent it so the order form can show the sender as the
+                # authorising person.
+                quotation.submitted_by = request.user
         quotation.client_status = quotation.client_status or Quotation.CLIENT_PENDING
         quotation.save()
 
@@ -4225,11 +4230,18 @@ def public_order_payload(order):
     """Safe summary of an order for the public client page."""
     tenant = order.tenant
     logo_url = ''
+    seal_url = ''
     if tenant and tenant.logo and tenant.logo.name:
         try:
             logo_url = tenant.logo.url
         except Exception:
             logo_url = ''
+    if tenant and tenant.seal and tenant.seal.name:
+        try:
+            seal_url = tenant.seal.url
+        except Exception:
+            seal_url = ''
+    approval = order_approval_info(order)
     return {
         'id': order.id,
         'proposalNo': order.proposal_no,
@@ -4248,11 +4260,16 @@ def public_order_payload(order):
         'currency': order.currency,
         'scope': order.scope,
         'details': order.details,
+        'approvedBy': approval['approvedBy'],
+        'approvedByDesignation': approval['approvedByDesignation'],
+        'approvedByCompany': approval['approvedByCompany'],
+        'approvedAt': approval['approvedAt'],
         'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
         'termsSummaryHtml': tenant.terms_summary_html if tenant else '',
         'termsFullHtml': tenant.terms_full_html if tenant else '',
         'companyName': tenant.name if tenant else '',
         'companyLogo': logo_url,
+        'companySeal': seal_url,
         'companyAddress': tenant.address if tenant else '',
         'companyEmail': tenant.email if tenant else '',
         'companyPhone': tenant.phone if tenant else '',

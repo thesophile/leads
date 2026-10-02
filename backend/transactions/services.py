@@ -9,10 +9,13 @@ import io
 import logging
 import re
 from datetime import date
+from math import cos, pi, sin
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.utils import timezone
+
+from .models import Quotation, QuotationApproval
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -22,7 +25,13 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode import code128
 from reportlab.graphics.barcode.qr import QrCodeWidget
-from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.shapes import (
+    Circle,
+    Drawing,
+    Line,
+    Polygon,
+    String,
+)
 from reportlab.platypus import (
     Image,
     Paragraph,
@@ -585,6 +594,87 @@ def _qr_drawing(value, size):
     return drawing
 
 
+def _star_points(cx, cy, outer, inner, points=5, rotation=-pi / 2):
+    pts = []
+    for i in range(points * 2):
+        r = outer if i % 2 == 0 else inner
+        angle = rotation + pi * i / points
+        pts.append(cx + r * cos(angle))
+        pts.append(cy + r * sin(angle))
+    return pts
+
+
+def _approved_seal_drawing(size, initial=''):
+    """A round 'APPROVED' rubber-stamp ``Drawing`` (used when a company has
+    not uploaded its own seal). Rendered as a classical serrated ink seal."""
+    d = Drawing(size, size)
+    cx = cy = size / 2.0
+    black = colors.black
+    white = colors.white
+
+    # Serrated / scalloped outer edge (cogwheel style tooth ring).
+    teeth = 44
+    pts = []
+    for i in range(teeth * 2):
+        r = size * (0.447 if i % 2 == 0 else 0.397)
+        angle = pi * i / teeth
+        pts.append(cx + r * cos(angle))
+        pts.append(cy + r * sin(angle))
+    d.add(Polygon(pts, strokeColor=black, fillColor=white, strokeWidth=1.0))
+
+    # Main ink ring.
+    d.add(Circle(cx, cy, size * 0.435, strokeColor=black, fillColor=white, strokeWidth=1.5))
+
+    # Dashed inner ring made of short ticks (like a real stamp).
+    for deg in range(0, 360, 15):
+        a = pi * deg / 180.0
+        r1 = size * 0.365
+        r2 = size * 0.325
+        d.add(Line(
+            cx + r1 * cos(a), cy + r1 * sin(a),
+            cx + r2 * cos(a), cy + r2 * sin(a),
+            strokeColor=black, strokeWidth=1.1,
+        ))
+
+    # Star + APPROVED + star in the centre.
+    d.add(Polygon(
+        _star_points(cx, cy + size * 0.20, size * 0.10, size * 0.05, 5),
+        strokeColor=black, fillColor=black, strokeWidth=0,
+    ))
+    d.add(String(
+        cx, cy - size * 0.015, 'APPROVED',
+        textAnchor='middle', fontName='Helvetica-Bold',
+        fontSize=size * 0.145, fillColor=black,
+    ))
+    star2 = _star_points(cx, cy - size * 0.14, size * 0.05, size * 0.023, 5, rotation=-pi / 2)
+    d.add(Polygon(star2, strokeColor=black, fillColor=black, strokeWidth=0))
+    if initial:
+        d.add(String(
+            cx, cy - size * 0.24, initial,
+            textAnchor='middle', fontName='Helvetica-Bold',
+            fontSize=size * 0.075, fillColor=black,
+        ))
+    return d
+
+
+def company_seal_flowable(tenant, size):
+    """Return the tenant's uploaded seal as an ``Image`` flowable when one
+    exists, otherwise a vector 'APPROVED' seal ``Drawing``."""
+    if tenant is not None and tenant.seal and tenant.seal.name:
+        try:
+            raw = io.BytesIO()
+            tenant.seal.open('rb')
+            try:
+                raw.write(tenant.seal.read())
+            finally:
+                tenant.seal.close()
+            raw.seek(0)
+            return Image(raw, width=size, height=size)
+        except Exception:
+            return _approved_seal_drawing(size, (tenant.name or '')[:1])
+    return _approved_seal_drawing(size, (tenant.name if tenant else '')[:1])
+
+
 def _order_client_link(order):
     """Full client link for the order's QR code (falls back to a path)."""
     token = getattr(order, 'client_token', '') or ''
@@ -702,6 +792,73 @@ def _draw_order_footer(canvas, order):
     canvas.setFillColor(colors.HexColor('#64748b'))
     canvas.drawCentredString(page_width / 2, base, 'Purchase authorization request')
     canvas.restoreState()
+
+
+def order_approval_info(order):
+    """Resolve the Approver information shown on an order form.
+
+    Orders are created from accepted quotations (``order.id == quotation.id``
+    in the normal flow). We surface the person who finally approved the
+    proposal — or, when it was sent without approval, the person who sent it
+    (treated as a self-approval) — along with their designation, the approving
+    company name and the internal approval date.
+    """
+    cached = getattr(order, '_order_approval_info', None)
+    if cached is not None:
+        return cached
+    quote = None
+    if order.id:
+        quote = Quotation.objects.filter(id=order.id).first()
+    if quote is None and order.proposal_no:
+        quote = Quotation.objects.filter(id=order.proposal_no).first()
+    tenant = quote.tenant if quote is not None and quote.tenant_id else None
+    company = tenant.name if tenant else ''
+
+    name = ''
+    designation = ''
+    approval_date = None
+
+    if quote is not None:
+        approved = list(
+            quote.approvals
+            .filter(status=QuotationApproval.STATUS_APPROVED)
+            .select_related('user__role')
+            .order_by('signed_at')
+        )
+        if approved:
+            last = approved[-1]
+            name = last.signed_by or (last.user.name if last.user_id else '')
+            if last.user_id and last.user and last.user.role_id:
+                designation = last.user.role.name
+            approval_date = last.signed_at or quote.approved_at
+        elif quote.submitted_by_id:
+            sender = quote.submitted_by
+            name = sender.name if sender else ''
+            if sender and sender.role_id:
+                designation = sender.role.name
+            approval_date = quote.sent_to_client_at or quote.client_responded_at
+        else:
+            name = quote.qtn_by or quote.staff
+            approval_date = quote.approved_at
+
+    if not name and order:
+        name = order.proposal_by or order.staff
+
+    iso_date = ''
+    if approval_date:
+        iso_date = approval_date.strftime('%d-%m-%Y')
+
+    info = {
+        'approvedBy': name,
+        'approvedByDesignation': designation,
+        'approvedByCompany': company,
+        'approvedAt': iso_date,
+    }
+    try:
+        setattr(order, '_order_approval_info', info)
+    except Exception:
+        pass
+    return info
 
 
 def render_order_pdf(order):
@@ -856,11 +1013,35 @@ def render_order_pdf(order):
         def signature_box(width):
             cell_width = width * 5 / 12 - 1 * mm
             qr_width = width * 2 / 12 - 1 * mm
-            approved = section_box('APPROVED BY', [
-                Paragraph('Programers International', styles['sig_company']),
-                Spacer(1, 7 * mm),
-                Paragraph('Authorised Signatory &#183; Signature &amp; date', styles['sig_note']),
-            ], cell_width)
+            approval = order_approval_info(order)
+            info_flow = []
+            if approval['approvedBy']:
+                info_flow.append(Paragraph(approval['approvedBy'], styles['sig_company']))
+            info_flow.append(Paragraph(
+                approval['approvedByDesignation'] or '&nbsp;',
+                styles['sig_note'],
+            ))
+            if approval['approvedByCompany']:
+                info_flow.append(Paragraph(approval['approvedByCompany'], styles['sig_company']))
+            if approval['approvedAt']:
+                info_flow.append(Paragraph(f"Date: {approval['approvedAt']}", styles['sig_note']))
+            seal_w = min(cell_width * 0.42, 22 * mm)
+            seal = company_seal_flowable(order.tenant, seal_w)
+            approved_inner = Table(
+                [[info_flow, seal]],
+                colWidths=[cell_width - seal_w - 2 * mm, seal_w],
+            )
+            approved_inner.setStyle(
+                TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ])
+            )
+            approved = section_box('APPROVED BY', [approved_inner], cell_width)
             accepted = section_box('ACCEPTED BY', [
                 Paragraph(order.company or 'Client', styles['sig_company']),
                 Spacer(1, 7 * mm),

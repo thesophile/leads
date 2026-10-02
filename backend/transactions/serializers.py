@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import Attachment, CallHistory, ClientDetail, Lead, LeadContactHistory, Order, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+from .services import order_approval_info
 
 
 class AttachmentSerializer(serializers.ModelSerializer):
@@ -292,6 +293,10 @@ class OrderSerializer(serializers.ModelSerializer):
     proposalBy = serializers.CharField(source='proposal_by', required=False, allow_blank=True)
     netAmount = serializers.CharField(source='net_amount', required=False, allow_blank=True)
     deliveryDate = serializers.CharField(source='delivery_date', required=False, allow_blank=True)
+    approvedBy = serializers.SerializerMethodField()
+    approvedByDesignation = serializers.SerializerMethodField()
+    approvedByCompany = serializers.SerializerMethodField()
+    approvedAt = serializers.SerializerMethodField()
     termsSummaryHtml = serializers.SerializerMethodField()
     termsFullHtml = serializers.SerializerMethodField()
     clientStatus = serializers.SerializerMethodField()
@@ -324,12 +329,28 @@ class OrderSerializer(serializers.ModelSerializer):
             'remarks',
             'scope',
             'details',
+            'approvedBy',
+            'approvedByDesignation',
+            'approvedByCompany',
+            'approvedAt',
             'termsSummaryHtml',
             'termsFullHtml',
             'clientStatus',
             'clientRespondedAt',
             'clientToken',
         ]
+
+    def get_approvedBy(self, obj):
+        return order_approval_info(obj)['approvedBy']
+
+    def get_approvedByDesignation(self, obj):
+        return order_approval_info(obj)['approvedByDesignation']
+
+    def get_approvedByCompany(self, obj):
+        return order_approval_info(obj)['approvedByCompany']
+
+    def get_approvedAt(self, obj):
+        return order_approval_info(obj)['approvedAt']
 
     def get_clientStatus(self, obj):
         return obj.client_status

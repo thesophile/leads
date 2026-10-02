@@ -21,6 +21,10 @@ function mapPublicOrder(d, token) {
     total: d.total || '',
     discount: d.discount || '',
     net: d.netAmount || '',
+    approvedBy: d.approvedBy || '',
+    approvedByDesignation: d.approvedByDesignation || '',
+    approvedByCompany: d.approvedByCompany || '',
+    approvedAt: d.approvedAt || '',
     orderSummaryHtml: d.scope || '',
     orderInDetailsHtml: d.details || '',
     termsSummaryHtml: d.termsSummaryHtml || '',
@@ -165,6 +169,7 @@ export default function ClientOrder() {
             email: data.companyEmail,
             phone: data.companyPhone,
             website: '',
+            seal: data.companySeal || '',
           }}
         />
 

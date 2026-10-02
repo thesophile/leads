@@ -28,6 +28,10 @@ function mapOrder(o) {
     total: o.total || '',
     discount: o.discount || '',
     net: o.netAmount || '',
+    approvedBy: o.approvedBy || '',
+    approvedByDesignation: o.approvedByDesignation || '',
+    approvedByCompany: o.approvedByCompany || '',
+    approvedAt: o.approvedAt || '',
     orderSummaryHtml: o.scope || '',
     orderInDetailsHtml: o.details || '',
     termsSummaryHtml: o.termsSummaryHtml || '',
@@ -122,7 +126,17 @@ export default function OrderPreview() {
   }
 
   function handleOrderSent(updated) {
-    setOrderData((prev) => ({ ...(prev || {}), ...mapOrder(updated || {}) }))
+    setOrderData((prev) => {
+      const mapped = mapOrder(updated || {})
+      return {
+        ...(prev || {}),
+        ...mapped,
+        approvedBy: mapped.approvedBy || prev?.approvedBy || '',
+        approvedByDesignation: mapped.approvedByDesignation || prev?.approvedByDesignation || '',
+        approvedByCompany: mapped.approvedByCompany || prev?.approvedByCompany || '',
+        approvedAt: mapped.approvedAt || prev?.approvedAt || '',
+      }
+    })
   }
 
   if (loadingQuote) {
