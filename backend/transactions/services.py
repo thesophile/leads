@@ -661,8 +661,12 @@ def _draw_order_header(canvas, order):
     canvas.restoreState()
 
 
-def _draw_order_footer(canvas):
-    """Draw the shared order-form footer on a PDF page."""
+def _draw_order_footer(canvas, order):
+    """Draw the shared order-form footer on a PDF page.
+
+    Address / email / website / phone come from the tenant ``Company`` profile
+    so the footer is never hardcoded and stays in sync with Settings.
+    """
     page_width, _ = A4
     left = 10 * mm
     right = page_width - 10 * mm
@@ -670,14 +674,30 @@ def _draw_order_footer(canvas):
     canvas.setStrokeColor(colors.black)
     canvas.setLineWidth(0.6)
     base = 13 * mm
-    canvas.line(left, base + 6 * mm, right, base + 6 * mm)
+    canvas.line(left, base + 9 * mm, right, base + 9 * mm)
+
+    company = order.tenant
+    address = str(company.address) if company and company.address else ''
+    email = str(company.email) if company and company.email else ''
+    website = str(company.website) if company and company.website else ''
+    phone = str(company.phone) if company and company.phone else ''
+    contact = ', '.join(p for p in [email, website] if p)
+    address_line = ' | '.join(p for p in [address, contact] if p)
+    if not address_line and company and company.name:
+        address_line = str(company.name)
+    phone_line = f'Ph: {phone}' if phone else ''
+
     canvas.setFillColor(colors.HexColor('#334155'))
     canvas.setFont('Helvetica', 6.8)
-    canvas.drawCentredString(
-        page_width / 2, base + 3 * mm,
-        '4th Floor, Park House ,Round North, Thrissur, Kerala, India - 680 001 | '
-        'info@programers.in, www.programers.in | Ph: 9447151442, 9495951442, 9446451442',
-    )
+    full_line = ' | '.join(p for p in [address_line, phone_line] if p)
+    available = right - left
+    if full_line and canvas.stringWidth(full_line, 'Helvetica', 6.8) <= available:
+        canvas.drawCentredString(page_width / 2, base + 5 * mm, full_line)
+    else:
+        if address_line:
+            canvas.drawCentredString(page_width / 2, base + 6 * mm, address_line)
+        if phone_line:
+            canvas.drawCentredString(page_width / 2, base + 3 * mm, phone_line)
     canvas.setFont('Helvetica', 6.3)
     canvas.setFillColor(colors.HexColor('#64748b'))
     canvas.drawCentredString(page_width / 2, base, 'Purchase authorization request')
@@ -981,7 +1001,7 @@ def render_order_pdf(order):
 
         def _on_page(canvas, _doc):
             _draw_order_header(canvas, order)
-            _draw_order_footer(canvas)
+            _draw_order_footer(canvas, order)
 
         doc.build(elements, onFirstPage=_on_page, onLaterPages=_on_page)
         return buf.getvalue()

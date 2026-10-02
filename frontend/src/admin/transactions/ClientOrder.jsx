@@ -157,7 +157,16 @@ export default function ClientOrder() {
         </div>
 
         {/* Official order form — same document as the internal preview */}
-        <OrderFormDocument order={order} />
+        <OrderFormDocument
+          order={order}
+          company={{
+            name: data.companyName,
+            address: data.companyAddress,
+            email: data.companyEmail,
+            phone: data.companyPhone,
+            website: '',
+          }}
+        />
 
         <p className="print-hidden mt-4 text-center text-[11px] text-slate-400 leading-relaxed">
           {[data.companyName, data.companyAddress, data.companyPhone, data.companyEmail]

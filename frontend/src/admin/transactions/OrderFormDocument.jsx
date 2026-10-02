@@ -144,11 +144,18 @@ function FinancialBanner({ order }) {
   )
 }
 
-function PageFooter() {
+function PageFooter({ company }) {
+  const parts = []
+  if (company?.address) parts.push(String(company.address))
+  const contact = [company?.email, company?.website].filter(Boolean).map(String).join(', ')
+  if (contact) parts.push(contact)
+  const line1 = parts.join(' | ') || (company?.name ? `${company.name} — set your address &amp; contact details in Settings` : '')
+  const phoneLine = company?.phone ? `Ph: ${company.phone}` : ''
   return (
     <div className="border-t border-black pt-1.5 text-center text-[10.5px] leading-tight text-slate-800 shrink-0">
-      <p className="font-medium">
-        4th Floor, Park House ,Round North, Thrissur, Kerala, India - 680 001 | info@programers.in, www.programers.in | Ph: 9447151442, 9495951442, 9446451442
+      <p className="font-medium flex flex-wrap items-center justify-center gap-x-1">
+        {line1 ? <span>{line1}</span> : <span>&nbsp;</span>}
+        {phoneLine ? <span className="whitespace-nowrap">| {phoneLine}</span> : null}
       </p>
       <p className="text-[9.5px] text-slate-500 mt-0.5">
         Purchase authorization request
@@ -200,7 +207,7 @@ function SignatureBlock({ order }) {
  * page so the client always sees the same order form. ``order`` is the mapped
  * document shape (see ``mapOrder`` in OrderPreview).
  */
-export default function OrderFormDocument({ order }) {
+export default function OrderFormDocument({ order, company }) {
   const approvedRowRef = useRef(null)
   const page2FooterRef = useRef(null)
   const page3SigRef = useRef(null)
@@ -308,7 +315,7 @@ export default function OrderFormDocument({ order }) {
         </div>
 
         <div className="mt-2.5">
-          <PageFooter />
+          <PageFooter company={company} />
         </div>
       </div>
 
@@ -341,7 +348,7 @@ export default function OrderFormDocument({ order }) {
         </div>
 
         <div ref={page2FooterRef} className="mt-3">
-          <PageFooter />
+          <PageFooter company={company} />
         </div>
       </div>
 
@@ -357,7 +364,7 @@ export default function OrderFormDocument({ order }) {
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
           pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (2/2)" />}
-          pageFooter={<PageFooter />}
+          pageFooter={<PageFooter company={company} />}
           continueNote={false}
         />
       )}
@@ -401,7 +408,7 @@ export default function OrderFormDocument({ order }) {
         </div>
 
         <div ref={page3FooterRef} className="mt-2.5">
-          <PageFooter />
+          <PageFooter company={company} />
         </div>
       </div>
 
@@ -419,7 +426,7 @@ export default function OrderFormDocument({ order }) {
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
           pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (1/2)" />}
-          pageFooter={<PageFooter />}
+          pageFooter={<PageFooter company={company} />}
           continueNote={false}
         />
       )}
@@ -433,7 +440,7 @@ export default function OrderFormDocument({ order }) {
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
           pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (2/2)" />}
-          pageFooter={<PageFooter />}
+          pageFooter={<PageFooter company={company} />}
           pageFooterWrapClass="mt-3"
           continueNote={false}
         />
@@ -448,7 +455,7 @@ export default function OrderFormDocument({ order }) {
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
           pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (2/2)" />}
-          pageFooter={<PageFooter />}
+          pageFooter={<PageFooter company={company} />}
           continueNote={false}
           endBlock={
             <div className="space-y-2">

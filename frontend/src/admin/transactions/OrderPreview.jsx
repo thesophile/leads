@@ -53,6 +53,13 @@ export default function OrderPreview() {
   const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.order)
   const [refreshing, setRefreshing] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [company, setCompany] = useState({})
+
+  useEffect(() => {
+    api.get('/auth/company/')
+      .then((data) => setCompany(data || {}))
+      .catch(() => setCompany({}))
+  }, [])
 
   // Load the real order by its id from the backend.
   const loadOrder = useCallback(async () => {
@@ -215,7 +222,7 @@ export default function OrderPreview() {
         )}
 
         {/* Official Order Form Document (shared with the client-facing page) */}
-        <OrderFormDocument order={orderData} />
+        <OrderFormDocument order={orderData} company={company} />
       </div>
 
       {/* Send to Client modal */}
