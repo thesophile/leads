@@ -535,14 +535,14 @@ export default function ProposalPreview() {
   // Temporarily hide the client acceptance box. Flip back to true to restore it.
   const SHOW_CLIENT_ACCEPTANCE = false
 
-  const acceptanceEnd = SHOW_CLIENT_ACCEPTANCE ? (
+  const acceptanceEnd = (
     <div className="space-y-2">
-      <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />
+      {SHOW_CLIENT_ACCEPTANCE && <div dangerouslySetInnerHTML={{ __html: CLIENT_ACCEPTANCE_HTML }} />}
       <p className="text-right text-[11px] font-bold text-slate-400">
-        --- End of proposal ---
+        --- End of document ---
       </p>
     </div>
-  ) : null
+  )
 
   const isSent = proposalData?.status === 'Pending Approval'
 
