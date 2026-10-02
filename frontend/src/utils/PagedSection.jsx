@@ -130,9 +130,6 @@ export default function PagedSection({
                 {showContinue ? (
                   <p className="mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                 ) : null}
-                {!continueNote && (
-                  <p className="mt-2 text-right text-[11px] font-bold text-slate-400">--- End of page ---</p>
-                )}
               </div>
             </div>
             {showInsetInline ? insetChunk : null}

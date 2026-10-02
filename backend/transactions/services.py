@@ -627,6 +627,10 @@ def render_order_pdf(order):
                 'o-sig-note', fontName='Helvetica', fontSize=7.5, leading=10,
                 textColor=colors.HexColor('#94a3b8'),
             ),
+            'end': ParagraphStyle(
+                'o-end', fontName='Helvetica-Bold', fontSize=7.5, leading=10,
+                textColor=colors.HexColor('#94a3b8'), alignment=TA_RIGHT,
+            ),
         }
 
         def section_box(title, flowables, width):
@@ -788,13 +792,21 @@ def render_order_pdf(order):
             getattr(company, 'terms_summary_html', '') if company else ''
         )
         left_column = [
-            section_box('ORDER SUMMARY', [Paragraph(summary_markup, styles['body'])], left_width),
+            section_box('ORDER SUMMARY', [
+                Paragraph(summary_markup, styles['body']),
+                Spacer(1, 2 * mm),
+                Paragraph('Continued…', styles['end']),
+            ], left_width),
             Spacer(1, 2 * mm),
             financial_box(left_width),
         ]
         right_column = section_box(
             'TERMS &amp; CONDITIONS',
-            [Paragraph(terms_summary_markup or '&nbsp;', styles['body_small'])],
+            [
+                Paragraph(terms_summary_markup or '&nbsp;', styles['body_small']),
+                Spacer(1, 2 * mm),
+                Paragraph('Continued…', styles['end']),
+            ],
             right_width,
         )
         middle = Table(
@@ -835,6 +847,8 @@ def render_order_pdf(order):
             [Paragraph(company_terms_markup or '&nbsp;', styles['body_small'])],
             content_width,
         ))
+        elements.append(Spacer(1, 2 * mm))
+        elements.append(Paragraph('--- End of document ---', styles['end']))
 
         def _on_page(canvas, _doc):
             _draw_order_header(canvas, order)

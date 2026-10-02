@@ -271,6 +271,7 @@ export default function OrderFormDocument({ order }) {
                     <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
                   ))}
                 </div>
+                <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
               </SectionBox>
 
               <FinancialBanner order={order} />
@@ -288,6 +289,7 @@ export default function OrderFormDocument({ order }) {
                     <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
                   ))}
                 </div>
+                <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
               </SectionBox>
             </div>
           </div>
@@ -324,10 +326,8 @@ export default function OrderFormDocument({ order }) {
                   <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
                 ))}
               </div>
-              {detailsPaged.part2Html ? (
+              {detailsPaged.part2Html && (
                 <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- Continued ---</p>
-              ) : (
-                <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- End of page ---</p>
               )}
             </SectionBox>
           </div>
@@ -384,7 +384,10 @@ export default function OrderFormDocument({ order }) {
             {/* Final Signatures & QR Block — only on the last page (page 3 when nothing continues) */}
             <div ref={page3SigRef} className="mt-2.5">
               {!legalPaged.part2Html && (
-                <SignatureBlock order={order} />
+                <div className="space-y-2">
+                  <SignatureBlock order={order} />
+                  <p className="text-right text-[11px] font-bold text-slate-400">--- End of document ---</p>
+                </div>
               )}
             </div>
           </div>
@@ -440,7 +443,12 @@ export default function OrderFormDocument({ order }) {
           pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (2/2)" />}
           pageFooter={<PageFooter />}
           continueNote={false}
-          endBlock={<SignatureBlock order={order} />}
+          endBlock={
+            <div className="space-y-2">
+              <SignatureBlock order={order} />
+              <p className="text-right text-[11px] font-bold text-slate-400">--- End of document ---</p>
+            </div>
+          }
         />
       )}
     </div>
