@@ -169,15 +169,15 @@ function InfoBlock({ label, value }) {
   )
 }
 
-function SectionBox({ title, children, className = '', overflowVisible = false }) {
+function SectionBox({ title, children, className = '', overflowVisible = false, pinBottom = false }) {
   return (
     <div
-      className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-slate-300 ${className}`}
+      className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-slate-300 ${pinBottom ? 'flex flex-col ' : ''}${className}`}
     >
       <div className="flex items-center justify-between bg-black px-3 py-2">
         <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
       </div>
-      <div className="p-3.5 bg-white">{children}</div>
+      <div className={`${pinBottom ? 'flex flex-1 flex-col ' : ''}p-3.5 bg-white`}>{children}</div>
     </div>
   )
 }
@@ -849,7 +849,7 @@ const approvedByRef = useRef(null)
 
             <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 print:grid-cols-12 flex-1">
               <div className="flex flex-col justify-between gap-3 lg:col-span-4 print:col-span-4">
-                <SectionBox title="Terms &amp; Conditions" className="flex-1">
+                <SectionBox title="Terms &amp; Conditions" className="flex-1" pinBottom>
                   {proposalData.termsHtml ? (
                     <div
                       ref={termsContentRef}
@@ -879,6 +879,7 @@ const approvedByRef = useRef(null)
                       )}
                     </div>
                   )}
+                  <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                 </SectionBox>
 
                 <div ref={approvedByRef}>
@@ -969,7 +970,7 @@ const approvedByRef = useRef(null)
               </div>
 
               <div className="flex flex-col justify-between gap-3 lg:col-span-8 print:col-span-8">
-                <SectionBox title="Proposal Summary" className="flex-1">
+                <SectionBox title="Proposal Summary" className="flex-1" pinBottom>
                   <div
                     ref={summaryContentRef}
                     className="text-[13.5px] leading-snug text-slate-800"
@@ -979,6 +980,7 @@ const approvedByRef = useRef(null)
                       <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
                     ))}
                   </div>
+                  <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                 </SectionBox>
 
                 <div ref={financialRef}>
