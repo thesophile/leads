@@ -19,12 +19,26 @@ const LOGO_TARGET_WIDTH = 400
 const LOGO_TARGET_HEIGHT = 160
 const LOGO_MAX_MB = 1
 
+const SEAL_TARGET_WIDTH = 400
+const SEAL_TARGET_HEIGHT = 400
+const SEAL_MAX_MB = 1
+
 function LogoIcon({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="8.5" cy="8.5" r="1.5" />
       <polyline points="21 15 16 10 5 21" />
+    </svg>
+  )
+}
+
+function SealIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5.5" />
+      <polygon points="12,9.6 13.7,11.1 15.6,10.8 15.6,12.8 17.1,14.4 15.2,15.8 15.4,17.8 13.4,17.3 12,19 10.6,17.3 8.6,17.8 8.8,15.8 6.9,14.4 8.4,12.8 8.4,10.8 10.3,11.1" />
     </svg>
   )
 }
@@ -340,6 +354,11 @@ export default function Settings() {
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoWarning, setLogoWarning] = useState(null)
   const [logoModalError, setLogoModalError] = useState('')
+  const [companySeal, setCompanySeal] = useState('')
+  const [sealFile, setSealFile] = useState(null)
+  const [sealUploading, setSealUploading] = useState(false)
+  const [sealWarning, setSealWarning] = useState(null)
+  const [sealModalError, setSealModalError] = useState('')
   const [termsSummaryHtml, setTermsSummaryHtml] = useState('')
   const [termsFullHtml, setTermsFullHtml] = useState('')
   const [gstNo, setGstNo] = useState('')
@@ -364,6 +383,7 @@ export default function Settings() {
   const [savingGeneral, setSavingGeneral] = useState(false)
   const [savingTemplates, setSavingTemplates] = useState(false)
   const [removingLogo, setRemovingLogo] = useState(false)
+  const [removingSeal, setRemovingSeal] = useState(false)
 
   const [backupBusy, setBackupBusy] = useState(false)
   const [restoreFile, setRestoreFile] = useState(null)
@@ -387,6 +407,7 @@ export default function Settings() {
           if (company.website) setCompanyWebsite(company.website)
           if (company.address) setCompanyAddress(company.address)
           setCompanyLogo(company.logo || '')
+          setCompanySeal(company.seal || '')
           if (company.termsSummaryHtml !== undefined) setTermsSummaryHtml(htmlToPlainLines(company.termsSummaryHtml || '').join('\n'))
           if (company.termsFullHtml !== undefined) setTermsFullHtml(company.termsFullHtml || '')
           if (company.currency) setCurrency(company.currency)
@@ -634,6 +655,67 @@ export default function Settings() {
         showToast(`Failed to remove logo: ${err.message}`)
       } finally {
         setRemovingLogo(false)
+      }
+    }
+  }
+
+  function handleSealFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSealWarning(null)
+    setSealFile(file)
+  }
+
+  async function uploadSeal(confirm = false) {
+    if (!sealFile) return
+    setSealUploading(true)
+    setSealWarning(null)
+    setSealModalError('')
+    try {
+      const fd = new FormData()
+      fd.append('seal', sealFile)
+      if (confirm) fd.append('confirm', '1')
+      const data = await api.post('/auth/company/seal/', fd)
+      if (data?.status === 'warning') {
+        setSealWarning(data)
+        return
+      }
+      if (data?.seal) setCompanySeal(data.seal)
+      setSealFile(null)
+      showToast('Company seal updated successfully.')
+    } catch (err) {
+      if (confirm) setSealModalError(err.message || 'Failed to upload seal.')
+      else showToast(`Failed to upload seal: ${err.message}`)
+    } finally {
+      setSealUploading(false)
+    }
+  }
+
+  async function handleConfirmResizeSeal() {
+    await uploadSeal(true)
+  }
+
+  function handleCancelSealWarning() {
+    if (sealUploading) return
+    setSealWarning(null)
+    setSealModalError('')
+    setSealFile(null)
+  }
+
+  async function handleRemoveSeal() {
+    if (removingSeal) return
+    if (window.confirm('Remove the current company seal?')) {
+      setRemovingSeal(true)
+      try {
+        await api.del('/auth/company/seal/')
+        setCompanySeal('')
+        setSealFile(null)
+        setSealWarning(null)
+        showToast('Company seal removed.')
+      } catch (err) {
+        showToast(`Failed to remove seal: ${err.message}`)
+      } finally {
+        setRemovingSeal(false)
       }
     }
   }
@@ -1198,6 +1280,86 @@ export default function Settings() {
                 )}
               </div>
 
+              <div className="border-t border-slate-100 px-6 py-6 md:px-8 md:py-7">
+                <SectionTitle>Company Seal</SectionTitle>
+                <p className="mt-1.5 text-[11px] text-slate-400">
+                  Stamped on the "Approved By" box of every order form. When no seal is uploaded, the default seal is
+                  used. Recommended size: {SEAL_TARGET_WIDTH}×{SEAL_TARGET_HEIGHT} px, maximum file size {SEAL_MAX_MB}MB
+                  (PNG, JPG, or WEBP).
+                </p>
+
+                <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
+                      {companySeal ? (
+                        <img src={companySeal} alt="Company seal" className="h-full w-full object-contain p-1" />
+                      ) : sealFile ? (
+                        <img src={URL.createObjectURL(sealFile)} alt="Selected seal preview" className="h-full w-full object-contain p-1" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 px-3 text-center">
+                          <SealIcon className="h-6 w-6 text-slate-300" />
+                          <span className="text-[10px] text-slate-400">No seal uploaded</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2 text-[11px] text-slate-500">
+                      {!companySeal && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+                          <SealIcon className="h-3.5 w-3.5" />
+                          Default seal is used on documents
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50">
+                      <UploadIcon className="h-3.5 w-3.5" />
+                      {companySeal ? 'Update Seal' : 'Upload Seal'}
+                      <input
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={handleSealFileChange}
+                      />
+                    </label>
+                    {sealFile && !sealUploading && (
+                      <button
+                        type="button"
+                        onClick={() => uploadSeal(false)}
+                        className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer"
+                      >
+                        Save Seal
+                      </button>
+                    )}
+                    {sealUploading && (
+                      <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
+                        Uploading…
+                      </span>
+                    )}
+                    {companySeal && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveSeal}
+                        disabled={removingSeal}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-100 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {removingSeal ? <Spinner className="h-3.5 w-3.5" /> : <TrashIcon className="h-3.5 w-3.5" />}
+                        {removingSeal ? 'Removing…' : 'Remove'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {sealFile && (
+                  <p className="mt-3 text-[11px] text-slate-400">
+                    Selected: <span className="font-semibold text-slate-600">{sealFile.name}</span> ({(sealFile.size / 1024).toFixed(0)} KB). Click{" "}
+                    <span className="font-semibold text-slate-600">Save Seal</span> to upload. If its dimensions are not {SEAL_TARGET_WIDTH}×{SEAL_TARGET_HEIGHT}px,
+                    you will be asked before it is auto-resized.
+                  </p>
+                )}
+              </div>
+
               <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
                 <p className="text-[11px] text-slate-400">Changes apply immediately to new documents.</p>
                 <button
@@ -1468,6 +1630,47 @@ export default function Settings() {
               >
                 {logoUploading && <Spinner className="h-3.5 w-3.5" />}
                 {logoUploading ? 'Uploading…' : `Auto-Resize to ${logoWarning.required_width}×${logoWarning.required_height}px`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sealWarning && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={handleCancelSealWarning} />
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <SealIcon className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Seal dimensions mismatch</h2>
+                <p className="text-[11px] text-slate-500">The uploaded seal is not the required size.</p>
+              </div>
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-slate-600">{sealWarning.detail}</p>
+            {sealModalError && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+                {sealModalError}
+              </div>
+            )}
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={handleCancelSealWarning}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResizeSeal}
+                disabled={sealUploading}
+                className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {sealUploading && <Spinner className="h-3.5 w-3.5" />}
+                {sealUploading ? 'Uploading…' : `Auto-Resize to ${sealWarning.required_width}×${sealWarning.required_height}px`}
               </button>
             </div>
           </div>

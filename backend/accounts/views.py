@@ -593,6 +593,10 @@ LOGO_MIME = {
     'image/webp': 'WEBP',
 }
 
+# Square stamp printed on the order form's Approved By box.
+SEAL_TARGET = (400, 400)
+SEAL_MAX_BYTES = 1024 * 1024  # 1MB
+
 
 class CompanyLogoUploadView(APIView):
     """Upload / update / remove the tenant company logo.
@@ -730,6 +734,144 @@ class CompanyLogoUploadView(APIView):
             f'{request.user.name} removed the company logo.',
         )
         return Response({'detail': 'Company logo removed.', 'logo': ''})
+
+
+class CompanySealUploadView(APIView):
+    """Upload / update / remove the tenant company seal.
+
+    Accepts `multipart/form-data` with a `seal` file. Optional `confirm`
+    field ("1") approves auto-resizing to the required 400x400 square.
+
+    - File type must be PNG/JPG/JPEG/WEBP.
+    - File size must be <= 1MB.
+    - If dimensions are not 400x400 and `confirm` is not set, respond with a
+      warning so the client can ask the user before resizing.
+    - If dimensions are not 400x400 and `confirm` is set, resize/letterbox to
+      400x400. On failure, respond with an error.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_company(self, request):
+        company = getattr(request.user, 'company', None)
+        if company is None:
+            return None
+        if not can(request.user, 'company.edit'):
+            return None
+        return company
+
+    def post(self, request):
+        company = self._get_company(request)
+        if company is None:
+            return Response(
+                {'detail': 'You do not have permission to update the company seal.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        seal = request.FILES.get('seal')
+        if seal is None:
+            return Response({'detail': 'Please provide a seal image.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = (seal.content_type or '').lower()
+        content_type = 'image/jpeg' if content_type == 'image/jpg' else content_type
+        if content_type not in LOGO_MIME:
+            return Response(
+                {'detail': 'Unsupported image type. Please upload a PNG, JPG, JPEG, or WEBP image.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ext = 'png' if content_type == 'image/png' else 'jpg'
+        if content_type == 'image/webp':
+            ext = 'webp'
+
+        if seal.size > SEAL_MAX_BYTES:
+            return Response(
+                {'detail': 'Seal file is larger than 1MB. Please upload an image within 1MB.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            img = Image.open(seal)
+            img.load()
+        except Exception:
+            return Response(
+                {'detail': 'Unable to read the uploaded file as an image. Please upload a valid image.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        width, height = img.size
+        confirm = request.data.get('confirm') in ('1', 'true', 'True', 'on')
+
+        if (width, height) != SEAL_TARGET:
+            if not confirm:
+                return Response({
+                    'status': 'warning',
+                    'detail': (
+                        f'The seal is {width}x{height}px. The required size is '
+                        f'{SEAL_TARGET[0]}x{SEAL_TARGET[1]}px. '
+                        'You can auto-resize it to the required size, or cancel and '
+                        'upload an image with the correct dimensions.'
+                    ),
+                    'width': width,
+                    'height': height,
+                    'required_width': SEAL_TARGET[0],
+                    'required_height': SEAL_TARGET[1],
+                })
+            try:
+                resized = resize_letterbox(img, SEAL_TARGET)
+                if ext == 'jpg':
+                    resized = resized.convert('RGB')
+                buffer = io.BytesIO()
+                resized.save(buffer, format=LOGO_MIME[content_type])
+                img = Image.open(io.BytesIO(buffer.getvalue()))
+            except Exception:
+                return Response(
+                    {'detail': (
+                        f'Could not auto-resize the seal to {SEAL_TARGET[0]}x{SEAL_TARGET[1]}px. '
+                        f'Please upload an image with the exact size {SEAL_TARGET[0]}x{SEAL_TARGET[1]}px '
+                        'and within 1MB file size.'
+                    )},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        filename = f'company_{company.pk}_seal.{ext}'
+        save_buffer = io.BytesIO()
+        save_format = 'PNG' if ext == 'png' else ('WEBP' if ext == 'webp' else 'JPEG')
+        save_img = img
+        if save_format == 'JPEG':
+            save_img = save_img.convert('RGB')
+        save_img.save(save_buffer, format=save_format)
+        company.seal.save(filename, ContentFile(save_buffer.getvalue()), save=True)
+
+        data = CompanySerializer(company).data
+        data['status'] = 'saved'
+        data['resized'] = (width, height) != SEAL_TARGET
+        log_activity(
+            request.user,
+            company,
+            'updated company seal',
+            f'{request.user.name} updated the company seal.',
+        )
+        return Response(data)
+
+    def delete(self, request):
+        company = self._get_company(request)
+        if company is None:
+            return Response(
+                {'detail': 'You do not have permission to update the company seal.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if company.seal:
+            company.seal.delete(save=False)
+            company.seal = None
+            company.save(update_fields=['seal'])
+        log_activity(
+            request.user,
+            company,
+            'removed company seal',
+            f'{request.user.name} removed the company seal.',
+        )
+        return Response({'detail': 'Company seal removed.', 'seal': ''})
 
 
 def resize_letterbox(img, target):
