@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useBlocker } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import ReactQuill from 'react-quill-new'
@@ -519,6 +519,11 @@ export default function Settings() {
   const [activityLoading, setActivityLoading] = useState(false)
   const [activityError, setActivityError] = useState('')
 
+  const [generalBaseline, setGeneralBaseline] = useState(null)
+  const [templatesBaseline, setTemplatesBaseline] = useState(null)
+  const [pendingTab, setPendingTab] = useState(null)
+  const [unsavedForm, setUnsavedForm] = useState(null)
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -537,6 +542,20 @@ export default function Settings() {
           if (company.currency) setCurrency(company.currency)
           if (company.gstNo !== undefined) setGstNo(company.gstNo || '')
           if (company.defaultBank !== undefined) setDefaultBank(company.defaultBank || '')
+          setGeneralBaseline({
+            name: company.name || '',
+            email: company.email || '',
+            phone: company.phone || '',
+            website: company.website || '',
+            address: company.address || '',
+            currency: company.currency || 'INR (₹)',
+            gstNo: company.gstNo || '',
+            defaultBank: company.defaultBank || '',
+          })
+          setTemplatesBaseline({
+            summary: htmlToPlainLines(company.termsSummaryHtml || '').join('\n'),
+            full: company.termsFullHtml || '',
+          })
         }
       } catch (err) {
         console.error('Failed to load company settings', err)
@@ -546,6 +565,85 @@ export default function Settings() {
       cancelled = true
     }
   }, [])
+
+  const generalDirty = generalBaseline
+    ? generalBaseline.name !== companyName ||
+      generalBaseline.email !== companyEmail ||
+      generalBaseline.phone !== companyPhone ||
+      generalBaseline.website !== companyWebsite ||
+      generalBaseline.address !== companyAddress ||
+      generalBaseline.currency !== currency ||
+      generalBaseline.gstNo !== gstNo ||
+      generalBaseline.defaultBank !== defaultBank
+    : false
+
+  const templatesDirty = templatesBaseline
+    ? templatesBaseline.summary !== termsSummaryHtml || templatesBaseline.full !== termsFullHtml
+    : false
+
+  async function handleTabChange(tabId) {
+    if (tabId === activeTab) return
+    if (activeTab === 'general' && generalDirty) {
+      setPendingTab(tabId)
+      setUnsavedForm('general')
+      return
+    }
+    if (activeTab === 'templates' && templatesDirty) {
+      setPendingTab(tabId)
+      setUnsavedForm('templates')
+      return
+    }
+    setActiveTab(tabId)
+  }
+
+  function cancelUnsavedConfirm() {
+    if (blocker.state === 'blocked') blocker.reset()
+    setPendingTab(null)
+    setUnsavedForm(null)
+  }
+
+  function confirmUnsavedChanges() {
+    if (blocker.state === 'blocked') {
+      blocker.proceed()
+      setPendingTab(null)
+      setUnsavedForm(null)
+      return
+    }
+    if (unsavedForm === 'general') {
+      if (generalBaseline) {
+        setCompanyName(generalBaseline.name)
+        setCompanyEmail(generalBaseline.email)
+        setCompanyPhone(generalBaseline.phone)
+        setCompanyWebsite(generalBaseline.website)
+        setCompanyAddress(generalBaseline.address)
+        setCurrency(generalBaseline.currency)
+        setGstNo(generalBaseline.gstNo)
+        setDefaultBank(generalBaseline.defaultBank)
+      }
+      setLogoFile(null)
+      setLogoWarning(null)
+    } else if (unsavedForm === 'templates' && templatesBaseline) {
+      setTermsSummaryHtml(templatesBaseline.summary)
+      setTermsFullHtml(templatesBaseline.full)
+    }
+    const nextTab = pendingTab
+    setPendingTab(null)
+    setUnsavedForm(null)
+    if (nextTab) setActiveTab(nextTab)
+  }
+
+  const blocker = useBlocker(generalDirty || templatesDirty || !!logoFile || !!sealFile)
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (generalDirty || templatesDirty || logoFile || sealFile) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [generalDirty, templatesDirty, logoFile, sealFile])
 
   async function loadTargets(month, year) {
     setTargetsLoading(true)
@@ -657,6 +755,16 @@ export default function Settings() {
         gstNo,
         defaultBank,
       })
+      setGeneralBaseline({
+        name: companyName,
+        email: companyEmail,
+        phone: companyPhone,
+        website: companyWebsite,
+        address: companyAddress,
+        currency,
+        gstNo,
+        defaultBank,
+      })
       showToast('General settings saved successfully.')
     } catch (err) {
       showToast(`Failed to save settings: ${err.message}`)
@@ -713,6 +821,10 @@ export default function Settings() {
       await api.patch('/auth/company/', {
         termsSummaryHtml: linesToHtml(termsSummaryHtml.split('\n')),
         termsFullHtml,
+      })
+      setTemplatesBaseline({
+        summary: termsSummaryHtml,
+        full: termsFullHtml,
       })
       showToast('Terms & Conditions templates saved successfully.')
     } catch (err) {
@@ -1030,6 +1142,8 @@ export default function Settings() {
   const summaryCharCount = termsSummaryHtml.trim().length
   const summaryLineCount = termsSummaryHtml === '' ? 0 : termsSummaryHtml.split('\n').length
 
+  const unsavedLabel = activeTab === 'general' ? 'General & Finance' : 'Terms & Conditions'
+
   return (
     <Layout>
       <div className="mx-auto max-w-7xl space-y-6">
@@ -1065,7 +1179,7 @@ export default function Settings() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
                   isActive ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
@@ -1389,6 +1503,18 @@ export default function Settings() {
                 </div>
               </div>
 
+              <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
+                <p className="text-[11px] text-slate-400">Changes apply immediately to new documents.</p>
+                <button
+                  type="submit"
+                  disabled={savingGeneral}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {savingGeneral ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon className="h-3.5 w-3.5" />}
+                  {savingGeneral ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+
               <div className="border-t border-slate-100 px-6 py-6 md:px-8 md:py-7">
                 <SectionTitle>Company Logo</SectionTitle>
                 <p className="mt-1.5 text-[11px] text-slate-400">
@@ -1498,18 +1624,6 @@ export default function Settings() {
                     )}
                   </div>
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
-                <p className="text-[11px] text-slate-400">Changes apply immediately to new documents.</p>
-                <button
-                  type="submit"
-                  disabled={savingGeneral}
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {savingGeneral ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon className="h-3.5 w-3.5" />}
-                  {savingGeneral ? 'Saving…' : 'Save Changes'}
-                </button>
               </div>
             </form>
           </div>
@@ -2036,6 +2150,45 @@ export default function Settings() {
           </div>
         </div>
       )}
+    {unsavedForm || blocker.state === 'blocked' ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={cancelUnsavedConfirm} />
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Unsaved changes</h2>
+                <p className="text-[11px] text-slate-500">{unsavedLabel} has unsaved changes.</p>
+              </div>
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-slate-600">
+              If you leave, your unsaved changes will be discarded. Do you want to continue?
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={cancelUnsavedConfirm}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer"
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                onClick={confirmUnsavedChanges}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-rose-700 cursor-pointer"
+              >
+                Discard &amp; Leave
+              </button>
+            </div>
+          </div>
+        </div>
+        ) : null}
     </Layout>
   )
 }
