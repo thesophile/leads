@@ -64,6 +64,126 @@ function TrashIcon({ className = 'h-4 w-4' }) {
   )
 }
 
+function ImageUploadModal({
+  open,
+  icon,
+  title,
+  sizeHint,
+  accept,
+  file,
+  uploading,
+  dragActive,
+  error,
+  onFileChange,
+  onDragEnter,
+  onDragLeave,
+  onDrop,
+  onCancel,
+  onSave,
+}) {
+  const inputRef = useRef(null)
+  const fileUrl = file ? URL.createObjectURL(file) : null
+  useEffect(() => () => {
+    if (fileUrl) URL.revokeObjectURL(fileUrl)
+  }, [fileUrl])
+  if (!open) return null
+  const fileInput = () => inputRef.current?.click()
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            {icon}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+            <p className="text-[11px] text-slate-500">{sizeHint}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={uploading}
+            aria-label="Close"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div
+          className={`mt-5 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition ${
+            dragActive
+              ? 'border-brand-500 bg-brand-50/60'
+              : 'border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-brand-50/40'
+          }`}
+          role="button"
+          tabIndex={0}
+          onClick={fileInput}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              fileInput()
+            }
+          }}
+          onDragEnter={onDragEnter}
+          onDragOver={(e) => e.preventDefault()}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          {file ? (
+            <img src={fileUrl} alt={`Selected ${title.toLowerCase()} preview`} className="max-h-40 max-w-full object-contain" />
+          ) : (
+            <>
+              <UploadIcon className="h-8 w-8 text-brand-500" />
+              <p className="text-xs font-semibold text-slate-600">
+                Drag &amp; drop an image here, or <span className="text-brand-600 underline">browse</span>
+              </p>
+              <p className="text-[11px] text-slate-400">PNG, JPG, or WEBP</p>
+            </>
+          )}
+          <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={onFileChange} />
+        </div>
+
+        {file && (
+          <p className="mt-3 text-[11px] text-slate-400">
+            Selected: <span className="font-semibold text-slate-600">{file.name}</span> ({(file.size / 1024).toFixed(0)} KB)
+          </p>
+        )}
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={uploading}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={uploading || !file}
+            className="flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {uploading && <Spinner className="h-3.5 w-3.5" />}
+            {uploading ? 'Uploading…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const QUILL_MODULES = {
   toolbar: [
     ['bold', 'italic', 'underline', 'strike'],
@@ -354,11 +474,15 @@ export default function Settings() {
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoWarning, setLogoWarning] = useState(null)
   const [logoModalError, setLogoModalError] = useState('')
+  const [logoModalOpen, setLogoModalOpen] = useState(false)
+  const [logoDragActive, setLogoDragActive] = useState(false)
   const [companySeal, setCompanySeal] = useState('')
   const [sealFile, setSealFile] = useState(null)
   const [sealUploading, setSealUploading] = useState(false)
   const [sealWarning, setSealWarning] = useState(null)
   const [sealModalError, setSealModalError] = useState('')
+  const [sealModalOpen, setSealModalOpen] = useState(false)
+  const [sealDragActive, setSealDragActive] = useState(false)
   const [termsSummaryHtml, setTermsSummaryHtml] = useState('')
   const [termsFullHtml, setTermsFullHtml] = useState('')
   const [gstNo, setGstNo] = useState('')
@@ -599,10 +723,41 @@ export default function Settings() {
   }
 
   function handleLogoFileChange(e) {
-    const file = e.target.files?.[0]
+    acceptLogoFile(e.target.files?.[0])
+  }
+
+  function acceptLogoFile(file) {
     if (!file) return
     setLogoWarning(null)
+    setLogoModalError('')
     setLogoFile(file)
+  }
+
+  function handleLogoDrop(e) {
+    e.preventDefault()
+    setLogoDragActive(false)
+    acceptLogoFile(e.dataTransfer?.files?.[0])
+  }
+
+  function openLogoModal() {
+    setLogoModalError('')
+    setLogoWarning(null)
+    setLogoFile(null)
+    setLogoModalOpen(true)
+  }
+
+  function closeLogoModal() {
+    if (logoUploading) return
+    setLogoModalOpen(false)
+    setLogoWarning(null)
+    setLogoModalError('')
+    setLogoFile(null)
+  }
+
+  function handleSaveLogo() {
+    if (logoUploading || !logoFile) return
+    setLogoModalError('')
+    uploadLogo(false)
   }
 
   async function uploadLogo(confirm = false) {
@@ -616,15 +771,16 @@ export default function Settings() {
       if (confirm) fd.append('confirm', '1')
       const data = await api.post('/auth/company/logo/', fd)
       if (data?.status === 'warning') {
+        setLogoModalOpen(false)
         setLogoWarning(data)
         return
       }
       if (data?.logo) setCompanyLogo(data.logo)
       setLogoFile(null)
+      setLogoModalOpen(false)
       showToast('Company logo updated successfully.')
     } catch (err) {
-      if (confirm) setLogoModalError(err.message || 'Failed to upload logo.')
-      else showToast(`Failed to upload logo: ${err.message}`)
+      setLogoModalError(err.message || 'Failed to upload logo.')
     } finally {
       setLogoUploading(false)
     }
@@ -660,10 +816,41 @@ export default function Settings() {
   }
 
   function handleSealFileChange(e) {
-    const file = e.target.files?.[0]
+    acceptSealFile(e.target.files?.[0])
+  }
+
+  function acceptSealFile(file) {
     if (!file) return
     setSealWarning(null)
+    setSealModalError('')
     setSealFile(file)
+  }
+
+  function handleSealDrop(e) {
+    e.preventDefault()
+    setSealDragActive(false)
+    acceptSealFile(e.dataTransfer?.files?.[0])
+  }
+
+  function openSealModal() {
+    setSealModalError('')
+    setSealWarning(null)
+    setSealFile(null)
+    setSealModalOpen(true)
+  }
+
+  function closeSealModal() {
+    if (sealUploading) return
+    setSealModalOpen(false)
+    setSealWarning(null)
+    setSealModalError('')
+    setSealFile(null)
+  }
+
+  function handleSaveSeal() {
+    if (sealUploading || !sealFile) return
+    setSealModalError('')
+    uploadSeal(false)
   }
 
   async function uploadSeal(confirm = false) {
@@ -677,15 +864,16 @@ export default function Settings() {
       if (confirm) fd.append('confirm', '1')
       const data = await api.post('/auth/company/seal/', fd)
       if (data?.status === 'warning') {
+        setSealModalOpen(false)
         setSealWarning(data)
         return
       }
       if (data?.seal) setCompanySeal(data.seal)
       setSealFile(null)
+      setSealModalOpen(false)
       showToast('Company seal updated successfully.')
     } catch (err) {
-      if (confirm) setSealModalError(err.message || 'Failed to upload seal.')
-      else showToast(`Failed to upload seal: ${err.message}`)
+      setSealModalError(err.message || 'Failed to upload seal.')
     } finally {
       setSealUploading(false)
     }
@@ -1233,30 +1421,14 @@ export default function Settings() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={openLogoModal}
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                    >
                       <UploadIcon className="h-3.5 w-3.5" />
                       {companyLogo ? 'Update Logo' : 'Upload Logo'}
-                      <input
-                        type="file"
-                        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                        className="hidden"
-                        onChange={handleLogoFileChange}
-                      />
-                    </label>
-                    {logoFile && !logoUploading && (
-                      <button
-                        type="button"
-                        onClick={() => uploadLogo(false)}
-                        className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer"
-                      >
-                        Save Logo
-                      </button>
-                    )}
-                    {logoUploading && (
-                      <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
-                        Uploading…
-                      </span>
-                    )}
+                    </button>
                     {companyLogo && (
                       <button
                         type="button"
@@ -1270,14 +1442,6 @@ export default function Settings() {
                     )}
                   </div>
                 </div>
-
-                {logoFile && (
-                  <p className="mt-3 text-[11px] text-slate-400">
-                    Selected: <span className="font-semibold text-slate-600">{logoFile.name}</span> ({(logoFile.size / 1024).toFixed(0)} KB). Click{" "}
-                    <span className="font-semibold text-slate-600">Save Logo</span> to upload. If its dimensions are not {LOGO_TARGET_WIDTH}×{LOGO_TARGET_HEIGHT}px,
-                    you will be asked before it is auto-resized.
-                  </p>
-                )}
               </div>
 
               <div className="border-t border-slate-100 px-6 py-6 md:px-8 md:py-7">
@@ -1313,30 +1477,14 @@ export default function Settings() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={openSealModal}
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                    >
                       <UploadIcon className="h-3.5 w-3.5" />
                       {companySeal ? 'Update Seal' : 'Upload Seal'}
-                      <input
-                        type="file"
-                        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                        className="hidden"
-                        onChange={handleSealFileChange}
-                      />
-                    </label>
-                    {sealFile && !sealUploading && (
-                      <button
-                        type="button"
-                        onClick={() => uploadSeal(false)}
-                        className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer"
-                      >
-                        Save Seal
-                      </button>
-                    )}
-                    {sealUploading && (
-                      <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
-                        Uploading…
-                      </span>
-                    )}
+                    </button>
                     {companySeal && (
                       <button
                         type="button"
@@ -1350,14 +1498,6 @@ export default function Settings() {
                     )}
                   </div>
                 </div>
-
-                {sealFile && (
-                  <p className="mt-3 text-[11px] text-slate-400">
-                    Selected: <span className="font-semibold text-slate-600">{sealFile.name}</span> ({(sealFile.size / 1024).toFixed(0)} KB). Click{" "}
-                    <span className="font-semibold text-slate-600">Save Seal</span> to upload. If its dimensions are not {SEAL_TARGET_WIDTH}×{SEAL_TARGET_HEIGHT}px,
-                    you will be asked before it is auto-resized.
-                  </p>
-                )}
               </div>
 
               <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
@@ -1594,6 +1734,42 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      <ImageUploadModal
+        open={logoModalOpen}
+        icon={<LogoIcon className="h-5 w-5" />}
+        title={companyLogo ? 'Update company logo' : 'Upload company logo'}
+        sizeHint={`Recommended size ${LOGO_TARGET_WIDTH}×${LOGO_TARGET_HEIGHT}px, max ${LOGO_MAX_MB}MB.`}
+        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        file={logoFile}
+        uploading={logoUploading}
+        dragActive={logoDragActive}
+        error={logoModalError}
+        onFileChange={handleLogoFileChange}
+        onDragEnter={() => setLogoDragActive(true)}
+        onDragLeave={() => setLogoDragActive(false)}
+        onDrop={handleLogoDrop}
+        onCancel={closeLogoModal}
+        onSave={handleSaveLogo}
+      />
+
+      <ImageUploadModal
+        open={sealModalOpen}
+        icon={<SealIcon className="h-5 w-5" />}
+        title={companySeal ? 'Update company seal' : 'Upload company seal'}
+        sizeHint={`Recommended size ${SEAL_TARGET_WIDTH}×${SEAL_TARGET_HEIGHT}px, max ${SEAL_MAX_MB}MB.`}
+        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        file={sealFile}
+        uploading={sealUploading}
+        dragActive={sealDragActive}
+        error={sealModalError}
+        onFileChange={handleSealFileChange}
+        onDragEnter={() => setSealDragActive(true)}
+        onDragLeave={() => setSealDragActive(false)}
+        onDrop={handleSealDrop}
+        onCancel={closeSealModal}
+        onSave={handleSaveSeal}
+      />
 
       {logoWarning && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
