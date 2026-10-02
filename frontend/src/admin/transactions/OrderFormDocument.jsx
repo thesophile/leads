@@ -164,62 +164,6 @@ function PageFooter({ company }) {
   )
 }
 
-function SignatureCell({ title, company, children }) {
-  return (
-    <div className="col-span-5 rounded-md border border-black bg-white p-2">
-      <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
-        {title}
-      </div>
-      <div className="mt-1 text-[11px]">
-        {company ? (
-          <p className="text-slate-800 font-semibold mt-0.5">{company}</p>
-        ) : null}
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function sealPolygonPoints(cx, cy, outer, inner, teeth = 44) {
-  const pts = []
-  for (let i = 0; i < teeth * 2; i++) {
-    const r = i % 2 === 0 ? outer : inner
-    const angle = (Math.PI * i) / teeth
-    pts.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`)
-  }
-  return pts.join(' ')
-}
-
-function starPoints(cx, cy, outer, inner, points = 5) {
-  const pts = []
-  for (let i = 0; i < points * 2; i++) {
-    const r = i % 2 === 0 ? outer : inner
-    const angle = -Math.PI / 2 + (Math.PI * i) / points
-    pts.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`)
-  }
-  return pts.join(' ')
-}
-
-function ApprovedSeal({ className = '' }) {
-  const cx = 50
-  const cy = 50
-  return (
-    <svg viewBox="0 0 100 100" className={className} role="img" aria-label="Approved seal">
-      <polygon points={sealPolygonPoints(cx, cy, 47, 42.5)} fill="#ffffff" stroke="#0f172a" strokeWidth="1" />
-      <circle cx={cx} cy={cy} r="45" fill="#ffffff" stroke="#0f172a" strokeWidth="1.7" />
-      <circle cx={cx} cy={cy} r="35" fill="none" stroke="#0f172a" strokeWidth="1" strokeDasharray="2.6 3.4" />
-      <polygon points={starPoints(cx, cy - 20, 8, 3.6)} fill="#0f172a" />
-      <text x={cx} y={cy + 4} textAnchor="middle" fontSize="12.5" fontWeight="900" fontFamily="sans-serif" letterSpacing="0.5" fill="#0f172a">
-        APPROVED
-      </text>
-      <polygon points={starPoints(cx, cy + 13, 4.5, 2)} fill="#0f172a" />
-      <text x={cx} y={cy + 24} textAnchor="middle" fontSize="5" fontWeight="700" fontFamily="sans-serif" letterSpacing="1.5" fill="#0f172a">
-        SIGNED
-      </text>
-    </svg>
-  )
-}
-
 function ApprovedByCell({ order, company }) {
   const seal = company?.seal
   return (
@@ -248,8 +192,31 @@ function ApprovedByCell({ order, company }) {
           {seal ? (
             <img src={seal} alt="Company seal" className="h-full w-full object-contain" />
           ) : (
-            <ApprovedSeal className="h-full w-full" />
+            <img src="/approved_seal.jpg" alt="Approved seal" className="h-full w-full object-contain" />
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AcceptedByCell({ order }) {
+  return (
+    <div className="col-span-5 rounded-md border border-black bg-white p-2">
+      <div className="border-b border-black bg-black -mx-2 -mt-2 px-2 py-1 text-center text-[11px] font-bold uppercase text-white mb-1">
+        Accepted By
+      </div>
+      <div className="mt-1 flex items-stretch gap-2">
+        <div className="flex-1 text-[11px]">
+          <p className="text-slate-800 font-semibold leading-tight">{order.customerCompany || 'Client'}</p>
+          {order.acceptedAt && (
+            <p className="text-slate-500 mt-1">
+              Accepted: <span className="font-mono font-bold text-slate-800">{order.acceptedAt}</span>
+            </p>
+          )}
+        </div>
+        <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center">
+          <img src="/green_tick.png" alt="Accepted" className="h-[54px] w-[54px] object-contain" />
         </div>
       </div>
     </div>
@@ -261,9 +228,7 @@ function SignatureBlock({ order, company }) {
     <div className="grid grid-cols-12 gap-2">
       <ApprovedByCell order={order} company={company} />
 
-      <SignatureCell title="Accepted By" company={order.customerCompany || 'Client'}>
-        <p className="text-slate-400 text-[9.5px] mt-3">Client&rsquo;s Authorised Signatory &middot; Signature &amp; date</p>
-      </SignatureCell>
+      <AcceptedByCell order={order} />
 
       <div className="col-span-2 flex items-center justify-center rounded-md border border-black bg-white p-1">
         <div className="h-[72px] w-[72px]">

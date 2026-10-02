@@ -297,6 +297,7 @@ class OrderSerializer(serializers.ModelSerializer):
     approvedByDesignation = serializers.SerializerMethodField()
     approvedByCompany = serializers.SerializerMethodField()
     approvedAt = serializers.SerializerMethodField()
+    acceptedAt = serializers.SerializerMethodField()
     termsSummaryHtml = serializers.SerializerMethodField()
     termsFullHtml = serializers.SerializerMethodField()
     clientStatus = serializers.SerializerMethodField()
@@ -333,6 +334,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'approvedByDesignation',
             'approvedByCompany',
             'approvedAt',
+            'acceptedAt',
             'termsSummaryHtml',
             'termsFullHtml',
             'clientStatus',
@@ -351,6 +353,9 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_approvedAt(self, obj):
         return order_approval_info(obj)['approvedAt']
+
+    def get_acceptedAt(self, obj):
+        return order_approval_info(obj)['acceptedAt']
 
     def get_clientStatus(self, obj):
         return obj.client_status

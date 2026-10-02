@@ -659,7 +659,8 @@ def _approved_seal_drawing(size, initial=''):
 
 def company_seal_flowable(tenant, size):
     """Return the tenant's uploaded seal as an ``Image`` flowable when one
-    exists, otherwise a vector 'APPROVED' seal ``Drawing``."""
+    exists, otherwise the default ``approved_seal.jpg`` asset (falling back to
+    a vector 'APPROVED' seal ``Drawing`` if that asset is unavailable)."""
     if tenant is not None and tenant.seal and tenant.seal.name:
         try:
             raw = io.BytesIO()
@@ -671,7 +672,13 @@ def company_seal_flowable(tenant, size):
             raw.seek(0)
             return Image(raw, width=size, height=size)
         except Exception:
-            return _approved_seal_drawing(size, (tenant.name or '')[:1])
+            pass
+    default_path = _frontend_public_asset('approved_seal.jpg')
+    if default_path:
+        try:
+            return Image(default_path, width=size, height=size)
+        except Exception:
+            pass
     return _approved_seal_drawing(size, (tenant.name if tenant else '')[:1])
 
 
@@ -817,6 +824,7 @@ def order_approval_info(order):
     name = ''
     designation = ''
     approval_date = None
+    accepted_at = getattr(quote, 'client_responded_at', None) if quote is not None else None
 
     if quote is not None:
         approved = list(
@@ -848,11 +856,16 @@ def order_approval_info(order):
     if approval_date:
         iso_date = approval_date.strftime('%d-%m-%Y')
 
+    iso_accepted = ''
+    if accepted_at:
+        iso_accepted = accepted_at.strftime('%d-%m-%Y %I:%M %p')
+
     info = {
         'approvedBy': name,
         'approvedByDesignation': designation,
         'approvedByCompany': company,
         'approvedAt': iso_date,
+        'acceptedAt': iso_accepted,
     }
     try:
         setattr(order, '_order_approval_info', info)
@@ -1042,11 +1055,39 @@ def render_order_pdf(order):
                 ])
             )
             approved = section_box('APPROVED BY', [approved_inner], cell_width)
-            accepted = section_box('ACCEPTED BY', [
-                Paragraph(order.company or 'Client', styles['sig_company']),
-                Spacer(1, 7 * mm),
-                Paragraph("Client's Authorised Signatory &#183; Signature &amp; date", styles['sig_note']),
-            ], cell_width)
+
+            accepted_flow = [Paragraph(order.company or 'Client', styles['sig_company'])]
+            if approval['acceptedAt']:
+                accepted_flow.append(Paragraph(
+                    f"Accepted: {approval['acceptedAt']}",
+                    styles['sig_note'],
+                ))
+            tick = None
+            tick_path = _frontend_public_asset('green_tick.png')
+            if tick_path:
+                try:
+                    tick_width = min(cell_width * 0.22, 12 * mm)
+                    tick = Image(tick_path, width=tick_width, height=tick_width)
+                except Exception:
+                    tick = None
+            if tick is not None:
+                accepted_inner = Table(
+                    [[accepted_flow, tick]],
+                    colWidths=[cell_width - min(cell_width * 0.22, 12 * mm) - 2 * mm, min(cell_width * 0.22, 12 * mm)],
+                )
+                accepted_inner.setStyle(
+                    TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                        ('TOPPADDING', (0, 0), (-1, -1), 0),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                    ])
+                )
+                accepted = section_box('ACCEPTED BY', [accepted_inner], cell_width)
+            else:
+                accepted = section_box('ACCEPTED BY', accepted_flow, cell_width)
             qr = _qr_drawing(_order_client_link(order), min(qr_width, 20 * mm))
             outer = Table(
                 [[approved, accepted, qr]],

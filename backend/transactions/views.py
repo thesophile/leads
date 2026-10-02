@@ -4264,6 +4264,7 @@ def public_order_payload(order):
         'approvedByDesignation': approval['approvedByDesignation'],
         'approvedByCompany': approval['approvedByCompany'],
         'approvedAt': approval['approvedAt'],
+        'acceptedAt': approval['acceptedAt'],
         'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
         'termsSummaryHtml': tenant.terms_summary_html if tenant else '',
         'termsFullHtml': tenant.terms_full_html if tenant else '',

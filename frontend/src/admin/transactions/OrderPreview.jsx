@@ -32,6 +32,7 @@ function mapOrder(o) {
     approvedByDesignation: o.approvedByDesignation || '',
     approvedByCompany: o.approvedByCompany || '',
     approvedAt: o.approvedAt || '',
+    acceptedAt: o.acceptedAt || '',
     orderSummaryHtml: o.scope || '',
     orderInDetailsHtml: o.details || '',
     termsSummaryHtml: o.termsSummaryHtml || '',
@@ -135,6 +136,7 @@ export default function OrderPreview() {
         approvedByDesignation: mapped.approvedByDesignation || prev?.approvedByDesignation || '',
         approvedByCompany: mapped.approvedByCompany || prev?.approvedByCompany || '',
         approvedAt: mapped.approvedAt || prev?.approvedAt || '',
+        acceptedAt: mapped.acceptedAt || prev?.acceptedAt || '',
       }
     })
   }
