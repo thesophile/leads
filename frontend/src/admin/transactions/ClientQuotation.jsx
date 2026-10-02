@@ -319,7 +319,7 @@ export default function ClientQuotation() {
             <div className="space-y-3 px-5 pb-5">
               {scopeHtml && stripHtml(scopeHtml) && (
                 <div className="overflow-hidden rounded-xl border border-slate-300">
-                  <div className="bg-black px-3 py-2">
+                  <div className="bg-black px-3 py-2 text-center">
                     <span className="text-[12px] font-bold uppercase tracking-wider text-white">
                       Proposal Summary
                     </span>
@@ -334,7 +334,7 @@ export default function ClientQuotation() {
 
               {(detailFreeHtml && stripHtml(detailFreeHtml)) || detailItems.length > 0 ? (
                 <div className="overflow-hidden rounded-xl border border-slate-300">
-                  <div className="bg-black px-3 py-2">
+                  <div className="bg-black px-3 py-2 text-center">
                     <span className="text-[12px] font-bold uppercase tracking-wider text-white">
                       Proposal in Detail
                     </span>

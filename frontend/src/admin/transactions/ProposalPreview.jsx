@@ -175,7 +175,7 @@ function SectionBox({ title, children, className = '', overflowVisible = false, 
     <div
       className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-slate-300 ${pinBottom ? 'flex flex-col ' : ''}${className}`}
     >
-      <div className="flex items-center justify-between bg-black px-3 py-2">
+      <div className="flex items-center justify-center bg-black px-3 py-2">
         <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
       </div>
       <div className={`${pinBottom ? 'flex flex-1 flex-col ' : ''}p-3.5 bg-white`}>{children}</div>
@@ -1017,7 +1017,7 @@ const approvedByRef = useRef(null)
             contentClass="text-[13px] leading-snug text-slate-800"
             sectionTitle="Proposal in Details &amp; Specifications"
             boxClass="rounded-xl border border-slate-300 bg-white"
-            titleClass="text-left"
+            titleClass="text-center"
             pageHeader={
               <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
             }
@@ -1030,7 +1030,7 @@ const approvedByRef = useRef(null)
                     html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml)),
                     contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
                     boxClass: 'rounded-xl border border-slate-300 bg-white',
-                    titleClass: 'text-left',
+                    titleClass: 'text-center',
                     reserve: 64,
                     minFraction: 0.5,
                     pageHeader: (
