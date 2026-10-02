@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
@@ -127,7 +127,7 @@ function BarcodeVisual({ code = '' }) {
         width={1.2}
         height={26}
         format="CODE128"
-        displayValue={true}
+        displayValue={false}
         font="monospace"
         fontSize={11}
         textMargin={2}
@@ -203,7 +203,6 @@ function PageHeader({ proposal, annexLabel, company, clientToken = '' }) {
         <div className="space-y-2.5">
           <InfoBlock label="Quotation #" value={proposal.id} />
           <InfoBlock label="Order Date" value={proposal.orderDate} />
-          {annexLabel && <InfoBlock label="Annexure" value={annexLabel} />}
         </div>
       </div>
 
@@ -220,6 +219,14 @@ function PageHeader({ proposal, annexLabel, company, clientToken = '' }) {
       </div>
 
       <div className="flex flex-col items-end space-y-2 text-right">
+        {annexLabel && (
+          <span
+            data-annex={annexLabel}
+            className="inline-block max-w-[220px] border border-slate-900 bg-black px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white"
+          >
+            {annexLabel}
+          </span>
+        )}
         <ProgramersLogo logo={company?.logo} companyName={company?.name} />
         <BarcodeVisual code={proposal.id} />
         <p className="font-mono text-[9.5px] text-slate-600">
@@ -311,7 +318,7 @@ function FinancialBanner({ proposal }) {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-200 bg-slate-100 px-3 py-2 text-[11.5px] font-bold text-slate-700">
         <span>{words}</span>
-        <span>Annexure - A(0)</span>
+        <span>ANNEXURE - A</span>
       </div>
     </div>
   )
@@ -578,9 +585,47 @@ const approvedByRef = useRef(null)
   const page1FooterRef = useRef(null)
   const termsContentRef = useRef(null)
   const summaryContentRef = useRef(null)
+  const docRef = useRef(null)
+  const [totalPages, setTotalPages] = useState(null)
   const approvalRefetchedRef = useRef(false)
   const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 16)
   const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 16)
+
+  // Stamp each A4 page's annexure tag with "ANNEXURE - A (page/total)". The
+  // total is only known after layout settles (fonts, async continuation
+  // pages), so this runs on every commit and writes into the already-rendered
+  // tags in document order. Idempotent: writing the same text never loops.
+  useLayoutEffect(() => {
+    const root = docRef.current
+    if (!totalPages || !root) return
+    const pages = Array.from(root.querySelectorAll('.print-page'))
+    pages.forEach((page, i) => {
+      const tag = page.querySelector('[data-annex]')
+      if (tag) tag.textContent = `${tag.dataset.annex || 'ANNEXURE - A'} (${i + 1}/${totalPages})`
+    })
+  })
+
+  // Count how many A4 pages the whole document eventually uses and keep the
+  // count current if content re-paginates (font loads, window resize, async
+  // continuation pages mounting).
+  useLayoutEffect(() => {
+    const root = docRef.current
+    if (!root) return
+    const refresh = () => {
+      const n = root.querySelectorAll('.print-page').length
+      setTotalPages((prev) => (prev === n ? prev : n))
+    }
+    refresh()
+    const onFonts = () => refresh()
+    if (document.fonts) document.fonts.ready.then(onFonts)
+    const mo = new MutationObserver(refresh)
+    mo.observe(root, { childList: true, subtree: true })
+    window.addEventListener('resize', refresh)
+    return () => {
+      mo.disconnect()
+      window.removeEventListener('resize', refresh)
+    }
+  }, [])
 
 
   function handlePrint() {
@@ -798,11 +843,11 @@ const approvedByRef = useRef(null)
         </div>
 
         {/* All pages, continuous vertical scroll */}
-        <div className="space-y-8 print:space-y-0">
+        <div className="space-y-8 print:space-y-0" ref={docRef}>
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
           <div className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">
-            <PageHeader proposal={proposalData} company={company} clientToken={liveToken} />
+            <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 print:grid-cols-3">
               <SectionBox title="Customer Details">
@@ -1036,7 +1081,7 @@ const approvedByRef = useRef(null)
                     pageHeader: (
                       <PageHeader
                         proposal={proposalData}
-                        annexLabel="ANNEXURE - B"
+                        annexLabel="ANNEXURE - A"
                         company={company}
                         clientToken={liveToken}
                       />
