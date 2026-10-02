@@ -807,7 +807,7 @@ const approvedByRef = useRef(null)
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 print:grid-cols-3">
               <SectionBox title="Customer Details">
                 <div className="space-y-1">
-                  <p className="text-[15px] font-bold uppercase leading-snug text-slate-900">
+                  <p className="text-[13.5px] font-bold leading-snug text-slate-900">
                     {proposalData.customerCompany}
                   </p>
                   <p className="text-[13.5px] font-medium text-slate-700">
