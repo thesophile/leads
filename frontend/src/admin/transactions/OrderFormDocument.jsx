@@ -5,6 +5,12 @@ import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import { htmlToPlainLines } from './orderFormDocumentUtils'
 
+function orderFormLink(order) {
+  const token = order && order.clientToken
+  if (token) return `${window.location.origin}/order/${token}`
+  return (order && order.clientLink) || ''
+}
+
 function QRCodeVisual({ value }) {
   return (
     <div className="flex h-full w-full items-center justify-center bg-white p-0.5">
@@ -87,7 +93,7 @@ function PageHeader({ order, annexLabel }) {
 
         <div className="flex flex-col items-center">
           <div className="h-16 w-16 overflow-hidden rounded border border-black bg-white p-0.5">
-            <QRCodeVisual value={order.clientLink} />
+            <QRCodeVisual value={orderFormLink(order)} />
           </div>
           <span className="mt-1 text-[10px] font-black uppercase tracking-wider text-black">
             {annexLabel}
@@ -179,7 +185,7 @@ function SignatureBlock({ order }) {
 
       <div className="col-span-2 flex items-center justify-center rounded-md border border-black bg-white p-1">
         <div className="h-[72px] w-[72px]">
-          <QRCodeVisual value={order.clientLink} />
+          <QRCodeVisual value={orderFormLink(order)} />
         </div>
       </div>
     </div>
