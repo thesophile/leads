@@ -9,6 +9,7 @@ import { can } from '../../utils/permissions'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
+import { proposalItemsFromHtml, itemsTotal, itemsPrintHtml, currencySymbol, fmtAmount } from './proposalItemsUtils'
 
 function escapeHtml(value) {
   return String(value)
@@ -507,6 +508,7 @@ export default function ProposalPreview() {
         total: p.total || '',
         discount: p.discount || '',
         net: p.netAmount || '',
+        currency: p.currency || '',
         termsHtml: p.companyTerms || '',
         termsConditions: p.termsConditions || '',
         termsSummaryHtml: p.termsSummaryHtml || '',
@@ -531,6 +533,19 @@ export default function ProposalPreview() {
   }, [proposal])
 
   const hasFullTerms = htmlToPlainLines(proposalData?.termsFullHtml || '').length > 0
+
+  // "Proposal in Detail" = free-form text followed by any structured
+  // service/text blocks (bold title, description below, right-aligned amount).
+  const detailSplit = proposalItemsFromHtml(proposalData?.proposalInDetailsHtml || '')
+  const detailTotal = itemsTotal(detailSplit.items)
+  const composedDetailsHtml = [
+    detailSplit.freeHtml ? linesToHtml(htmlToPlainLines(detailSplit.freeHtml)) : '',
+    itemsPrintHtml(
+      detailSplit.items,
+      currencySymbol(proposalData?.currency),
+      detailTotal > 0 ? fmtAmount(detailTotal) : ''
+    ),
+  ].join('')
 
   // Temporarily hide the client acceptance box. Flip back to true to restore it.
   const SHOW_CLIENT_ACCEPTANCE = false
@@ -997,7 +1012,7 @@ const approvedByRef = useRef(null)
 
           {/* -------------------- PAGE 2+ (PROPOSAL IN DETAILS & SPECIFICATIONS + DETAILED TERMS & CONDITIONS) -------------------- */}
           <PagedSection
-            html={linesToHtml(htmlToPlainLines(proposalData.proposalInDetailsHtml))}
+            html={composedDetailsHtml}
             reserve={64}
             contentClass="text-[13px] leading-snug text-slate-800"
             sectionTitle="Proposal in Details &amp; Specifications"

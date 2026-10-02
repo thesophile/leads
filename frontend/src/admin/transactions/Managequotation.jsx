@@ -7,6 +7,7 @@ import { api } from '../../api/client'
 import { can } from '../../utils/permissions'
 import { useAuth } from '../../context/auth-context'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
+import { proposalItemsFromHtml, buildItemsHtml, itemsTotal, fmtAmount } from './proposalItemsUtils'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
@@ -717,6 +718,9 @@ export default function Managequotation() {
   const [sourceVal, setSourceVal] = useState('Google Search')
   const [currencyVal, setCurrencyVal] = useState('INR (₹)')
   const [remarksVal, setRemarksVal] = useState('')
+  const [proposalItems, setProposalItems] = useState([])
+  const [itemDraft, setItemDraft] = useState(null)
+  const [editingItemId, setEditingItemId] = useState(null)
   const [validationErrors, setValidationErrors] = useState({})
 
   function clearError(field) {
@@ -726,6 +730,53 @@ export default function Managequotation() {
       delete next[field]
       return next
     })
+  }
+
+  function startAddItem(type) {
+    setEditingItemId(null)
+    setItemDraft(
+      type === 'service'
+        ? { type: 'service', title: '', description: '', amount: '' }
+        : { type: 'text', text: '' }
+    )
+  }
+
+  function startEditItem(index) {
+    setEditingItemId(index)
+    setItemDraft({ ...proposalItems[index] })
+  }
+
+  function cancelItemDraft() {
+    setEditingItemId(null)
+    setItemDraft(null)
+  }
+
+  function saveItemDraft() {
+    if (!itemDraft) return
+    let next
+    if (editingItemId === null) {
+      next = [...proposalItems, itemDraft]
+    } else {
+      next = proposalItems.map((it, i) => (i === editingItemId ? itemDraft : it))
+    }
+    setProposalItems(next)
+    const t = itemsTotal(next)
+    if (t > 0) {
+      setTotalVal(fmtAmount(t))
+      clearError('totalVal')
+    }
+    setEditingItemId(null)
+    setItemDraft(null)
+  }
+
+  function deleteItem(index) {
+    const next = proposalItems.filter((_, i) => i !== index)
+    setProposalItems(next)
+    const t = itemsTotal(next)
+    if (t > 0) {
+      setTotalVal(fmtAmount(t))
+      clearError('totalVal')
+    }
   }
 
   const [submitMessage, setSubmitMessage] = useState('')
@@ -797,10 +848,11 @@ export default function Managequotation() {
         sourceVal,
         currencyVal,
         remarksVal,
+        proposalItemsKey: JSON.stringify(proposalItems),
       }),
       [
         bdm, qtnBy, revisionNo, customerPerson, companyName, mobileNum, email, categoryName, customerType, cityVal,
-        scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal,
+        scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal, proposalItems,
       ]
     )
   )
@@ -887,6 +939,7 @@ export default function Managequotation() {
 
   function hasFormContent() {
     return Boolean(
+      proposalItems.length > 0 ||
       (scopeHtml && scopeHtml.replace(/<[^>]*>/g, '').trim()) ||
         (termsHtml && termsHtml.replace(/<[^>]*>/g, '').trim()) ||
         customerPerson.trim() ||
@@ -901,14 +954,18 @@ export default function Managequotation() {
     setSelectedTemplateId(templateId)
     const tpl = resolveTemplate(templateId)
     if (tpl) {
+      const tplTerms = tpl.detailHtml || tpl.detail_html || ''
+      const { items: tplItems, freeHtml: tplFree } = proposalItemsFromHtml(tplTerms)
       setScopeHtml(tpl.scopeHtml || tpl.scope_html || '')
-      setTermsHtml(tpl.detailHtml || tpl.detail_html || '')
+      setProposalItems(tplItems)
+      setTermsHtml(tplFree)
       setCategoryName(tpl.category || 'General')
       setTotalVal(tpl.defaultTotal || tpl.default_total || '')
       setDiscountVal(tpl.defaultDiscount || tpl.default_discount || '')
       setCurrencyVal(tpl.currency || 'INR (₹)')
     } else {
       setScopeHtml('')
+      setProposalItems([])
       setTermsHtml('')
       setCategoryName('General')
       setTotalVal('')
@@ -977,7 +1034,11 @@ export default function Managequotation() {
     if (draft.category) setCategoryName(draft.category)
     if (draft.customerType !== undefined) setCustomerType(draft.customerType)
     if (draft.scopeHtml !== undefined) setScopeHtml(draft.scopeHtml)
-    if (draft.termsHtml !== undefined) setTermsHtml(draft.termsHtml)
+    if (draft.termsHtml !== undefined) {
+      const { items: draftItems, freeHtml: draftFree } = proposalItemsFromHtml(draft.termsHtml)
+      setProposalItems(draftItems)
+      setTermsHtml(draftFree)
+    }
     if (draft.total !== undefined) setTotalVal(draft.total)
     if (draft.discount !== undefined) setDiscountVal(draft.discount)
     if (draft.source) setSourceVal(draft.source)
@@ -1006,7 +1067,9 @@ export default function Managequotation() {
       setCustomerType(quote.customerType || '')
       setCityVal(quote.city || '')
       setScopeHtml(quote.proposalScope || '')
-      setTermsHtml(quote.termsConditions || '')
+      const { items: quoteItems, freeHtml: quoteFree } = proposalItemsFromHtml(quote.termsConditions || '')
+      setProposalItems(quoteItems)
+      setTermsHtml(quoteFree)
       setTotalVal(quote.total || quote.amount?.replace('₹', '') || '')
       setDiscountVal(quote.discount || '0')
       setSourceVal(quote.source || 'Google Search')
@@ -1027,6 +1090,7 @@ export default function Managequotation() {
       setCustomerType('')
       setCityVal('')
       setScopeHtml('')
+      setProposalItems([])
       setTermsHtml('')
       setTotalVal('')
       setDiscountVal('0')
@@ -1054,9 +1118,11 @@ export default function Managequotation() {
     const rules = [
       { key: 'customerPerson', label: 'Client Name', value: customerPerson.trim() },
       { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) },
-      { key: 'termsHtml', label: 'Proposal in Detail', value: stripHtml(termsHtml) },
-      { key: 'totalVal', label: 'Total', value: totalVal.trim() },
+      { key: 'termsHtml', label: 'Proposal in Detail', value: stripHtml(termsHtml) || (proposalItems.length > 0 ? 'x' : '') },
     ]
+    if (itemsTotal(proposalItems) <= 0) {
+      rules.push({ key: 'totalVal', label: 'Total', value: totalVal.trim() })
+    }
     rules.forEach(({ key, label, value }) => {
       if (!value) errors[key] = `${label} is required`
     })
@@ -1095,7 +1161,8 @@ export default function Managequotation() {
     }
 
     const currentScope = scopeHtml
-    const currentTerms = termsHtml
+    const currentTerms = buildItemsHtml(proposalItems) + termsHtml
+    const effectiveTotal = itemsTotal(proposalItems) > 0 ? fmtAmount(itemsTotal(proposalItems)) : totalVal
     let nextApprovalId = null
     let targetQuote = null
     let persistLeadId = null
@@ -1120,9 +1187,9 @@ export default function Managequotation() {
         category: categoryName || existing.category,
         customerType: customerType || existing.customerType,
         city: cityVal || existing.city,
-        total: totalVal,
+        total: effectiveTotal,
         discount: discountVal,
-        netAmount: netFrom(totalVal, discountVal),
+        netAmount: netFrom(effectiveTotal, discountVal),
         currency: currencyVal,
         source: sourceVal,
         proposalScope: currentScope,
@@ -1157,9 +1224,9 @@ export default function Managequotation() {
         date: 'Today',
         revisionNo,
         status: 'Not Sent',
-        total: totalVal,
+        total: effectiveTotal,
         discount: discountVal,
-        netAmount: netFrom(totalVal, discountVal),
+        netAmount: netFrom(effectiveTotal, discountVal),
         currency: currencyVal,
         source: sourceVal,
         proposalScope: currentScope,
@@ -1269,7 +1336,7 @@ export default function Managequotation() {
       category: categoryName,
       customerType,
       scopeHtml,
-      termsHtml,
+      termsHtml: buildItemsHtml(proposalItems) + termsHtml,
       total: totalVal,
       discount: discountVal,
       source: sourceVal,
@@ -1322,7 +1389,7 @@ export default function Managequotation() {
       defaultDiscount: discountVal,
       currency: currencyVal,
       scopeHtml,
-      detailHtml: termsHtml,
+      detailHtml: buildItemsHtml(proposalItems) + termsHtml,
     }
     setTemplateAction('update')
     try {
@@ -1354,7 +1421,7 @@ export default function Managequotation() {
       defaultDiscount: discountVal,
       currency: currencyVal,
       scopeHtml,
-      detailHtml: termsHtml,
+      detailHtml: buildItemsHtml(proposalItems) + termsHtml,
     }
     setTemplateAction('save')
     try {
@@ -2315,6 +2382,150 @@ export default function Managequotation() {
                 )}
               </div>
 
+              {/* Services / Text blocks below the detail editor */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-600">
+                    Add services or text blocks below the detail text
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startAddItem('text')}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-100 cursor-pointer"
+                    >
+                      ＋ Add text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startAddItem('service')}
+                      className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-[11px] font-bold text-brand-700 transition hover:bg-brand-100 cursor-pointer"
+                    >
+                      ＋ Add service
+                    </button>
+                  </div>
+                </div>
+
+                {itemDraft && (
+                  <div className="mb-2.5 rounded-lg border border-slate-300 bg-white p-3 space-y-2 animate-in fade-in duration-150">
+                    {itemDraft.type === 'service' ? (
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <input
+                          type="text"
+                          placeholder="Title"
+                          value={itemDraft.title}
+                          onChange={(e) => setItemDraft({ ...itemDraft, title: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Description"
+                          value={itemDraft.description}
+                          onChange={(e) => setItemDraft({ ...itemDraft, description: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder={`Amount ${currencySymbol(currencyVal)}`}
+                          value={itemDraft.amount}
+                          onChange={(e) =>
+                            setItemDraft({ ...itemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
+                          }
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                    ) : (
+                      <textarea
+                        rows={2}
+                        placeholder="Text block content"
+                        value={itemDraft.text}
+                        onChange={(e) => setItemDraft({ ...itemDraft, text: e.target.value })}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelItemDraft}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveItemDraft}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer"
+                      >
+                        {editingItemId === null ? 'Save' : 'Update'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {proposalItems.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {proposalItems.map((it, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            {it.type === 'service' ? (
+                              <>
+                                <p className="text-[12.5px] font-bold text-slate-900">{it.title}</p>
+                                <p className="mt-0.5 text-[11.5px] text-slate-600 leading-snug">
+                                  {it.description}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-[12.5px] text-slate-700 whitespace-pre-line">{it.text}</p>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {it.type === 'service' && (
+                              <span className="font-mono text-[12.5px] font-bold text-slate-900">
+                                {currencySymbol(currencyVal)}{fmtAmount(itemsTotal([it]))}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => startEditItem(i)}
+                              className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600 cursor-pointer"
+                              title="Edit"
+                            >
+                              <PencilIcon className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteItem(i)}
+                              className="rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                              title="Delete"
+                            >
+                              <TrashIcon className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {itemsTotal(proposalItems) > 0 && (
+                      <div className="flex items-center justify-end gap-3 px-1 pt-1">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          Total
+                        </span>
+                        <span className="font-mono text-[13.5px] font-bold text-slate-900">
+                          {currencySymbol(currencyVal)}{fmtAmount(itemsTotal(proposalItems))}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 text-center text-[11px] text-slate-400">
+                    No services or text blocks yet — add one above.
+                  </p>
+                )}
+              </div>
+
               {/* Financial & Source Grid */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 pt-1">
                 <div>
@@ -2323,13 +2534,14 @@ export default function Managequotation() {
                   </label>
                   <input
                     type="text"
-                    placeholder="Total Amount"
-                    value={totalVal}
+                    placeholder={itemsTotal(proposalItems) > 0 ? 'Auto-calculated from services' : 'Total Amount'}
+                    value={itemsTotal(proposalItems) > 0 ? fmtAmount(itemsTotal(proposalItems)) : totalVal}
+                    readOnly={itemsTotal(proposalItems) > 0}
                     onChange={(e) => {
                       setTotalVal(e.target.value)
                       clearError('totalVal')
                     }}
-                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${validationErrors.totalVal ? 'border-rose-400' : 'border-slate-300'}`}
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${itemsTotal(proposalItems) > 0 ? 'bg-slate-50 text-slate-600' : ''} ${validationErrors.totalVal ? 'border-rose-400' : 'border-slate-300'}`}
                   />
                   {validationErrors.totalVal && (
                     <p className="mt-1 text-[10px] font-semibold text-rose-600">

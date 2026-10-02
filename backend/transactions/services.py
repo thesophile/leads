@@ -15,7 +15,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.utils import timezone
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
@@ -96,6 +96,130 @@ def html_to_pdf_markup(html):
     # Drop any trailing break so the section does not end on a stray blank line.
     text = re.sub(r'(?:<br/>)+\s*$', '', text)
     return text
+
+
+# ---------------------------------------------------------------------------
+# Proposal service / text blocks
+# ---------------------------------------------------------------------------
+
+_ITEM_BLOCK_RE = re.compile(r'<div class="proposal-item-(service|text)">(.*?)</div>', re.S)
+_ITEM_SPAN_RE = re.compile(r'<span class="pi-([a-z]+)">(.*?)</span>', re.S)
+
+
+def split_proposal_items(html):
+    """Split composed proposal HTML into structured items and free-form text.
+
+    Mirrors the frontend ``proposalItemsUtils`` contract so the editor can
+    re-open the field and the PDF can lay services out as table rows instead of
+    jumbled paragraphs.
+    """
+    source = str(html or '')
+    if not source:
+        return [], ''
+    items = []
+    parts = []
+    last = 0
+    for match in _ITEM_BLOCK_RE.finditer(source):
+        if match.start() > last:
+            parts.append(source[last:match.start()])
+        kind = match.group(1)
+        fields = {
+            span.group(1): span.group(2)
+            for span in _ITEM_SPAN_RE.finditer(match.group(2))
+        }
+        if kind == 'service':
+            items.append({
+                'type': 'service',
+                'title': fields.get('title', '') or '',
+                'description': fields.get('desc', '') or '',
+                'amount': re.sub(r'[^0-9.]', '', fields.get('amount', '') or ''),
+            })
+        else:
+            items.append({'type': 'text', 'text': fields.get('text', '') or ''})
+        last = match.end()
+    if last < len(source):
+        parts.append(source[last:])
+    return items, ''.join(parts)
+
+
+def _indian_amount(value):
+    """Format a number with Indian digit grouping (e.g. 125000 -> 1,25,000)."""
+    digits = re.sub(r'[^0-9.]', '', str(value or '')) or '0'
+    try:
+        num = int(round(float(digits)))
+    except ValueError:
+        num = 0
+    s = str(num)
+    if len(s) <= 3:
+        return s
+    head = s[:-3]
+    tail = s[-3:]
+    groups = []
+    while head:
+        groups.append(head[-2:])
+        head = head[:-2]
+    return ','.join(reversed(groups)) + ',' + tail
+
+
+def items_table(elements, items, currency, body_style):
+    """Append a right-aligned service breakdown table to the PDF flowables."""
+    item_money = ParagraphStyle(
+        'itemmoney',
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        leading=13,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor('#0f172a'),
+    )
+    total_money = ParagraphStyle(
+        'totalmoney',
+        fontName='Helvetica-Bold',
+        fontSize=11,
+        leading=14,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor('#0f172a'),
+    )
+    currency_code = currency_label(currency)
+    rows = []
+    total = 0
+    for item in items:
+        if item['type'] == 'text':
+            markup = html_to_pdf_markup(item['text'])
+            if markup:
+                rows.append([Paragraph(markup, body_style), ''])
+            continue
+        title_markup = html_to_pdf_markup(item['title'])
+        desc_markup = html_to_pdf_markup(item['description'])
+        amount = re.sub(r'[^0-9.]', '', item.get('amount') or '') or '0'
+        try:
+            total += float(amount)
+        except ValueError:
+            pass
+        left_html = f'<b>{title_markup}</b>'
+        if desc_markup:
+            left_html += f'<br/><font size="8.5" color="#475569">{desc_markup}</font>'
+        rows.append([
+            Paragraph(left_html, body_style),
+            Paragraph(f'{currency_code} {_indian_amount(amount)}'.strip(), item_money),
+        ])
+    if total:
+        rows.append([
+            '',
+            Paragraph(f'TOTAL: {currency_code} {_indian_amount(round(total))}', total_money),
+        ])
+    table = Table(
+        rows,
+        colWidths=[142 * mm, 40 * mm],
+        style=TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (0, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LINEBELOW', (0, 0), (-1, -2), 0.25, colors.HexColor('#e2e8f0')),
+        ]),
+    )
+    elements.append(table)
 
 
 class _PdfStyles:
@@ -347,10 +471,14 @@ def render_quotation_pdf(quotation):
             elements.append(Paragraph(scope_markup, pdf_styles.body))
 
         # Terms & conditions.
-        terms_markup = html_to_pdf_markup(quotation.terms_conditions)
-        if terms_markup:
+        detail_items, detail_free_html = split_proposal_items(quotation.terms_conditions)
+        terms_markup = html_to_pdf_markup(detail_free_html)
+        if terms_markup or detail_items:
             elements.append(Paragraph('PROPOSAL IN DETAIL', pdf_styles.section))
+        if terms_markup:
             elements.append(Paragraph(terms_markup, pdf_styles.body))
+        if detail_items:
+            items_table(elements, detail_items, quotation.currency, pdf_styles.body)
 
         company_terms_markup = html_to_pdf_markup(
             (getattr(company, 'terms_full_html', '') or getattr(company, 'terms_summary_html', '')) or ''
@@ -830,7 +958,8 @@ def render_order_pdf(order):
         elements.append(Spacer(1, 5 * mm))
 
         # Order in details.
-        details_markup = html_to_pdf_markup(order.details)
+        _, order_details_free = split_proposal_items(order.details)
+        details_markup = html_to_pdf_markup(order_details_free)
         elements.append(section_box(
             'ORDER IN DETAILS',
             [Paragraph(details_markup or '&nbsp;', styles['body'])],

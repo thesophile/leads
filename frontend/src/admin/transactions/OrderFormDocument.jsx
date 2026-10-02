@@ -4,6 +4,7 @@ import Barcode from 'react-barcode'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import { htmlToPlainLines } from './orderFormDocumentUtils'
+import { stripItems } from './proposalItemsUtils'
 
 function orderFormLink(order) {
   const token = order && order.clientToken
@@ -328,7 +329,7 @@ export default function OrderFormDocument({ order }) {
                 className="text-[13px] leading-snug text-slate-800"
                 style={detailsPaged.cap ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
               >
-                {htmlToPlainLines(order.orderInDetailsHtml).map((line, i) => (
+                {htmlToPlainLines(stripItems(order.orderInDetailsHtml)).map((line, i) => (
                   <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
                 ))}
               </div>

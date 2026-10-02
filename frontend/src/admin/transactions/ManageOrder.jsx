@@ -8,6 +8,7 @@ import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import { limitRichHtml, richTextCharCount } from './orderFormDocumentUtils'
+import { stripItems } from './proposalItemsUtils'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
 import SendToClientModal from './SendToClientModal'
@@ -334,7 +335,7 @@ export default function ManageOrder() {
       setDeliveryDate(order.deliveryDate || '')
       setProposalNo(order.proposalNo || order.id || nextOrderNumber())
       setOrderSummaryHtml(order.scope || order.orderSummaryHtml || '')
-      setOrderInDetailsHtml(order.details || order.orderInDetailsHtml || '')
+      setOrderInDetailsHtml(stripItems(order.details || order.orderInDetailsHtml || ''))
       setTotalVal(order.total || '50,000')
       setDiscountVal(order.discount || '5,000')
       setNetVal(order.netAmount || '45,000.00')
