@@ -3,7 +3,7 @@
 # build. They are exposed via /api/version/ and shown on the About screen so a
 # deployed update is easy to verify from the web app.
 APP_MAJOR_VERSION = 'v2'  # application major version
-BACKEND_VERSION = 'b8'    # backend build version
+BACKEND_VERSION = 'b9'    # backend build version
 
 
 from datetime import timedelta
