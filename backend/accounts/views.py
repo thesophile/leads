@@ -31,8 +31,6 @@ from .permissions import IsSuperuser, can, require_permission
 from .models import Company, EmailChangeRequest, Role
 from .rbac import FLAT_PERMISSIONS, PERMISSION_GROUPS
 from utilities.models import log_activity
-from . import core_client
-from .core_client import CoreError, bearer_token
 from .serializers import (
     AdminManageSerializer,
     AdminRegisterSerializer,
@@ -88,84 +86,18 @@ def get_tokens_for_user(user):
 
 
 class RegisterView(APIView):
-    """Company admin self-registration.
-
-    The identity (and password) is created in SystemSoft Core; LEADS then
-    creates the matching local company/admin account and links it to the Core
-    user and organization.
-    """
+    """Company admin self-registration. Creates a staff-level admin (never a
+    superuser) for the registering company."""
 
     permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = AdminRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        company_name = data['company'].strip()
-        company_email = data.get('company_email', '')
-        company_phone = data.get('company_phone', '')
-        company_gstin = data.get('company_gstin', '') or ''
-        email = (data['email'] or '').strip().lower()
-        name = data['name']
-        phone = data.get('phone', '')
-        password = data['password']
-
-        # 1. Create the identity in Core (the source of truth for credentials).
-        try:
-            core_user = core_client.register_user(email, name, phone, password)
-        except CoreError as exc:
-            if exc.status_code == 400:
-                return Response(
-                    {'detail': 'An account with this email address already exists.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            return Response(
-                {'detail': 'Unable to reach the authentication service. Please try again.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        core_user_id = core_user['id']
-
-        # 2. Sign the new user in to Core to obtain tokens.
-        try:
-            tokens = core_client.login(email, password)
-        except CoreError:
-            return Response(
-                {'detail': 'Your account was created but sign-in failed. Please sign in.'},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        # 3. Create the Core organization; the creating user becomes its owner.
-        core_org_id = None
-        try:
-            org = core_client.create_organization(company_name, tokens['access'])
-            core_org_id = org['id']
-        except CoreError:
-            core_org_id = None
-
-        # 4. Create the local tenant + admin account linked to Core.
-        company = Company.objects.create(
-            name=company_name,
-            email=company_email,
-            phone=company_phone,
-            gstin=company_gstin,
-            core_org_id=core_org_id,
-        )
-        user = User.objects.create_user(
-            email=email,
-            password=None,
-            name=name,
-            phone=phone,
-            company=company,
-            role=company.roles.filter(code='admin').first(),
-            is_staff=True,
-        )
-        user.core_user_id = core_user_id
-        user.save(update_fields=['core_user_id'])
-
+        user = serializer.save()
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {'access': tokens['access'], 'refresh': tokens['refresh']},
+            'tokens': get_tokens_for_user(user),
         }, status=status.HTTP_201_CREATED)
 
 
@@ -294,18 +226,8 @@ class StaffResetPasswordView(APIView):
             )
         serializer = PasswordResetByAdminSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if user.core_user_id:
-            try:
-                core_client.patch_user(
-                    user.core_user_id,
-                    {'password': serializer.validated_data['new_password']},
-                    bearer_token(request),
-                )
-            except CoreError:
-                return Response(
-                    {'detail': 'Unable to update the password in the authentication service.'},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
         log_activity(
             request.user,
             request.user.company,
@@ -491,7 +413,7 @@ class SuperuserAdminListView(APIView):
         return Response(UserSerializer(admins, many=True).data)
 
     def post(self, request):
-        serializer = AdminManageSerializer(data=request.data, context={'request': request})
+        serializer = AdminManageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
@@ -517,9 +439,7 @@ class SuperuserAdminDetailView(APIView):
                 {'detail': 'Platform superadmin accounts cannot be edited here.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = AdminUpdateSerializer(
-            user, data=request.data, partial=True, context={'request': request}
-        )
+        serializer = AdminUpdateSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(UserSerializer(user).data)
@@ -565,77 +485,34 @@ class SuperuserAdminResetPasswordView(APIView):
             )
         serializer = PasswordResetByAdminSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if user.core_user_id:
-            try:
-                core_client.patch_user(
-                    user.core_user_id,
-                    {'password': serializer.validated_data['new_password']},
-                    bearer_token(request),
-                )
-            except CoreError:
-                return Response(
-                    {'detail': 'Unable to update the password in the authentication service.'},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
         return Response({'detail': 'Password updated successfully.'})
 
 
 class LoginView(APIView):
-    """Authenticate against SystemSoft Core, then resolve the local account."""
-
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = str(request.data.get('email', '')).strip().lower()
-        password = request.data.get('password', '')
-        if not email or not password:
-            return Response({'detail': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        try:
-            data = core_client.login(email, password)
-        except CoreError as exc:
-            if exc.status_code in (400, 401):
-                return Response({'detail': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
-            return Response(
-                {'detail': 'Unable to reach the authentication service. Please try again.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        core_user_id = data['user']['id']
-        user = User.objects.filter(core_user_id=core_user_id).first()
-        if user is None:
-            # Legacy account not yet linked: adopt it by email.
-            user = User.objects.filter(email__iexact=email).first()
-            if user is not None and user.core_user_id is None:
-                user.core_user_id = core_user_id
-                user.save(update_fields=['core_user_id'])
-        if user is None:
-            return Response(
-                {'detail': 'No LEADS account is linked to this user.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if not user.is_active:
-            return Response(
-                {'detail': 'This account has been deactivated. Contact your admin.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+        serializer = LoginSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {'access': data['access'], 'refresh': data['refresh']},
+            'tokens': get_tokens_for_user(user),
         })
 
 
 class LogoutView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         refresh_token = request.data.get('refresh')
         if refresh_token:
             try:
-                core_client.logout(refresh_token)
-            except CoreError:
-                pass  # already revoked or Core unreachable — still log out locally
+                RefreshToken(refresh_token).blacklist()
+            except Exception:
+                pass  # already revoked or malformed — still log the user out
         return Response({'detail': 'Logged out successfully.'})
 
 
@@ -1024,75 +901,55 @@ def resize_letterbox(img, target):
 
 
 class ChangePasswordView(APIView):
-    """Change the signed-in user's Core password."""
-
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        old_password = request.data.get('old_password', '')
-        new_password = request.data.get('new_password', '')
-        new_password2 = request.data.get('new_password2', '')
-        if not old_password or not new_password:
-            return Response(
-                {'detail': 'All password fields are required.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if new_password != new_password2:
-            return Response(
-                {'new_password2': ['New passwords do not match.']},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            core_client.change_password(bearer_token(request), old_password, new_password)
-        except CoreError as exc:
-            if exc.status_code in (400, 401):
-                return Response(
-                    {'detail': 'Current password is incorrect.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            return Response(
-                {'detail': 'Unable to reach the authentication service. Please try again.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        request.user.set_password(serializer.validated_data['new_password'])
+        request.user.save(update_fields=['password'])
         return Response({'detail': 'Password changed successfully.'})
 
 
 class PasswordResetRequestView(APIView):
-    """Start a Core password reset; the reset code is emailed by Core."""
-
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = str(request.data.get('email', '')).strip()
-        if not email:
-            return Response({'email': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            core_client.password_reset_request(email)
-        except CoreError:
-            pass  # never reveal whether the account exists
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.user  # None if the email doesn't exist (no info leak)
+        if user is not None:
+            token = default_token_generator.make_token(user)
+            try:
+                send_mail(
+                    subject='LEADS - Password reset code',
+                    message=(
+                        f'Hi {user.name},\n\n'
+                        f'You requested a password reset for {user.email}.\n\n'
+                        f'Your one-time reset code is:\n\n    {token}\n\n'
+                        f'Enter it on the reset screen along with your new password. '
+                        f'The code expires in 1 hour and can only be used once.\n\n'
+                        f'If you did not request this, you can safely ignore this email.\n\n'
+                        f'- LEADS'
+                    ),
+                    from_email=None,
+                    recipient_list=[user.email],
+                    fail_silently=True,
+                )
+            except Exception:
+                logger.exception('Failed to send password reset email to %s', user.email)
         return Response({'detail': 'If an account exists for this email, a reset code has been sent.'})
 
 
 class PasswordResetConfirmView(APIView):
-    """Finish the Core password reset using the emailed one-time code."""
-
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email', '')
-        token = request.data.get('token', '')
-        new_password = request.data.get('new_password', '')
-        if not email or not token or not new_password:
-            return Response({'detail': 'All fields are required.'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            core_client.password_reset_confirm(email, token, new_password)
-        except CoreError as exc:
-            if exc.status_code == 400:
-                return Response(exc.data or {'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
-            return Response(
-                {'detail': 'Unable to reach the authentication service. Please try again.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
         return Response({'detail': 'Password has been reset. You can now sign in.'})
 
 
@@ -1228,13 +1085,6 @@ class EmailChangeVerifyView(APIView):
         old_email = user.email
         user.email = User.objects.normalize_email(new_email)
         user.save(update_fields=['email', 'updated_at'])
-        if user.core_user_id:
-            try:
-                core_client.patch_user(
-                    user.core_user_id, {'email': user.email}, bearer_token(request)
-                )
-            except CoreError:
-                pass
         log_activity(
             user,
             user.company,
@@ -1245,13 +1095,7 @@ class EmailChangeVerifyView(APIView):
         )
 
         request_row.delete()
-        access = bearer_token(request)
-        if access:
-            try:
-                core_client.logout_all(access)
-            except CoreError:
-                pass
-        blacklist_user_tokens(user)  # legacy local tokens (if any)
+        blacklist_user_tokens(user)
 
         return Response({
             'detail': (
@@ -1263,25 +1107,32 @@ class EmailChangeVerifyView(APIView):
         })
 
 
-class SafeTokenRefreshView(APIView):
-    """Refresh a Core-issued access token by proxying to Core."""
+class SafeTokenRefreshSerializer(TokenRefreshSerializer):
+    """TokenRefreshSerializer that treats a missing user as a clean 401.
 
-    permission_classes = [AllowAny]
+    SimpleJWT's default implementation does an unguarded ``User.objects.get``
+    which raises ``User.DoesNotExist`` (a 500) when the refreshed token belongs
+    to a user row that no longer exists (e.g. after a backup restore wiped and
+    reloaded the DB). We resolve the account up front and fail with the same
+    "no active account" error used elsewhere.
+    """
 
-    def post(self, request):
-        refresh_token = request.data.get('refresh')
-        if not refresh_token:
-            return Response({'detail': 'refresh is required.'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            data = core_client.refresh(refresh_token)
-        except CoreError as exc:
-            if exc.status_code in (400, 401):
-                return Response(
-                    {'detail': 'Your session has expired. Please sign in again.'},
-                    status=status.HTTP_401_UNAUTHORIZED,
+    def validate(self, attrs):
+        refresh = self.token_class(attrs['refresh'])
+        user_id = refresh.payload.get(api_settings.USER_ID_CLAIM, None)
+        if user_id:
+            user = get_user_model().objects.filter(
+                **{api_settings.USER_ID_FIELD: user_id}
+            ).first()
+            if user is None or not api_settings.USER_AUTHENTICATION_RULE(user):
+                raise AuthenticationFailed(
+                    self.error_messages['no_active_account'],
+                    code='no_active_account',
                 )
-            return Response(
-                {'detail': 'Unable to reach the authentication service. Please try again.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        return Response(data)
+        return super().validate(attrs)
+
+
+class SafeTokenRefreshView(TokenRefreshView):
+    """Refresh endpoint that never 500s on a deleted account."""
+
+    serializer_class = SafeTokenRefreshSerializer
