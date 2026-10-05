@@ -26,6 +26,8 @@ function mapPublicOrder(d, token) {
     approvedByCompany: d.approvedByCompany || '',
     approvedAt: d.approvedAt || '',
     acceptedAt: d.acceptedAt || '',
+    acceptedByName: d.acceptedByName || '',
+    acceptedByDesignation: d.acceptedByDesignation || '',
     orderSummaryHtml: d.scope || '',
     orderInDetailsHtml: d.details || '',
     termsSummaryHtml: d.termsSummaryHtml || '',

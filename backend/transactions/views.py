@@ -2639,10 +2639,19 @@ class ClientQuotationResponseView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         message = str(request.data.get('message') or '').strip()
+        accepted_by_name = str(request.data.get('name') or '').strip()
+        accepted_by_designation = str(request.data.get('designation') or '').strip()
+        if accepted and (not accepted_by_name or not accepted_by_designation):
+            return Response(
+                {'detail': 'Please provide your name and designation to accept the quotation.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         verb = 'accepted' if accepted else 'declined'
         quotation.client_status = Quotation.CLIENT_ACCEPTED if accepted else Quotation.CLIENT_DECLINED
         quotation.status = 'Accepted' if accepted else 'Declined'
         quotation.client_message = message
+        quotation.client_accepted_by_name = accepted_by_name
+        quotation.client_accepted_by_designation = accepted_by_designation
         quotation.client_responded_at = timezone.now()
         # Single-use: revoke the token once a decision is recorded.
         quotation.client_token = ''
@@ -4265,6 +4274,8 @@ def public_order_payload(order):
         'approvedByCompany': approval['approvedByCompany'],
         'approvedAt': approval['approvedAt'],
         'acceptedAt': approval['acceptedAt'],
+        'acceptedByName': approval['acceptedByName'],
+        'acceptedByDesignation': approval['acceptedByDesignation'],
         'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
         'termsSummaryHtml': tenant.terms_summary_html if tenant else '',
         'termsFullHtml': tenant.terms_full_html if tenant else '',

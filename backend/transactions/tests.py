@@ -2531,6 +2531,19 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
             total='10000', net_amount='10000', date='2026-09-10',
         )
 
+    def post_accept(self, **overrides):
+        payload = {
+            'decision': 'accept',
+            'message': '',
+            'name': 'Confirm Person',
+            'designation': 'Procurement Officer',
+        }
+        payload.update(overrides)
+        return self.client.post(
+            '/api/transactions/public/quotations/tok-confirm/respond/',
+            payload, format='json',
+        )
+
     def test_accept_sends_confirmation_email(self):
         import types
         from unittest.mock import patch
@@ -2546,23 +2559,18 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
             'transactions.views.build_quotation_accepted_email',
             return_value=fake_email,
         ) as builder:
-            resp = self.client.post(
-                '/api/transactions/public/quotations/tok-confirm/respond/',
-                {'decision': 'accept', 'message': ''}, format='json',
-            )
+            resp = self.post_accept()
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(sent.get('called'))
         self.assertTrue(builder.called)
 
     def test_accept_creates_order_and_client_detail(self):
+        from transactions.services import order_approval_info
         from unittest.mock import patch
 
         self.client.force_authenticate(None)
         with patch('transactions.views.build_quotation_accepted_email') as builder:
-            resp = self.client.post(
-                '/api/transactions/public/quotations/tok-confirm/respond/',
-                {'decision': 'accept', 'message': ''}, format='json',
-            )
+            resp = self.post_accept()
         self.assertEqual(resp.status_code, 200)
         order = Order.objects.filter(lead_id=self.lead.id).first()
         self.assertIsNotNone(order)
@@ -2575,6 +2583,26 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
         self.assertEqual(record.client_name, 'Confirm Person')
         self.lead.refresh_from_db()
         self.assertEqual(self.lead.status, Lead.STATUS_ORDER)
+        # The acceptor identity captured on the quotation is exposed on the
+        # order form's "Accepted By" block.
+        self.quotation.refresh_from_db()
+        self.assertEqual(self.quotation.client_accepted_by_name, 'Confirm Person')
+        self.assertEqual(self.quotation.client_accepted_by_designation, 'Procurement Officer')
+        info = order_approval_info(order)
+        self.assertEqual(info['acceptedByName'], 'Confirm Person')
+        self.assertEqual(info['acceptedByDesignation'], 'Procurement Officer')
+        self.assertEqual(info['acceptedAt'], self.quotation.client_responded_at.strftime('%d-%m-%Y %I:%M %p'))
+
+    def test_accept_requires_name_and_designation(self):
+        from unittest.mock import patch
+
+        for payload in ({'name': ''}, {'designation': ''}, {'name': '   ', 'designation': 'Officer'}):
+            with patch('transactions.views.build_quotation_accepted_email') as builder:
+                resp = self.post_accept(**payload)
+            self.assertEqual(resp.status_code, 400)
+            builder.assert_not_called()
+            self.quotation.refresh_from_db()
+            self.assertEqual(self.quotation.client_status, Quotation.CLIENT_PENDING)
 
     def test_confirmation_email_has_no_attachment(self):
         from transactions.services import build_quotation_accepted_email
@@ -2609,10 +2637,7 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
 
         sibling = self.make_sibling_version()
         with patch('transactions.views.build_quotation_accepted_email'):
-            resp = self.client.post(
-                '/api/transactions/public/quotations/tok-confirm/respond/',
-                {'decision': 'accept', 'message': ''}, format='json',
-            )
+            resp = self.post_accept()
         self.assertEqual(resp.status_code, 200)
         sibling.refresh_from_db()
         self.assertIsNotNone(sibling.superseded_at)
@@ -2628,10 +2653,7 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
 
         sibling = self.make_sibling_version()
         with patch('transactions.views.build_quotation_accepted_email'):
-            self.client.post(
-                '/api/transactions/public/quotations/tok-confirm/respond/',
-                {'decision': 'accept', 'message': ''}, format='json',
-            )
+            self.post_accept()
         viewer = User.objects.create_user(
             email='viewer2@confirm.com', password='x', name='Viewer Two',
             role=self.company.roles.create(
@@ -2651,10 +2673,7 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
 
         sibling = self.make_sibling_version()
         with patch('transactions.views.build_quotation_accepted_email'):
-            self.client.post(
-                '/api/transactions/public/quotations/tok-confirm/respond/',
-                {'decision': 'accept', 'message': ''}, format='json',
-            )
+            self.post_accept()
         manager = User.objects.create_user(
             email='mgr2@confirm.com', password='x', name='Manager Two',
             role=self.company.roles.get(code='manager'), company=self.company,

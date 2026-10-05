@@ -208,10 +208,16 @@ function AcceptedByCell({ order }) {
       </div>
       <div className="mt-1 flex items-stretch gap-2">
         <div className="flex-1 text-[11px]">
-          <p className="text-slate-800 font-semibold leading-tight">{order.customerCompany || 'Client'}</p>
+          {order.acceptedByName && (
+            <p className="text-slate-900 font-extrabold leading-tight">{order.acceptedByName}</p>
+          )}
+          {order.acceptedByDesignation && (
+            <p className="text-slate-600 font-semibold mt-0.5 leading-tight">{order.acceptedByDesignation}</p>
+          )}
+          <p className="text-slate-800 font-semibold mt-0.5 leading-tight">{order.customerCompany || 'Client'}</p>
           {order.acceptedAt && (
             <p className="text-slate-500 mt-1">
-              Accepted: <span className="font-mono font-bold text-slate-800">{order.acceptedAt}</span>
+              Date &amp; Time: <span className="font-mono font-bold text-slate-800">{order.acceptedAt}</span>
             </p>
           )}
         </div>

@@ -93,6 +93,10 @@ export default function ClientQuotation() {
   const [actionError, setActionError] = useState('')
   const [done, setDone] = useState(false)
 
+  const [acceptorName, setAcceptorName] = useState('')
+  const [acceptorDesignation, setAcceptorDesignation] = useState('')
+  const [acceptorErrors, setAcceptorErrors] = useState({})
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -120,7 +124,12 @@ export default function ClientQuotation() {
     try {
       const d = await api.post(
         `/transactions/public/quotations/${encodeURIComponent(token)}/respond/`,
-        { decision, message: message.trim() }
+        {
+          decision,
+          message: message.trim(),
+          name: acceptorName.trim(),
+          designation: acceptorDesignation.trim(),
+        }
       )
       setData(d)
       setDone(true)
@@ -129,6 +138,26 @@ export default function ClientQuotation() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function handleClickAccept() {
+    setActionError('')
+    setAcceptorErrors({})
+    setDecision('accept')
+  }
+
+  function handleCancelAccept() {
+    setDecision(null)
+    setAcceptorErrors({})
+  }
+
+  function handleConfirmAccept() {
+    const errors = {}
+    if (!acceptorName.trim()) errors.name = 'Name is required'
+    if (!acceptorDesignation.trim()) errors.designation = 'Designation is required'
+    setAcceptorErrors(errors)
+    if (Object.keys(errors).length > 0) return
+    handleSubmit()
   }
 
   function decisionCopy() {
@@ -441,10 +470,7 @@ export default function ClientQuotation() {
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 sm:gap-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      setActionError('')
-                      setDecision('accept')
-                    }}
+                    onClick={handleClickAccept}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition cursor-pointer active:scale-[0.98]"
                   >
                     <CheckIcon />
@@ -462,15 +488,15 @@ export default function ClientQuotation() {
                     Decline
                   </button>
                 </div>
-              ) : (
+              ) : decision === 'decline' ? (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold text-slate-800">
-                        Reviewing to <span className={decision === 'accept' ? 'text-emerald-600' : 'text-rose-600'}>{chosen.word.toLowerCase()}</span>
+                        Reviewing to decline
                       </p>
                       <p className="text-[10.5px] text-slate-500 mt-0.5">
-                        Confirm your {chosen.word.toLowerCase()} to submit your response. This action cannot be undone.
+                        Confirm your decline to submit your response. This action cannot be undone.
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -489,6 +515,88 @@ export default function ClientQuotation() {
                         className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-60 ${chosen.cls}`}
                       >
                         {submitting ? 'Submitting…' : `Confirm ${chosen.word}`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Accept modal — collect the acceptor's identity before confirming */}
+              {decision === 'accept' && (
+                <div
+                  className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget && !submitting) handleCancelAccept()
+                  }}
+                >
+                  <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    <div className="p-5">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
+                          <CheckIcon />
+                        </span>
+                        <h3 className="text-sm font-bold text-slate-900">Accept quotation</h3>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+                        Please confirm who is accepting this quotation on behalf of {d.company}.
+                      </p>
+
+                      <label className="mt-4 block text-[11px] font-bold text-slate-700 mb-1">
+                        Your name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        value={acceptorName}
+                        onChange={(e) => setAcceptorName(e.target.value)}
+                        placeholder="Enter your full name"
+                        autoFocus
+                        disabled={submitting}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60"
+                      />
+                      {acceptorErrors.name && (
+                        <p className="mt-1 text-[11px] font-semibold text-rose-600">{acceptorErrors.name}</p>
+                      )}
+
+                      <label className="mt-3 block text-[11px] font-bold text-slate-700 mb-1">
+                        Your designation <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        value={acceptorDesignation}
+                        onChange={(e) => setAcceptorDesignation(e.target.value)}
+                        placeholder="Enter your designation / role"
+                        disabled={submitting}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60"
+                      />
+                      {acceptorErrors.designation && (
+                        <p className="mt-1 text-[11px] font-semibold text-rose-600">{acceptorErrors.designation}</p>
+                      )}
+
+                      <p className="mt-3 text-[10.5px] text-slate-400 leading-relaxed">
+                        This information will be shown in the order form.
+                      </p>
+                    </div>
+                    {actionError && (
+                      <div className="px-5 pb-3.5">
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-medium text-rose-600">
+                          {actionError}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+                      <button
+                        type="button"
+                        onClick={handleCancelAccept}
+                        disabled={submitting}
+                        className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmAccept}
+                        disabled={submitting}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {submitting ? 'Submitting…' : 'Confirm Accept'}
                       </button>
                     </div>
                   </div>

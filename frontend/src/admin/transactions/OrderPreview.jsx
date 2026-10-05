@@ -33,6 +33,8 @@ function mapOrder(o) {
     approvedByCompany: o.approvedByCompany || '',
     approvedAt: o.approvedAt || '',
     acceptedAt: o.acceptedAt || '',
+    acceptedByName: o.acceptedByName || '',
+    acceptedByDesignation: o.acceptedByDesignation || '',
     orderSummaryHtml: o.scope || '',
     orderInDetailsHtml: o.details || '',
     termsSummaryHtml: o.termsSummaryHtml || '',
@@ -137,6 +139,8 @@ export default function OrderPreview() {
         approvedByCompany: mapped.approvedByCompany || prev?.approvedByCompany || '',
         approvedAt: mapped.approvedAt || prev?.approvedAt || '',
         acceptedAt: mapped.acceptedAt || prev?.acceptedAt || '',
+        acceptedByName: mapped.acceptedByName || prev?.acceptedByName || '',
+        acceptedByDesignation: mapped.acceptedByDesignation || prev?.acceptedByDesignation || '',
       }
     })
   }

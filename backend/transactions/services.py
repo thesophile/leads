@@ -866,6 +866,8 @@ def order_approval_info(order):
         'approvedByCompany': company,
         'approvedAt': iso_date,
         'acceptedAt': iso_accepted,
+        'acceptedByName': getattr(quote, 'client_accepted_by_name', '') if quote is not None else '',
+        'acceptedByDesignation': getattr(quote, 'client_accepted_by_designation', '') if quote is not None else '',
     }
     try:
         setattr(order, '_order_approval_info', info)
@@ -1056,7 +1058,14 @@ def render_order_pdf(order):
             )
             approved = section_box('APPROVED BY', [approved_inner], cell_width)
 
-            accepted_flow = [Paragraph(order.company or 'Client', styles['sig_company'])]
+            accepted_flow = []
+            if approval['acceptedByName']:
+                accepted_flow.append(Paragraph(approval['acceptedByName'], styles['sig_company']))
+            accepted_flow.append(Paragraph(
+                approval['acceptedByDesignation'] or '&nbsp;',
+                styles['sig_note'],
+            ))
+            accepted_flow.append(Paragraph(order.company or 'Client', styles['sig_company']))
             if approval['acceptedAt']:
                 accepted_flow.append(Paragraph(
                     f"Accepted: {approval['acceptedAt']}",

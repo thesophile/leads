@@ -306,6 +306,10 @@ class Quotation(models.Model):
     )
     client_message = models.TextField(blank=True)
     client_responded_at = models.DateTimeField(null=True, blank=True)
+    # Who accepted the quotation on the client side. Captured from the public
+    # accept form and printed on the order form's "Accepted By" block.
+    client_accepted_by_name = models.CharField(max_length=160, blank=True)
+    client_accepted_by_designation = models.CharField(max_length=160, blank=True)
     # Set when a sibling version of the same lead is accepted by the client.
     # A superseded version must never regain a live client link or be re-sent.
     superseded_at = models.DateTimeField(null=True, blank=True)
