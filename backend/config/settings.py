@@ -153,9 +153,12 @@ FRONTEND_URL = (
 )
 
 # DRF + JWT
+# Authentication is delegated to SystemSoft Core: tokens are issued by Core and
+# validated locally with the shared signing key, then mapped to the local
+# accounts.User via its core_user_id link.
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'accounts.authentication.CoreJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -163,10 +166,16 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
+    # Must match the SIGNING_KEY configured on the SystemSoft Core service.
+    'SIGNING_KEY': os.environ.get('AUTH_SIGNING_KEY', SECRET_KEY),
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# Base URL of the SystemSoft Core API. Register/login/password/logout requests
+# are proxied here server-to-server.
+CORE_API_URL = os.environ.get('CORE_API_URL', 'http://localhost:8000').rstrip('/')
 
 # Email: when EMAIL_HOST is set in the environment, real mail is sent over
 # SMTP and every message is also printed to the terminal. Without EMAIL_HOST

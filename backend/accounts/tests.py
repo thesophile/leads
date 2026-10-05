@@ -14,10 +14,94 @@ from transactions.admin import LeadAdmin
 from transactions.models import Lead
 
 from .admin import UserAdmin
+from .core_client import CoreError
 from .models import Company, Role
 from .serializers import AdminRegisterSerializer
 
 User = get_user_model()
+
+
+class _FakeCore:
+    """In-memory stand-in for the SystemSoft Core identity service."""
+
+    def __init__(self):
+        self._next_id = 1000
+        self.users = {}
+        self.patched = []
+
+    def _new_id(self):
+        self._next_id += 1
+        return self._next_id
+
+    def register_user(self, email, name, phone, password):
+        key = (email or '').lower()
+        if key in self.users:
+            raise CoreError(400, {'email': ['A user with this email already exists.']})
+        uid = self._new_id()
+        self.users[key] = {'id': uid, 'password': password}
+        return {'id': uid, 'email': email, 'name': name, 'phone': phone}
+
+    def login(self, email, password):
+        user = self.users.get((email or '').lower())
+        if user is None or user['password'] != password:
+            raise CoreError(401, {'detail': 'No active account found with the given credentials'})
+        return {
+            'access': f'access-{user["id"]}',
+            'refresh': f'refresh-{user["id"]}',
+            'user': {'id': user['id'], 'email': email},
+        }
+
+    def refresh(self, token):
+        if not token:
+            raise CoreError(400, {'detail': 'Invalid token.'})
+        return {'access': 'refreshed-access'}
+
+    def logout(self, token):
+        return {'detail': 'Logged out successfully.'}
+
+    def logout_all(self, access):
+        return {'detail': 'All sessions signed out.'}
+
+    def change_password(self, access, old_password, new_password):
+        for user in self.users.values():
+            if f'access-{user["id"]}' == access:
+                if user['password'] != old_password:
+                    raise CoreError(400, {'old_password': ['Current password is incorrect.']})
+                user['password'] = new_password
+                return {'detail': 'Password changed successfully.'}
+        raise CoreError(401, {'detail': 'No active account found.'})
+
+    def create_organization(self, name, access):
+        return {'id': self._new_id(), 'name': name}
+
+    def create_membership(self, *args, **kwargs):
+        return {'id': self._new_id()}
+
+    def patch_user(self, core_user_id, data, access=None):
+        self.patched.append({'user_id': core_user_id, 'data': data})
+        return {'id': core_user_id}
+
+    def password_reset_request(self, email):
+        return {'detail': 'If an account exists for this email, a reset code has been sent.'}
+
+    def password_reset_confirm(self, email, token, new_password):
+        return {'detail': 'Password has been reset. You can now sign in.'}
+
+
+class CoreStubMixin:
+    """Route all Core client calls to an in-memory stub for the test."""
+
+    CORE_METHODS = (
+        'register_user', 'login', 'refresh', 'logout', 'logout_all', 'change_password',
+        'create_organization', 'create_membership', 'patch_user',
+        'password_reset_request', 'password_reset_confirm',
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.core = _FakeCore()
+        for name in self.CORE_METHODS:
+            self.enterContext(patch(f'accounts.core_client.{name}', getattr(self.core, name)))
 
 
 def make_company(name):
@@ -28,7 +112,7 @@ def admin_role(company):
     return company.roles.get(code='admin')
 
 
-class RegistrationTests(TestCase):
+class RegistrationTests(CoreStubMixin, TestCase):
     def test_registered_admin_is_not_superuser(self):
         serializer = AdminRegisterSerializer(data={
             'company': 'Acme Corp',
@@ -122,7 +206,7 @@ class AdminQuerysetScopingTests(TestCase):
         self.assertEqual(set(qs.values_list('id', flat=True)), {'RL-1'})
 
 
-class SuperuserAdminManagementTests(APITestCase):
+class SuperuserAdminManagementTests(CoreStubMixin, APITestCase):
     def setUp(self):
         acme, globex = make_company('Acme'), make_company('Globex')
         self.superuser = User.objects.create_superuser(
@@ -193,6 +277,8 @@ class SuperuserAdminManagementTests(APITestCase):
         self.assertTrue(User.objects.filter(pk=other.pk).exists())
 
     def test_reset_password_works_cross_company(self):
+        self.admin_b.core_user_id = 555
+        self.admin_b.save(update_fields=['core_user_id'])
         self.client.force_authenticate(self.superuser)
         resp = self.client.post(
             f'/api/auth/admins/{self.admin_b.pk}/reset-password/',
@@ -200,8 +286,10 @@ class SuperuserAdminManagementTests(APITestCase):
             format='json',
         )
         self.assertEqual(resp.status_code, 200)
-        self.admin_b.refresh_from_db()
-        self.assertTrue(self.admin_b.check_password('NewPass123!'))
+        # The password change is delegated to Core.
+        self.assertTrue(
+            any(p['data'].get('password') == 'NewPass123!' for p in self.core.patched)
+        )
 
 
 class StaffRenamePropagationTests(APITestCase):
@@ -285,7 +373,7 @@ class StaffRenameCrossTenantIsolationTests(APITestCase):
         self.assertEqual(self.lead_b.assigned_to, 'Shanu VR')
 
 
-class StaffAdminProtectionTests(APITestCase):
+class StaffAdminProtectionTests(CoreStubMixin, APITestCase):
     """A lesser role cannot administer the company admin.
 
     Authority is read from the permission system: an actor may only manage a
@@ -465,28 +553,24 @@ class AdminRenamePropagationTests(APITestCase):
 
 
 class TokenRefreshSafetyTests(APITestCase):
-    """Refreshing with a token whose user no longer exists must be a 401,
-    not a 500 (e.g. after a backup restore replaced the database)."""
+    """Token refresh is delegated to Core; Core errors map to clean 401s."""
 
-    def setUp(self):
-        self.company = make_company('Refresh Co')
-        self.user = User.objects.create_user(
-            email='refresh@acme.com', password='x', name='Refresh User',
-            role=admin_role(self.company), company=self.company,
-        )
-        self.refresh_token = str(RefreshToken.for_user(self.user))
-
-    def test_refresh_returns_200_when_user_exists(self):
-        resp = self.client.post('/api/auth/token/refresh/', {
-            'refresh': self.refresh_token,
-        }, format='json')
+    def test_refresh_proxies_to_core(self):
+        with patch('accounts.core_client.refresh', return_value={'access': 'refreshed-access'}):
+            resp = self.client.post('/api/auth/token/refresh/', {
+                'refresh': 'a-refresh-token',
+            }, format='json')
         self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['access'], 'refreshed-access')
 
-    def test_refresh_returns_401_when_user_is_deleted(self):
-        self.user.delete()
-        resp = self.client.post('/api/auth/token/refresh/', {
-            'refresh': self.refresh_token,
-        }, format='json')
+    def test_refresh_invalid_token_is_401(self):
+        with patch(
+            'accounts.core_client.refresh',
+            side_effect=CoreError(401, {'detail': 'Token is invalid or expired.'}),
+        ):
+            resp = self.client.post('/api/auth/token/refresh/', {
+                'refresh': 'a-refresh-token',
+            }, format='json')
         self.assertEqual(resp.status_code, 401)
 
 
@@ -719,9 +803,9 @@ class SelfRoleChangeGuardTests(APITestCase):
 
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-class EmailChangeOtpTests(APITestCase):
+class EmailChangeOtpTests(CoreStubMixin, APITestCase):
     """Self-service email changes send an OTP to the *new* address and the new
-    email is persisted only after verification; the user is then signed out."""
+    email is persisted only after verification; the change is mirrored to Core."""
 
     FIXED_CODE = '424242'
 
@@ -733,6 +817,9 @@ class EmailChangeOtpTests(APITestCase):
         )
 
     def _auth(self):
+        # Link the local account to Core so a Core-style JWT resolves to it.
+        self.user.core_user_id = self.user.id
+        self.user.save(update_fields=['core_user_id'])
         self.refresh_token = str(RefreshToken.for_user(self.user))
         self.token = RefreshToken(self.refresh_token).access_token
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
@@ -802,14 +889,10 @@ class EmailChangeOtpTests(APITestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, 'new@emailco.com')
         self.assertFalse(hasattr(self.user, 'email_change_request'))
-
-        # Every outstanding refresh token is blacklisted and can no longer refresh.
-        self.assertTrue(OutstandingToken.objects.filter(user=self.user).exists())
-        self.assertTrue(BlacklistedToken.objects.filter(token__user=self.user).exists())
-        resp = self.client.post('/api/auth/token/refresh/', {
-            'refresh': self.refresh_token,
-        }, format='json')
-        self.assertIn(resp.status_code, (401, 400))
+        # The new address is mirrored to the Core identity.
+        self.assertTrue(
+            any(p['data'].get('email') == 'new@emailco.com' for p in self.core.patched)
+        )
 
     def test_verify_without_request_fails(self):
         self.client.force_authenticate(self.user)

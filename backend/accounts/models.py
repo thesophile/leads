@@ -55,6 +55,8 @@ class Company(models.Model):
     gstin = models.CharField(max_length=50, blank=True)
     default_bank = models.CharField(max_length=150, blank=True)
     base_currency = models.CharField(max_length=30, blank=True, default='INR')
+    # Id of the matching organization in SystemSoft Core (identity provider).
+    core_org_id = models.IntegerField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -142,6 +144,15 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
+    # Id of the matching user in SystemSoft Core. This is the identity link used
+    # to resolve a Core-issued JWT to this local account. The ``password``
+    # column is retained for historical data only and is no longer used.
+    core_user_id = models.IntegerField(
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+    )
     date_joined = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

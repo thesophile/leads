@@ -3,6 +3,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework import serializers
 
+from . import core_client
+from .core_client import CoreError, bearer_token
 from .models import Company, Role
 from .rbac import FLAT_PERMISSIONS
 
@@ -149,22 +151,50 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         from .models import Company
 
+        request = self.context.get('request')
         company_name = validated_data.pop('company').strip()
         company_email = validated_data.pop('company_email', '')
         company_phone = validated_data.pop('company_phone', '')
         company_gstin = validated_data.pop('company_gstin', '') or ''
+        password = validated_data.pop('password')
+        validated_data.pop('password2', None)
+        email = validated_data.get('email', '')
+        name = validated_data.get('name', '')
+        phone = validated_data.get('phone', '')
+
+        # Create the Core identity first — Core owns credentials.
+        try:
+            core_user = core_client.register_user(email, name, phone, password)
+        except CoreError as exc:
+            raise serializers.ValidationError({'email': exc.message})
+
         company, created = Company.objects.get_or_create(name=company_name)
-        if not created or not company.email:
+        if created or not company.email:
             company.email = company_email
             company.phone = company_phone
             company.gstin = company_gstin
             company.save(update_fields=['email', 'phone', 'gstin'])
-        validated_data.pop('password2')
+
+        access = bearer_token(request) if request else None
+        if not company.core_org_id:
+            try:
+                org = core_client.create_organization(company_name, access)
+                company.core_org_id = org['id']
+                company.save(update_fields=['core_org_id'])
+            except CoreError:
+                pass
+        if company.core_org_id:
+            try:
+                core_client.create_membership(core_user['id'], company.core_org_id, access, role='admin')
+            except CoreError:
+                pass
+
+        validated_data['core_user_id'] = core_user['id']
         validated_data['role'] = company.roles.filter(code='admin').first()
         validated_data['is_staff'] = True
         # Intentionally NOT a superuser: this endpoint is publicly reachable,
         # so the registering company admin must not get cross-tenant access.
-        return User.objects.create_user(company=company, **validated_data)
+        return User.objects.create_user(company=company, password=None, **validated_data)
 
 
 class AdminManageSerializer(AdminRegisterSerializer):
@@ -188,6 +218,19 @@ class AdminUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['name', 'phone', 'email', 'is_active']
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        if instance.core_user_id and validated_data:
+            try:
+                core_client.patch_user(
+                    instance.core_user_id,
+                    validated_data,
+                    bearer_token(self.context.get('request')),
+                )
+            except CoreError:
+                pass
+        return instance
 
 
 class StaffCreateSerializer(serializers.ModelSerializer):
@@ -226,15 +269,38 @@ class StaffCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         from .models import User as UserModel
 
-        owner = self.context['request'].user
+        request = self.context['request']
+        owner = request.user
         company = owner.company
         mobile = validated_data.pop('mobile', '') or validated_data.get('phone', '')
         branch_name = validated_data.pop('branch', '') or ''
+        password = validated_data.pop('password')
+        email = validated_data.get('email', '')
+        name = validated_data.get('name', '')
+        phone = validated_data.get('phone', '')
+
+        # Create the Core identity first — Core owns credentials.
+        try:
+            core_user = core_client.register_user(email, name, phone, password)
+        except CoreError as exc:
+            raise serializers.ValidationError({'email': exc.message})
+        validated_data['core_user_id'] = core_user['id']
 
         user = UserModel.objects.create_user(
             **validated_data,
             company=company,
+            password=None,
         )
+
+        # Make the staff member a member of the Core organization so company
+        # admins may administer their Core identity later.
+        if company.core_org_id:
+            try:
+                core_client.create_membership(
+                    core_user['id'], company.core_org_id, bearer_token(request)
+                )
+            except CoreError:
+                pass
 
         # The staff profile (code/name/role/email/mobile) is created and kept
         # in sync by the accounts post_save signal; only branch is set here.
@@ -360,6 +426,22 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
             validated_data['role'] = role
 
         instance = super().update(instance, validated_data)
+
+        # Keep the Core identity in sync with local name/phone/email/active state.
+        core_fields = {
+            key: validated_data[key]
+            for key in ('name', 'email', 'phone', 'is_active')
+            if key in validated_data
+        }
+        if core_fields and instance.core_user_id:
+            try:
+                core_client.patch_user(
+                    instance.core_user_id,
+                    core_fields,
+                    bearer_token(self.context.get('request')),
+                )
+            except CoreError:
+                pass
 
         # Rename propagation and profile field sync are handled by the accounts
         # post_save signal; only the branch assignment lives here.
