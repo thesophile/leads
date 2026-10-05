@@ -4462,7 +4462,10 @@ class DashboardStatsView(APIView):
         # (or no parseable date was stored). Future-dated follow-ups are not due.
         follow_ups_due = 0
         follow_ups_due_leads = []
-        due_leads = scoped.filter(has_follow_up=True).only(
+        due_leads = scoped.filter(
+            has_follow_up=True,
+            call_status='Follow Up',
+        ).only(
             'company', 'phone', 'category', 'assigned_to',
             'next_follow_up_date', 'next_follow_up_time', 'status',
         )
