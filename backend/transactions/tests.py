@@ -2593,6 +2593,36 @@ class QuotationAcceptanceConfirmationTests(APITestCase):
         self.assertEqual(info['acceptedByDesignation'], 'Procurement Officer')
         self.assertEqual(info['acceptedAt'], self.quotation.client_responded_at.strftime('%d-%m-%Y %I:%M %p'))
 
+    def test_accept_records_client_timezone_for_local_display(self):
+        from zoneinfo import ZoneInfo
+        from transactions.services import order_approval_info
+        from unittest.mock import patch
+
+        self.client.force_authenticate(None)
+        with patch('transactions.views.build_quotation_accepted_email'):
+            resp = self.post_accept(timezone='Asia/Kolkata')
+        self.assertEqual(resp.status_code, 200)
+        self.quotation.refresh_from_db()
+        self.assertEqual(self.quotation.client_timezone, 'Asia/Kolkata')
+        order = Order.objects.filter(lead_id=self.lead.id).first()
+        info = order_approval_info(order)
+        local = self.quotation.client_responded_at.astimezone(ZoneInfo('Asia/Kolkata'))
+        self.assertEqual(info['acceptedAt'], local.strftime('%d-%m-%Y %I:%M %p'))
+
+    def test_accept_ignores_invalid_timezone(self):
+        from transactions.services import order_approval_info
+        from unittest.mock import patch
+
+        self.client.force_authenticate(None)
+        with patch('transactions.views.build_quotation_accepted_email'):
+            resp = self.post_accept(timezone='Not/AZone')
+        self.assertEqual(resp.status_code, 200)
+        self.quotation.refresh_from_db()
+        self.assertEqual(self.quotation.client_timezone, '')
+        order = Order.objects.filter(lead_id=self.lead.id).first()
+        info = order_approval_info(order)
+        self.assertEqual(info['acceptedAt'], self.quotation.client_responded_at.strftime('%d-%m-%Y %I:%M %p'))
+
     def test_accept_requires_name_and_designation(self):
         from unittest.mock import patch
 

@@ -129,6 +129,7 @@ export default function ClientQuotation() {
           message: message.trim(),
           name: acceptorName.trim(),
           designation: acceptorDesignation.trim(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }
       )
       setData(d)

@@ -10,6 +10,7 @@ import logging
 import re
 from datetime import date
 from math import cos, pi, sin
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -858,6 +859,14 @@ def order_approval_info(order):
 
     iso_accepted = ''
     if accepted_at:
+        # Show the acceptance datetime in the client's local timezone. Fall back
+        # to the stored UTC value when no/invalid timezone was captured.
+        client_tz = getattr(quote, 'client_timezone', '') if quote is not None else ''
+        if client_tz:
+            try:
+                accepted_at = accepted_at.astimezone(ZoneInfo(client_tz))
+            except Exception:
+                pass
         iso_accepted = accepted_at.strftime('%d-%m-%Y %I:%M %p')
 
     info = {

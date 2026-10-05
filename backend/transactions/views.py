@@ -7,6 +7,7 @@ import re
 import secrets
 import sys
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -2533,6 +2534,22 @@ def _get_by_client_token(token):
     return Quotation.objects.filter(client_token=str(token or '')).first()
 
 
+def _validate_timezone(name):
+    """Return a valid IANA timezone name from the browser, or '' when absent.
+
+    Used to render the client's acceptance datetime in their local time. An
+    unrecognised value is ignored so a bad payload never blocks acceptance.
+    """
+    name = str(name or '').strip()
+    if not name or len(name) > 64:
+        return ''
+    try:
+        ZoneInfo(name)
+    except Exception:
+        return ''
+    return name
+
+
 def create_order_from_quotation(quotation):
     """Create an Order record from an accepted quotation.
 
@@ -2641,6 +2658,7 @@ class ClientQuotationResponseView(APIView):
         message = str(request.data.get('message') or '').strip()
         accepted_by_name = str(request.data.get('name') or '').strip()
         accepted_by_designation = str(request.data.get('designation') or '').strip()
+        client_timezone = _validate_timezone(request.data.get('timezone'))
         if accepted and (not accepted_by_name or not accepted_by_designation):
             return Response(
                 {'detail': 'Please provide your name and designation to accept the quotation.'},
@@ -2652,6 +2670,7 @@ class ClientQuotationResponseView(APIView):
         quotation.client_message = message
         quotation.client_accepted_by_name = accepted_by_name
         quotation.client_accepted_by_designation = accepted_by_designation
+        quotation.client_timezone = client_timezone
         quotation.client_responded_at = timezone.now()
         # Single-use: revoke the token once a decision is recorded.
         quotation.client_token = ''

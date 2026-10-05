@@ -11,14 +11,14 @@ pip install -r requirements.txt
 Backend
 ```
 $env:ENV = "dev"
-cd ~\Desktop\Codebase\leads\backend
+cd ~\Desktop\Codebase\Systemsoft_suite\leads\backend
 venv\Scripts\activate
 Python manage.py runserver 8002
 ```
 
 frontend
 ```
-cd ~\Desktop\Codebase\leads\frontend
+cd ~\Desktop\Codebase\Systemsoft_suite\leads\frontend
 npm run dev -- --mode dev
 ```
 
@@ -27,7 +27,7 @@ npm run dev -- --mode dev
 migrate
 ```
 $env:ENV = "dev"
-cd ~\Desktop\Codebase\leads\backend
+cd ~\Desktop\Codebase\Systemsoft_suite\leads\backend
 venv\Scripts\activate
 Python manage.py migrate
 ```

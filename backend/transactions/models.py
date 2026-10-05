@@ -310,6 +310,9 @@ class Quotation(models.Model):
     # accept form and printed on the order form's "Accepted By" block.
     client_accepted_by_name = models.CharField(max_length=160, blank=True)
     client_accepted_by_designation = models.CharField(max_length=160, blank=True)
+    # IANA timezone of the accepter's browser, so the order form can show the
+    # acceptance datetime in the client's local time instead of UTC.
+    client_timezone = models.CharField(max_length=64, blank=True)
     # Set when a sibling version of the same lead is accepted by the client.
     # A superseded version must never regain a live client link or be re-sent.
     superseded_at = models.DateTimeField(null=True, blank=True)
