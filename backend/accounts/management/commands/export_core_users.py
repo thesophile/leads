@@ -21,11 +21,17 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         users = []
         for user in User.objects.all().iterator():
+            # Django stores unusable passwords with a leading '!'. Copying such a
+            # hash into Core would make the account unable to authenticate (and
+            # could clobber a real Core password), so export it without one.
+            password = user.password or ''
+            if password.startswith('!'):
+                password = ''
             users.append({
                 'email': user.email,
                 'name': user.name,
                 'phone': user.phone or '',
-                'password': user.password,
+                'password': password,
                 'is_staff': user.is_staff,
                 'is_superuser': user.is_superuser,
                 'is_active': user.is_active,

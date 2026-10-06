@@ -24,7 +24,7 @@ ENV = os.getenv("ENV", "prod")
 
 load_dotenv(BASE_DIR.parent / f".env.{ENV}")
 
-
+print(f"Loading environment variables from .env.{ENV}")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
