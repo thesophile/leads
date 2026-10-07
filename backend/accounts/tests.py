@@ -208,6 +208,7 @@ class AdminQuerysetScopingTests(TestCase):
 
 class SuperuserAdminManagementTests(CoreStubMixin, APITestCase):
     def setUp(self):
+        super().setUp()
         acme, globex = make_company('Acme'), make_company('Globex')
         self.superuser = User.objects.create_superuser(
             email='root@platform.com', password='x', name='Root',
@@ -810,6 +811,7 @@ class EmailChangeOtpTests(CoreStubMixin, APITestCase):
     FIXED_CODE = '424242'
 
     def setUp(self):
+        super().setUp()
         self.company = make_company('Email Co')
         self.user = User.objects.create_user(
             email='old@emailco.com', password='x', name='Email User',

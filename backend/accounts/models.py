@@ -175,11 +175,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_permissions(self):
         """Return the set of permission keys this user currently holds.
 
-        System roles implicitly hold the full catalog; regular roles use their
-        stored permission list.
+        When the user authenticated with a SystemSoft Core token, the centrally
+        assigned permissions (``core_permissions``) are authoritative. Otherwise
+        the local company role is used; system roles implicitly hold the full
+        catalog.
         """
         if self.is_superuser:
             return set(FLAT_PERMISSIONS)
+        core = getattr(self, 'core_permissions', None)
+        if core is not None:
+            return set(core)
         if self.role_id:
             return self.role.permission_names
         return set()

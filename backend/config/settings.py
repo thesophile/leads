@@ -177,6 +177,9 @@ SIMPLE_JWT = {
 # are proxied here server-to-server.
 CORE_API_URL = os.environ.get('CORE_API_URL', 'http://localhost:8000').rstrip('/')
 
+# Registry code this app authenticates against; must match Core's Application.code.
+CORE_APP_CODE = os.environ.get('CORE_APP_CODE', 'leads')
+
 # Email: when EMAIL_HOST is set in the environment, real mail is sent over
 # SMTP and every message is also printed to the terminal. Without EMAIL_HOST
 # the console backend is used, which only prints to the terminal.

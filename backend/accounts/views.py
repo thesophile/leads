@@ -17,16 +17,16 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.token_blacklist.models import (
     BlacklistedToken,
     OutstandingToken,
 )
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from PIL import Image
 
+from . import core_client
+from .authentication import CoreJWTAuthentication
+from .core_client import CoreError
 from .permissions import IsSuperuser, can, require_permission
 from .models import Company, EmailChangeRequest, Role
 from .rbac import FLAT_PERMISSIONS, PERMISSION_GROUPS
@@ -491,15 +491,41 @@ class SuperuserAdminResetPasswordView(APIView):
 
 
 class LoginView(APIView):
+    """Authenticate against SystemSoft Core (the identity authority).
+
+    Credentials are verified by Core; the returned Core JWT is validated here
+    with the shared signing key. Login is refused unless the user has been
+    granted access to LEADS, and the centrally-assigned permissions are applied.
+    """
+
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = LoginSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
+        email = (request.data.get('email') or request.data.get('username') or '').strip()
+        password = request.data.get('password')
+        if not email or not password:
+            return Response({'detail': 'Email and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            data = core_client.login(email, password)
+        except CoreError as exc:
+            detail = exc.message or 'Invalid email or password.'
+            return Response({'detail': detail}, status=exc.status_code or status.HTTP_401_UNAUTHORIZED)
+
+        access = data.get('access')
+        if not access:
+            return Response({'detail': 'Authentication service returned no token.'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        try:
+            user = CoreJWTAuthentication().get_user(AccessToken(access))
+        except AuthenticationFailed as exc:
+            return Response({'detail': str(exc.detail)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception:
+            return Response({'detail': 'Invalid credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
+
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': get_tokens_for_user(user),
+            'tokens': {'access': access, 'refresh': data.get('refresh')},
         })
 
 
@@ -1107,32 +1133,18 @@ class EmailChangeVerifyView(APIView):
         })
 
 
-class SafeTokenRefreshSerializer(TokenRefreshSerializer):
-    """TokenRefreshSerializer that treats a missing user as a clean 401.
+class SafeTokenRefreshView(APIView):
+    """Refresh endpoint that proxies to SystemSoft Core (the only token issuer)."""
 
-    SimpleJWT's default implementation does an unguarded ``User.objects.get``
-    which raises ``User.DoesNotExist`` (a 500) when the refreshed token belongs
-    to a user row that no longer exists (e.g. after a backup restore wiped and
-    reloaded the DB). We resolve the account up front and fail with the same
-    "no active account" error used elsewhere.
-    """
+    permission_classes = [AllowAny]
 
-    def validate(self, attrs):
-        refresh = self.token_class(attrs['refresh'])
-        user_id = refresh.payload.get(api_settings.USER_ID_CLAIM, None)
-        if user_id:
-            user = get_user_model().objects.filter(
-                **{api_settings.USER_ID_FIELD: user_id}
-            ).first()
-            if user is None or not api_settings.USER_AUTHENTICATION_RULE(user):
-                raise AuthenticationFailed(
-                    self.error_messages['no_active_account'],
-                    code='no_active_account',
-                )
-        return super().validate(attrs)
-
-
-class SafeTokenRefreshView(TokenRefreshView):
-    """Refresh endpoint that never 500s on a deleted account."""
-
-    serializer_class = SafeTokenRefreshSerializer
+    def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response({'detail': 'A refresh token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            data = core_client.refresh(refresh_token)
+        except CoreError as exc:
+            detail = exc.message or 'Refresh token is invalid.'
+            return Response({'detail': detail}, status=exc.status_code or status.HTTP_401_UNAUTHORIZED)
+        return Response(data)
