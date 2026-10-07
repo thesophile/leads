@@ -40,7 +40,7 @@ Python manage.py migrate
 
 Backend
 ```
-cd ~\Desktop\Codebase\leads
+cd ~\Desktop\Codebase\Systemsoft_suite\leads
 git archive HEAD backend -o backend.zip
 scp backend.zip leads:/home/newleadsprograme/
 ssh leads "cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip"
@@ -49,7 +49,7 @@ ssh leads "source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate &&
 
 Frontend
 ```
-cd ~\Desktop\Codebase\leads\frontend
+cd ~\Desktop\Codebase\Systemsoft_suite\leads\frontend
 npm run build -- --mode prod
 ssh leads "rm -rf ~/public_html/assets"
 scp -r .\dist\* leads:/home/newleadsprograme/public_html/
