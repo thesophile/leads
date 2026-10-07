@@ -1118,7 +1118,6 @@ export default function Managequotation() {
     const rules = [
       { key: 'customerPerson', label: 'Client Name', value: customerPerson.trim() },
       { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) },
-      { key: 'termsHtml', label: 'Proposal in Detail', value: stripHtml(termsHtml) || (proposalItems.length > 0 ? 'x' : '') },
     ]
     if (itemsTotal(proposalItems) <= 0) {
       rules.push({ key: 'totalVal', label: 'Total', value: totalVal.trim() })
