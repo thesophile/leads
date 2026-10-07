@@ -528,3 +528,23 @@ class Attachment(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ClientPayment(models.Model):
+    client_detail = models.ForeignKey(ClientDetail, on_delete=models.CASCADE, related_name='payments')
+    order_no = models.CharField(max_length=50, blank=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    date = models.DateField()
+    method = models.CharField(max_length=50, default='Bank Transfer')
+    reference = models.CharField(max_length=200, blank=True)
+    received_by = models.CharField(max_length=200, blank=True)
+    notes = models.TextField(blank=True)
+    synced_to_accounts = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Payment {self.id} for {self.client_detail.company} - {self.amount}'

@@ -5,6 +5,7 @@ from .views import (
     ClientDetailAttachmentView,
     ClientDetailDetailView,
     ClientDetailListCreateView,
+    ClientDetailPaymentView,
     ClientDetailSendToClientView,
     ClientOrderDetailView,
     ClientOrderPdfView,
