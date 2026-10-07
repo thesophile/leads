@@ -7,7 +7,7 @@
       "password": "pbkdf2_sha256$1000000$vI3Tiv3wWLcqVCGnMjHGrc$BkKxTZkhD3TAUwPQpNVNXZsfEs+7CtrrlVOM0okZgyk=",
       "is_staff": false,
       "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "admin@programers.com",
@@ -19,10 +19,28 @@
       "is_active": true
     },
     {
+      "email": "cm@programers.in",
+      "name": "Admin Name",
+      "phone": "9495951442",
+      "password": "pbkdf2_sha256$1000000$1FA56Yhfhvp27TtL2EnvcX$xWZ+YsPtGjw0atctf/7fvKAM4wKwagvx6oGD8y+M8ts=",
+      "is_staff": false,
+      "is_superuser": false,
+      "is_active": true
+    },
+    {
+      "email": "test@mail.com",
+      "name": "Admin name",
+      "phone": "",
+      "password": "pbkdf2_sha256$1000000$Dn3UKa2MKdkWixiqDYripK$RJjVdr7INpsun1O68Fl54xLqdcNxadA9U5rMdW/aDLk=",
+      "is_staff": true,
+      "is_superuser": false,
+      "is_active": true
+    },
+    {
       "email": "amitha@programers.in",
       "name": "Amitha",
       "phone": "8547378525",
-      "password": "",
+      "password": "pbkdf2_sha256$1000000$6FPPz0MyO8KEPXsmEi847K$zUzaQqieCEenAEUwyykzSc6/aOuvYDkzHfAMUCfgQbA=",
       "is_staff": false,
       "is_superuser": false,
       "is_active": true
@@ -31,19 +49,10 @@
       "email": "amt@gmail.com",
       "name": "Amritha",
       "phone": "9456765434",
-      "password": "",
+      "password": "pbkdf2_sha256$1000000$ORDdL1ZVZv3XJ7RFmyKRK4$PoZA+dKCBSJFN04GaXLD9CNNCsydoupa/gEQDwmp18o=",
       "is_staff": false,
       "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "husna@programers.in",
-      "name": "bhbhjb v",
-      "phone": "9288289869",
-      "password": "pbkdf2_sha256$1000000$atx0uM3VNbDQoa4coTNXxa$0MoXWmokhCJsbtWdC5HO3QtTIWsAqLMUfqF++2OVikE=",
-      "is_staff": true,
-      "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "bincyprogramers26@gmail.com",
@@ -55,55 +64,64 @@
       "is_active": true
     },
     {
-      "email": "gdfgd@thyt.jtyjyt",
-      "name": "dfghdrg",
-      "phone": "",
-      "password": "pbkdf2_sha256$1000000$Sjq7b06VENrmmoMpr67O1j$QvFjjqddV3s69/SsEkYlkSL2LYkiENwws4+zZgbDLG4=",
-      "is_staff": true,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
       "email": "dhanya@programers.in",
       "name": "Dhanya",
       "phone": "8089244500",
       "password": "",
       "is_staff": false,
       "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "dharsana@gmail.com",
       "name": "Dharsana",
       "phone": "9446451446",
-      "password": "",
+      "password": "pbkdf2_sha256$1000000$E9KiNsttcBzwS9i078jtgI$VmfUnZDC1EgO6/QNdotG7YigC6oHSNC3XpBtGbTIRE8=",
       "is_staff": false,
       "is_superuser": false,
       "is_active": true
     },
     {
-      "email": "malavika@programers.in",
-      "name": "Malavika",
-      "phone": "9746079951",
-      "password": "",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "abhinavprogramers@gmail.com",
-      "name": "Name Admin",
+      "email": "gdf@gerg.uykjuy",
+      "name": "grgdg",
       "phone": "",
-      "password": "pbkdf2_sha256$1000000$JKUIyMRfAEhzdNKMBCFhRo$tSISv5O+hYMv89HYW7n7K/te4391Hdqvz9ZL6Zi4z+s=",
+      "password": "pbkdf2_sha256$1000000$aKrpfJfNni8OItyEvSvT7o$XFVgpHsQ3Q/+hjA9ZVd9yT+1vfPd42H0iMD9z2FThLY=",
+      "is_staff": false,
+      "is_superuser": false,
+      "is_active": true
+    },
+    {
+      "email": "husna@programers.in",
+      "name": "Husna MS",
+      "phone": "9288289869",
+      "password": "pbkdf2_sha256$1000000$ikUzuMr5n0rqY4AFyNCtCo$OakXe8Ui4u270u9bkOdYWf2XUVcTEagcNbjWYMtIlew=",
       "is_staff": true,
       "is_superuser": false,
       "is_active": true
     },
     {
-      "email": "name@mail.com",
-      "name": "Name O Manager",
-      "phone": "",
-      "password": "pbkdf2_sha256$1000000$nxb0nj6UnmaZFTaXalCDNW$PhETqgBceasH9hI5ATlgtq9BItFq2VpO/V4QSM69F8Y=",
+      "email": "bincyprogramers25@gmail.com",
+      "name": "Karthika",
+      "phone": "9447737954",
+      "password": "",
+      "is_staff": false,
+      "is_superuser": false,
+      "is_active": true
+    },
+    {
+      "email": "kiranchalakudy123@gmail.com",
+      "name": "Kiran",
+      "phone": "9854126589",
+      "password": "",
+      "is_staff": false,
+      "is_superuser": false,
+      "is_active": false
+    },
+    {
+      "email": "malavika@programers.in",
+      "name": "Malavika",
+      "phone": "9746079951",
+      "password": "pbkdf2_sha256$1000000$1otYJVo3yVO86TpcpE7U0i$WTXDjLyOLgXQvNiJocmKJ22chDc7MqvYoHRa3Ilpgq0=",
       "is_staff": false,
       "is_superuser": false,
       "is_active": true
@@ -112,16 +130,7 @@
       "email": "nasifprog@gmail.com",
       "name": "Nasif",
       "phone": "9495951443",
-      "password": "",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "cm@programers.in",
-      "name": "NIMISHA DAVIS",
-      "phone": "8089244500",
-      "password": "",
+      "password": "pbkdf2_sha256$1000000$MtvI6scYLcZmIpOd2qGuVI$FAPcIk6g6HEhKT6BxEsQLyXETqjT6FVmAeoJHcTRmG8=",
       "is_staff": false,
       "is_superuser": false,
       "is_active": true
@@ -130,28 +139,10 @@
       "email": "sales@gmail.com",
       "name": "Nisha",
       "phone": "8089259004",
-      "password": "pbkdf2_sha256$1000000$yVFC71jUGwAeyQ61tcpaqL$7PElY1de6zXgfEKiZdiQm8v7uDo7fdEkyimu+T6OVko=",
+      "password": "",
       "is_staff": false,
       "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "wqeqwe@ergfr.thrt",
-      "name": "qweqwewq",
-      "phone": "",
-      "password": "pbkdf2_sha256$1000000$aNzSOXnRJn43Hf04kFFRRQ$rRwc6Lb3294g6KOsAJLxuTxHmpfhW2OyjsP2H7HcqfE=",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "qwewqrs@gmail.com",
-      "name": "qwewqeqwe",
-      "phone": "",
-      "password": "pbkdf2_sha256$1000000$gmBu9RYNkKFPwmgGEtc0Ol$+haOS86hmwmR7yI39kQrcststH5OsYR0zezPHrReX64=",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "admin@programers.in",
@@ -160,7 +151,7 @@
       "password": "pbkdf2_sha256$1000000$KxP84qKgngiXDVSSmZrDCS$3vcjX5/DCU/yO3EdSUOI5WKiyZFIwYM6TFwbn01SRks=",
       "is_staff": true,
       "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "sales@programers.in",
@@ -169,7 +160,7 @@
       "password": "",
       "is_staff": false,
       "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "projects@programers.in",
@@ -178,16 +169,7 @@
       "password": "",
       "is_staff": false,
       "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "demo@company.com",
-      "name": "sadasda",
-      "phone": "",
-      "password": "pbkdf2_sha256$1000000$yiv2w8i8tv4JhmVSqoVZCA$nYhoHxtdPo05DY6cB3S0yBi6tOlXzlokfrag0R5y7kw=",
-      "is_staff": true,
-      "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "sahala@gmail.com",
@@ -196,13 +178,22 @@
       "password": "",
       "is_staff": false,
       "is_superuser": false,
+      "is_active": false
+    },
+    {
+      "email": "info@programers.in",
+      "name": "Sajeev",
+      "phone": "9447442367",
+      "password": "pbkdf2_sha256$1000000$b046uUjZ6J76zuTtCsE383$oqyJmC2loT7em8S6wNo83L5BC35BAcaoqLykrZzHGjY=",
+      "is_staff": false,
+      "is_superuser": false,
       "is_active": true
     },
     {
       "email": "sandra@programers.in",
       "name": "Sandra",
       "phone": "9494823678",
-      "password": "pbkdf2_sha256$1000000$o7yR34sHoMaLeZ6r1bUQ0y$FeYXu8+/nHCjZ2WqilwY7+Yxw/ZP9O9CFjKtMnaB6Ag=",
+      "password": "pbkdf2_sha256$1000000$ec27f45bG5WlYipA6DXfXR$Lqw/gtPV+Gk97rZUD1BvWWgxD/ji/DrGaZQ0Vwp9G7U=",
       "is_staff": true,
       "is_superuser": false,
       "is_active": true
@@ -211,7 +202,7 @@
       "email": "sariga@gmail.com",
       "name": "SARIGA",
       "phone": "9497105862",
-      "password": "",
+      "password": "pbkdf2_sha256$1000000$xXimNLXzbhnajCjSoCrdJt$FHkjx1d7iGxLwDDiB2Uboc3yEGr1Ls8Q/MJ2mFQedus=",
       "is_staff": false,
       "is_superuser": false,
       "is_active": true
@@ -223,7 +214,7 @@
       "password": "",
       "is_staff": false,
       "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "snaya@gmail.com",
@@ -232,16 +223,7 @@
       "password": "",
       "is_staff": false,
       "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "staff@leads.com",
-      "name": "staff",
-      "phone": "",
-      "password": "pbkdf2_sha256$1000000$oEMOsdxLabEKHVAbGWm10C$FZH8ABIGxOcY8+yG/dQ2VEfU+D5mczTtsh8OwpDDDwI=",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
+      "is_active": false
     },
     {
       "email": "sujithra@gmail.com",
@@ -253,28 +235,10 @@
       "is_active": true
     },
     {
-      "email": "crm@programers.in",
-      "name": "Superadmin",
-      "phone": "9495951442",
-      "password": "pbkdf2_sha256$1000000$1FA56Yhfhvp27TtL2EnvcX$xWZ+YsPtGjw0atctf/7fvKAM4wKwagvx6oGD8y+M8ts=",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "bincyprogramers25@gmail.com",
-      "name": "Test",
-      "phone": "9447737954",
-      "password": "",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "kiranchalakudy123@gmail.com",
-      "name": "Test 2",
-      "phone": "9854126589",
-      "password": "",
+      "email": "abhinavprogramers@gmail.com",
+      "name": "Test Manager",
+      "phone": "",
+      "password": "pbkdf2_sha256$1000000$7RlpkrYLiSkwJRkeYEPseF$RjCQobDv6u09heSr/NpTjFTiEJYiO6/uGckIvwFgzuc=",
       "is_staff": false,
       "is_superuser": false,
       "is_active": true
@@ -287,46 +251,24 @@
       "is_staff": false,
       "is_superuser": false,
       "is_active": true
-    },
-    {
-      "email": "fdfd@ergt.jhyh",
-      "name": "vsddvdsv",
-      "phone": "",
-      "password": "pbkdf2_sha256$1000000$ZuC7oKdZbutDeSZxmjAQ7K$Eya7s9LXjclm+OlKdJEUrbFxPWrqzjU9TNKAAKm0wPk=",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
     }
   ],
   "companies": [
     {
-      "name": "Demo Company",
-      "admin_emails": [
-        "demo@company.com"
-      ]
-    },
-    {
-      "name": "efwefwe",
-      "admin_emails": [
-        "gdfgd@thyt.jtyjyt"
-      ]
+      "name": "dedewd",
+      "admin_emails": []
     },
     {
       "name": "Programers",
       "admin_emails": [
-        "cm@programers.in",
-        "crm@programers.in"
+        "cm@programers.in"
       ]
     },
     {
       "name": "Test Comp",
       "admin_emails": [
-        "abhinavprogramers@gmail.com"
+        "test@mail.com"
       ]
-    },
-    {
-      "name": "Test Company",
-      "admin_emails": []
     }
   ]
 }
