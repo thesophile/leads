@@ -37,6 +37,15 @@
       "is_active": true
     },
     {
+      "email": "husna@programers.in",
+      "name": "bhbhjb v",
+      "phone": "9288289869",
+      "password": "pbkdf2_sha256$1000000$atx0uM3VNbDQoa4coTNXxa$0MoXWmokhCJsbtWdC5HO3QtTIWsAqLMUfqF++2OVikE=",
+      "is_staff": true,
+      "is_superuser": false,
+      "is_active": true
+    },
+    {
       "email": "bincyprogramers26@gmail.com",
       "name": "Bincy",
       "phone": "9447443598",
@@ -67,33 +76,6 @@
       "email": "dharsana@gmail.com",
       "name": "Dharsana",
       "phone": "9446451446",
-      "password": "",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "husna@programers.in",
-      "name": "Husna MS",
-      "phone": "9288289869",
-      "password": "pbkdf2_sha256$1000000$atx0uM3VNbDQoa4coTNXxa$0MoXWmokhCJsbtWdC5HO3QtTIWsAqLMUfqF++2OVikE=",
-      "is_staff": true,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "bincyprogramers25@gmail.com",
-      "name": "Karthika",
-      "phone": "9447737954",
-      "password": "",
-      "is_staff": false,
-      "is_superuser": false,
-      "is_active": true
-    },
-    {
-      "email": "kiranchalakudy123@gmail.com",
-      "name": "Kiran",
-      "phone": "9854126589",
       "password": "",
       "is_staff": false,
       "is_superuser": false,
@@ -280,6 +262,24 @@
       "is_active": true
     },
     {
+      "email": "bincyprogramers25@gmail.com",
+      "name": "Test",
+      "phone": "9447737954",
+      "password": "",
+      "is_staff": false,
+      "is_superuser": false,
+      "is_active": true
+    },
+    {
+      "email": "kiranchalakudy123@gmail.com",
+      "name": "Test 2",
+      "phone": "9854126589",
+      "password": "",
+      "is_staff": false,
+      "is_superuser": false,
+      "is_active": true
+    },
+    {
       "email": "vismaya2323@gmail.com",
       "name": "Vismaya K M",
       "phone": "9747223128",
@@ -323,6 +323,10 @@
       "admin_emails": [
         "abhinavprogramers@gmail.com"
       ]
+    },
+    {
+      "name": "Test Company",
+      "admin_emails": []
     }
   ]
 }

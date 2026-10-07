@@ -26,6 +26,13 @@ class Command(BaseCommand):
         except (OSError, ValueError) as exc:
             raise CommandError(f'Could not read users map: {exc}')
 
+        # Stale links (e.g. from a previous Core database) may already hold one
+        # of the ids we are about to assign. Clear those first so the unique
+        # ``core_user_id`` constraint can never collide while relinking.
+        target_user_ids = {v for v in user_map.values() if v is not None}
+        if target_user_ids:
+            User.objects.filter(core_user_id__in=target_user_ids).update(core_user_id=None)
+
         linked = 0
         missing = 0
         for email, core_id in user_map.items():
@@ -43,6 +50,10 @@ class Command(BaseCommand):
                     org_map = json.load(fh)
             except (OSError, ValueError) as exc:
                 raise CommandError(f'Could not read orgs map: {exc}')
+
+            target_org_ids = {v for v in org_map.values() if v is not None}
+            if target_org_ids:
+                Company.objects.filter(core_org_id__in=target_org_ids).update(core_org_id=None)
 
             org_linked = 0
             for name, core_org_id in org_map.items():
