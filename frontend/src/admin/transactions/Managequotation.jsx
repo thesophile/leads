@@ -143,15 +143,21 @@ const LOCKED_STATUSES = ['Approved', 'Sent to Client', 'Accepted', 'Declined']
 // "send without approval" permission (i.e. skipping the approval flow).
 const SEND_WITHOUT_APPROVAL_STATUSES = ['Not Sent', 'Pending Approval', 'Rejected', 'Declined']
 
+// const SOURCES = [
+//   'Google Search',
+//   'Official Website',
+//   'Instagram Campaign',
+//   'Facebook Ads',
+//   'Customer Referral',
+//   'Direct Walk-in',
+//   'Telecalling Outreach',
+// ]
+
 const SOURCES = [
-  'Google Search',
-  'Official Website',
-  'Instagram Campaign',
-  'Facebook Ads',
-  'Customer Referral',
-  'Direct Walk-in',
-  'Telecalling Outreach',
+  'New Customer',
+  'CRM',
 ]
+
 
 const CURRENCIES = [
   'INR (₹)',
