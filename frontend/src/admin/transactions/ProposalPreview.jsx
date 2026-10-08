@@ -9,7 +9,7 @@ import { can } from '../../utils/permissions'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
-import { proposalItemsFromHtml, itemsTotal, itemsPrintHtml, currencySymbol, fmtAmount } from './proposalItemsUtils'
+import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol } from './proposalItemsUtils'
 
 function escapeHtml(value) {
   return String(value)
@@ -544,14 +544,17 @@ export default function ProposalPreview() {
   // "Proposal in Detail" = free-form text followed by any structured
   // service/text blocks (bold title, description below, right-aligned amount).
   const detailSplit = proposalItemsFromHtml(proposalData?.proposalInDetailsHtml || '')
-  const detailTotal = itemsTotal(detailSplit.items)
   const composedDetailsHtml = [
     detailSplit.freeHtml ? linesToHtml(htmlToPlainLines(detailSplit.freeHtml)) : '',
-    itemsPrintHtml(
-      detailSplit.items,
-      currencySymbol(proposalData?.currency),
-      detailTotal > 0 ? fmtAmount(detailTotal) : ''
-    ),
+    itemsPrintHtml(detailSplit.items, currencySymbol(proposalData?.currency), ''),
+  ].join('')
+
+  // "Proposal Summary" carries its own optional service/text blocks. Totals are
+  // collective (shown once in the financial banner), so no per-section total.
+  const summarySplit = proposalItemsFromHtml(proposalData?.proposalSummaryHtml || '')
+  const composedSummaryHtml = [
+    summarySplit.freeHtml ? linesToHtml(htmlToPlainLines(summarySplit.freeHtml)) : '',
+    itemsPrintHtml(summarySplit.items, currencySymbol(proposalData?.currency), ''),
   ].join('')
 
   // Temporarily hide the client acceptance box. Flip back to true to restore it.
@@ -1035,12 +1038,11 @@ const approvedByRef = useRef(null)
                     ref={summaryContentRef}
                     className="text-[13.5px] leading-snug text-slate-800"
                     style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
-                  >
-                    {htmlToPlainLines(proposalData.proposalSummaryHtml).map((line, i) => (
-                      <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
-                    ))}
-                  </div>
-                  <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                    dangerouslySetInnerHTML={{ __html: composedSummaryHtml }}
+                  />
+                  {summaryPaged.part2Html ? (
+                    <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                  ) : null}
                 </SectionBox>
 
                 <div ref={financialRef}>
@@ -1054,6 +1056,22 @@ const approvedByRef = useRef(null)
             </div>
             </div>
           </div>
+
+          {/* Proposal Summary continued (summary text / blocks that overflowed page 1) */}
+          {summaryPaged.part2Html ? (
+            <PagedSection
+              html={summaryPaged.part2Html}
+              reserve={16}
+              contentClass="text-[13.5px] leading-snug text-slate-800"
+              sectionTitle="Proposal Summary (Continued)"
+              boxClass="rounded-xl border border-slate-300 bg-white"
+              titleClass="text-center"
+              pageHeader={
+                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
+              }
+              pageFooter={<PageFooter company={company} />}
+            />
+          ) : null}
 
           {/* -------------------- PAGE 2+ (PROPOSAL IN DETAILS & SPECIFICATIONS + DETAILED TERMS & CONDITIONS) -------------------- */}
           <PagedSection

@@ -334,7 +334,7 @@ export default function ManageOrder() {
       setProposalDate(order.proposalDate || todayStr())
       setDeliveryDate(order.deliveryDate || '')
       setProposalNo(order.proposalNo || order.id || nextOrderNumber())
-      setOrderSummaryHtml(order.scope || order.orderSummaryHtml || '')
+      setOrderSummaryHtml(stripItems(order.scope || order.orderSummaryHtml || ''))
       setOrderInDetailsHtml(stripItems(order.details || order.orderInDetailsHtml || ''))
       setTotalVal(order.total || '50,000')
       setDiscountVal(order.discount || '5,000')

@@ -171,7 +171,7 @@ def _indian_amount(value):
     return ','.join(reversed(groups)) + ',' + tail
 
 
-def items_table(elements, items, currency, body_style):
+def items_table(elements, items, currency, body_style, show_total=True):
     """Append a right-aligned service breakdown table to the PDF flowables."""
     item_money = ParagraphStyle(
         'itemmoney',
@@ -212,7 +212,7 @@ def items_table(elements, items, currency, body_style):
             Paragraph(left_html, body_style),
             Paragraph(f'{currency_code} {_indian_amount(amount)}'.strip(), item_money),
         ])
-    if total:
+    if total and show_total:
         rows.append([
             '',
             Paragraph(f'TOTAL: {currency_code} {_indian_amount(round(total))}', total_money),
@@ -474,11 +474,15 @@ def render_quotation_pdf(quotation):
         elements.append(Spacer(1, 8))
         elements.append(financial)
 
-        # Proposal Summary.
-        scope_markup = html_to_pdf_markup(quotation.proposal_scope)
-        if scope_markup:
+        # Proposal Summary (free text plus any embedded service/text blocks).
+        scope_items, scope_free_html = split_proposal_items(quotation.proposal_scope)
+        scope_markup = html_to_pdf_markup(scope_free_html)
+        if scope_markup or scope_items:
             elements.append(Paragraph('SCOPE &amp; DELIVERABLES', pdf_styles.section))
+        if scope_markup:
             elements.append(Paragraph(scope_markup, pdf_styles.body))
+        if scope_items:
+            items_table(elements, scope_items, quotation.currency, pdf_styles.body, show_total=False)
 
         # Terms & conditions.
         detail_items, detail_free_html = split_proposal_items(quotation.terms_conditions)
@@ -488,7 +492,7 @@ def render_quotation_pdf(quotation):
         if terms_markup:
             elements.append(Paragraph(terms_markup, pdf_styles.body))
         if detail_items:
-            items_table(elements, detail_items, quotation.currency, pdf_styles.body)
+            items_table(elements, detail_items, quotation.currency, pdf_styles.body, show_total=False)
 
         company_terms_markup = html_to_pdf_markup(
             (getattr(company, 'terms_full_html', '') or getattr(company, 'terms_summary_html', '')) or ''
@@ -1175,7 +1179,8 @@ def render_order_pdf(order):
         # Page 1 middle: Order Summary + financial (left) and Terms (right).
         left_width = content_width * 7 / 12 - 1 * mm
         right_width = content_width * 5 / 12 - 1 * mm
-        summary_markup = html_to_pdf_markup(order.scope)
+        _, order_scope_free = split_proposal_items(order.scope)
+        summary_markup = html_to_pdf_markup(order_scope_free)
         terms_summary_markup = html_to_pdf_markup(
             getattr(company, 'terms_summary_html', '') if company else ''
         )
@@ -1408,7 +1413,8 @@ def build_client_email(quotation, link, message=''):
             f'{message_html}</p>'
         )
 
-    scope = _strip_html(quotation.proposal_scope)
+    _, scope_free_html = split_proposal_items(quotation.proposal_scope)
+    scope = _strip_html(scope_free_html)
     scope_html = ''
     if scope:
         scope = scope[:420]
@@ -1519,7 +1525,8 @@ def build_order_client_email(order, link, message='', recipients=None, cc=None):
             f'{message_html}</p>'
         )
 
-    scope = _strip_html(order.scope)
+    _, order_scope_free = split_proposal_items(order.scope)
+    scope = _strip_html(order_scope_free)
     scope_html = ''
     if scope:
         scope = scope[:420]

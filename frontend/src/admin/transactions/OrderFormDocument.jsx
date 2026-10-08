@@ -326,7 +326,7 @@ export default function OrderFormDocument({ order, company }) {
                   className="text-[13px] leading-snug text-black"
                   style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
                 >
-                  {htmlToPlainLines(order.orderSummaryHtml).map((line, i) => (
+                  {htmlToPlainLines(stripItems(order.orderSummaryHtml)).map((line, i) => (
                     <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
                   ))}
                 </div>

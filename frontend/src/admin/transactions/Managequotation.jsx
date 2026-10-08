@@ -42,9 +42,6 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
-const SCOPE_MAX_CHARS = 1500
-const SCOPE_MAX_LINES = 30
-
 const BLOCKED_PREFIXES = new Set([
   'ASS', 'BIT', 'CUM', 'DAM', 'DIC', 'FAG', 'FUC', 'GAY', 'JAP',
   'KYS', 'PIS', 'SEX', 'SHI', 'SLU', 'TIT', 'WTF', 'NIG', 'COK',
@@ -82,99 +79,10 @@ function companyPrefix(company) {
   return primary
 }
 
-const stripHtmlText = (html) =>
-  String(html || '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
 const stripRevSuffix = (value) =>
   String(value || '')
     .replace(/\s*\(Rev\s*\d+\)\s*$/i, '')
     .trim()
-
-const clampRichHtml = (html, limit) => {
-  const div = document.createElement('div')
-  div.innerHTML = html || ''
-  const walker = document.createTreeWalker(div, NodeFilter.SHOW_ALL)
-  const nodes = []
-  let node
-  while ((node = walker.nextNode())) nodes.push(node)
-  let count = 0
-  let cutIdx = -1
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i]
-    if (n.nodeType === 3) {
-      const len = n.textContent.length
-      if (count + len > limit) {
-        n.textContent = n.textContent.slice(0, Math.max(0, limit - count))
-        cutIdx = i
-        break
-      }
-      count += len
-    }
-  }
-  if (cutIdx >= 0) {
-    for (let i = cutIdx + 1; i < nodes.length; i++) {
-      const n = nodes[i]
-      if (n.parentNode) n.parentNode.removeChild(n)
-    }
-  }
-  return div.innerHTML
-}
-
-const RICH_LINE_BLOCKS = new Set([
-  'P',
-  'H1',
-  'H2',
-  'H3',
-  'H4',
-  'H5',
-  'H6',
-  'LI',
-  'BLOCKQUOTE',
-])
-
-function richBlockLines(el) {
-  const tag = el.tagName
-  if (tag === 'UL' || tag === 'OL') return Math.max(1, el.querySelectorAll('li').length)
-  if (!RICH_LINE_BLOCKS.has(tag)) return 0
-  const hasText = el.textContent.replace(/\u200b/g, '').trim().length > 0
-  return hasText ? el.querySelectorAll('br').length + 1 : 1
-}
-
-const countRichLines = (html) => {
-  const div = document.createElement('div')
-  div.innerHTML = html || ''
-  let total = 0
-  const walk = (el) => {
-    Array.from(el.children).forEach((child) => {
-      const lines = richBlockLines(child)
-      if (lines > 0) total += lines
-      else walk(child)
-    })
-  }
-  walk(div)
-  return total
-}
-
-const clampRichLines = (html, limit) => {
-  const div = document.createElement('div')
-  div.innerHTML = html || ''
-  let count = 0
-  Array.from(div.children).forEach((child) => {
-    const lines = richBlockLines(child)
-    if (lines > 0) {
-      if (count + lines > limit) {
-        if (child.parentNode) child.parentNode.removeChild(child)
-      } else {
-        count += lines
-      }
-    }
-  })
-  return div.innerHTML
-}
 
 function parseMoney(value) {
   const s = String(value == null ? '' : value).replace(/[, ]/g, '').trim()
@@ -721,6 +629,9 @@ export default function Managequotation() {
   const [proposalItems, setProposalItems] = useState([])
   const [itemDraft, setItemDraft] = useState(null)
   const [editingItemId, setEditingItemId] = useState(null)
+  const [summaryItems, setSummaryItems] = useState([])
+  const [summaryItemDraft, setSummaryItemDraft] = useState(null)
+  const [editingSummaryItemId, setEditingSummaryItemId] = useState(null)
   const [validationErrors, setValidationErrors] = useState({})
 
   function clearError(field) {
@@ -760,7 +671,7 @@ export default function Managequotation() {
       next = proposalItems.map((it, i) => (i === editingItemId ? itemDraft : it))
     }
     setProposalItems(next)
-    const t = itemsTotal(next)
+    const t = itemsTotal(next) + itemsTotal(summaryItems)
     if (t > 0) {
       setTotalVal(fmtAmount(t))
       clearError('totalVal')
@@ -772,7 +683,54 @@ export default function Managequotation() {
   function deleteItem(index) {
     const next = proposalItems.filter((_, i) => i !== index)
     setProposalItems(next)
-    const t = itemsTotal(next)
+    const t = itemsTotal(next) + itemsTotal(summaryItems)
+    if (t > 0) {
+      setTotalVal(fmtAmount(t))
+      clearError('totalVal')
+    }
+  }
+
+  function startAddSummaryItem(type) {
+    setEditingSummaryItemId(null)
+    setSummaryItemDraft(
+      type === 'service'
+        ? { type: 'service', title: '', description: '', amount: '' }
+        : { type: 'text', text: '' }
+    )
+  }
+
+  function startEditSummaryItem(index) {
+    setEditingSummaryItemId(index)
+    setSummaryItemDraft({ ...summaryItems[index] })
+  }
+
+  function cancelSummaryItemDraft() {
+    setEditingSummaryItemId(null)
+    setSummaryItemDraft(null)
+  }
+
+  function saveSummaryItemDraft() {
+    if (!summaryItemDraft) return
+    let next
+    if (editingSummaryItemId === null) {
+      next = [...summaryItems, summaryItemDraft]
+    } else {
+      next = summaryItems.map((it, i) => (i === editingSummaryItemId ? summaryItemDraft : it))
+    }
+    setSummaryItems(next)
+    const t = itemsTotal(next) + itemsTotal(proposalItems)
+    if (t > 0) {
+      setTotalVal(fmtAmount(t))
+      clearError('totalVal')
+    }
+    setEditingSummaryItemId(null)
+    setSummaryItemDraft(null)
+  }
+
+  function deleteSummaryItem(index) {
+    const next = summaryItems.filter((_, i) => i !== index)
+    setSummaryItems(next)
+    const t = itemsTotal(next) + itemsTotal(proposalItems)
     if (t > 0) {
       setTotalVal(fmtAmount(t))
       clearError('totalVal')
@@ -849,10 +807,11 @@ export default function Managequotation() {
         currencyVal,
         remarksVal,
         proposalItemsKey: JSON.stringify(proposalItems),
+        summaryItemsKey: JSON.stringify(summaryItems),
       }),
       [
         bdm, qtnBy, revisionNo, customerPerson, companyName, mobileNum, email, categoryName, customerType, cityVal,
-        scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal, proposalItems,
+        scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal, proposalItems, summaryItems,
       ]
     )
   )
@@ -940,6 +899,7 @@ export default function Managequotation() {
   function hasFormContent() {
     return Boolean(
       proposalItems.length > 0 ||
+      summaryItems.length > 0 ||
       (scopeHtml && scopeHtml.replace(/<[^>]*>/g, '').trim()) ||
         (termsHtml && termsHtml.replace(/<[^>]*>/g, '').trim()) ||
         customerPerson.trim() ||
@@ -956,7 +916,11 @@ export default function Managequotation() {
     if (tpl) {
       const tplTerms = tpl.detailHtml || tpl.detail_html || ''
       const { items: tplItems, freeHtml: tplFree } = proposalItemsFromHtml(tplTerms)
-      setScopeHtml(tpl.scopeHtml || tpl.scope_html || '')
+      const { items: tplSummaryItems, freeHtml: tplSummaryFree } = proposalItemsFromHtml(
+        tpl.scopeHtml || tpl.scope_html || ''
+      )
+      setSummaryItems(tplSummaryItems)
+      setScopeHtml(tplSummaryFree)
       setProposalItems(tplItems)
       setTermsHtml(tplFree)
       setCategoryName(tpl.category || 'General')
@@ -964,6 +928,7 @@ export default function Managequotation() {
       setDiscountVal(tpl.defaultDiscount || tpl.default_discount || '')
       setCurrencyVal(tpl.currency || 'INR (₹)')
     } else {
+      setSummaryItems([])
       setScopeHtml('')
       setProposalItems([])
       setTermsHtml('')
@@ -1033,7 +998,11 @@ export default function Managequotation() {
     if (draft.mobile !== undefined) setMobileNum(draft.mobile)
     if (draft.category) setCategoryName(draft.category)
     if (draft.customerType !== undefined) setCustomerType(draft.customerType)
-    if (draft.scopeHtml !== undefined) setScopeHtml(draft.scopeHtml)
+    if (draft.scopeHtml !== undefined) {
+      const { items: draftSummaryItems, freeHtml: draftSummaryFree } = proposalItemsFromHtml(draft.scopeHtml)
+      setSummaryItems(draftSummaryItems)
+      setScopeHtml(draftSummaryFree)
+    }
     if (draft.termsHtml !== undefined) {
       const { items: draftItems, freeHtml: draftFree } = proposalItemsFromHtml(draft.termsHtml)
       setProposalItems(draftItems)
@@ -1066,7 +1035,9 @@ export default function Managequotation() {
       setCategoryName(quote.category || 'Hospital')
       setCustomerType(quote.customerType || '')
       setCityVal(quote.city || '')
-      setScopeHtml(quote.proposalScope || '')
+      const { items: quoteSummaryItems, freeHtml: quoteSummaryFree } = proposalItemsFromHtml(quote.proposalScope || '')
+      setSummaryItems(quoteSummaryItems)
+      setScopeHtml(quoteSummaryFree)
       const { items: quoteItems, freeHtml: quoteFree } = proposalItemsFromHtml(quote.termsConditions || '')
       setProposalItems(quoteItems)
       setTermsHtml(quoteFree)
@@ -1089,6 +1060,7 @@ export default function Managequotation() {
       setCategoryName('General')
       setCustomerType('')
       setCityVal('')
+      setSummaryItems([])
       setScopeHtml('')
       setProposalItems([])
       setTermsHtml('')
@@ -1117,20 +1089,20 @@ export default function Managequotation() {
     const stripHtml = (html) => (html ? String(html).replace(/<[^>]*>/g, '').trim() : '')
     const rules = [
       { key: 'customerPerson', label: 'Client Name', value: customerPerson.trim() },
+<<<<<<< HEAD
       { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) },
+=======
+      { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) || (summaryItems.length > 0 ? 'x' : '') },
+      { key: 'termsHtml', label: 'Proposal in Detail', value: stripHtml(termsHtml) || (proposalItems.length > 0 ? 'x' : '') },
+>>>>>>> proposal_form
     ]
-    if (itemsTotal(proposalItems) <= 0) {
+    const combinedTotal = itemsTotal(proposalItems) + itemsTotal(summaryItems)
+    if (combinedTotal <= 0) {
       rules.push({ key: 'totalVal', label: 'Total', value: totalVal.trim() })
     }
     rules.forEach(({ key, label, value }) => {
       if (!value) errors[key] = `${label} is required`
     })
-    if (stripHtmlText(scopeHtml).length > SCOPE_MAX_CHARS) {
-      errors.scopeHtml = `Proposal Summary must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer`
-    }
-    if (countRichLines(scopeHtml) > SCOPE_MAX_LINES) {
-      errors.scopeHtml = `Proposal Summary must be ${SCOPE_MAX_LINES} lines or fewer`
-    }
     return errors
   }
 
@@ -1140,28 +1112,15 @@ export default function Managequotation() {
 
     const errors = validateProposalForm()
     setValidationErrors(errors)
-    if (stripHtmlText(scopeHtml).length > SCOPE_MAX_CHARS) {
-      showToast(
-        `Character limit exceeded — Proposal Summary must be ${SCOPE_MAX_CHARS.toLocaleString()} characters or fewer.`,
-        'error',
-      )
-      return
-    }
-    if (countRichLines(scopeHtml) > SCOPE_MAX_LINES) {
-      showToast(
-        `Line limit exceeded — Proposal Summary must be ${SCOPE_MAX_LINES} lines or fewer.`,
-        'error',
-      )
-      return
-    }
     if (Object.keys(errors).length > 0) {
       setSubmitMessage('Please fill in the required fields highlighted below.')
       return
     }
 
-    const currentScope = scopeHtml
+    const currentScope = buildItemsHtml(summaryItems) + scopeHtml
     const currentTerms = buildItemsHtml(proposalItems) + termsHtml
-    const effectiveTotal = itemsTotal(proposalItems) > 0 ? fmtAmount(itemsTotal(proposalItems)) : totalVal
+    const combinedTotal = itemsTotal(proposalItems) + itemsTotal(summaryItems)
+    const effectiveTotal = combinedTotal > 0 ? fmtAmount(combinedTotal) : totalVal
     let nextApprovalId = null
     let targetQuote = null
     let persistLeadId = null
@@ -1334,7 +1293,7 @@ export default function Managequotation() {
       mobile: mobileNum,
       category: categoryName,
       customerType,
-      scopeHtml,
+      scopeHtml: buildItemsHtml(summaryItems) + scopeHtml,
       termsHtml: buildItemsHtml(proposalItems) + termsHtml,
       total: totalVal,
       discount: discountVal,
@@ -1387,7 +1346,7 @@ export default function Managequotation() {
       defaultTotal: totalVal,
       defaultDiscount: discountVal,
       currency: currencyVal,
-      scopeHtml,
+      scopeHtml: buildItemsHtml(summaryItems) + scopeHtml,
       detailHtml: buildItemsHtml(proposalItems) + termsHtml,
     }
     setTemplateAction('update')
@@ -1419,7 +1378,7 @@ export default function Managequotation() {
       defaultTotal: totalVal,
       defaultDiscount: discountVal,
       currency: currencyVal,
-      scopeHtml,
+      scopeHtml: buildItemsHtml(summaryItems) + scopeHtml,
       detailHtml: buildItemsHtml(proposalItems) + termsHtml,
     }
     setTemplateAction('save')
@@ -2307,14 +2266,7 @@ export default function Managequotation() {
                     className="quill-tall"
                     value={scopeHtml}
                     onChange={(value) => {
-                      let next = value
-                      if (stripHtmlText(next).length > SCOPE_MAX_CHARS) {
-                        next = clampRichHtml(next, SCOPE_MAX_CHARS)
-                      }
-                      if (countRichLines(next) > SCOPE_MAX_LINES) {
-                        next = clampRichLines(next, SCOPE_MAX_LINES)
-                      }
-                      setScopeHtml(next)
+                      setScopeHtml(value)
                       clearError('scopeHtml')
                     }}
                     modules={QUILL_MODULES}
@@ -2322,37 +2274,145 @@ export default function Managequotation() {
                     placeholder="Enter detailed deliverables, software features, and module breakdown..."
                   />
                 </div>
-                <div className="mt-1 flex items-center justify-between">
-                  <p className="text-[10px] font-semibold text-slate-400">
-                    {validationErrors.scopeHtml ? (
-                      <span className="text-rose-600">{validationErrors.scopeHtml}</span>
-                    ) : (
-                      `Maximum ${SCOPE_MAX_LINES} lines, ${SCOPE_MAX_CHARS.toLocaleString()} characters`
-                    )}
+                {validationErrors.scopeHtml && (
+                  <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                    {validationErrors.scopeHtml}
                   </p>
-                  <p className="font-mono text-[10px] text-slate-400">
-                    <span
-                      className={
-                        countRichLines(scopeHtml) >= SCOPE_MAX_LINES
-                          ? 'font-bold text-rose-600'
-                          : ''
-                      }
+                )}
+              </div>
+
+              {/* Services / Text blocks below the summary editor */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-600">
+                    Add services or text blocks below the summary text
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startAddSummaryItem('text')}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-100 cursor-pointer"
                     >
-                      {countRichLines(scopeHtml)} / {SCOPE_MAX_LINES} lines
-                    </span>
-                    <span className="mx-1 text-slate-300">|</span>
-                    <span
-                      className={
-                        stripHtmlText(scopeHtml).length >= SCOPE_MAX_CHARS
-                          ? 'font-bold text-rose-600'
-                          : ''
-                      }
+                      ＋ Add text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startAddSummaryItem('service')}
+                      className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-[11px] font-bold text-brand-700 transition hover:bg-brand-100 cursor-pointer"
                     >
-                      {stripHtmlText(scopeHtml).length.toLocaleString()} /{' '}
-                      {SCOPE_MAX_CHARS.toLocaleString()} chars
-                    </span>
-                  </p>
+                      ＋ Add service
+                    </button>
+                  </div>
                 </div>
+
+                {summaryItemDraft && (
+                  <div className="mb-2.5 rounded-lg border border-slate-300 bg-white p-3 space-y-2 animate-in fade-in duration-150">
+                    {summaryItemDraft.type === 'service' ? (
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <input
+                          type="text"
+                          placeholder="Title"
+                          value={summaryItemDraft.title}
+                          onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, title: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Description"
+                          value={summaryItemDraft.description}
+                          onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, description: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder={`Amount ${currencySymbol(currencyVal)}`}
+                          value={summaryItemDraft.amount}
+                          onChange={(e) =>
+                            setSummaryItemDraft({ ...summaryItemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
+                          }
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                    ) : (
+                      <textarea
+                        rows={2}
+                        placeholder="Text block content"
+                        value={summaryItemDraft.text}
+                        onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, text: e.target.value })}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelSummaryItemDraft}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveSummaryItemDraft}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer"
+                      >
+                        {editingSummaryItemId === null ? 'Save' : 'Update'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {summaryItems.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {summaryItems.map((it, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            {it.type === 'service' ? (
+                              <>
+                                <p className="text-[12.5px] font-bold text-slate-900">{it.title}</p>
+                                <p className="mt-0.5 text-[11.5px] text-slate-600 leading-snug">
+                                  {it.description}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-[12.5px] text-slate-700 whitespace-pre-line">{it.text}</p>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {it.type === 'service' && (
+                              <span className="font-mono text-[12.5px] font-bold text-slate-900">
+                                {currencySymbol(currencyVal)}{fmtAmount(itemsTotal([it]))}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => startEditSummaryItem(i)}
+                              className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600 cursor-pointer"
+                              title="Edit"
+                            >
+                              <PencilIcon className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteSummaryItem(i)}
+                              className="rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                              title="Delete"
+                            >
+                              <TrashIcon className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 text-center text-[11px] text-slate-400">
+                    No services or text blocks yet — add one above.
+                  </p>
+                )}
               </div>
 
               {/* Rich Text Editor 2 - Proposal in Detail */}
@@ -2507,16 +2567,6 @@ export default function Managequotation() {
                         </div>
                       </div>
                     ))}
-                    {itemsTotal(proposalItems) > 0 && (
-                      <div className="flex items-center justify-end gap-3 px-1 pt-1">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                          Total
-                        </span>
-                        <span className="font-mono text-[13.5px] font-bold text-slate-900">
-                          {currencySymbol(currencyVal)}{fmtAmount(itemsTotal(proposalItems))}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 text-center text-[11px] text-slate-400">
@@ -2533,14 +2583,14 @@ export default function Managequotation() {
                   </label>
                   <input
                     type="text"
-                    placeholder={itemsTotal(proposalItems) > 0 ? 'Auto-calculated from services' : 'Total Amount'}
-                    value={itemsTotal(proposalItems) > 0 ? fmtAmount(itemsTotal(proposalItems)) : totalVal}
-                    readOnly={itemsTotal(proposalItems) > 0}
+                    placeholder={itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0 ? 'Auto-calculated from services' : 'Total Amount'}
+                    value={itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0 ? fmtAmount(itemsTotal(proposalItems) + itemsTotal(summaryItems)) : totalVal}
+                    readOnly={itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0}
                     onChange={(e) => {
                       setTotalVal(e.target.value)
                       clearError('totalVal')
                     }}
-                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${itemsTotal(proposalItems) > 0 ? 'bg-slate-50 text-slate-600' : ''} ${validationErrors.totalVal ? 'border-rose-400' : 'border-slate-300'}`}
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0 ? 'bg-slate-50 text-slate-600' : ''} ${validationErrors.totalVal ? 'border-rose-400' : 'border-slate-300'}`}
                   />
                   {validationErrors.totalVal && (
                     <p className="mt-1 text-[10px] font-semibold text-rose-600">
