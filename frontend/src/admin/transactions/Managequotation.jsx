@@ -115,15 +115,6 @@ function normalizeRichText(html) {
     .trim()
 }
 
-const STAFF_LIST = [
-  'All Staff',
-  'NIMISHA DAVIS',
-  'Priya Sharma',
-  'Alex Joseph',
-  'Ananya Nair',
-  'Shanu VR',
-]
-
 const STATUS_LIST = [
   'All Status',
   'Quotation Requested',
@@ -316,7 +307,6 @@ export default function Managequotation() {
   const [quotationsList, setQuotationsList] = useState([])
   const [error, setError] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
-  const [staffOptions, setStaffOptions] = useState(STAFF_LIST)
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState(null)
@@ -353,6 +343,7 @@ export default function Managequotation() {
   const {
     count,
     counts: statusCounts,
+    facets,
     loading: isLoading,
     page,
     totalPages,
@@ -365,25 +356,13 @@ export default function Managequotation() {
     onError: (msg) => setError(msg),
   })
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchStaffOptions() {
-      try {
-        const data = await api.get('/auth/assignable-staff/')
-        if (!cancelled && Array.isArray(data) && data.length > 0) {
-          setStaffOptions(['All Staff', ...data.map((s) => s.name)])
-        }
-      } catch {
-        // Fall back to the static STAFF_LIST if the endpoint is unavailable.
-      }
-    }
-
-    if (canFilterByStaff) fetchStaffOptions()
-    return () => {
-      cancelled = true
-    }
-  }, [canFilterByStaff])
+  // The staff filter scopes to the telecaller who moved each lead to
+  // "Quotation Requested"; the backend returns the distinct names present in
+  // that scope as a facet so the picker always matches real data.
+  const staffOptions = useMemo(
+    () => ['All Staff', ...(Array.isArray(facets?.staff) ? facets.staff : [])],
+    [facets],
+  )
 
   // Real approving users for the "Send for Approval" picker.
   const [approverOptions, setApproverOptions] = useState([])

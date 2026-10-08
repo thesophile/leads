@@ -2819,6 +2819,38 @@ class PaginationAndFilterTests(APITestCase):
         self.assertEqual(len(resp.data['results']), 100)
         self.assertTrue(resp.data['results'][0]['hasProposal'])
 
+    def test_quotation_staff_filter_matches_who_requested_the_quote(self):
+        self.client.force_authenticate(self.manager)
+        Lead.objects.filter(status='raw').update(status='quotation')
+        leads = list(Lead.objects.filter(status='quotation').order_by('id'))
+        # Staff A moved the first three leads to "Quotation Requested",
+        # Staff B the next two.
+        for lead in leads[:3]:
+            CallHistory.objects.create(
+                lead=lead, caller='Staff A', status='Quotation Requested',
+            )
+        for lead in leads[3:5]:
+            CallHistory.objects.create(
+                lead=lead, caller='Staff B', status='Quotation Requested',
+            )
+        # The first Staff A lead already has a proposal; it must not reappear
+        # as a synthetic "Quotation Requested" row.
+        Quotation.objects.create(
+            id=leads[0].id, lead_id=leads[0].id, company=leads[0].company,
+            tenant=leads[0].tenant, staff='Someone Else', status='Not Sent',
+        )
+
+        resp = self.client.get('/api/transactions/quotations/rows/?staff=Staff%20A')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 3)
+        self.assertEqual(resp.data['counts']['Quotation Requested'], 2)
+        self.assertEqual(
+            {row['leadId'] for row in resp.data['results']},
+            {leads[0].id, leads[1].id, leads[2].id},
+        )
+        # The picker keeps showing every staff even while one is selected.
+        self.assertEqual(resp.data['facets']['staff'], ['Staff A', 'Staff B'])
+
     def test_order_register_pages(self):
         self.client.force_authenticate(self.manager)
         for i in range(120):

@@ -1554,7 +1554,28 @@ class QuotationRowsView(APIView):
                 {'detail': 'You do not have permission to view quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # "Staff" on this screen means the telecaller who first moved the lead
+        # to "Quotation Requested", recorded on its CallHistory (mirrors
+        # ExternalOrdersView._sales_person). Some leads have several QR rows, so
+        # the earliest one wins.
+        first_qr_caller = {}
+        for lead_id, caller in (
+            CallHistory.objects
+            .filter(status='Quotation Requested')
+            .order_by('created_at', 'pk')
+            .values_list('lead_id', 'caller')
+        ):
+            first_qr_caller.setdefault(lead_id, caller)
+
         scoped_leads = scoped_queryset(request.user, Lead.STATUS_QUOTATION)
+        staff_filter = request.query_params.get('staff')
+        if staff_filter:
+            requested_ids = [
+                lead_id for lead_id, caller in first_qr_caller.items()
+                if caller == staff_filter
+            ]
+            scoped_leads = scoped_leads.filter(id__in=requested_ids)
+
         base_quotes = Quotation.objects.filter(lead_id__in=scoped_leads.values('id'))
 
         search = (request.query_params.get('search') or '').strip()
@@ -1566,23 +1587,27 @@ class QuotationRowsView(APIView):
                 | Q(staff__icontains=search)
                 | Q(id__icontains=search)
             )
-        staff_filter = request.query_params.get('staff')
-        if staff_filter:
-            base_quotes = base_quotes.filter(Q(staff=staff_filter) | Q(bdm=staff_filter))
         status_filter = request.query_params.get('status')
         quotes_for_page = base_quotes
         if status_filter and status_filter != 'Quotation Requested':
             quotes_for_page = base_quotes.filter(status=status_filter)
 
         quoted_lead_ids = set(base_quotes.values_list('lead_id', flat=True))
-        lead_scope = scoped_queryset(request.user, Lead.STATUS_QUOTATION)
-        lead_scope = apply_lead_search(lead_scope, search)
-        synthetic_all = scoped_queryset(request.user, Lead.STATUS_QUOTATION) \
-            .exclude(id__in=quoted_lead_ids)
+        lead_scope = apply_lead_search(scoped_leads, search)
+        synthetic_all = scoped_leads.exclude(id__in=quoted_lead_ids)
         if status_filter and status_filter != 'Quotation Requested':
             synthetic_for_page = False  # filtered out; never matches a proposal status
         else:
             synthetic_for_page = lead_scope.exclude(id__in=quoted_lead_ids)
+
+        # The staff picker's options ignore the staff filter itself, so picking
+        # a value never collapses the dropdown it belongs to.
+        facet_staff = sorted({
+            first_qr_caller.get(lead_id)
+            for lead_id in scoped_queryset(request.user, Lead.STATUS_QUOTATION)
+            .values_list('id', flat=True)
+            if first_qr_caller.get(lead_id)
+        })
 
         counts = {
             'Quotation Requested': synthetic_all.count(),
@@ -1651,6 +1676,7 @@ class QuotationRowsView(APIView):
             'page': page,
             'page_size': page_size,
             'counts': counts,
+            'facets': {'staff': facet_staff},
             'results': results,
         })
 
