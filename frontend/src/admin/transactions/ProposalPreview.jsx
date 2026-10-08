@@ -183,7 +183,7 @@ function SectionBox({ title, children, className = '', overflowVisible = false, 
   )
 }
 
-function PageHeader({ proposal, annexLabel, company, clientToken = '' }) {
+function PageHeader({ proposal, company, clientToken = '' }) {
   const token = clientToken || proposal.clientToken || ''
   const proposalLink = token ? `${window.location.origin}/quotation/${token}` : ''
   return (
@@ -219,14 +219,6 @@ function PageHeader({ proposal, annexLabel, company, clientToken = '' }) {
       </div>
 
       <div className="flex flex-col items-end space-y-2 text-right">
-        {annexLabel && (
-          <span
-            data-annex={annexLabel}
-            className="inline-block max-w-[220px] border border-slate-900 bg-black px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white"
-          >
-            {annexLabel}
-          </span>
-        )}
         <ProgramersLogo logo={company?.logo} companyName={company?.name} />
         <BarcodeVisual code={proposal.id} />
         <p className="font-mono text-[9.5px] text-slate-600">
@@ -579,7 +571,7 @@ export default function ProposalPreview() {
   )
 
   const proposalPageHeader = (
-    <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
+    <PageHeader proposal={proposalData} company={company} clientToken={liveToken} />
   )
 
   // The "Proposal in Details" box and the "Detailed Terms" box are configured
@@ -899,7 +891,7 @@ const approvedByRef = useRef(null)
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
           <div className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">
-            <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
+    <PageHeader proposal={proposalData} company={company} clientToken={liveToken} />
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 print:grid-cols-3">
               <SectionBox title="Customer Details">
