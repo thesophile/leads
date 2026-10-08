@@ -16,6 +16,7 @@ import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
 import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
+import { moveToTop } from '../../utils/listOrder'
 
 // Initial dataset of approved orders ready for execution
 const STAFF_LIST = [
@@ -398,9 +399,7 @@ export default function ManageOrder() {
             details: orderInDetailsHtml,
           }
         )
-        setOrdersList((prev) =>
-          prev.map((item) => (item.id === editingOrderId ? { ...item, ...updated } : item))
-        )
+        setOrdersList((prev) => moveToTop(prev, editingOrderId, updated))
         setSubmitMessage('✓ Order Form updated successfully!')
       } else {
         // Create new
@@ -457,9 +456,7 @@ export default function ManageOrder() {
         `/transactions/orders/${encodeURIComponent(orderId)}/`,
         { status: nextStatus }
       )
-      setOrdersList((prev) =>
-        prev.map((item) => (item.id === orderId ? { ...item, ...updated } : item))
-      )
+      setOrdersList((prev) => moveToTop(prev, orderId, updated))
       const label = nextStatus === 'Sent to Client' ? 'Sent' : 'Not Sent'
       showToast(`Order ${orderId} marked as ${label}.`)
     } catch (err) {
@@ -471,9 +468,7 @@ export default function ManageOrder() {
   }
 
   function handleOrderSent(updated) {
-    setOrdersList((prev) =>
-      prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
-    )
+    setOrdersList((prev) => moveToTop(prev, updated.id, updated))
   }
 
   function showToast(msg, type = 'success') {

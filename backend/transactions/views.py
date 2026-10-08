@@ -812,7 +812,9 @@ class LeadListView(APIView):
         elif ordering == '-date':
             leads = leads.order_by('-date', '-created_at')
         else:
-            leads = leads.order_by('-created_at')
+            # Telecall and other activity-based views: most recently touched
+            # lead first, so a newly assigned or reverted lead rises to the top.
+            leads = leads.order_by('-updated_at')
         page_leads, envelope = paginated_queryset(leads, request)
         page_leads = page_leads.prefetch_related('history', 'contact_history')
         lead_ids = list(page_leads.values_list('id', flat=True))
@@ -3813,7 +3815,9 @@ class OrderListCreateView(APIView):
             qs = qs.exclude(status='Sent to Client')
         elif status_filter == 'Sent to Client':
             qs = qs.filter(status='Sent to Client')
-        qs = qs.order_by('-created_at').select_related('tenant')
+        # Most recently active order first: a new order starts at the top and an
+        # edited or status-changed order rises again.
+        qs = qs.order_by('-updated_at').select_related('tenant')
         page_orders, envelope = paginated_queryset(qs, request)
         envelope['results'] = OrderSerializer(page_orders, many=True).data
         envelope['counts'] = counts

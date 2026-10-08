@@ -14,6 +14,7 @@ import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
 import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
+import { moveToTop } from '../../utils/listOrder'
 
 // Window scroll position saved just before opening a quotation preview, so
 // returning here from the preview restores exactly where the user was in the
@@ -304,19 +305,6 @@ function ShareIcon({ className = 'h-3.5 w-3.5' }) {
 function currencySymbol(currency) {
   const m = String(currency || '').match(/\(([^)]+)\)/)
   return m ? m[1] : (currency || '₹')
-}
-
-// Apply ``patch`` to the matching row and float it to the top of the list.
-// This is local-only so the edited row shows at the top instantly; the server's
-// activity-based ordering catches up the rest on the next load/refresh.
-function moveToTop(list, id, patch) {
-  const next = list.map((item) => (item.id === id ? { ...item, ...patch } : item))
-  const index = next.findIndex((item) => item.id === id)
-  if (index > 0) {
-    const [row] = next.splice(index, 1)
-    next.unshift(row)
-  }
-  return next
 }
 
 export default function Managequotation() {
