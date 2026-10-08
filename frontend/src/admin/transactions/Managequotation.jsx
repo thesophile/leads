@@ -628,6 +628,7 @@ export default function Managequotation() {
   const [termsHtml, setTermsHtml] = useState('')
   
   const [totalVal, setTotalVal] = useState('')
+  const [totalOverridden, setTotalOverridden] = useState(false)
   const [discountVal, setDiscountVal] = useState('10,000')
   const [sourceVal, setSourceVal] = useState('Google Search')
   const [currencyVal, setCurrencyVal] = useState('INR (₹)')
@@ -647,6 +648,12 @@ export default function Managequotation() {
       delete next[field]
       return next
     })
+  }
+
+  function syncAutoTotal(nextProposal, nextSummary) {
+    if (totalOverridden) return
+    const t = itemsTotal(nextProposal) + itemsTotal(nextSummary)
+    setTotalVal(t > 0 ? fmtAmount(t) : '')
   }
 
   function startAddItem(type) {
@@ -677,11 +684,8 @@ export default function Managequotation() {
       next = proposalItems.map((it, i) => (i === editingItemId ? itemDraft : it))
     }
     setProposalItems(next)
-    const t = itemsTotal(next) + itemsTotal(summaryItems)
-    if (t > 0) {
-      setTotalVal(fmtAmount(t))
-      clearError('totalVal')
-    }
+    syncAutoTotal(next, summaryItems)
+    clearError('totalVal')
     setEditingItemId(null)
     setItemDraft(null)
   }
@@ -689,11 +693,8 @@ export default function Managequotation() {
   function deleteItem(index) {
     const next = proposalItems.filter((_, i) => i !== index)
     setProposalItems(next)
-    const t = itemsTotal(next) + itemsTotal(summaryItems)
-    if (t > 0) {
-      setTotalVal(fmtAmount(t))
-      clearError('totalVal')
-    }
+    syncAutoTotal(next, summaryItems)
+    clearError('totalVal')
   }
 
   function startAddSummaryItem(type) {
@@ -724,11 +725,8 @@ export default function Managequotation() {
       next = summaryItems.map((it, i) => (i === editingSummaryItemId ? summaryItemDraft : it))
     }
     setSummaryItems(next)
-    const t = itemsTotal(next) + itemsTotal(proposalItems)
-    if (t > 0) {
-      setTotalVal(fmtAmount(t))
-      clearError('totalVal')
-    }
+    syncAutoTotal(proposalItems, next)
+    clearError('totalVal')
     setEditingSummaryItemId(null)
     setSummaryItemDraft(null)
   }
@@ -736,11 +734,8 @@ export default function Managequotation() {
   function deleteSummaryItem(index) {
     const next = summaryItems.filter((_, i) => i !== index)
     setSummaryItems(next)
-    const t = itemsTotal(next) + itemsTotal(proposalItems)
-    if (t > 0) {
-      setTotalVal(fmtAmount(t))
-      clearError('totalVal')
-    }
+    syncAutoTotal(proposalItems, next)
+    clearError('totalVal')
   }
 
   const [submitMessage, setSubmitMessage] = useState('')
@@ -918,6 +913,7 @@ export default function Managequotation() {
 
   function applyTemplate(templateId) {
     setSelectedTemplateId(templateId)
+    setTotalOverridden(false)
     const tpl = resolveTemplate(templateId)
     if (tpl) {
       const tplTerms = tpl.detailHtml || tpl.detail_html || ''
@@ -1014,6 +1010,7 @@ export default function Managequotation() {
       setProposalItems(draftItems)
       setTermsHtml(draftFree)
     }
+    setTotalOverridden(false)
     if (draft.total !== undefined) setTotalVal(draft.total)
     if (draft.discount !== undefined) setDiscountVal(draft.discount)
     if (draft.source) setSourceVal(draft.source)
@@ -1024,6 +1021,7 @@ export default function Managequotation() {
   async function handleOpenNewProposalModal(quote = null, asNewVersion = false) {
     setValidationErrors({})
     setSelectedTemplateId('')
+    setTotalOverridden(false)
     setEditAsNewVersion(!!asNewVersion)
     const nextDraftKey = quote ? `edit-${quote.id}` : `new-${newProposalCounter.current}`
     newProposalCounter.current += 1
@@ -1098,9 +1096,11 @@ export default function Managequotation() {
       { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) || (summaryItems.length > 0 ? 'x' : '') },
     ]
     const combinedTotal = itemsTotal(proposalItems) + itemsTotal(summaryItems)
-    if (combinedTotal <= 0) {
-      rules.push({ key: 'totalVal', label: 'Total', value: totalVal.trim() })
-    }
+    rules.push({
+      key: 'totalVal',
+      label: 'Total',
+      value: totalVal.trim() || (combinedTotal > 0 ? fmtAmount(combinedTotal) : ''),
+    })
     rules.forEach(({ key, label, value }) => {
       if (!value) errors[key] = `${label} is required`
     })
@@ -1121,7 +1121,8 @@ export default function Managequotation() {
     const currentScope = buildItemsHtml(summaryItems) + scopeHtml
     const currentTerms = buildItemsHtml(proposalItems) + termsHtml
     const combinedTotal = itemsTotal(proposalItems) + itemsTotal(summaryItems)
-    const effectiveTotal = combinedTotal > 0 ? fmtAmount(combinedTotal) : totalVal
+    const effectiveTotal =
+      totalVal.trim() || (combinedTotal > 0 ? fmtAmount(combinedTotal) : '')
     let nextApprovalId = null
     let targetQuote = null
     let persistLeadId = null
@@ -2585,13 +2586,20 @@ export default function Managequotation() {
                   <input
                     type="text"
                     placeholder={itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0 ? 'Auto-calculated from services' : 'Total Amount'}
-                    value={itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0 ? fmtAmount(itemsTotal(proposalItems) + itemsTotal(summaryItems)) : totalVal}
-                    readOnly={itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0}
+                    value={totalVal}
                     onChange={(e) => {
-                      setTotalVal(e.target.value)
+                      const v = e.target.value
+                      const combined = itemsTotal(proposalItems) + itemsTotal(summaryItems)
+                      if (combined > 0 && v.trim() === '') {
+                        setTotalOverridden(false)
+                        setTotalVal(fmtAmount(combined))
+                      } else {
+                        setTotalVal(v)
+                        setTotalOverridden(combined > 0 && v.trim() !== '')
+                      }
                       clearError('totalVal')
                     }}
-                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0 ? 'bg-slate-50 text-slate-600' : ''} ${validationErrors.totalVal ? 'border-rose-400' : 'border-slate-300'}`}
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${validationErrors.totalVal ? 'border-rose-400' : 'border-slate-300'}`}
                   />
                   {validationErrors.totalVal && (
                     <p className="mt-1 text-[10px] font-semibold text-rose-600">
