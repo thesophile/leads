@@ -237,9 +237,12 @@ function PageFooter({ company }) {
   if (company?.phone) parts.push(`Ph: ${company.phone}`)
   const text = parts.join(' | ')
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-[11px] leading-relaxed text-slate-600">
-      {text || (company?.name ? `${company.name} — set your address &amp; contact details in Settings` : '')}
-    </div>
+    <>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-[11px] leading-relaxed text-slate-600">
+        {text || (company?.name ? `${company.name} — set your address &amp; contact details in Settings` : '')}
+      </div>
+      <p data-page-number className="mt-1.5 text-center text-[10px] font-bold tracking-wide text-slate-500" />
+    </>
   )
 }
 
@@ -635,17 +638,17 @@ const approvedByRef = useRef(null)
   const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 16)
   const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 16)
 
-  // Stamp each A4 page's annexure tag with "ANNEXURE - A (page/total)". The
-  // total is only known after layout settles (fonts, async continuation
-  // pages), so this runs on every commit and writes into the already-rendered
-  // tags in document order. Idempotent: writing the same text never loops.
+  // Stamp each A4 page footer with "Page N of TOTAL". The total is only known
+  // after layout settles (fonts, async continuation pages), so this runs on
+  // every commit and writes into the already-rendered footers in document
+  // order. Idempotent: writing the same text never loops.
   useLayoutEffect(() => {
     const root = docRef.current
     if (!totalPages || !root) return
     const pages = Array.from(root.querySelectorAll('.print-page'))
     pages.forEach((page, i) => {
-      const tag = page.querySelector('[data-annex]')
-      if (tag) tag.textContent = `${tag.dataset.annex || 'ANNEXURE - A'} (${i + 1}/${totalPages})`
+      const tag = page.querySelector('[data-page-number]')
+      if (tag) tag.textContent = `Page ${i + 1} of ${totalPages}`
     })
   })
 
