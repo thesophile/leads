@@ -555,6 +555,8 @@ export default function ProposalPreview() {
     detailSplit.freeHtml ? linesToHtml(htmlToPlainLines(detailSplit.freeHtml)) : '',
     itemsPrintHtml(detailSplit.items, currencySymbol(proposalData?.currency), ''),
   ].join('')
+  const hasDetails =
+    htmlToPlainLines(detailSplit.freeHtml || '').length > 0 || detailSplit.items.length > 0
 
   // "Proposal Summary" carries its own optional service/text blocks. Totals are
   // collective (shown once in the financial banner), so no per-section total.
@@ -584,6 +586,7 @@ export default function ProposalPreview() {
   // as a chain so that, when the Proposal Summary overflows page 1, each one
   // follows the previous box inline as long as that box leaves at least
   // `minFraction` (25%) of the page free; otherwise the section starts fresh.
+  // The Details box is omitted entirely when there is no detail content.
   const termsInset = hasFullTerms
     ? {
         title: 'Detailed Terms & Conditions',
@@ -599,19 +602,21 @@ export default function ProposalPreview() {
       }
     : null
 
-  const detailsInset = {
-    title: 'Proposal in Details & Specifications',
-    html: composedDetailsHtml,
-    contentClass: 'text-[13px] leading-snug text-slate-800',
-    boxClass: 'rounded-xl border border-slate-300 bg-white',
-    titleClass: 'text-center',
-    reserve: 64,
-    minFraction: 0.25,
-    pageHeader: proposalPageHeader,
-    pageFooter: <PageFooter company={company} />,
-    endBlock: hasFullTerms ? null : acceptanceEnd,
-    insetSection: termsInset,
-  }
+  const detailsInset = hasDetails
+    ? {
+        title: 'Proposal in Details & Specifications',
+        html: composedDetailsHtml,
+        contentClass: 'text-[13px] leading-snug text-slate-800',
+        boxClass: 'rounded-xl border border-slate-300 bg-white',
+        titleClass: 'text-center',
+        reserve: 64,
+        minFraction: 0.25,
+        pageHeader: proposalPageHeader,
+        pageFooter: <PageFooter company={company} />,
+        endBlock: hasFullTerms ? null : acceptanceEnd,
+        insetSection: termsInset,
+      }
+    : null
 
   const isSent = proposalData?.status === 'Pending Approval'
 
@@ -1094,9 +1099,9 @@ const approvedByRef = useRef(null)
               titleClass="text-center"
               pageHeader={proposalPageHeader}
               pageFooter={<PageFooter company={company} />}
-              insetSection={detailsInset}
+              insetSection={detailsInset || termsInset}
             />
-          ) : (
+          ) : hasDetails ? (
             /* -------------------- PAGE 2+ (PROPOSAL IN DETAILS & SPECIFICATIONS + DETAILED TERMS & CONDITIONS) -------------------- */
             <PagedSection
               html={composedDetailsHtml}
@@ -1110,6 +1115,29 @@ const approvedByRef = useRef(null)
               endBlock={hasFullTerms ? null : acceptanceEnd}
               insetSection={termsInset}
             />
+          ) : hasFullTerms ? (
+            /* No detail content — render only the Detailed Terms box. */
+            <PagedSection
+              html={termsInset.html}
+              reserve={termsInset.reserve}
+              contentClass={termsInset.contentClass}
+              sectionTitle={termsInset.title}
+              boxClass={termsInset.boxClass}
+              titleClass={termsInset.titleClass}
+              pageHeader={proposalPageHeader}
+              pageFooter={<PageFooter company={company} />}
+              endBlock={acceptanceEnd}
+            />
+          ) : (
+            /* No detail content and no detailed terms — close the document
+               without an empty details box. */
+            <div className={PAGE_CLASS}>
+              <div className="flex flex-1 flex-col">
+                {proposalPageHeader}
+                <div className="flex flex-1 flex-col justify-end">{acceptanceEnd}</div>
+                <PageFooter company={company} />
+              </div>
+            </div>
           )}
 
         </div>

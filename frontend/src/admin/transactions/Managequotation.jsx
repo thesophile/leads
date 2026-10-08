@@ -1096,7 +1096,6 @@ export default function Managequotation() {
     const rules = [
       { key: 'customerPerson', label: 'Client Name', value: customerPerson.trim() },
       { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) || (summaryItems.length > 0 ? 'x' : '') },
-      { key: 'termsHtml', label: 'Proposal in Detail', value: stripHtml(termsHtml) || (proposalItems.length > 0 ? 'x' : '') },
     ]
     const combinedTotal = itemsTotal(proposalItems) + itemsTotal(summaryItems)
     if (combinedTotal <= 0) {

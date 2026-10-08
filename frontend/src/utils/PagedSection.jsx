@@ -72,7 +72,8 @@ export default function PagedSection({
     footerRef,
     [],
     insetSection?.reserve ?? reserve,
-    insetSection?.endBlock ? insetAcceptRef : null
+    insetSection?.endBlock ? insetAcceptRef : null,
+    paged.cap || 0
   )
 
   // Optional second inset (e.g. Terms after Details after Summary). It follows
@@ -87,7 +88,8 @@ export default function PagedSection({
     footerRef,
     [],
     nested2?.reserve ?? reserve,
-    nested2?.endBlock ? inset2AcceptRef : null
+    nested2?.endBlock ? inset2AcceptRef : null,
+    paged.cap || 0
   )
   const showNestedInline =
     Boolean(nested2) &&

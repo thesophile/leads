@@ -21,6 +21,12 @@ import { useCallback, useLayoutEffect, useState, useRef } from 'react'
  *   its own continuation page. Its height is measured while visible and stored
  *   so the decision never depends on its toggling display state (which would
  *   oscillate).
+ * - `fullCap` (optional): the content height available on a full page (i.e. the
+ *   cap of a box that starts at the top of the page). Used only for the
+ *   unsplittable-block guard: an inset can have a much smaller cap than a full
+ *   page, and a block that merely exceeded that small remainder must still be
+ *   allowed to continue on its own page instead of being clipped. Pass 0 (the
+ *   default) when the measured cap already is a full-page cap.
  *
  * Returns:
  *  - cap: max-height (px) to apply to the content element so it stays on-page
@@ -31,7 +37,7 @@ import { useCallback, useLayoutEffect, useState, useRef } from 'react'
  *  - endOverflow: true when the end block could not fit after the content and
  *    needs to render on its own continuation page
  */
-export default function usePagedContent(contentRef, bottomRef, belowBlocks = [], reserve = 48, endBlockRef = null) {
+export default function usePagedContent(contentRef, bottomRef, belowBlocks = [], reserve = 48, endBlockRef = null, fullCap = 0) {
   const [cap, setCap] = useState(undefined)
   const [part2Html, setPart2Html] = useState('')
   const [showEnd, setShowEnd] = useState(true)
@@ -51,6 +57,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
   const belowRef = useRef(belowBlocks)
   const reserveRef = useRef(reserve)
   const endBlockRefRef = useRef(endBlockRef)
+  const fullCapRef = useRef(fullCap)
 
   // Once a page commits as the final page (no continuation), keep it final.
   // Incidental re-measures (font loads, async heights) must not re-spawn a
@@ -62,6 +69,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     belowRef.current = belowBlocks
     reserveRef.current = reserve
     endBlockRefRef.current = endBlockRef
+    fullCapRef.current = fullCap
   })
 
   const check = useCallback(() => {
@@ -137,12 +145,17 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     let nextFreePx = 0
     let nextEndOverflow = false
 
+    // A block is only truly unsplittable when it cannot fit a FULL page. An
+    // inline inset may have a much smaller cap than that, so compare against
+    // the supplied full-page cap (falling back to this page's own cap).
+    const splitLimit = fullCapRef.current > 0 ? fullCapRef.current : c
+
     if (endEl && endCapHRef.current > 0) {
       // Phase 1 — available height with the end block excluded. Pages that
       // still overflow are plain fill pages: full height, no end block.
       const full = splitAt(c)
       if (full.over.length) {
-        const unsplit = full.over.length === 1 && full.over[0].height > c
+        const unsplit = full.over.length === 1 && full.over[0].height > splitLimit
         if (!unsplit) {
           nextCap = Math.max(48, full.last)
           nextPart2 = full.over.map((o) => o.html).join('')
@@ -171,7 +184,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       // No end block: plain overflow split (existing behaviour).
       const { last, over } = splitAt(c)
       if (over.length) {
-        const unsplit = over.length === 1 && over[0].height > c
+        const unsplit = over.length === 1 && over[0].height > splitLimit
         if (!unsplit) {
           nextCap = Math.max(48, last)
           nextPart2 = over.map((o) => o.html).join('')
