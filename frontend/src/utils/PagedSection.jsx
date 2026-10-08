@@ -15,6 +15,10 @@ import usePagedContent from './usePagedContent'
  *   least `minFraction` (default 0.5) of the page is still empty; otherwise it
  *   starts on a fresh page. Its own overflow (and optional `endBlock`) flows
  *   onto continuation pages below.
+ * - `insetSection.insetSection` (optional): a second box that follows the first
+ *   inset by the same rule — inline when the first inset is inline on this page
+ *   and leaves at least `minFraction` of its usable height free, else on a fresh
+ *   page. This supports a chain such as Summary → Details → Terms.
  *
  * Recursion is hard-capped at `MAX_CONTINUATION_PAGES` as a safety net — the
  * pagination in `usePagedContent` already stops splitting content that can
@@ -71,8 +75,31 @@ export default function PagedSection({
     insetSection?.endBlock ? insetAcceptRef : null
   )
 
+  // Optional second inset (e.g. Terms after Details after Summary). It follows
+  // the outer inset inline when the outer inset leaves at least its
+  // `minFraction` of usable height free; otherwise it starts on a fresh page.
+  // Its overflow and end block obey the exact same rules as the outer one.
+  const nested2 = insetSection?.insetSection || null
+  const inset2ContentRef = useRef(null)
+  const inset2AcceptRef = useRef(null)
+  const inset2Paged = usePagedContent(
+    inset2ContentRef,
+    footerRef,
+    [],
+    nested2?.reserve ?? reserve,
+    nested2?.endBlock ? inset2AcceptRef : null
+  )
+  const showNestedInline =
+    Boolean(nested2) &&
+    showInsetInline &&
+    insetPaged.part2Html === '' &&
+    (insetPaged.cap || 0) > 0 &&
+    (insetPaged.freePx || 0) >= (insetPaged.cap || 0) * (nested2.minFraction ?? 0.5)
+
   const insetEndOverflow = Boolean(insetSection?.endBlock) && showInsetInline && insetPaged.endOverflow
-  const endOverflowPage = (mainEndOverflow || insetEndOverflow) && !atLimit
+  const inset2EndOverflow = Boolean(nested2?.endBlock) && showNestedInline && inset2Paged.endOverflow
+  const endOverflowPage =
+    (mainEndOverflow || insetEndOverflow || inset2EndOverflow) && !atLimit
 
   const insetBox = insetSection ? (
     <div className={`overflow-hidden ${insetSection.boxClass || boxClass} flex flex-col`}>
@@ -97,12 +124,45 @@ export default function PagedSection({
     </div>
   ) : null
 
+  const inset2Box = nested2 ? (
+    <div className={`overflow-hidden ${nested2.boxClass || boxClass} flex flex-col`}>
+      <div
+        className={`shrink-0 bg-black px-3 py-1.5 text-[13px] font-bold uppercase tracking-wider text-white ${
+          nested2.titleClass || titleClass
+        }`}
+      >
+        {nested2.title}
+      </div>
+      <div className={`flex-1 flex flex-col justify-start ${nested2.paddingClass || paddingClass}`}>
+        <div
+          ref={inset2ContentRef}
+          className={nested2.contentClass || contentClass}
+          style={inset2Paged.cap ? { maxHeight: inset2Paged.cap, overflow: 'hidden' } : undefined}
+          dangerouslySetInnerHTML={{ __html: nested2.html }}
+        />
+        {inset2Paged.part2Html ? (
+          <p className="mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+        ) : null}
+      </div>
+    </div>
+  ) : null
+
   const insetChunk = insetSection ? (
     <div className="mt-3 flex flex-1 flex-col">
       {insetBox}
       {insetSection.endBlock ? (
         <div ref={insetAcceptRef} className={`pt-4 ${insetPaged.showEnd ? '' : 'hidden'}`}>
           {insetSection.endBlock}
+        </div>
+      ) : null}
+      {showNestedInline ? (
+        <div className="mt-3 flex flex-col">
+          {inset2Box}
+          {nested2.endBlock ? (
+            <div ref={inset2AcceptRef} className={`pt-4 ${inset2Paged.showEnd ? '' : 'hidden'}`}>
+              {nested2.endBlock}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -172,15 +232,27 @@ export default function PagedSection({
       {endOverflowPage ? (
         <div className={pageClassName} style={{ boxSizing: 'border-box' }}>
           <div className="flex flex-1 flex-col">
-            {insetEndOverflow ? insetSection.pageHeader : pageHeader}
+            {inset2EndOverflow
+              ? nested2.pageHeader
+              : insetEndOverflow
+              ? insetSection.pageHeader
+              : pageHeader}
             <div className="flex flex-1 flex-col justify-end">
               <div className={`pt-4 ${endBlockClass}`}>
-                {insetEndOverflow ? insetSection.endBlock : endBlock}
+                {inset2EndOverflow
+                  ? nested2.endBlock
+                  : insetEndOverflow
+                  ? insetSection.endBlock
+                  : endBlock}
               </div>
             </div>
           </div>
           <div className={pageFooterWrapClass}>
-            {insetEndOverflow ? insetSection.pageFooter : pageFooter}
+            {inset2EndOverflow
+              ? nested2.pageFooter
+              : insetEndOverflow
+              ? insetSection.pageFooter
+              : pageFooter}
           </div>
         </div>
       ) : null}
@@ -201,6 +273,27 @@ export default function PagedSection({
           endBlock={insetSection?.endBlock || null}
           endBlockClass={endBlockClass}
           pageIndex={0}
+          insetSection={insetSection?.insetSection || null}
+        />
+      ) : null}
+
+      {showNestedInline && inset2Paged.part2Html && !atLimit ? (
+        <PagedSection
+          html={inset2Paged.part2Html}
+          reserve={nested2?.reserve ?? reserve}
+          contentClass={nested2?.contentClass || contentClass}
+          sectionTitle={nested2?.continueTitle || `${nested2?.title} (CONTINUED)`}
+          boxClass={nested2?.boxClass || boxClass}
+          titleClass={nested2?.titleClass || titleClass}
+          paddingClass={nested2?.paddingClass || paddingClass}
+          pageHeader={nested2?.pageHeader}
+          pageFooter={nested2?.pageFooter}
+          pageFooterWrapClass={pageFooterWrapClass}
+          pageClassName={pageClassName}
+          endBlock={nested2?.endBlock || null}
+          endBlockClass={endBlockClass}
+          pageIndex={0}
+          insetSection={nested2?.insetSection || null}
         />
       ) : null}
 
@@ -220,6 +313,32 @@ export default function PagedSection({
           endBlock={insetSection.endBlock || null}
           endBlockClass={endBlockClass}
           pageIndex={0}
+          insetSection={insetSection?.insetSection || null}
+        />
+      ) : null}
+
+      {nested2 &&
+      showInsetInline &&
+      insetPaged.part2Html === '' &&
+      (insetPaged.cap || 0) > 0 &&
+      !showNestedInline &&
+      !atLimit ? (
+        <PagedSection
+          html={nested2.html}
+          reserve={nested2?.reserve ?? reserve}
+          contentClass={nested2?.contentClass || contentClass}
+          sectionTitle={nested2?.title}
+          boxClass={nested2?.boxClass || boxClass}
+          titleClass={nested2?.titleClass || titleClass}
+          paddingClass={nested2?.paddingClass || paddingClass}
+          pageHeader={nested2?.pageHeader}
+          pageFooter={nested2?.pageFooter}
+          pageFooterWrapClass={pageFooterWrapClass}
+          pageClassName={pageClassName}
+          endBlock={nested2?.endBlock || null}
+          endBlockClass={endBlockClass}
+          pageIndex={0}
+          insetSection={nested2?.insetSection || null}
         />
       ) : null}
     </>

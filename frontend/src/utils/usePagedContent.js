@@ -244,5 +244,17 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     }
   }, [check, contentRef])
 
+  // A content element can mount on a later commit than the hook itself — e.g. an
+  // inset that only renders once the page has room, or a chained inset waiting
+  // on its parent. The setup effect above runs only once, so its observer is
+  // attached against a null element and never fires; without this, such an
+  // element is never measured, its `cap` stays unset and the fixed-height page
+  // clips its content with no continuation page. Re-check every commit so a
+  // freshly-mounted element is measured immediately. `check` only commits state
+  // when values actually change and settled pages latch, so this converges.
+  useLayoutEffect(() => {
+    check()
+  })
+
   return { cap, part2Html, showEnd, freePx, endOverflow }
 }

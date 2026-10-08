@@ -576,6 +576,43 @@ export default function ProposalPreview() {
     </div>
   )
 
+  const proposalPageHeader = (
+    <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
+  )
+
+  // The "Proposal in Details" box and the "Detailed Terms" box are configured
+  // as a chain so that, when the Proposal Summary overflows page 1, each one
+  // follows the previous box inline as long as that box leaves at least
+  // `minFraction` (25%) of the page free; otherwise the section starts fresh.
+  const termsInset = hasFullTerms
+    ? {
+        title: 'Detailed Terms & Conditions',
+        html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml)),
+        contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
+        boxClass: 'rounded-xl border border-slate-300 bg-white',
+        titleClass: 'text-center',
+        reserve: 64,
+        minFraction: 0.25,
+        pageHeader: proposalPageHeader,
+        pageFooter: <PageFooter company={company} />,
+        endBlock: acceptanceEnd,
+      }
+    : null
+
+  const detailsInset = {
+    title: 'Proposal in Details & Specifications',
+    html: composedDetailsHtml,
+    contentClass: 'text-[13px] leading-snug text-slate-800',
+    boxClass: 'rounded-xl border border-slate-300 bg-white',
+    titleClass: 'text-center',
+    reserve: 64,
+    minFraction: 0.25,
+    pageHeader: proposalPageHeader,
+    pageFooter: <PageFooter company={company} />,
+    endBlock: hasFullTerms ? null : acceptanceEnd,
+    insetSection: termsInset,
+  }
+
   const isSent = proposalData?.status === 'Pending Approval'
 
   const myApproval = (proposalData?.approvals || []).find(
@@ -1044,7 +1081,9 @@ const approvedByRef = useRef(null)
             </div>
           </div>
 
-          {/* Proposal Summary continued (summary text / blocks that overflowed page 1) */}
+          {/* "Proposal Summary (Continued)" page. Details and Detailed Terms
+              follow it inline when at least 25% of the page is left free;
+              otherwise each starts on a fresh page. */}
           {summaryPaged.part2Html ? (
             <PagedSection
               html={summaryPaged.part2Html}
@@ -1053,50 +1092,25 @@ const approvedByRef = useRef(null)
               sectionTitle="Proposal Summary (Continued)"
               boxClass="rounded-xl border border-slate-300 bg-white"
               titleClass="text-center"
-              pageHeader={
-                <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
-              }
+              pageHeader={proposalPageHeader}
               pageFooter={<PageFooter company={company} />}
+              insetSection={detailsInset}
             />
-          ) : null}
-
-          {/* -------------------- PAGE 2+ (PROPOSAL IN DETAILS & SPECIFICATIONS + DETAILED TERMS & CONDITIONS) -------------------- */}
-          <PagedSection
-            html={composedDetailsHtml}
-            reserve={64}
-            contentClass="text-[13px] leading-snug text-slate-800"
-            sectionTitle="Proposal in Details &amp; Specifications"
-            boxClass="rounded-xl border border-slate-300 bg-white"
-            titleClass="text-center"
-            pageHeader={
-              <PageHeader proposal={proposalData} annexLabel="ANNEXURE - A" company={company} clientToken={liveToken} />
-            }
-            pageFooter={<PageFooter company={company} />}
-            endBlock={hasFullTerms ? null : acceptanceEnd}
-            insetSection={
-              hasFullTerms
-                ? {
-                    title: 'Detailed Terms & Conditions',
-                    html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml)),
-                    contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
-                    boxClass: 'rounded-xl border border-slate-300 bg-white',
-                    titleClass: 'text-center',
-                    reserve: 64,
-                    minFraction: 0.5,
-                    pageHeader: (
-                      <PageHeader
-                        proposal={proposalData}
-                        annexLabel="ANNEXURE - A"
-                        company={company}
-                        clientToken={liveToken}
-                      />
-                    ),
-                    pageFooter: <PageFooter company={company} />,
-                    endBlock: acceptanceEnd,
-                  }
-                : null
-            }
-          />
+          ) : (
+            /* -------------------- PAGE 2+ (PROPOSAL IN DETAILS & SPECIFICATIONS + DETAILED TERMS & CONDITIONS) -------------------- */
+            <PagedSection
+              html={composedDetailsHtml}
+              reserve={64}
+              contentClass="text-[13px] leading-snug text-slate-800"
+              sectionTitle="Proposal in Details &amp; Specifications"
+              boxClass="rounded-xl border border-slate-300 bg-white"
+              titleClass="text-center"
+              pageHeader={proposalPageHeader}
+              pageFooter={<PageFooter company={company} />}
+              endBlock={hasFullTerms ? null : acceptanceEnd}
+              insetSection={termsInset}
+            />
+          )}
 
         </div>
       </div>
