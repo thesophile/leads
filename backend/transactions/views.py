@@ -1593,36 +1593,56 @@ class QuotationRowsView(APIView):
             'Declined': base_quotes.filter(status='Declined').count(),
         }
 
-        quote_created = Lead.objects.filter(id=OuterRef('lead_id')).values('created_at')[:1]
-        quotes_ordered = (
-            quotes_for_page
-            .annotate(lead_created_at=Subquery(quote_created))
-            .order_by('-lead_created_at', 'version_no')
-            .prefetch_related('approvals')
+        # Show the most recently active row first: a proposal rises when it is
+        # edited (``updated_at``) and a lead with no proposal yet rises when it
+        # is moved to "Quotation Requested" (also ``updated_at``). Both sources
+        # are merged into one recency-ordered list before the page is sliced.
+        quote_keys = list(
+            quotes_for_page.order_by().values_list('id', 'updated_at')
         )
+        lead_keys = (
+            list(synthetic_for_page.order_by().values_list('id', 'updated_at'))
+            if synthetic_for_page is not False
+            else []
+        )
+        combined = (
+            [(ts, 0, pk) for pk, ts in quote_keys]
+            + [(ts, 1, pk) for pk, ts in lead_keys]
+        )
+        # ``list.sort`` is stable, so exact ties keep proposals above requested
+        # leads (they are inserted first).
+        combined.sort(key=lambda row: row[0], reverse=True)
 
         page, page_size = page_params(request)
-        total_quotes = quotes_ordered.count()
-        if synthetic_for_page is False:
-            synthetic_count = 0
-        else:
-            synthetic_count = synthetic_for_page.count()
-        count = total_quotes + synthetic_count
+        count = len(combined)
         start = (page - 1) * page_size
+        page_keys = combined[start:start + page_size]
+
+        quote_ids = [pk for _, kind, pk in page_keys if kind == 0]
+        synthetic_ids = [pk for _, kind, pk in page_keys if kind == 1]
+
+        quote_map = {
+            q.id: q
+            for q in Quotation.objects.filter(id__in=quote_ids).prefetch_related('approvals')
+        }
+        lead_ids = {q.lead_id for q in quote_map.values()} | set(synthetic_ids)
+        lead_map = {
+            lead.id: lead
+            for lead in Lead.objects.filter(id__in=list(lead_ids)).prefetch_related('contact_history')
+        }
 
         results = []
-        if start < total_quotes:
-            quote_page = list(quotes_ordered[start:start + page_size])
-            lead_ids = [q.lead_id for q in quote_page]
-            leads = Lead.objects.filter(id__in=lead_ids).prefetch_related('contact_history')
-            lead_map = {lead.id: lead for lead in leads}
-            for q in quote_page:
-                results.append(self._row_from_quotation(lead_map.get(q.lead_id), q))
-        if len(results) < page_size and synthetic_count:
-            needed = page_size - len(results)
-            syn_start = max(0, start - total_quotes)
-            for lead in synthetic_for_page[syn_start:syn_start + needed]:
-                results.append(self._row_from_lead(lead))
+        for _, kind, pk in page_keys:
+            if kind == 0:
+                quotation = quote_map.get(pk)
+                if quotation is not None:
+                    results.append(
+                        self._row_from_quotation(lead_map.get(quotation.lead_id), quotation)
+                    )
+            else:
+                lead = lead_map.get(pk)
+                if lead is not None:
+                    results.append(self._row_from_lead(lead))
 
         return Response({
             'count': count,

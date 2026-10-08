@@ -306,6 +306,19 @@ function currencySymbol(currency) {
   return m ? m[1] : (currency || '₹')
 }
 
+// Apply ``patch`` to the matching row and float it to the top of the list.
+// This is local-only so the edited row shows at the top instantly; the server's
+// activity-based ordering catches up the rest on the next load/refresh.
+function moveToTop(list, id, patch) {
+  const next = list.map((item) => (item.id === id ? { ...item, ...patch } : item))
+  const index = next.findIndex((item) => item.id === id)
+  if (index > 0) {
+    const [row] = next.splice(index, 1)
+    next.unshift(row)
+  }
+  return next
+}
+
 export default function Managequotation() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -494,9 +507,7 @@ export default function Managequotation() {
         showToast(`✗ Email could not be sent${reason}. Quotation link is ready to share.`, 'error')
       } else {
         setQuotationsList((prev) =>
-          prev.map((item) =>
-            item.id === sendClientQuoteId ? { ...item, status: 'Sent to Client' } : item
-          )
+          moveToTop(prev, sendClientQuoteId, { status: 'Sent to Client' })
         )
         showToast(
           sendClientChannels.includes('email')
@@ -556,17 +567,12 @@ export default function Managequotation() {
     const chosen = approverOptions.filter((a) => selectedApprovers.includes(a.id))
     const approverNames = chosen.map((a) => a.name).join(', ')
     setQuotationsList((prev) =>
-      prev.map((item) =>
-        item.id === approvalQuoteId
-          ? {
-              ...item,
-              status: 'Pending Approval',
-              approverName: approverNames,
-              approvalsTotal: selectedApprovers.length,
-              remarks: `Sent to ${approverNames} for approval`,
-            }
-          : item
-      )
+      moveToTop(prev, approvalQuoteId, {
+        status: 'Pending Approval',
+        approverName: approverNames,
+        approvalsTotal: selectedApprovers.length,
+        remarks: `Sent to ${approverNames} for approval`,
+      })
     )
     resetApprovalDirty()
     if (quote?.id) {
@@ -1161,9 +1167,7 @@ export default function Managequotation() {
       if (isNewVersion) {
         // Do not touch the locked version; a new copy is added on save.
       } else {
-        setQuotationsList((prev) =>
-          prev.map((item) => (item.id === editingProposalId ? targetQuote : item))
-        )
+        setQuotationsList((prev) => moveToTop(prev, editingProposalId, targetQuote))
       }
     } else {
       // Create new
