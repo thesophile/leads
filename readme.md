@@ -13,14 +13,14 @@ pip install -r requirements.txt
 Backend
 ```
 $env:ENV = "dev"
-cd ~\Desktop\Codebase\Systemsoft_suite\leads\backend
+cd $root/backend
 venv\Scripts\activate
 Python manage.py runserver 8002
 ```
 
 frontend
 ```
-cd ~\Desktop\Codebase\Systemsoft_suite\leads\frontend
+cd $root/frontend
 npm run dev -- --mode dev
 ```
 
@@ -53,7 +53,6 @@ if (-not $dir) {
 
 $root = $dir.FullName
 
-cd "$root\frontend"
 ```
 
 Backend
@@ -76,7 +75,7 @@ ssh leads "chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1"
 ```
 
 
-
+---
 
 ### Preview
 

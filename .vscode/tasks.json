@@ -1,81 +1,84 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Install Dependencies",
-      "type": "shell",
-      "command": "venv\\Scripts\\activate; pip install -r requirements.txt",
-      "options": {
-        "cwd": "${workspaceFolder}\\backend"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Start Frontend",
-      "type": "shell",
-      "command": "npm run dev -- --mode dev",
-      "options": {
-        "cwd": "${workspaceFolder}\\frontend"
-      },
-      "isBackground": true,
-      "problemMatcher": []
-    },
-    {
-      "label": "Start Backend",
-      "type": "shell",
-      "command": "$env:ENV='dev'; .\\venv\\Scripts\\python.exe manage.py runserver 8002",
-      "options": {
-        "cwd": "${workspaceFolder}\\backend"
-      },
-      "isBackground": true,
-      "problemMatcher": []
-    },
-    {
-      "label": "Run Project",
-      "dependsOn": [
-        "Start Frontend",
-        "Start Backend"
-      ],
-      "dependsOrder": "parallel",
-      "problemMatcher": []
-    },
-    {
-      "label": "Deploy Frontend",
-      "type": "shell",
-      "command": "cd \"$env:USERPROFILE\\Desktop\\Codebase\\leads\\frontend\"; npm run build -- --mode prod; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Write-Host '=== Removing old assets ==='; ssh leads 'rm -rf ~/public_html/assets'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Uploading frontend ==='; $attempt = 0; do { $attempt++; Write-Host \"SCP attempt $attempt of 3\"; scp -r .\\dist\\* leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -eq 0) { break }; Write-Host 'SCP failed, retrying in 5 seconds...'; Start-Sleep -Seconds 5 } while ($attempt -lt 3); if ($LASTEXITCODE -ne 0) { Write-Host '=== Frontend upload failed ==='; exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Uploading .htaccess ==='; $attempt = 0; do { $attempt++; Write-Host \"SCP .htaccess attempt $attempt of 3\"; scp .\\dist\\.htaccess leads:/home/newleadsprograme/public_html/; if ($LASTEXITCODE -eq 0) { break }; Write-Host 'SCP failed, retrying in 5 seconds...'; Start-Sleep -Seconds 5 } while ($attempt -lt 3); if ($LASTEXITCODE -ne 0) { Write-Host '=== .htaccess upload failed ==='; exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Setting permissions ==='; ssh leads 'chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Write-Host '=== Frontend deployment completed ==='",
-      "options": {
-        "shell": {
-          "executable": "powershell.exe"
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Deploy Backend",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\deploy.ps1",
+                "backend"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "Deploy Frontend",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\deploy.ps1",
+                "frontend"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "Deploy Full",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\deploy.ps1",
+                "full"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "Run Backend",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\deploy.ps1",
+                "run-backend"
+            ],
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Frontend",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\deploy.ps1",
+                "run-frontend"
+            ],
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Full",
+            "dependsOn": [
+                "Run Backend",
+                "Run Frontend"
+            ],
+            "dependsOrder": "parallel",
+            "problemMatcher": []
         }
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Deploy Backend",
-      "type": "shell",
-      "command": "cd \"$env:USERPROFILE\\Desktop\\Codebase\\leads\"; Write-Host '=== Creating backend.zip ==='; git archive HEAD backend -o backend.zip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Write-Host '=== Uploading backend.zip ==='; $attempt = 0; do { $attempt++; Write-Host \"SCP attempt $attempt of 3\"; scp backend.zip leads:/home/newleadsprograme/; if ($LASTEXITCODE -eq 0) { break }; Write-Host 'SCP failed, retrying in 5 seconds...'; Start-Sleep -Seconds 5 } while ($attempt -lt 3); if ($LASTEXITCODE -ne 0) { Write-Host '=== Backend upload failed ==='; exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Extracting backend ==='; ssh leads 'cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Start-Sleep -Seconds 3; Write-Host '=== Running migrations ==='; ssh leads 'source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate && cd /home/newleadsprograme/backend && python manage.py migrate'; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Remove-Item .\\backend.zip -ErrorAction SilentlyContinue; Write-Host '=== Backend deployment completed ==='",
-      "options": {
-        "shell": {
-          "executable": "powershell.exe"
-        }
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Deploy Full",
-      "dependsOn": [
-        "Deploy Backend",
-        "Deploy Frontend"
-      ],
-      "dependsOrder": "sequence",
-      "type": "shell",
-      "command": "Write-Host '=== Full deployment completed ==='",
-      "options": {
-        "shell": {
-          "executable": "powershell.exe"
-        }
-      },
-      "problemMatcher": []
-    }
-  ]
+    ]
 }
