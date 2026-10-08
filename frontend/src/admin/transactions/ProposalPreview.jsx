@@ -539,6 +539,13 @@ export default function ProposalPreview() {
     return null
   }, [proposal])
 
+  const pageOneTermsHtml =
+    proposalData?.termsSummaryHtml ||
+    proposalData?.termsHtml ||
+    company?.termsSummaryHtml ||
+    company?.termsFullHtml ||
+    ''
+
   const hasFullTerms = htmlToPlainLines(proposalData?.termsFullHtml || '').length > 0
 
   // "Proposal in Detail" = free-form text followed by any structured
@@ -913,35 +920,15 @@ const approvedByRef = useRef(null)
             <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 print:grid-cols-12 flex-1">
               <div className="flex flex-col justify-between gap-3 lg:col-span-4 print:col-span-4">
                 <SectionBox title="Terms &amp; Conditions" className="flex-1" pinBottom>
-                  {proposalData.termsHtml ? (
-                    <div
-                      ref={termsContentRef}
-                      className="text-[11px] leading-snug text-slate-700 text-justify"
-                      style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
-                    >
-                      {htmlToPlainLines(proposalData.termsHtml).map((line, i) => (
-                        <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div
-                      ref={termsContentRef}
-                      className="text-[11px] leading-snug text-slate-700 text-justify"
-                      style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
-                    >
-                      {Array.isArray(proposalData.termsConditions) ? (
-                        proposalData.termsConditions.map((t, idx) => (
-                          <div key={idx}>
-                            <span className="font-bold text-slate-900">{t.title}</span> {t.content}
-                          </div>
-                        ))
-                      ) : (
-                        htmlToPlainLines(proposalData.termsConditions).map((line, i) => (
-                          <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
-                        ))
-                      )}
-                    </div>
-                  )}
+                  <div
+                    ref={termsContentRef}
+                    className="text-[11px] leading-snug text-slate-700 text-justify"
+                    style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
+                  >
+                    {htmlToPlainLines(pageOneTermsHtml).map((line, i) => (
+                      <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                    ))}
+                  </div>
                   <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                 </SectionBox>
 
