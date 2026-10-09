@@ -883,7 +883,7 @@ export default function Telecall() {
                         {/* Company */}
                         <td className="py-0.5 pr-3">
                           <div className="flex items-center gap-1.5">
-                            <p className="font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={lead.company}>
+                            <p className="font-semibold text-slate-900 text-xs truncate max-w-[200px] uppercase" title={lead.company}>
                               {lead.company}
                             </p>
                             {dueToday && (
@@ -923,7 +923,7 @@ export default function Telecall() {
                         </td>
 
                         {/* Category */}
-                        <td className="py-0.5 pr-3 font-medium text-slate-800 text-xs">
+                        <td className="py-0.5 pr-3 font-medium text-slate-800 text-xs uppercase">
                           {lead.category}
                         </td>
 
@@ -931,7 +931,7 @@ export default function Telecall() {
                         {canViewAll && (
                           <td className="py-0.5 pr-3">
                             {lead.assignedTo ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 uppercase">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                 <span>{lead.assignedTo}</span>
                               </span>
@@ -946,7 +946,7 @@ export default function Telecall() {
 
                         {/* Call Status Badge */}
                         <td className="py-0.5 pr-3">
-                          <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold">
+                          <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold uppercase">
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${
                                 lead.callStatus === 'Interested'

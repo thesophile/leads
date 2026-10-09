@@ -1583,12 +1583,12 @@ async function handleBulkImport(e) {
                       )}
 
                       {/* Company Name */}
-                      <td className="py-0.5 pr-2 font-semibold text-slate-900 text-xs truncate max-w-[200px]" title={item.company}>
+                      <td className="py-0.5 pr-2 font-semibold text-slate-900 text-xs truncate max-w-[200px] uppercase" title={item.company}>
                         {item.company}
                       </td>
 
                       {/* Contact Person */}
-                      <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs">
+                      <td className="py-0.5 pr-2 font-medium text-slate-700 text-xs uppercase">
                         {item.contact}
                       </td>
 
@@ -1598,17 +1598,17 @@ async function handleBulkImport(e) {
                       </td>
 
                       {/* Email */}
-                      <td className="py-0.5 pr-2 text-slate-500 text-xs truncate max-w-[180px]">
+                      <td className="py-0.5 pr-2 text-slate-500 text-xs truncate max-w-[180px] lowercase">
                         {item.email}
                       </td>
 
                       {/* Category */}
-                      <td className="py-0.5 pr-2 font-medium text-slate-800 text-xs">
+                      <td className="py-0.5 pr-2 font-medium text-slate-800 text-xs uppercase">
                         {item.category}
                       </td>
 
                       {/* Location */}
-                      <td className="py-0.5 pr-2 text-slate-600 text-xs">
+                      <td className="py-0.5 pr-2 text-slate-600 text-xs uppercase">
                         <span className="block truncate max-w-[140px]">{item.city}</span>
                         {item.sublocation && (
                           <span className="block text-[10px] text-slate-400 truncate max-w-[140px]">
