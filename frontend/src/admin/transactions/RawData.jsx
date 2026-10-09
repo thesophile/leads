@@ -5,6 +5,7 @@ import Layout from '../../Layout/Layout'
 import { can } from '../../utils/permissions'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Spinner from '../../components/Spinner'
+import StaffMultiSelect from '../../components/StaffMultiSelect'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
@@ -1002,18 +1003,6 @@ async function handleBulkImport(e) {
     }
   }
 
-  function toggleAssignStaff(name) {
-    setAssignStaffList((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    )
-  }
-
-  function toggleAllAssignStaff() {
-    const allNames = assignableStaff.map((s) => s.name)
-    const allSelected = assignStaffList.length === allNames.length && allNames.length > 0
-    setAssignStaffList(allSelected ? [] : allNames)
-  }
-
   function formatAssignStaffSummary(names) {
     const joined = names.join(', ')
     const maxLen = 42
@@ -1055,19 +1044,6 @@ async function handleBulkImport(e) {
     } finally {
       setIsSaving(false)
     }
-  }
-
-  function toggleAssignSelectedStaff(name) {
-    setAssignSelectedStaffList((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    )
-  }
-
-  function toggleAllAssignSelectedStaff() {
-    const allNames = assignableStaff.map((s) => s.name)
-    const allSelected =
-      assignSelectedStaffList.length === allNames.length && allNames.length > 0
-    setAssignSelectedStaffList(allSelected ? [] : allNames)
   }
 
   async function handleExecuteAssignSelected(e) {
@@ -1757,83 +1733,15 @@ async function handleBulkImport(e) {
                   </span>
                 </div>
 
-                <div className="relative mt-1">
-                  {/* Multi-select trigger */}
-                  <button
-                    type="button"
-                    onClick={() => setAssignStaffOpen((v) => !v)}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-slate-50/50 px-3 py-2 text-left text-xs transition cursor-pointer ${
-                      assignStaffOpen
-                        ? 'border-brand-500 ring-2 ring-brand-500/10'
-                        : 'border-slate-300'
-                    }`}
-                  >
-                    <span className={`truncate font-semibold ${
-                      assignStaffList.length === 0 ? 'text-slate-400' : 'text-slate-800'
-                    }`}>
-                      {assignStaffList.length === 0
-                        ? 'Select staff members…'
-                        : formatAssignStaffSummary(assignStaffList)}
-                    </span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                      {assignStaffOpen && <span className="shrink-0 rounded bg-brand-600 px-1.5 py-0.5 text-[11px] font-bold text-white cursor-pointer" onClick={(e) => { e.stopPropagation(); setAssignStaffOpen(false); }}>OK</span>}
-                      <svg
-                         viewBox="0 0 24 24"
-                         className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${assignStaffOpen ? 'rotate-180' : ''}`}
-                         fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                       >
-                         <polyline points="6 9 12 15 18 9" />
-                       </svg>
-                    </span>
-                   </button>
-
-                   {/* Checkbox dropdown panel */}
-                   {assignStaffOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setAssignStaffOpen(false)}
-                      />
-                      <div className="absolute left-0 right-0 z-20 mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                        {assignableStaff.length === 0 ? (
-                          <p className="px-3 py-2 text-xs text-slate-400">No assignable staff</p>
-                        ) : (
-                          [
-                            <label
-                              key="__all__"
-                              className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 border-b border-slate-100"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={
-                                  assignStaffList.length === assignableStaff.length && assignableStaff.length > 0
-                                }
-                                onChange={toggleAllAssignStaff}
-                                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                              />
-                              <span className="font-semibold text-slate-800">All staff</span>
-                            </label>,
-                            ...assignableStaff.map((staff) => (
-                              <label
-                                key={staff.name}
-                                className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
-                              >
-                                  <input
-                                    type="checkbox"
-                                    checked={assignStaffList.includes(staff.name)}
-                                    onChange={() => toggleAssignStaff(staff.name)}
-                                    className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                                  />
-                                  <span className="font-semibold text-slate-800">{staff.name}</span>
-{staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
-                                 </label>
-                               ))
-                             ]
-                           )}
-                      </div>
-                      </>
-                     )}
-                   </div>
+                <StaffMultiSelect
+                  staff={assignableStaff}
+                  selected={assignStaffList}
+                  onChange={setAssignStaffList}
+                  open={assignStaffOpen}
+                  onOpenChange={setAssignStaffOpen}
+                  accent="brand"
+                  formatSummary={formatAssignStaffSummary}
+                />
                  </div>
 
                {/* Step 2: Filter Records & Set Volume */}
@@ -2030,83 +1938,15 @@ async function handleBulkImport(e) {
                   </span>
                 </div>
 
-                <div className="relative mt-1">
-                  {/* Multi-select trigger */}
-                  <button
-                    type="button"
-                    onClick={() => setAssignSelectedStaffOpen((v) => !v)}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-slate-50/50 px-3 py-2 text-left text-xs transition cursor-pointer ${
-                      assignSelectedStaffOpen
-                        ? 'border-emerald-500 ring-2 ring-emerald-500/10'
-                        : 'border-slate-300'
-                    }`}
-                  >
-                    <span className={`truncate font-semibold ${
-                      assignSelectedStaffList.length === 0 ? 'text-slate-400' : 'text-slate-800'
-                    }`}>
-                      {assignSelectedStaffList.length === 0
-                        ? 'Select staff members…'
-                        : formatAssignStaffSummary(assignSelectedStaffList)}
-                    </span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                      {assignSelectedStaffOpen && <span className="shrink-0 rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold text-white cursor-pointer" onClick={(e) => { e.stopPropagation(); setAssignSelectedStaffOpen(false); }}>OK</span>}
-                      <svg
-                         viewBox="0 0 24 24"
-                         className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${assignSelectedStaffOpen ? 'rotate-180' : ''}`}
-                         fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                       >
-                         <polyline points="6 9 12 15 18 9" />
-                       </svg>
-                    </span>
-                   </button>
-
-                   {/* Checkbox dropdown panel */}
-                   {assignSelectedStaffOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setAssignSelectedStaffOpen(false)}
-                      />
-                      <div className="absolute left-0 right-0 z-20 mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                        {assignableStaff.length === 0 ? (
-                          <p className="px-3 py-2 text-xs text-slate-400">No assignable staff</p>
-                        ) : (
-                          [
-                            <label
-                              key="__all__"
-                              className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 border-b border-slate-100"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={
-                                  assignSelectedStaffList.length === assignableStaff.length && assignableStaff.length > 0
-                                }
-                                onChange={toggleAllAssignSelectedStaff}
-                                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                              />
-                              <span className="font-semibold text-slate-800">All staff</span>
-                            </label>,
-                            ...assignableStaff.map((staff) => (
-                              <label
-                                key={staff.name}
-                                className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
-                              >
-                                <input
-                                  type="checkbox"
-                                   checked={assignSelectedStaffList.includes(staff.name)}
-                                   onChange={() => toggleAssignSelectedStaff(staff.name)}
-                                   className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                 />
-                                 <span className="font-semibold text-slate-800">{staff.name}</span>
-{staff.role && <span className="text-[11px] text-slate-400">({staff.role})</span>}
-                                </label>
-                              ))
-                            ]
-                          )}
-                      </div>
-                     </>
-                   )}
-                 </div>
+                <StaffMultiSelect
+                  staff={assignableStaff}
+                  selected={assignSelectedStaffList}
+                  onChange={setAssignSelectedStaffList}
+                  open={assignSelectedStaffOpen}
+                  onOpenChange={setAssignSelectedStaffOpen}
+                  accent="emerald"
+                  formatSummary={formatAssignStaffSummary}
+                />
                </div>
 
                {/* Live Info Banner */}
