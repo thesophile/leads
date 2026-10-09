@@ -397,24 +397,37 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
                 {'detail': 'You cannot deactivate your own account.'}
             )
 
-        # Block deactivating a staff member who still owns tele-call leads;
-        # those must be reassigned first so they are not orphaned. Leads that
-        # have moved past tele-call (quotation / order / client) keep the
-        # assignee as a historical snapshot and cannot be reassigned, so they
-        # must not block deactivation.
+        # Block deactivating a staff member only while work still depends on
+        # them:
+        #   * raw leads they entered that nobody has been assigned yet
+        #     (assigning them moves the lead out of the raw stage), and
+        #   * tele-call leads currently assigned to them (reassign those).
+        # Leads that have moved past those stages (quotation / order / client)
+        # keep the assignee as a historical snapshot and cannot be reassigned,
+        # so they must not block deactivation.
         if attrs.get('is_active') is False and target is not None and target.pk:
             from transactions.models import Lead
 
-            owns_leads = Lead.objects.filter(
+            raw_added = Lead.objects.filter(
+                tenant=target.company,
+                added_by=target.name,
+                status=Lead.STATUS_RAW,
+            ).count()
+            assigned = Lead.objects.filter(
                 tenant=target.company,
                 assigned_to=target.name,
                 status=Lead.STATUS_ASSIGNED,
-            ).exists()
-            if owns_leads:
+            ).count()
+            if raw_added or assigned:
+                parts = []
+                if raw_added:
+                    parts.append(f'{raw_added} raw lead(s) they added')
+                if assigned:
+                    parts.append(f'{assigned} lead(s) assigned to them')
                 raise serializers.ValidationError(
                     {'detail': (
-                        f'{target.name} still has assigned leads. '
-                        'Reassign those leads before deactivating this account.'
+                        f'{target.name} still has ' + ' and '.join(parts) +
+                        '. Assign/reassign those leads before deactivating this account.'
                     )}
                 )
         return attrs
