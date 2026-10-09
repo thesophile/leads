@@ -848,7 +848,7 @@ class LeadImportTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertFalse(resp.data['updated'])
-        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         self.assertEqual(lead.phone, '9998887776')
 
     def test_import_requires_phone(self):
@@ -883,7 +883,7 @@ class LeadImportTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['updated'])
-        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         self.assertEqual(lead.phone, '9998887776')
         self.assertEqual(
             Lead.objects.filter(tenant=self.company, company_key='cafe day').count(), 1
@@ -899,7 +899,7 @@ class LeadImportTests(APITestCase):
             'company': 'Cafe Day', 'phone': '',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
-        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         self.assertEqual(lead.phone, '1112223334')
 
     def test_import_does_not_touch_pipeline_fields(self):
@@ -908,7 +908,7 @@ class LeadImportTests(APITestCase):
             'company': 'Cafe Day', 'phone': '1112223334',
             'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
-        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         lead.status = Lead.STATUS_ASSIGNED
         lead.assigned_to = 'Manager I'
         lead.remarks = 'keep me'
@@ -939,7 +939,7 @@ class LeadImportTests(APITestCase):
             'category': 'cosmetics store', 'city': 'kochi',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
-        lead = Lead.objects.get(company='Lower Case Co', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Lower Case Co', tenant=self.company)
         self.assertEqual(lead.category, 'COSMETICS STORE')
         self.assertEqual(lead.city, 'KOCHI')
         self.assertEqual(lead.location_code, 'LC001')
@@ -952,7 +952,7 @@ class LeadImportTests(APITestCase):
             'category': 'COSMETICS STORE', 'city': 'Other',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
-        lead = Lead.objects.get(company='Other Loc Co', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Other Loc Co', tenant=self.company)
         self.assertEqual(lead.city, 'Other')
         self.assertEqual(lead.location_code, '')
 
@@ -1807,7 +1807,7 @@ class ContactEditSyncTests(APITestCase):
         self.lead.refresh_from_db()
         self.assertEqual(self.lead.phone, '333')
         self.assertEqual(self.lead.email, 'mail@sync.co')
-        self.assertEqual(self.lead.contact, 'New Person')
+        self.assertEqual(self.lead.contact, 'NEW PERSON')
         rows = {}
         for field, from_value, to_value in (
             LeadContactHistory.objects.filter(lead=self.lead)
@@ -1815,7 +1815,7 @@ class ContactEditSyncTests(APITestCase):
         ):
             rows[field] = (from_value, to_value)
         self.assertEqual(rows['phone'], ('111', '333'))
-        self.assertEqual(rows['contact'], ('Old Person', 'New Person'))
+        self.assertEqual(rows['contact'], ('OLD PERSON', 'NEW PERSON'))
 
     def test_quotation_edit_on_generated_quote_flags_warning(self):
         self.client.force_authenticate(self.manager)
@@ -2796,7 +2796,7 @@ class PaginationAndFilterTests(APITestCase):
         resp = self.client.get('/api/transactions/leads/?status=raw&search=Paged%20Lead%201')
         self.assertEqual(resp.data['count'], 31)
         self.assertTrue(all(
-            'Paged Lead 1' in row['company'] for row in resp.data['results']
+            'PAGED LEAD 1' in row['company'] for row in resp.data['results']
         ))
 
     def test_scoped_staff_filter_is_applied_server_side(self):
@@ -3381,7 +3381,7 @@ class FollowUpReminderTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         row = {r['id']: r for r in resp.data['follow_ups_due_leads']}[self.due_lead.id]
         self.assertTrue(row['isDueToday'])
-        self.assertEqual(row['company'], 'Due Co')
+        self.assertEqual(row['company'], 'DUE CO')
         self.assertEqual(row['due'], f'{self.today.isoformat()} 10:00 AM')
         self.assertNotIn(self.future_lead.id, {
             r['id'] for r in resp.data['follow_ups_due_leads']

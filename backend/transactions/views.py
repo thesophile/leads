@@ -168,8 +168,9 @@ def sync_contact_from_quotation(user, lead, quotation, old_contact):
         # quotation's value but leave the lead (source of truth) untouched.
         logger.warning('Could not mirror contact change to lead %s.', lead.id)
         return []
-    for lead_field, old_value, new_value in pending:
-        log_contact_change(user, lead, lead_field, old_value, new_value)
+    for lead_field, old_value, _ in pending:
+        # Read the saved (normalised) value so the audit trail matches storage.
+        log_contact_change(user, lead, lead_field, old_value, getattr(lead, lead_field))
     return changed_fields
 
 
