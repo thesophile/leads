@@ -397,15 +397,19 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
                 {'detail': 'You cannot deactivate your own account.'}
             )
 
-        # Block deactivating a staff member who still owns working leads;
-        # leads must be reassigned first so they are not orphaned.
+        # Block deactivating a staff member who still owns tele-call leads;
+        # those must be reassigned first so they are not orphaned. Leads that
+        # have moved past tele-call (quotation / order / client) keep the
+        # assignee as a historical snapshot and cannot be reassigned, so they
+        # must not block deactivation.
         if attrs.get('is_active') is False and target is not None and target.pk:
             from transactions.models import Lead
 
             owns_leads = Lead.objects.filter(
                 tenant=target.company,
                 assigned_to=target.name,
-            ).exclude(status='client').exists()
+                status=Lead.STATUS_ASSIGNED,
+            ).exists()
             if owns_leads:
                 raise serializers.ValidationError(
                     {'detail': (

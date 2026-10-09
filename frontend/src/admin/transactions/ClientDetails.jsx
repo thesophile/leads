@@ -14,17 +14,6 @@ import { api } from '../../api/client'
 
 const ATTACHMENT_TYPES = ['SRS Document', 'Business Card', 'Voice Clip', 'Other']
 
-const STAFF_LIST = [
-  'All Staff',
-  'Bincy',
-  'Priya Sharma',
-  'Ananya Nair',
-  'Alex Joseph',
-  'Shanu VR',
-  'NIMISHA DAVIS',
-  'Husna',
-]
-
 const CATEGORIES = [
   'All Category',
   'Dynamic Website',
@@ -308,6 +297,7 @@ export default function ClientDetails() {
   const {
     count,
     counts: listCounts,
+    facets,
     loading,
     page,
     totalPages,
@@ -324,6 +314,22 @@ export default function ClientDetails() {
   })
 
   const filteredRecords = records
+
+  // Filter choices: all active staff plus any inactive member still stamped on
+  // a visible record. The "Collected By" input additionally offers only active
+  // staff (plus the record's current value so editing never drops it).
+  const staffOptions = useMemo(
+    () => ['All Staff', ...(facets?.staff || [])],
+    [facets]
+  )
+
+  const collectedByOptions = useMemo(() => {
+    const active = facets?.active_staff || []
+    if (form.collectedBy && !active.includes(form.collectedBy)) {
+      return [form.collectedBy, ...active]
+    }
+    return active
+  }, [facets, form.collectedBy])
 
   const totalCount = listCounts.total ?? count
   const statusCounts = STATUS_VALUES.map((status) => ({
@@ -649,7 +655,7 @@ export default function ClientDetails() {
                    onChange={(e) => setSelectedStaff(e.target.value)}
                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none cursor-pointer"
                  >
-                   {STAFF_LIST.map((s) => (
+                   {staffOptions.map((s) => (
                      <option key={s} value={s}>
                        {s}
                      </option>
@@ -1003,7 +1009,7 @@ export default function ClientDetails() {
                     onChange={(e) => handleField('collectedBy', e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none cursor-pointer"
                   >
-                    {STAFF_LIST.filter((s) => s !== 'All Staff').map((s) => (
+                    {collectedByOptions.map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>

@@ -456,6 +456,28 @@ class StaffAdminProtectionTests(CoreStubMixin, APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 200)
 
+    def test_manager_can_deactivate_staff_who_only_owns_past_telecall_leads(self):
+        from transactions.models import Lead
+
+        # A lead that has progressed past tele-call keeps the assignee as a
+        # historical snapshot; it is not reassignable and must not block
+        # deactivation.
+        Lead.objects.create(
+            id='QT-1', company='Hospital One', tenant=self.manager.company,
+            assigned_to=self.staff.name, status='quotation',
+        )
+        Lead.objects.create(
+            id='OR-1', company='Hospital Two', tenant=self.manager.company,
+            assigned_to=self.staff.name, status='order',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.staff.refresh_from_db()
+        self.assertFalse(self.staff.is_active)
+
     def test_admin_can_demote_another_admin(self):
         second_admin = User.objects.create_user(
             email='admin2@acme.com', password='x', name='Admin Two',

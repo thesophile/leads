@@ -110,6 +110,11 @@ class StaffListView(APIView):
 
     def get(self, request):
         users = User.objects.filter(company=request.user.company).order_by('name')
+        status_filter = (request.query_params.get('status') or '').strip().lower()
+        if status_filter == 'active':
+            users = users.filter(is_active=True)
+        elif status_filter == 'inactive':
+            users = users.filter(is_active=False)
         return Response(UserSerializer(users, many=True).data)
 
     def post(self, request):
@@ -144,7 +149,7 @@ class StaffAssigneeListView(APIView):
             )
         users = (
             User.objects
-            .filter(company=request.user.company)
+            .filter(company=request.user.company, is_active=True)
             .exclude(is_superuser=True)
             .order_by('name')
         )

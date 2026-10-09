@@ -249,6 +249,7 @@ export default function Staff() {
   })
   const [editingId, setEditingId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('active')
   const [showCredentials, setShowCredentials] = useState(null) // newly created creds
   const [resetModal, setResetModal] = useState(null) // user object for reset
   const [resetPw, setResetPw] = useState('')
@@ -477,16 +478,19 @@ export default function Staff() {
   }
 
   const filteredStaff = useMemo(() => {
-    if (!searchQuery.trim()) return staffList
+    const byStatus = staffList.filter((s) =>
+      statusFilter === 'all' ? true : statusFilter === 'active' ? s.is_active : !s.is_active
+    )
+    if (!searchQuery.trim()) return byStatus
     const q = searchQuery.toLowerCase()
-    return staffList.filter(
+    return byStatus.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         (s.email || '').toLowerCase().includes(q) ||
         (s.staff_code || '').toLowerCase().includes(q) ||
         (s.role_name || '').toLowerCase().includes(q)
     )
-  }, [staffList, searchQuery])
+  }, [staffList, searchQuery, statusFilter])
 
   // The full catalog (from /auth/permissions/), used to compute which roles the
   // acting user may assign. Authority is a pure permission-set subset relation:
@@ -721,6 +725,27 @@ export default function Staff() {
               </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-1 pt-3">
+              {[
+                { key: 'active', label: 'Active' },
+                { key: 'inactive', label: 'Inactive' },
+                { key: 'all', label: 'All' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStatusFilter(key)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    statusFilter === key
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <SpinnerIcon />
@@ -820,7 +845,13 @@ export default function Staff() {
               </div>
             ) : (
               <div className="py-10 text-center text-xs text-slate-400">
-                {searchQuery ? `No employees match "${searchQuery}".` : 'No employees yet. Use the form to add your first employee.'}
+                {searchQuery
+                  ? `No employees match "${searchQuery}".`
+                  : statusFilter === 'inactive'
+                    ? 'No inactive employees.'
+                    : statusFilter === 'active'
+                      ? 'No active employees. Use the form to add your first employee.'
+                      : 'No employees yet. Use the form to add your first employee.'}
               </div>
             )}
           </div>
