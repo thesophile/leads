@@ -1,5 +1,14 @@
 $rootFile = ".leads_root"
 
+$sshAlias = "leads"
+$remoteHome = "/home/newleadsprograme"
+$pythonVersion = "3.13"
+$backendPort = 8002
+
+$retryDelaySeconds = 2
+$retryTimeoutSeconds = 60
+
+
 $dir = Get-Item (Get-Location)
 
 while ($dir -and -not (Test-Path (Join-Path $dir.FullName $rootFile))) {
@@ -17,7 +26,7 @@ function Invoke-WithRetry {
     param (
         [string]$Name,
         [scriptblock]$Action,
-        [int]$TimeoutSeconds = 60
+        [int]$TimeoutSeconds = $retryTimeoutSeconds
     )
 
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -34,20 +43,15 @@ function Invoke-WithRetry {
         try {
             & $Action
 
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "$Name succeeded." -ForegroundColor Green
-                return $true
-            }
-
-            Write-Host "$Name failed. Retrying..." -ForegroundColor Yellow
+            Write-Host "$Name succeeded." -ForegroundColor Green
+            return $true
         }
         catch {
             Write-Host "$Name failed: $_" -ForegroundColor Yellow
-            Write-Host "Retrying..." -ForegroundColor Yellow
         }
 
         if ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds $retryDelaySeconds
         }
     }
 
@@ -64,13 +68,13 @@ function Deploy-Backend {
         git archive HEAD backend -o backend.zip
         if ($LASTEXITCODE -ne 0) { throw "git archive failed" }
 
-        scp backend.zip leads:/home/newleadsprograme/
+        scp backend.zip "${sshAlias}:${remoteHome}/"
         if ($LASTEXITCODE -ne 0) { throw "scp failed" }
 
-        ssh leads "cd /home/newleadsprograme && unzip -o backend.zip && rm backend.zip"
+        ssh $sshAlias "cd $remoteHome && unzip -o backend.zip && rm backend.zip"
         if ($LASTEXITCODE -ne 0) { throw "Remote unzip failed" }
 
-        ssh leads "source /home/newleadsprograme/virtualenv/backend/3.13/bin/activate && cd /home/newleadsprograme/backend && python manage.py migrate"
+        ssh $sshAlias "source $remoteHome/virtualenv/backend/$pythonVersion/bin/activate && cd $remoteHome/backend && python manage.py migrate"
         if ($LASTEXITCODE -ne 0) { throw "Migration failed" }
     }
 }
@@ -84,16 +88,16 @@ function Deploy-Frontend {
         npm run build -- --mode prod
         if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
 
-        ssh leads "rm -rf ~/public_html/assets"
+        ssh $sshAlias "rm -rf $remoteHome/public_html/assets"
         if ($LASTEXITCODE -ne 0) { throw "Remote assets removal failed" }
 
-        scp -r .\dist\* leads:/home/newleadsprograme/public_html/
+        scp -r .\dist\* "${sshAlias}:$remoteHome/public_html/"
         if ($LASTEXITCODE -ne 0) { throw "Frontend upload failed" }
 
-        scp .\dist\.htaccess leads:/home/newleadsprograme/public_html/
+        scp .\dist\.htaccess "${sshAlias}:$remoteHome/public_html/"
         if ($LASTEXITCODE -ne 0) { throw ".htaccess upload failed" }
 
-        ssh leads "chmod -R 755 ~/public_html/assets && chmod 755 ~/public_html/v1"
+        ssh $sshAlias "chmod -R 755 $remoteHome/public_html/assets && chmod 755 $remoteHome/public_html/v1"
         if ($LASTEXITCODE -ne 0) { throw "Permission update failed" }
     }
 }
@@ -104,7 +108,7 @@ function Run-Backend {
 
     $env:ENV = "dev"
 
-    & ".\venv\Scripts\python.exe" manage.py runserver 8002
+    & ".\venv\Scripts\python.exe" manage.py runserver $backendPort
 }
 
 
@@ -161,3 +165,4 @@ switch ($args[0]) {
         exit 1
     }
 }
+
