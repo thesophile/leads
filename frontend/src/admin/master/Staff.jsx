@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
@@ -254,10 +254,11 @@ export default function Staff() {
   const [resetModal, setResetModal] = useState(null) // user object for reset
   const [resetPw, setResetPw] = useState('')
   const [selfEmailModal, setSelfEmailModal] = useState(null) // { stage, otp, busy, error }
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null) // { message, type: 'success' | 'error' }
   const [saving, setSaving] = useState(false)
   const [togglingId, setTogglingId] = useState(null)
   const [resettingPw, setResettingPw] = useState(false)
+  const toastTimerRef = useRef(null)
 
   // Roles & Permissions editor state
   const [editingRole, setEditingRole] = useState(null) // role object being edited
@@ -284,7 +285,7 @@ export default function Staff() {
           setPermissionCatalog(permRes.length ? permRes : [])
         }
       } catch (err) {
-        if (!cancelled) setError(err.message)
+        if (!cancelled) showToast(err.message, 'error')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -296,9 +297,10 @@ export default function Staff() {
     }
   }, [])
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+  function showToast(msg, type = 'success') {
+    setToast({ message: msg, type })
+    window.clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 3000)
   }
 
   async function refreshData() {
@@ -312,7 +314,7 @@ export default function Staff() {
       setStaffList(users)
       setBranches(branchRes)
     } catch (err) {
-      setError(err.message)
+      showToast(err.message, 'error')
     } finally {
       setLoading(false)
     }
@@ -324,11 +326,11 @@ export default function Staff() {
     if (saving) return
 
     if (!formData.name.trim() || !formData.email.trim()) {
-      setError('Name and email are required.')
+      showToast('Name and email are required.', 'error')
       return
     }
     if (!editingId && formData.password.length < 8) {
-      setError('Initial password must be at least 8 characters.')
+      showToast('Initial password must be at least 8 characters.', 'error')
       return
     }
 
@@ -373,7 +375,7 @@ export default function Staff() {
       setEditingId(null)
       await refreshData()
     } catch (err) {
-      setError(err.message)
+      showToast(err.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -406,7 +408,7 @@ export default function Staff() {
       showToast(emp.is_active ? `Deactivated ${emp.name}.` : `Activated ${emp.name}.`)
       await refreshData()
     } catch (err) {
-      setError(err.message)
+      showToast(err.message, 'error')
     } finally {
       setTogglingId(null)
     }
@@ -525,11 +527,15 @@ export default function Staff() {
     <Layout>
       <div className="space-y-6">
         {toast && (
-          <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+          <div className={`fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3 shadow-lg ${toast.type === 'error' ? 'border-red-200' : 'border-slate-200'}`}>
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full ${toast.type === 'error' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+              {toast.type === 'error' ? (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+              )}
             </span>
-            <span className="text-xs font-semibold text-slate-800">{toast}</span>
+            <span className={`text-xs font-semibold ${toast.type === 'error' ? 'text-red-700' : 'text-slate-800'}`}>{toast.message}</span>
           </div>
         )}
 
@@ -574,12 +580,6 @@ export default function Staff() {
           </div>
         )}
 
-        {error && !resetModal && !selfEmailModal && !showCredentials && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-            {error}
-          </div>
-        )}
-
         {tab === 'roles' ? (
           <RolesEditor
             roles={roles}
@@ -596,7 +596,6 @@ export default function Staff() {
             setIsNewRole={setIsNewRole}
             setRoles={setRoles}
             showToast={showToast}
-            setError={setError}
           />
         ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr] items-start">
@@ -1072,7 +1071,6 @@ function RolesEditor({
   setIsNewRole,
   setRoles,
   showToast,
-  setError,
 }) {
   const [saveError, setSaveError] = useState('')
   const [roleSaving, setRoleSaving] = useState(false)
@@ -1143,7 +1141,6 @@ function RolesEditor({
       setRoleFormCode('')
       setRoleFormPermissions([])
     } catch (err) {
-      setError(err.message)
       setSaveError(err.message)
     } finally {
       setRoleSaving(false)
@@ -1164,7 +1161,6 @@ function RolesEditor({
         setEditingRole(null)
       }
     } catch (err) {
-      setError(err.message)
       setSaveError(err.message)
     } finally {
       setRoleDeleting(false)
