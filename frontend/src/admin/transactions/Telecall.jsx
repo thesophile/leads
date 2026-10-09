@@ -562,8 +562,10 @@ export default function Telecall() {
     )
   }
 
+  const reassignStaffOptions = assignableStaff.filter((s) => s.name !== selectedCaller)
+
   function toggleAllReassignStaff() {
-    const allNames = assignableStaff.map((s) => s.name)
+    const allNames = reassignStaffOptions.map((s) => s.name)
     const allSelected = reassignStaffList.length === allNames.length && allNames.length > 0
     setReassignStaffList(allSelected ? [] : allNames)
   }
@@ -1772,7 +1774,7 @@ export default function Telecall() {
                         onClick={() => setReassignStaffOpen(false)}
                       />
                       <div className="absolute left-0 right-0 z-20 mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                        {assignableStaff.length === 0 ? (
+                        {reassignStaffOptions.length === 0 ? (
                           <p className="px-3 py-2 text-xs text-slate-400">No assignable staff</p>
                         ) : (
                           [
@@ -1783,14 +1785,14 @@ export default function Telecall() {
                               <input
                                 type="checkbox"
                                 checked={
-                                  reassignStaffList.length === assignableStaff.length && assignableStaff.length > 0
+                                  reassignStaffList.length === reassignStaffOptions.length && reassignStaffOptions.length > 0
                                 }
                                 onChange={toggleAllReassignStaff}
                                 className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                               />
                               <span className="font-semibold text-slate-800">All staff</span>
                             </label>,
-                            ...assignableStaff.map((staff) => (
+                            ...reassignStaffOptions.map((staff) => (
                               <label
                                 key={staff.name}
                                 className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
