@@ -918,16 +918,15 @@ class LeadListView(APIView):
 
 
 class LeadImportView(APIView):
-    """Create-or-update a single raw lead row from a CSV import.
+    """Create a single raw lead row from a CSV import.
 
     Every row must carry a company, a phone number, a category and a location;
     a row missing any is rejected so the frontend can report it and hand it
     back for correction.
 
-    When a lead with the same (tenant, company) already exists, the incoming
-    row overwrites its contact fields instead of being skipped as a duplicate,
-    so re-importing a corrected CSV updates the record. The pipeline fields
-    (status, remarks, assignment, dates) are never touched by an import.
+    When a lead with the same (tenant, company) already exists, the row is
+    rejected as a duplicate — exactly like the manual Add Raw Data form — so an
+    import never overwrites an existing record.
     """
     permission_classes = [IsAuthenticated]
 
@@ -970,7 +969,7 @@ class LeadImportView(APIView):
 
         existing = find_duplicate_lead(request.user, company)
         if existing is not None:
-            return self._update(request, existing, company, category, source, location)
+            return duplicate_response(existing)
 
         saved = None
         last_error = None
@@ -1003,7 +1002,7 @@ class LeadImportView(APIView):
                 last_error = exc
                 existing = find_duplicate_lead(request.user, company)
                 if existing is not None:
-                    return self._update(request, existing, company, category, source, location)
+                    return duplicate_response(existing)
         if saved is None:
             raise last_error
         log_activity(
@@ -1018,41 +1017,6 @@ class LeadImportView(APIView):
             {'updated': False, 'lead': LeadSerializer(saved).data},
             status=status.HTTP_201_CREATED,
         )
-
-    def _update(self, request, lead, company, category, source, location):
-        changed_fields = []
-        fields = (
-            ('company', company),
-            ('contact', request.data.get('contact', '').strip()),
-            ('phone', request.data.get('phone', '').strip()),
-            ('email', request.data.get('email', '').strip()),
-            ('category', category),
-            ('source', source),
-            ('city', location),
-            ('sublocation', request.data.get('sublocation', '').strip()),
-        )
-        for field, new_value in fields:
-            new_value = '' if new_value is None else new_value
-            old_value = getattr(lead, field) or ''
-            if old_value != new_value:
-                log_contact_change(request.user, lead, field, old_value, new_value)
-                setattr(lead, field, new_value)
-                changed_fields.append(field)
-        changed_fields += stamp_codes(lead, request.user.company)
-        if changed_fields:
-            lead.save(update_fields=changed_fields + ['updated_at'])
-            sync_lead_contact_to_quotation(lead, changed_fields)
-        else:
-            lead.save(update_fields=['updated_at'])
-        log_activity(
-            request.user,
-            request.user.company,
-            'updated lead',
-            f'{request.user.name} updated lead {lead.id} - {lead.company} via import.',
-            entity_type='lead',
-            entity_id=lead.id,
-        )
-        return Response({'updated': True, 'lead': LeadSerializer(lead).data})
 
 
 class LeadDetailView(APIView):
