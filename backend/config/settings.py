@@ -180,6 +180,12 @@ CORE_API_URL = os.environ.get('CORE_API_URL', 'http://localhost:8000').rstrip('/
 # Registry code this app authenticates against; must match Core's Application.code.
 CORE_APP_CODE = os.environ.get('CORE_APP_CODE', 'leads')
 
+# ServiceApp credential for server-to-server writes to Core (create staff,
+# grant/update LEADS access, patch identities). Created on Core with the
+# ``create_service_app`` management command. Without it LEADS falls back to the
+# caller's Bearer token for these calls.
+CORE_API_KEY = os.environ.get('CORE_API_KEY', '')
+
 # Email: when EMAIL_HOST is set in the environment, real mail is sent over
 # SMTP and every message is also printed to the terminal. Without EMAIL_HOST
 # the console backend is used, which only prints to the terminal.

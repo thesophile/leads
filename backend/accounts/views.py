@@ -24,9 +24,9 @@ from rest_framework_simplejwt.token_blacklist.models import (
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from PIL import Image
 
-from . import core_client
+from . import core_client, services
 from .authentication import CoreJWTAuthentication
-from .core_client import CoreError
+from .core_client import CoreError, bearer_token
 from .permissions import IsSuperuser, can, require_permission
 from .models import Company, EmailChangeRequest, Role
 from .rbac import FLAT_PERMISSIONS, PERMISSION_GROUPS
@@ -109,13 +109,24 @@ class StaffListView(APIView):
     permission_classes = [require_permission('staff.manage')]
 
     def get(self, request):
-        users = User.objects.filter(company=request.user.company).order_by('name')
+        company = request.user.company
+        # Mirror SystemSoft User Management: users who hold LEADS access in the
+        # company's Core organization are upserted into the local table.
+        sync_ok = True
+        if company is not None:
+            _, sync_ok = services.sync_staff_from_core(company, access=bearer_token(request))
+        users = User.objects.filter(company=company).order_by('name')
         status_filter = (request.query_params.get('status') or '').strip().lower()
         if status_filter == 'active':
             users = users.filter(is_active=True)
         elif status_filter == 'inactive':
             users = users.filter(is_active=False)
-        return Response(UserSerializer(users, many=True).data)
+        response = Response(UserSerializer(users, many=True).data)
+        if company is not None and not sync_ok:
+            response['X-Sync-Warning'] = (
+                'Could not reach SystemSoft to sync staff. Check the company link / CORE_API_KEY.'
+            )
+        return response
 
     def post(self, request):
         serializer = StaffCreateSerializer(data=request.data, context={'request': request})
@@ -147,9 +158,12 @@ class StaffAssigneeListView(APIView):
                 {'detail': 'You do not have permission to assign leads to staff.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        company = request.user.company
+        if company is not None:
+            services.sync_staff_from_core(company, access=bearer_token(request))
         users = (
             User.objects
-            .filter(company=request.user.company, is_active=True)
+            .filter(company=company, is_active=True)
             .exclude(is_superuser=True)
             .order_by('name')
         )
@@ -212,36 +226,6 @@ class StaffDetailView(APIView):
             entity_id=str(user.pk),
         )
         return Response(UserSerializer(user).data)
-
-
-class StaffResetPasswordView(APIView):
-    """Role-managers (admin/manager): set a new password for staff of their company."""
-
-    permission_classes = [require_permission('staff.manage')]
-
-    def post(self, request, pk):
-        try:
-            user = User.objects.get(pk=pk, company=request.user.company)
-        except User.DoesNotExist:
-            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        if not request.user.can_manage(user):
-            return Response(
-                {'detail': 'You cannot manage a user with greater authority than your own.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        serializer = PasswordResetByAdminSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user.set_password(serializer.validated_data['new_password'])
-        user.save(update_fields=['password'])
-        log_activity(
-            request.user,
-            request.user.company,
-            'reset password',
-            f'{request.user.name} reset the password for {user.name}.',
-            entity_type='staff',
-            entity_id=str(user.pk),
-        )
-        return Response({'detail': 'Password updated successfully.'})
 
 
 class PermissionCatalogView(APIView):
@@ -366,6 +350,11 @@ class RoleDetailView(APIView):
                 )
             role.permissions = sorted(set(permissions))
         role.save()
+        # Push the (possibly re-permissioned) role to Core so every staff
+        # member holding it gets the updated LEADS permission set.
+        services.sync_role_permissions_to_core(
+            role.company, role, actor=request.user, access=bearer_token(request)
+        )
         log_activity(
             request.user,
             request.user.company,
@@ -490,8 +479,18 @@ class SuperuserAdminResetPasswordView(APIView):
             )
         serializer = PasswordResetByAdminSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user.set_password(serializer.validated_data['new_password'])
+        new_password = serializer.validated_data['new_password']
+        user.set_password(new_password)
         user.save(update_fields=['password'])
+        # Core owns credentials, so the real password change lives there.
+        if user.core_user_id:
+            try:
+                core_client.patch_user(
+                    user.core_user_id, {'password': new_password}, actor=request.user,
+                    access=bearer_token(request),
+                )
+            except CoreError:
+                pass
         return Response({'detail': 'Password updated successfully.'})
 
 
@@ -1116,6 +1115,15 @@ class EmailChangeVerifyView(APIView):
         old_email = user.email
         user.email = User.objects.normalize_email(new_email)
         user.save(update_fields=['email', 'updated_at'])
+        # Mirror the new sign-in email to the Core identity (login username).
+        if user.core_user_id:
+            try:
+                core_client.patch_user(
+                    user.core_user_id, {'email': user.email}, actor=user,
+                    access=bearer_token(request),
+                )
+            except CoreError:
+                pass
         log_activity(
             user,
             user.company,

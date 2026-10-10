@@ -3,6 +3,12 @@
 LEADS no longer stores credentials itself: registration, login, token refresh,
 logout and the password flows are all delegated to Core over HTTP. Core is the
 single source of truth for identities and passwords.
+
+Server-to-server writes (creating staff, granting/updating LEADS access,
+patching identities) authenticate with a Core ``ServiceApp`` credential when
+``CORE_API_KEY`` is configured, falling back to the caller's Bearer token.
+Every write passes the acting human (``actor``) along via ``X-Actor-*`` headers
+so Core's audit trail can attribute changes to the real user.
 """
 
 import requests
@@ -46,9 +52,32 @@ def _url(path):
     return f'{settings.CORE_API_URL}{path}'
 
 
-def _request(method, path, *, json=None, access=None, timeout=15):
+def _actor_headers(actor):
+    """Headers that carry the acting human for Core's audit trail."""
+    if actor is None:
+        return {}
     headers = {}
-    if access:
+    actor_id = getattr(actor, 'core_user_id', None)
+    if actor_id is not None:
+        headers['X-Actor-User-Id'] = str(actor_id)
+    email = getattr(actor, 'email', '') or ''
+    name = getattr(actor, 'name', '') or ''
+    if email:
+        headers['X-Actor-Email'] = email
+    if name:
+        headers['X-Actor-Name'] = name
+    return headers
+
+
+def _request(method, path, *, json=None, access=None, api_key=None, actor=None, timeout=15):
+    headers = {'X-Request-Source': 'leads'}
+    if actor is not None:
+        headers.update(_actor_headers(actor))
+    # Prefer the machine ServiceApp credential so writes never depend on a
+    # specific human's token role/validity; the actor is passed separately.
+    if api_key:
+        headers['Authorization'] = f'Api-Key {api_key}'
+    elif access:
         headers['Authorization'] = f'Bearer {access}'
     try:
         resp = requests.request(method, _url(path), json=json, headers=headers, timeout=timeout)
@@ -67,6 +96,13 @@ def _request(method, path, *, json=None, access=None, timeout=15):
     except ValueError:
         return None
 
+
+def _server_key():
+    """Return the configured ServiceApp credential, if any."""
+    return getattr(settings, 'CORE_API_KEY', '') or ''
+
+
+# --- Auth flow ---------------------------------------------------------------
 
 def login(email, password):
     return _request('POST', '/api/auth/token/', json={'email': email, 'password': password})
@@ -113,11 +149,19 @@ def password_reset_confirm(email, token, new_password):
     )
 
 
-def create_organization(name, access):
-    return _request('POST', '/api/v1/organizations/', json={'name': name}, access=access)
+# --- Organizations & membership ---------------------------------------------
+
+def create_organization(name, access=None, api_key=None):
+    return _request(
+        'POST',
+        '/api/v1/organizations/',
+        json={'name': name},
+        access=access,
+        api_key=api_key or _server_key(),
+    )
 
 
-def create_membership(core_user_id, core_org_id, access, role='member'):
+def create_membership(core_user_id, core_org_id, access=None, api_key=None, role='member'):
     return _request(
         'POST',
         '/api/v1/memberships/',
@@ -128,12 +172,134 @@ def create_membership(core_user_id, core_org_id, access, role='member'):
             'status': 'active',
         },
         access=access,
+        api_key=api_key or _server_key(),
     )
 
 
-def patch_user(core_user_id, data, access=None):
-    return _request('PATCH', f'/api/v1/users/{core_user_id}/', json=data, access=access)
+# --- Identity / staff provisioning -------------------------------------------
+
+def provision_staff_user(email, name, phone, org_id, application_id, role_label='', permissions=None, actor=None, access=None, api_key=None):
+    """Create a Core identity WITHOUT a password, add it to the organization,
+    and grant it LEADS access.
+
+    Because no password is sent, Core creates the user as inactive with an
+    unusable password — it stays locked until a Core admin sets a password.
+    Authenticates with the ServiceApp key when configured, otherwise with the
+    caller's Bearer token.
+    """
+    return _request(
+        'POST',
+        '/api/v1/user-provisioning/',
+        json={
+            'email': email,
+            'name': name or '',
+            'phone': phone or '',
+            'organization': org_id,
+            'accesses': [{
+                'application': application_id,
+                'role': role_label or '',
+                'permissions': permissions or [],
+                'status': 'enabled',
+            }],
+        },
+        access=access,
+        api_key=api_key or _server_key(),
+        actor=actor,
+    )
 
 
-def get_user(core_user_id, access=None):
-    return _request('GET', f'/api/v1/users/{core_user_id}/', access=access)
+def get_application(code, access=None, api_key=None):
+    data = _request(
+        'GET',
+        f'/api/v1/applications/?code={code}&page_size=20',
+        access=access,
+        api_key=api_key or _server_key(),
+    )
+    return (data.get('results') or [{}])[0] if data else None
+
+
+def list_org_users(org_id, access=None, api_key=None):
+    """Return every member of an organization (paginated)."""
+    page = 1
+    results = []
+    while True:
+        data = _request(
+            'GET',
+            f'/api/v1/users/?organization_id={org_id}&page_size=200&page={page}',
+            access=access,
+            api_key=api_key or _server_key(),
+        )
+        results.extend(data.get('results') or [])
+        if not data.get('next'):
+            break
+        page += 1
+    return results
+
+
+def list_user_access(org_id, application_id, user_id=None, access=None, api_key=None):
+    query = f'organization={org_id}&application={application_id}&page_size=200'
+    if user_id is not None:
+        query += f'&user={user_id}'
+    data = _request(
+        'GET',
+        f'/api/v1/user-application-access/?{query}',
+        access=access,
+        api_key=api_key or _server_key(),
+    )
+    return data.get('results') or [] if data else []
+
+
+def create_user_access(org_id, user_id, application_id, role_label='', permissions=None, actor=None, access=None, api_key=None):
+    return _request(
+        'POST',
+        '/api/v1/user-application-access/',
+        json={
+            'user': user_id,
+            'organization': org_id,
+            'application': application_id,
+            'role': role_label or '',
+            'permissions': permissions or [],
+            'status': 'enabled',
+        },
+        access=access,
+        api_key=api_key or _server_key(),
+        actor=actor,
+    )
+
+
+def update_user_access(access_id, role=None, permissions=None, status=None, actor=None, access=None, api_key=None):
+    payload = {}
+    if role is not None:
+        payload['role'] = role
+    if permissions is not None:
+        payload['permissions'] = permissions
+    if status is not None:
+        payload['status'] = status
+    return _request(
+        'PATCH',
+        f'/api/v1/user-application-access/{access_id}/',
+        json=payload,
+        access=access,
+        api_key=api_key or _server_key(),
+        actor=actor,
+    )
+
+
+def patch_user(core_user_id, data, access=None, actor=None, api_key=None):
+    return _request(
+        'PATCH',
+        f'/api/v1/users/{core_user_id}/',
+        json=data,
+        access=access,
+        api_key=api_key or _server_key(),
+        actor=actor,
+    )
+
+
+def get_user(core_user_id, access=None, api_key=None):
+    return _request(
+        'GET',
+        f'/api/v1/users/{core_user_id}/',
+        access=access,
+        api_key=api_key or _server_key(),
+    )

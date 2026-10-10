@@ -3,7 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework import serializers
 
-from . import core_client
+from . import core_client, services
 from .core_client import CoreError, bearer_token
 from .models import Company, Role
 from .rbac import FLAT_PERMISSIONS
@@ -194,7 +194,10 @@ class AdminRegisterSerializer(serializers.ModelSerializer):
         validated_data['is_staff'] = True
         # Intentionally NOT a superuser: this endpoint is publicly reachable,
         # so the registering company admin must not get cross-tenant access.
-        return User.objects.create_user(company=company, password=None, **validated_data)
+        user = User.objects.create_user(company=company, password=None, **validated_data)
+        # Grant LEADS access so the new company admin can sign in immediately.
+        services.push_access_to_core(user, actor=request.user if request else user, access=access)
+        return user
 
 
 class AdminManageSerializer(AdminRegisterSerializer):
@@ -220,13 +223,19 @@ class AdminUpdateSerializer(serializers.ModelSerializer):
         fields = ['name', 'phone', 'email', 'is_active']
 
     def update(self, instance, validated_data):
+        actor = self.context.get('request').user if self.context.get('request') else None
+        request = self.context.get('request')
         instance = super().update(instance, validated_data)
-        if instance.core_user_id and validated_data:
+        core_fields = {
+            key: validated_data[key]
+            for key in ('name', 'phone', 'email')
+            if key in validated_data
+        }
+        if instance.core_user_id and core_fields:
             try:
                 core_client.patch_user(
-                    instance.core_user_id,
-                    validated_data,
-                    bearer_token(self.context.get('request')),
+                    instance.core_user_id, core_fields, actor=actor,
+                    access=bearer_token(request),
                 )
             except CoreError:
                 pass
@@ -234,14 +243,19 @@ class AdminUpdateSerializer(serializers.ModelSerializer):
 
 
 class StaffCreateSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, validators=[validate_password])
+    """Add staff without a password.
+
+    The Core identity is created with no usable password and as inactive; it
+    stays locked until a Core admin sets a password and activates the account.
+    """
+
     mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
     branch = serializers.CharField(write_only=True, required=False, allow_blank=True)
     role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.none(), required=False, allow_null=True)
 
     class Meta:
         model = User
-        fields = ['name', 'email', 'phone', 'mobile', 'branch', 'role', 'password']
+        fields = ['name', 'email', 'phone', 'mobile', 'branch', 'role']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -274,33 +288,27 @@ class StaffCreateSerializer(serializers.ModelSerializer):
         company = owner.company
         mobile = validated_data.pop('mobile', '') or validated_data.get('phone', '')
         branch_name = validated_data.pop('branch', '') or ''
-        password = validated_data.pop('password')
         email = validated_data.get('email', '')
         name = validated_data.get('name', '')
         phone = validated_data.get('phone', '')
+        role = validated_data.get('role')
 
-        # Create the Core identity first — Core owns credentials.
-        try:
-            core_user = core_client.register_user(email, name, phone, password)
-        except CoreError as exc:
-            raise serializers.ValidationError({'email': exc.message})
-        validated_data['core_user_id'] = core_user['id']
+        # Create the Core identity (no password, inactive) + LEADS access.
+        provisioned = services.provision_staff(
+            company, email, name, phone, role, actor=owner, access=bearer_token(request)
+        )
+        if provisioned is None:
+            raise serializers.ValidationError(
+                {'email': 'Unable to create the SystemSoft identity. Check that the company is linked to SystemSoft.'}
+            )
+        validated_data['core_user_id'] = provisioned['id']
 
         user = UserModel.objects.create_user(
             **validated_data,
             company=company,
             password=None,
+            is_active=False,
         )
-
-        # Make the staff member a member of the Core organization so company
-        # admins may administer their Core identity later.
-        if company.core_org_id:
-            try:
-                core_client.create_membership(
-                    core_user['id'], company.core_org_id, bearer_token(request)
-                )
-            except CoreError:
-                pass
 
         # The staff profile (code/name/role/email/mobile) is created and kept
         # in sync by the accounts post_save signal; only branch is set here.
@@ -436,29 +444,36 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         mobile = validated_data.pop('mobile', None)
         branch_name = validated_data.pop('branch', None)
         role = validated_data.pop('role', None)
+        actor = self.context.get('request').user if self.context.get('request') else None
 
         if mobile is not None:
             validated_data['phone'] = mobile
         if role is not None:
             validated_data['role'] = role
 
+        role_changed = role is not None and instance.role_id != (role.pk if role else None)
+        active_changed = 'is_active' in validated_data
+        access_token = bearer_token(self.context.get('request'))
         instance = super().update(instance, validated_data)
 
-        # Keep the Core identity in sync with local name/phone/email/active state.
+        # Keep the Core identity in sync with local name/phone/email. Is-active
+        # is NOT pushed to the Core identity; deactivation only disables the
+        # LEADS access grant below.
         core_fields = {
             key: validated_data[key]
-            for key in ('name', 'email', 'phone', 'is_active')
+            for key in ('name', 'email', 'phone')
             if key in validated_data
         }
         if core_fields and instance.core_user_id:
             try:
                 core_client.patch_user(
-                    instance.core_user_id,
-                    core_fields,
-                    bearer_token(self.context.get('request')),
+                    instance.core_user_id, core_fields, actor=actor, access=access_token
                 )
             except CoreError:
                 pass
+
+        if role_changed or active_changed:
+            services.push_access_to_core(instance, actor=actor, access=access_token)
 
         # Rename propagation and profile field sync are handled by the accounts
         # post_save signal; only the branch assignment lives here.
