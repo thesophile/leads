@@ -142,6 +142,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         related_name='users',
     )
     is_active = models.BooleanField(default=True)
+    # LEADS-local deactivation. The LEADS Activate/Deactivate button only sets
+    # this flag: it removes the user from LEADS (dropdowns, login) without ever
+    # changing the SystemSoft identity status, which is the single source of
+    # truth mirrored into ``is_active`` by the staff sync.
+    deny_leads_access = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     # Id of the matching user in SystemSoft Core. This is the identity link used

@@ -87,11 +87,12 @@ class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     role_name = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
+    active_in_leads = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'phone', 'company', 'role', 'role_name', 'permissions', 'initials', 'staff_code', 'branch_name', 'is_active', 'is_superuser', 'date_joined']
-        read_only_fields = ['id', 'is_active', 'is_superuser', 'date_joined']
+        fields = ['id', 'email', 'name', 'phone', 'company', 'role', 'role_name', 'permissions', 'initials', 'staff_code', 'branch_name', 'is_active', 'deny_leads_access', 'active_in_leads', 'is_superuser', 'date_joined']
+        read_only_fields = ['id', 'is_active', 'deny_leads_access', 'is_superuser', 'date_joined']
 
     def get_company(self, obj):
         return obj.company.name if obj.company else ''
@@ -114,6 +115,10 @@ class UserSerializer(serializers.ModelSerializer):
     def get_branch_name(self, obj):
         profile = getattr(obj, 'staff_profile', None)
         return profile.branch.name if profile and profile.branch else ''
+
+    def get_active_in_leads(self, obj):
+        # Active in LEADS = SystemSoft says active AND not LEADS-deactivated.
+        return bool(obj.is_active and not obj.deny_leads_access)
 
 
 class AdminRegisterSerializer(serializers.ModelSerializer):
@@ -446,19 +451,27 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         role = validated_data.pop('role', None)
         actor = self.context.get('request').user if self.context.get('request') else None
 
+        # The LEADS Activate/Deactivate toggle controls the LEADS-local flag
+        # only. It never writes the identity ``is_active`` (that is mirrored
+        # one-way from SystemSoft) and never touches the SystemSoft status.
+        deny_change = None
+        if 'is_active' in validated_data:
+            deny_change = not validated_data.pop('is_active')
+        deny_changed = deny_change is not None and instance.deny_leads_access != deny_change
+
         if mobile is not None:
             validated_data['phone'] = mobile
         if role is not None:
             validated_data['role'] = role
 
+        if deny_change is not None:
+            instance.deny_leads_access = deny_change
         role_changed = role is not None and instance.role_id != (role.pk if role else None)
-        active_changed = 'is_active' in validated_data
         access_token = bearer_token(self.context.get('request'))
         instance = super().update(instance, validated_data)
 
-        # Keep the Core identity in sync with local name/phone/email. Is-active
-        # is NOT pushed to the Core identity; deactivation only disables the
-        # LEADS access grant below.
+        # Keep the Core identity in sync with local name/phone/email. The
+        # identity status is never pushed to Core.
         core_fields = {
             key: validated_data[key]
             for key in ('name', 'email', 'phone')
@@ -472,7 +485,7 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
             except CoreError:
                 pass
 
-        if role_changed or active_changed:
+        if role_changed or deny_changed:
             services.push_access_to_core(instance, actor=actor, access=access_token)
 
         # Rename propagation and profile field sync are handled by the accounts

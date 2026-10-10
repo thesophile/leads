@@ -385,9 +385,10 @@ export default function Staff() {
   async function handleToggleActive(emp) {
     if (togglingId) return
     setTogglingId(emp.id)
+    const wasActiveInLeads = emp.active_in_leads ?? emp.is_active
     try {
-      await api.patch(`/auth/users/${emp.id}/`, { is_active: !emp.is_active })
-      showToast(emp.is_active ? `Deactivated ${emp.name}.` : `Activated ${emp.name}.`)
+      await api.patch(`/auth/users/${emp.id}/`, { is_active: !wasActiveInLeads })
+      showToast(wasActiveInLeads ? `Deactivated ${emp.name} in LEADS.` : `Activated ${emp.name} in LEADS.`)
       await refreshData()
     } catch (err) {
       showToast(err.message, 'error')
@@ -723,7 +724,9 @@ export default function Staff() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black">
-                    {filteredStaff.map((emp) => (
+                    {filteredStaff.map((emp) => {
+                    const activeInLeads = emp.active_in_leads ?? emp.is_active
+                    return (
                       <tr key={emp.id} onClick={() => handleEditClick(emp)} className={`text-slate-600 transition-colors cursor-pointer ${editingId === emp.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
                         <td className="py-0.5 pr-2">
                           <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[11px] font-bold">
@@ -741,13 +744,13 @@ export default function Staff() {
                           <span className="capitalize text-slate-600">{emp.role_name || '—'}</span>
                         </td>
                         <td className="py-0.5 pr-2">
-                          {emp.is_active ? (
+                          {activeInLeads ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-500">
-                              <span className="h-1.5 w-1.5 rounded-full bg-red-400" /> Inactive
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-400" /> {emp.is_active ? 'Inactive in LEADS' : 'Inactive'}
                             </span>
                           )}
                         </td>
@@ -764,28 +767,29 @@ export default function Staff() {
                             >
                               <EditIcon />
                             </button>
-                            {emp.email !== user?.email && (
+                            {emp.email !== user?.email && emp.is_active && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   handleToggleActive(emp)
                                 }}
-                                title={emp.is_active ? 'Deactivate' : 'Activate'}
+                                title={activeInLeads ? 'Deactivate in LEADS' : 'Activate in LEADS'}
                                 disabled={togglingId !== null}
                                 className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                               >
                                 {togglingId === emp.id ? (
                                   <Spinner className="h-3.5 w-3.5 text-emerald-500" />
                                 ) : (
-                                  <PowerIcon active={emp.is_active} />
+                                  <PowerIcon active={activeInLeads} />
                                 )}
                               </button>
                             )}
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )
+                  })}
                   </tbody>
                 </table>
               </div>

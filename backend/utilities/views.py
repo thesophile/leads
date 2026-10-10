@@ -188,7 +188,7 @@ def _employee_options(user):
     company = user.company if not user.is_superuser else getattr(user, 'company', None)
     if company is not None:
         for account in get_user_model().objects.filter(
-            company=company, is_active=True
+            company=company, is_active=True, deny_leads_access=False
         ).exclude(is_superuser=True).order_by('name'):
             key = account.name.lower()
             if key not in seen:

@@ -50,10 +50,13 @@ def list_leads_staff_from_core(company, access=None):
 
 
 def sync_staff_from_core(company, access=None):
-    """Upsert local users from the Core members who hold LEADS access.
+    """Mirror SystemSoft's granted LEADS staff into the local user table.
 
-    Never deletes local rows: deactivated/revoked users stay in the local table
-    (marked inactive) so historical lead attribution is preserved.
+    Upserts every org member who holds a LEADS grant; ``is_active`` is set only
+    when the SystemSoft identity is active AND the LEADS grant is enabled.
+    Users without a current grant (or without a Core link) are marked inactive
+    so the Active list matches SystemSoft — rows are never deleted so historical
+    lead attribution is preserved.
 
     Returns ``(matched, ok)`` where ``ok`` is False when Core could not be
     reached at all (missing credential / wrong org / server down).
@@ -70,6 +73,7 @@ def sync_staff_from_core(company, access=None):
         return 0, False
 
     matched = 0
+    granted_core_ids = set()
     for core_user in core_users:
         access = _leads_access(core_user.get('access'))
         if access is None:
@@ -86,9 +90,14 @@ def sync_staff_from_core(company, access=None):
         # Never steal a user owned by another company.
         if user is not None and user.company_id is not None and user.company_id != company.pk:
             continue
+        granted_core_ids.add(core_user_id)
 
         name = (core_user.get('name') or email.split('@')[0] or f'User {core_user_id}').strip()
         phone = (core_user.get('phone') or '').strip()
+        # Active in LEADS = SystemSoft identity active AND the LEADS access grant
+        # is enabled. ``deny_leads_access`` (the LEADS-local deactivation) is
+        # never changed here so a LEADS deactivation persists while the
+        # identity stays active.
         is_active = bool(
             core_user.get('status') == 'active'
             and access.get('status') == 'enabled'
@@ -133,6 +142,21 @@ def sync_staff_from_core(company, access=None):
             if changed:
                 user.save()
         matched += 1
+
+    # Reconcile: any local company user without a current LEADS grant in the
+    # linked org is no longer active in LEADS. Rows are kept (historical lead
+    # attribution) but flagged inactive so the Active count matches SystemSoft.
+    stale = (
+        User.objects
+        .filter(company=company, is_active=True)
+        .exclude(core_user_id__in=granted_core_ids)
+    )
+    if stale.exists():
+        stale.update(is_active=False)
+        logger.info(
+            'Leads: marked %d stale staff as inactive for company %r (no LEADS grant in Core).',
+            stale.count(), company.name,
+        )
     return matched, True
 
 
@@ -198,7 +222,9 @@ def push_access_to_core(user, actor=None, fallback_role='', fallback_permissions
         records = core_client.list_user_access(
             company.core_org_id, application_id, user.core_user_id, access=access
         )
-        status = 'enabled' if user.is_active else 'disabled'
+        # The LEADS app-grant status follows the LEADS-local flag only. The
+        # SystemSoft identity status is untouched (owned by SystemSoft).
+        status = 'disabled' if user.deny_leads_access else 'enabled'
         if records:
             core_client.update_user_access(
                 records[0]['id'],
@@ -215,6 +241,7 @@ def push_access_to_core(user, actor=None, fallback_role='', fallback_permissions
                 application_id,
                 role_label=role_label,
                 permissions=permissions,
+                status=status,
                 actor=actor,
                 access=access,
             )

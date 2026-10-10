@@ -305,7 +305,7 @@ def assignment_name_set(user):
         return set()
     return set(
         User.objects
-        .filter(company=user.company, is_active=True)
+        .filter(company=user.company, is_active=True, deny_leads_access=False)
         .exclude(is_superuser=True)
         .values_list('name', flat=True)
     )
@@ -3651,7 +3651,7 @@ class PublicClientDetailAttachmentView(APIView):
     @staticmethod
     def _notify_staff(record, attachment):
         """In-app notification to the tenant's staff who can view client details."""
-        users = User.objects.filter(is_active=True)
+        users = User.objects.filter(is_active=True, deny_leads_access=False)
         if record.tenant_id:
             users = users.filter(company_id=record.tenant_id)
         else:

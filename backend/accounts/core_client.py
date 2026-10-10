@@ -249,7 +249,7 @@ def list_user_access(org_id, application_id, user_id=None, access=None, api_key=
     return data.get('results') or [] if data else []
 
 
-def create_user_access(org_id, user_id, application_id, role_label='', permissions=None, actor=None, access=None, api_key=None):
+def create_user_access(org_id, user_id, application_id, role_label='', permissions=None, status='enabled', actor=None, access=None, api_key=None):
     return _request(
         'POST',
         '/api/v1/user-application-access/',
@@ -259,7 +259,7 @@ def create_user_access(org_id, user_id, application_id, role_label='', permissio
             'application': application_id,
             'role': role_label or '',
             'permissions': permissions or [],
-            'status': 'enabled',
+            'status': status,
         },
         access=access,
         api_key=api_key or _server_key(),

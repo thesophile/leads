@@ -180,6 +180,10 @@ Then redeploy the LEADS backend.
   the staff list loads, LEADS pulls the organization's Core members and mirrors
   those who hold LEADS access into its local table. A user granted LEADS access
   in SystemSoft therefore appears in the LEADS employee list (and can log in).
+  **Active** in LEADS means the SystemSoft identity is active **and** the LEADS
+  access grant is enabled — users whose grant was removed (or who have no Core
+  link) are marked Inactive on the next sync, so the Active count matches
+  SystemSoft. History rows are kept, not deleted.
   Important: the grant must belong to the **same organization the LEADS company
   is linked to** (`core_org_id`) — users granted access under a different org
   (e.g. the default "SystemSoft" org) won't map to a LEADS company.
@@ -192,8 +196,16 @@ Then redeploy the LEADS backend.
   Roles & Permissions screen pushes the new permission set to every that-role
   user's LEADS access in SystemSoft. Changing permissions/role in SystemSoft
   User Management is picked up by LEADS on the next staff-list load or login.
-- **Deactivating a user in LEADS** only disables their LEADS access grant; the
-  SystemSoft identity stays active/usable in other apps.
+- **Active/Inactive is owned by SystemSoft and mirrored one-way.** A user who
+  is Active in SystemSoft shows Active in LEADS; one who is Inactive in
+  SystemSoft shows Inactive in LEADS, is signed out of an open LEADS session
+  immediately, and can't log in anywhere. LEADS never writes status back to
+  SystemSoft.
+- **The LEADS Activate/Deactivate button controls LEADS only.** It hides the
+  person from LEADS (staff dropdowns, login) without changing their SystemSoft
+  status — they stay active in SystemSoft and the rest of the suite. A
+  LEADS-side deactivation persists even while SystemSoft is Active; re-enabling
+  it in SystemSoft alone does not bring them back in LEADS.
 - **Granting in SystemSoft is idempotent.** Saving a user's app access updates
   the existing grant instead of failing with a "must make a unique set" 400, so
   stale edit screens can't create duplicates.

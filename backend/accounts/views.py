@@ -118,9 +118,9 @@ class StaffListView(APIView):
         users = User.objects.filter(company=company).order_by('name')
         status_filter = (request.query_params.get('status') or '').strip().lower()
         if status_filter == 'active':
-            users = users.filter(is_active=True)
+            users = users.filter(is_active=True, deny_leads_access=False)
         elif status_filter == 'inactive':
-            users = users.filter(is_active=False)
+            users = users.filter(Q(is_active=False) | Q(deny_leads_access=True))
         response = Response(UserSerializer(users, many=True).data)
         if company is not None and not sync_ok:
             response['X-Sync-Warning'] = (
@@ -163,7 +163,7 @@ class StaffAssigneeListView(APIView):
             services.sync_staff_from_core(company, access=bearer_token(request))
         users = (
             User.objects
-            .filter(company=company, is_active=True)
+            .filter(company=company, is_active=True, deny_leads_access=False)
             .exclude(is_superuser=True)
             .order_by('name')
         )
