@@ -63,6 +63,7 @@ urlpatterns = [
     path('orders/<pk>/pdf/', OrderPdfView.as_view(), name='transactions-order-pdf'),
     path('client-details/', ClientDetailListCreateView.as_view(), name='transactions-client-details-list'),
     path('client-details/<pk>/', ClientDetailDetailView.as_view(), name='transactions-client-detail'),
+    path('client-details/<pk>/payments/', ClientDetailPaymentView.as_view(), name='transactions-client-detail-payments'),
     path('client-details/<pk>/send-to-client/', ClientDetailSendToClientView.as_view(), name='transactions-client-detail-send-client'),
     path('client-details/<pk>/attachments/', ClientDetailAttachmentView.as_view(), name='transactions-client-detail-attachments'),
     path('client-details/<pk>/attachments/<aid>/', ClientDetailAttachmentDeleteView.as_view(), name='transactions-client-detail-attachment'),

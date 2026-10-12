@@ -1888,6 +1888,7 @@ def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, refe
     Tries HTTP endpoints first, then falls back to direct sqlite database update if local.
     """
     import json
+    import re
     import sqlite3
     import urllib.error
     import urllib.request
@@ -1910,9 +1911,7 @@ def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, refe
     if custom_url:
         target_urls.append(custom_url)
     target_urls.extend([
-        'http://localhost:8000/api/payments/external-sync/',
         'http://127.0.0.1:8000/api/payments/external-sync/',
-        'http://localhost:8003/api/payments/external-sync/',
         'http://127.0.0.1:8003/api/payments/external-sync/',
     ])
 
@@ -1922,7 +1921,7 @@ def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, refe
             req = urllib.request.Request(
                 url, data=req_data, headers={'Content-Type': 'application/json'}
             )
-            with urllib.request.urlopen(req, timeout=4) as response:
+            with urllib.request.urlopen(req, timeout=0.8) as response:
                 if response.status in (200, 201):
                     logger.info("Synced payment to Account Soft via HTTP endpoint %s", url)
                     return True
@@ -1943,11 +1942,38 @@ def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, refe
             if row:
                 order_pk, final_amt, tot_rec = row[0], float(row[1] or 0), float(row[2] or 0)
             else:
+                cursor.execute("PRAGMA table_info(orders)")
+                order_cols = {c[1] for c in cursor.fetchall()}
+                order_data = {
+                    'order_id': order_id,
+                    'lead_soft_ref': order_id,
+                    'customer': customer,
+                    'order_date': str(date),
+                    'delivery_date': str(date),
+                    'subtotal': amount,
+                    'discount': 0,
+                    'tax_amount': 0,
+                    'final_amount': amount,
+                    'total_received': 0,
+                    'pending_amount': amount,
+                    'order_status': 'Pending',
+                    'payment_status': 'Unpaid',
+                    'delivery_status': 'Pending',
+                    'sales_person': received_by,
+                    'notes': '',
+                    'is_cancelled': 0,
+                    'created_at': now_iso,
+                    'updated_at': now_iso,
+                }
+                if 'project_hours' in order_cols:
+                    order_data['project_hours'] = 0
+
+                valid_order_keys = [k for k in order_data if k in order_cols]
+                order_placeholders = ', '.join(['?'] * len(valid_order_keys))
+                order_cols_str = ', '.join(valid_order_keys)
                 cursor.execute(
-                    """INSERT INTO orders
-                       (order_id, lead_soft_ref, customer, order_date, delivery_date, subtotal, discount, tax_amount, final_amount, total_received, pending_amount, order_status, payment_status, delivery_status, sales_person, project_hours, notes, is_cancelled, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, 0, ?, 'Pending', 'Unpaid', 'Pending', ?, 0, '', 0, ?, ?)""",
-                    (order_id, order_id, customer, str(date), str(date), amount, amount, amount, received_by, now_iso, now_iso)
+                    f"INSERT INTO orders ({order_cols_str}) VALUES ({order_placeholders})",
+                    [order_data[k] for k in valid_order_keys]
                 )
                 order_pk = cursor.lastrowid
                 final_amt = float(amount)
@@ -1976,11 +2002,32 @@ def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, refe
                 status_pk = s_row[0] if s_row else None
 
             # Insert payment
+            cursor.execute("PRAGMA table_info(payments)")
+            pay_cols = {c[1] for c in cursor.fetchall()}
+            pay_data = {
+                'order_id': order_pk,
+                'amount': amount,
+                'date': str(date),
+                'method_id': method_pk,
+                'status_id': status_pk,
+                'reference': reference,
+                'notes': notes,
+                'received_by': received_by,
+                'bank_name': '',
+                'invoice_id': '',
+                'is_refunded': 0,
+                'created_at': now_iso,
+                'updated_at': now_iso,
+            }
+            if 'plan_stage' in pay_cols:
+                pay_data['plan_stage'] = ''
+
+            valid_pay_keys = [k for k in pay_data if k in pay_cols]
+            pay_placeholders = ', '.join(['?'] * len(valid_pay_keys))
+            pay_cols_str = ', '.join(valid_pay_keys)
             cursor.execute(
-                """INSERT INTO payments
-                   (order_id, amount, date, method_id, status_id, reference, notes, received_by, bank_name, invoice_id, plan_stage, is_refunded, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', '', 0, ?, ?)""",
-                (order_pk, amount, str(date), method_pk, status_pk, reference, notes, received_by, now_iso, now_iso)
+                f"INSERT INTO payments ({pay_cols_str}) VALUES ({pay_placeholders})",
+                [pay_data[k] for k in valid_pay_keys]
             )
 
             # Update order total received & pending
