@@ -1889,7 +1889,7 @@ def create_client_detail_from_order(order):
     )
 
 
-def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, reference='', received_by='', notes='', tenant=None):
+def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, reference='', received_by='', notes='', tenant=None, order_value=None):
     """Syncs a payment recorded against a client detail in Lead Soft to Account Soft.
 
     Tries HTTP endpoints first, then falls back to direct sqlite database update if local.
@@ -1911,6 +1911,8 @@ def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, refe
         'notes': notes,
         'received_by': received_by,
     }
+    if order_value is not None:
+        payload['order_value'] = order_value
     if tenant:
         payload['core_org_id'] = getattr(tenant, 'core_org_id', None)
         payload['tenant_name'] = getattr(tenant, 'name', '')
@@ -1922,6 +1924,7 @@ def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, refe
     if custom_url:
         target_urls.append(custom_url)
     target_urls.extend([
+        'http://127.0.0.1:8001/api/payments/external-sync/',
         'http://127.0.0.1:8000/api/payments/external-sync/',
         'http://127.0.0.1:8003/api/payments/external-sync/',
     ])

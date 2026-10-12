@@ -8,6 +8,7 @@ from transactions.models import (
     Attachment,
     CallHistory,
     ClientDetail,
+    ClientPayment,
     Lead,
     LeadContactHistory,
     Order,
@@ -3320,6 +3321,41 @@ class ExternalCustomersFeedTests(APITestCase):
         )
         self.assertIsNone(last.data['next'])
         self.assertIn('page=2', last.data['previous'])
+
+
+class ExternalPaymentsViewTests(APITestCase):
+    def setUp(self):
+        self.company_a = make_company('Payment Co A')
+        self.cd_a = ClientDetail.objects.create(
+            id='CD-P1', order_no='ORD-P1', company='Acme Payments',
+            tenant=self.company_a, status='In Progress',
+        )
+        self.payment = ClientPayment.objects.create(
+            client_detail=self.cd_a,
+            order_no='ORD-P1',
+            amount=250.00,
+            date=date.today(),
+            method='UPI',
+            reference='TXN123',
+        )
+
+    def test_requires_valid_api_key(self):
+        self.assertEqual(
+            self.client.get('/api/external/payments/').status_code, 403,
+        )
+
+    @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
+    def test_returns_payments_with_valid_key(self):
+        resp = self.client.get(
+            '/api/external/payments/', HTTP_AUTHORIZATION='Bearer test-key',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 1)
+        res = resp.data['results'][0]
+        self.assertEqual(res['order_id'], 'ORD-P1')
+        self.assertEqual(res['amount'], '250.00')
+        self.assertEqual(res['method'], 'UPI')
+        self.assertEqual(res['reference'], 'TXN123')
 
 
 class FollowUpReminderTests(APITestCase):

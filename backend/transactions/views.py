@@ -3553,6 +3553,9 @@ class ClientDetailPaymentView(APIView):
             synced_to_accounts=False,
         )
 
+        order_obj = Order.objects.filter(id=record.order_no).first() if record.order_no else None
+        order_val = (order_obj.net_amount or order_obj.total or None) if order_obj else None
+
         synced = sync_payment_to_accounts_soft(
             order_id=record.order_no or f'ORD-{record.id}',
             customer=record.company or record.client_name,
@@ -3563,6 +3566,7 @@ class ClientDetailPaymentView(APIView):
             received_by=received_by_str,
             notes=notes_str,
             tenant=record.tenant,
+            order_value=order_val,
         )
         if synced:
             payment.synced_to_accounts = True
@@ -4393,6 +4397,74 @@ class ExternalCustomersView(APIView):
                 'status': customer.status,
             }
             for customer in page_customers
+        ]
+        return Response(envelope)
+
+
+class ExternalPaymentsView(APIView):
+    """Read-only payments feed for external systems (e.g. ERP / accounting).
+
+    Authenticates with an API key (``Authorization: Bearer <key>`` or ``X-API-Key``).
+    Returns paginated ClientPayment records across tenants.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not external_key_authorized(request):
+            return Response(
+                {'detail': 'Invalid or missing API key.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = ClientPayment.objects.select_related('client_detail', 'client_detail__tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(client_detail__tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(client_detail__tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(client_detail__tenant__name__iexact=tenant_name)
+
+        order_no = (request.query_params.get('order_id') or request.query_params.get('order_no') or '').strip()
+        if order_no:
+            qs = qs.filter(order_no__iexact=order_no)
+
+        page_payments, envelope = paginated_queryset(qs, request)
+        envelope.update(
+            external_page_links(
+                request, envelope['page'], envelope['page_size'], envelope['count']
+            )
+        )
+        order_ids = [p.order_no for p in page_payments if p.order_no]
+        order_map = {o.id: o for o in Order.objects.filter(id__in=order_ids)} if order_ids else {}
+
+        envelope['results'] = [
+            {
+                'id': p.id,
+                'order_id': p.order_no or f'ORD-{p.client_detail_id}',
+                'amount': str(p.amount),
+                'date': str(p.date),
+                'method': p.method,
+                'reference': p.reference,
+                'received_by': p.received_by,
+                'notes': p.notes,
+                'synced_to_accounts': p.synced_to_accounts,
+                'customer': p.client_detail.company or p.client_detail.client_name if p.client_detail else '',
+                'core_org_id': getattr(p.client_detail.tenant, 'core_org_id', None) if p.client_detail and p.client_detail.tenant else None,
+                'tenant_name': getattr(p.client_detail.tenant, 'name', '') if p.client_detail and p.client_detail.tenant else '',
+                'order_value': str(order_map[p.order_no].net_amount or order_map[p.order_no].total or '') if p.order_no in order_map else '',
+                'created_at': p.created_at.isoformat() if p.created_at else '',
+            }
+            for p in page_payments
         ]
         return Response(envelope)
 

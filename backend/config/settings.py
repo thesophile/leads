@@ -137,6 +137,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Shared secret for the read-only external orders API (GET /api/external/orders/).
 # Consumers authenticate with "Authorization: Bearer <key>" or "X-API-Key: <key>".
 EXTERNAL_ORDERS_API_KEY = os.environ.get('EXTERNAL_ORDERS_API_KEY', '')
+ACCOUNTS_SOFT_API_URL = os.environ.get('ACCOUNTS_SOFT_API_URL', 'http://127.0.0.1:8001/api/payments/external-sync/')
 
 # Allow the Vite dev server (also proxied via /api, so CORS is a fallback)
 CORS_ALLOWED_ORIGINS = [
