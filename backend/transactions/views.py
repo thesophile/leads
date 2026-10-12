@@ -3562,6 +3562,7 @@ class ClientDetailPaymentView(APIView):
             reference=reference_str,
             received_by=received_by_str,
             notes=notes_str,
+            tenant=record.tenant,
         )
         if synced:
             payment.synced_to_accounts = True
@@ -4289,6 +4290,21 @@ class ExternalOrdersView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         qs = Order.objects.select_related('tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(tenant__name__iexact=tenant_name)
         company = (request.query_params.get('company') or '').strip()
         if company:
             qs = qs.filter(company__icontains=company)
@@ -4340,6 +4356,21 @@ class ExternalCustomersView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         qs = ClientDetail.objects.select_related('tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(tenant__name__iexact=tenant_name)
         page_customers, envelope = paginated_queryset(qs, request)
         envelope.update(
             external_page_links(
