@@ -33,6 +33,7 @@ from .models import (
     Attachment,
     CallHistory,
     ClientDetail,
+    ClientPayment,
     Lead,
     LeadContactHistory,
     Order,
@@ -44,6 +45,7 @@ from .models import (
 from .serializers import (
     AttachmentSerializer,
     ClientDetailSerializer,
+    ClientPaymentSerializer,
     LeadSerializer,
     OrderSerializer,
     ProposalDraftSerializer,
@@ -58,6 +60,7 @@ from .services import (
     create_client_detail_from_order,
     order_approval_info,
     render_order_pdf,
+    sync_payment_to_accounts_soft,
 )
 
 User = get_user_model()
@@ -3486,6 +3489,96 @@ class ClientDetailDetailView(APIView):
             entity_id=label,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ClientDetailPaymentView(APIView):
+    """List or record a payment for a particular client detail and sync it automatically to Account Soft."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_scoped_record(self, request, pk):
+        return scoped_client_details(request.user).filter(pk=pk).first()
+
+    def get(self, request, pk):
+        if not can(request.user, 'client.view'):
+            return Response(
+                {'detail': 'You do not have permission to view client payments.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        payments = record.payments.all()
+        return Response(ClientPaymentSerializer(payments, many=True).data)
+
+    def post(self, request, pk):
+        if not can(request.user, 'client.create', 'client.edit'):
+            return Response(
+                {'detail': 'You do not have permission to record payments.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        amount_val = request.data.get('amount')
+        try:
+            amount = float(amount_val)
+            if amount <= 0:
+                raise ValueError('Amount must be positive')
+        except (ValueError, TypeError):
+            return Response({'error': 'A valid positive amount is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        date_str = (request.data.get('date') or request.data.get('payment_date') or '').strip()
+        method_str = (request.data.get('method') or request.data.get('payment_method') or 'Bank Transfer').strip()
+        reference_str = (request.data.get('reference') or request.data.get('reference_no') or '').strip()
+        received_by_str = (request.data.get('receivedBy') or request.data.get('received_by') or request.user.name or '').strip()
+        notes_str = (request.data.get('notes') or '').strip()
+
+        from django.utils.dateparse import parse_date
+
+        p_date = parse_date(date_str)
+        if not p_date:
+            p_date = timezone.now().date()
+
+        payment = ClientPayment.objects.create(
+            client_detail=record,
+            order_no=record.order_no or f'ORD-{record.id}',
+            amount=amount,
+            date=p_date,
+            method=method_str,
+            reference=reference_str,
+            received_by=received_by_str,
+            notes=notes_str,
+            synced_to_accounts=False,
+        )
+
+        synced = sync_payment_to_accounts_soft(
+            order_id=record.order_no or f'ORD-{record.id}',
+            customer=record.company or record.client_name,
+            amount=amount,
+            date=str(p_date),
+            method=method_str,
+            reference=reference_str,
+            received_by=received_by_str,
+            notes=notes_str,
+        )
+        if synced:
+            payment.synced_to_accounts = True
+            payment.save(update_fields=['synced_to_accounts', 'updated_at'])
+
+        log_activity(
+            request.user,
+            request.user.company,
+            'recorded client payment',
+            f'{request.user.name} recorded payment of ₹{amount} for {record.company} ({record.order_no or record.id}).',
+            entity_type='client',
+            entity_id=record.id,
+        )
+
+        res_data = ClientPaymentSerializer(payment).data
+        res_data['syncedToAccounts'] = payment.synced_to_accounts
+        return Response(res_data, status=status.HTTP_201_CREATED)
 
 
 def _get_client_detail_by_token(token):
