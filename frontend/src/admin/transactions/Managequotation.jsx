@@ -2281,29 +2281,31 @@ export default function Managequotation() {
                 {summaryItemDraft && (
                   <div className="mb-2.5 rounded-lg border border-slate-300 bg-white p-3 space-y-2 animate-in fade-in duration-150">
                     {summaryItemDraft.type === 'service' ? (
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <input
-                          type="text"
-                          placeholder="Title"
-                          value={summaryItemDraft.title}
-                          onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, title: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <input
+                            type="text"
+                            placeholder="Title"
+                            value={summaryItemDraft.title}
+                            onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, title: e.target.value })}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder={`Amount ${currencySymbol(currencyVal)}`}
+                            value={summaryItemDraft.amount}
+                            onChange={(e) =>
+                              setSummaryItemDraft({ ...summaryItemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
+                            }
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
                           placeholder="Description"
                           value={summaryItemDraft.description}
                           onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, description: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder={`Amount ${currencySymbol(currencyVal)}`}
-                          value={summaryItemDraft.amount}
-                          onChange={(e) =>
-                            setSummaryItemDraft({ ...summaryItemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
-                          }
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         />
                       </div>
                     ) : (
@@ -2441,29 +2443,31 @@ export default function Managequotation() {
                 {itemDraft && (
                   <div className="mb-2.5 rounded-lg border border-slate-300 bg-white p-3 space-y-2 animate-in fade-in duration-150">
                     {itemDraft.type === 'service' ? (
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <input
-                          type="text"
-                          placeholder="Title"
-                          value={itemDraft.title}
-                          onChange={(e) => setItemDraft({ ...itemDraft, title: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <input
+                            type="text"
+                            placeholder="Title"
+                            value={itemDraft.title}
+                            onChange={(e) => setItemDraft({ ...itemDraft, title: e.target.value })}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder={`Amount ${currencySymbol(currencyVal)}`}
+                            value={itemDraft.amount}
+                            onChange={(e) =>
+                              setItemDraft({ ...itemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
+                            }
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
                           placeholder="Description"
                           value={itemDraft.description}
                           onChange={(e) => setItemDraft({ ...itemDraft, description: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder={`Amount ${currencySymbol(currencyVal)}`}
-                          value={itemDraft.amount}
-                          onChange={(e) =>
-                            setItemDraft({ ...itemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
-                          }
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         />
                       </div>
                     ) : (
