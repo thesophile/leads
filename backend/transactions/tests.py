@@ -8,6 +8,7 @@ from transactions.models import (
     Attachment,
     CallHistory,
     ClientDetail,
+    ClientPayment,
     Lead,
     LeadContactHistory,
     Order,
@@ -871,7 +872,7 @@ class LeadImportTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
-    def test_reimport_updates_existing_lead(self):
+    def test_reimport_rejects_existing_lead(self):
         self.client.force_authenticate(self.manager)
         self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'contact': 'Ann', 'phone': '1112223334',
@@ -902,7 +903,7 @@ class LeadImportTests(APITestCase):
         lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         self.assertEqual(lead.phone, '1112223334')
 
-    def test_import_does_not_touch_pipeline_fields(self):
+    def test_reimport_does_not_touch_existing_lead(self):
         self.client.force_authenticate(self.manager)
         self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'phone': '1112223334',
@@ -913,15 +914,16 @@ class LeadImportTests(APITestCase):
         lead.assigned_to = 'Manager I'
         lead.remarks = 'keep me'
         lead.save()
-        self.client.post('/api/transactions/leads/import/', {
+        resp = self.client.post('/api/transactions/leads/import/', {
             'company': 'Cafe Day', 'phone': '2223334445',
             'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
+        self.assertEqual(resp.status_code, 409)
         lead.refresh_from_db()
         self.assertEqual(lead.status, Lead.STATUS_ASSIGNED)
         self.assertEqual(lead.assigned_to, 'Manager I')
         self.assertEqual(lead.remarks, 'keep me')
-        self.assertEqual(lead.phone, '2223334445')
+        self.assertEqual(lead.phone, '1112223334')
 
     def test_import_rejects_unknown_category(self):
         self.client.force_authenticate(self.manager)
@@ -3319,6 +3321,41 @@ class ExternalCustomersFeedTests(APITestCase):
         )
         self.assertIsNone(last.data['next'])
         self.assertIn('page=2', last.data['previous'])
+
+
+class ExternalPaymentsViewTests(APITestCase):
+    def setUp(self):
+        self.company_a = make_company('Payment Co A')
+        self.cd_a = ClientDetail.objects.create(
+            id='CD-P1', order_no='ORD-P1', company='Acme Payments',
+            tenant=self.company_a, status='In Progress',
+        )
+        self.payment = ClientPayment.objects.create(
+            client_detail=self.cd_a,
+            order_no='ORD-P1',
+            amount=250.00,
+            date=date.today(),
+            method='UPI',
+            reference='TXN123',
+        )
+
+    def test_requires_valid_api_key(self):
+        self.assertEqual(
+            self.client.get('/api/external/payments/').status_code, 403,
+        )
+
+    @override_settings(EXTERNAL_ORDERS_API_KEY='test-key')
+    def test_returns_payments_with_valid_key(self):
+        resp = self.client.get(
+            '/api/external/payments/', HTTP_AUTHORIZATION='Bearer test-key',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 1)
+        res = resp.data['results'][0]
+        self.assertEqual(res['order_id'], 'ORD-P1')
+        self.assertEqual(res['amount'], '250.00')
+        self.assertEqual(res['method'], 'UPI')
+        self.assertEqual(res['reference'], 'TXN123')
 
 
 class FollowUpReminderTests(APITestCase):

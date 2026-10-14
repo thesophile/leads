@@ -19,7 +19,7 @@ def active_staff_qs(company):
         return User.objects.none()
     return (
         User.objects
-        .filter(company=company, is_active=True)
+        .filter(company=company, is_active=True, deny_leads_access=False)
         .exclude(is_superuser=True)
         .order_by('name')
     )

@@ -33,6 +33,7 @@ from .models import (
     Attachment,
     CallHistory,
     ClientDetail,
+    ClientPayment,
     Lead,
     LeadContactHistory,
     Order,
@@ -44,6 +45,7 @@ from .models import (
 from .serializers import (
     AttachmentSerializer,
     ClientDetailSerializer,
+    ClientPaymentSerializer,
     LeadSerializer,
     OrderSerializer,
     ProposalDraftSerializer,
@@ -58,6 +60,7 @@ from .services import (
     create_client_detail_from_order,
     order_approval_info,
     render_order_pdf,
+    sync_payment_to_accounts_soft,
 )
 
 User = get_user_model()
@@ -305,7 +308,7 @@ def assignment_name_set(user):
         return set()
     return set(
         User.objects
-        .filter(company=user.company, is_active=True)
+        .filter(company=user.company, is_active=True, deny_leads_access=False)
         .exclude(is_superuser=True)
         .values_list('name', flat=True)
     )
@@ -919,16 +922,15 @@ class LeadListView(APIView):
 
 
 class LeadImportView(APIView):
-    """Create-or-update a single raw lead row from a CSV import.
+    """Create a single raw lead row from a CSV import.
 
     Every row must carry a company, a phone number, a category and a location;
     a row missing any is rejected so the frontend can report it and hand it
     back for correction.
 
-    When a lead with the same (tenant, company) already exists, the incoming
-    row overwrites its contact fields instead of being skipped as a duplicate,
-    so re-importing a corrected CSV updates the record. The pipeline fields
-    (status, remarks, assignment, dates) are never touched by an import.
+    When a lead with the same (tenant, company) already exists, the row is
+    rejected as a duplicate — exactly like the manual Add Raw Data form — so an
+    import never overwrites an existing record.
     """
     permission_classes = [IsAuthenticated]
 
@@ -971,7 +973,7 @@ class LeadImportView(APIView):
 
         existing = find_duplicate_lead(request.user, company)
         if existing is not None:
-            return self._update(request, existing, company, category, source, location)
+            return duplicate_response(existing)
 
         saved = None
         last_error = None
@@ -1004,7 +1006,7 @@ class LeadImportView(APIView):
                 last_error = exc
                 existing = find_duplicate_lead(request.user, company)
                 if existing is not None:
-                    return self._update(request, existing, company, category, source, location)
+                    return duplicate_response(existing)
         if saved is None:
             raise last_error
         log_activity(
@@ -1019,41 +1021,6 @@ class LeadImportView(APIView):
             {'updated': False, 'lead': LeadSerializer(saved).data},
             status=status.HTTP_201_CREATED,
         )
-
-    def _update(self, request, lead, company, category, source, location):
-        changed_fields = []
-        fields = (
-            ('company', company),
-            ('contact', request.data.get('contact', '').strip()),
-            ('phone', request.data.get('phone', '').strip()),
-            ('email', request.data.get('email', '').strip()),
-            ('category', category),
-            ('source', source),
-            ('city', location),
-            ('sublocation', request.data.get('sublocation', '').strip()),
-        )
-        for field, new_value in fields:
-            new_value = '' if new_value is None else new_value
-            old_value = getattr(lead, field) or ''
-            if old_value != new_value:
-                log_contact_change(request.user, lead, field, old_value, new_value)
-                setattr(lead, field, new_value)
-                changed_fields.append(field)
-        changed_fields += stamp_codes(lead, request.user.company)
-        if changed_fields:
-            lead.save(update_fields=changed_fields + ['updated_at'])
-            sync_lead_contact_to_quotation(lead, changed_fields)
-        else:
-            lead.save(update_fields=['updated_at'])
-        log_activity(
-            request.user,
-            request.user.company,
-            'updated lead',
-            f'{request.user.name} updated lead {lead.id} - {lead.company} via import.',
-            entity_type='lead',
-            entity_id=lead.id,
-        )
-        return Response({'updated': True, 'lead': LeadSerializer(lead).data})
 
 
 class LeadDetailView(APIView):
@@ -3524,6 +3491,101 @@ class ClientDetailDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class ClientDetailPaymentView(APIView):
+    """List or record a payment for a particular client detail and sync it automatically to Account Soft."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_scoped_record(self, request, pk):
+        return scoped_client_details(request.user).filter(pk=pk).first()
+
+    def get(self, request, pk):
+        if not can(request.user, 'client.view'):
+            return Response(
+                {'detail': 'You do not have permission to view client payments.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        payments = record.payments.all()
+        return Response(ClientPaymentSerializer(payments, many=True).data)
+
+    def post(self, request, pk):
+        if not can(request.user, 'client.create', 'client.edit'):
+            return Response(
+                {'detail': 'You do not have permission to record payments.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        amount_val = request.data.get('amount')
+        try:
+            amount = float(amount_val)
+            if amount <= 0:
+                raise ValueError('Amount must be positive')
+        except (ValueError, TypeError):
+            return Response({'error': 'A valid positive amount is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        date_str = (request.data.get('date') or request.data.get('payment_date') or '').strip()
+        method_str = (request.data.get('method') or request.data.get('payment_method') or 'Bank Transfer').strip()
+        reference_str = (request.data.get('reference') or request.data.get('reference_no') or '').strip()
+        received_by_str = (request.data.get('receivedBy') or request.data.get('received_by') or request.user.name or '').strip()
+        notes_str = (request.data.get('notes') or '').strip()
+
+        from django.utils.dateparse import parse_date
+
+        p_date = parse_date(date_str)
+        if not p_date:
+            p_date = timezone.now().date()
+
+        payment = ClientPayment.objects.create(
+            client_detail=record,
+            order_no=record.order_no or f'ORD-{record.id}',
+            amount=amount,
+            date=p_date,
+            method=method_str,
+            reference=reference_str,
+            received_by=received_by_str,
+            notes=notes_str,
+            synced_to_accounts=False,
+        )
+
+        order_obj = Order.objects.filter(id=record.order_no).first() if record.order_no else None
+        order_val = (order_obj.net_amount or order_obj.total or None) if order_obj else None
+
+        synced = sync_payment_to_accounts_soft(
+            order_id=record.order_no or f'ORD-{record.id}',
+            customer=record.company or record.client_name,
+            amount=amount,
+            date=str(p_date),
+            method=method_str,
+            reference=reference_str,
+            received_by=received_by_str,
+            notes=notes_str,
+            tenant=record.tenant,
+            order_value=order_val,
+        )
+        if synced:
+            payment.synced_to_accounts = True
+            payment.save(update_fields=['synced_to_accounts', 'updated_at'])
+
+        log_activity(
+            request.user,
+            request.user.company,
+            'recorded client payment',
+            f'{request.user.name} recorded payment of ₹{amount} for {record.company} ({record.order_no or record.id}).',
+            entity_type='client',
+            entity_id=record.id,
+        )
+
+        res_data = ClientPaymentSerializer(payment).data
+        res_data['syncedToAccounts'] = payment.synced_to_accounts
+        return Response(res_data, status=status.HTTP_201_CREATED)
+
+
 def _get_client_detail_by_token(token):
     return ClientDetail.objects.filter(client_token=str(token or '')).first()
 
@@ -3687,7 +3749,7 @@ class PublicClientDetailAttachmentView(APIView):
     @staticmethod
     def _notify_staff(record, attachment):
         """In-app notification to the tenant's staff who can view client details."""
-        users = User.objects.filter(is_active=True)
+        users = User.objects.filter(is_active=True, deny_leads_access=False)
         if record.tenant_id:
             users = users.filter(company_id=record.tenant_id)
         else:
@@ -4232,6 +4294,21 @@ class ExternalOrdersView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         qs = Order.objects.select_related('tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(tenant__name__iexact=tenant_name)
         company = (request.query_params.get('company') or '').strip()
         if company:
             qs = qs.filter(company__icontains=company)
@@ -4283,6 +4360,21 @@ class ExternalCustomersView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         qs = ClientDetail.objects.select_related('tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(tenant__name__iexact=tenant_name)
         page_customers, envelope = paginated_queryset(qs, request)
         envelope.update(
             external_page_links(
@@ -4305,6 +4397,74 @@ class ExternalCustomersView(APIView):
                 'status': customer.status,
             }
             for customer in page_customers
+        ]
+        return Response(envelope)
+
+
+class ExternalPaymentsView(APIView):
+    """Read-only payments feed for external systems (e.g. ERP / accounting).
+
+    Authenticates with an API key (``Authorization: Bearer <key>`` or ``X-API-Key``).
+    Returns paginated ClientPayment records across tenants.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not external_key_authorized(request):
+            return Response(
+                {'detail': 'Invalid or missing API key.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = ClientPayment.objects.select_related('client_detail', 'client_detail__tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(client_detail__tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(client_detail__tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(client_detail__tenant__name__iexact=tenant_name)
+
+        order_no = (request.query_params.get('order_id') or request.query_params.get('order_no') or '').strip()
+        if order_no:
+            qs = qs.filter(order_no__iexact=order_no)
+
+        page_payments, envelope = paginated_queryset(qs, request)
+        envelope.update(
+            external_page_links(
+                request, envelope['page'], envelope['page_size'], envelope['count']
+            )
+        )
+        order_ids = [p.order_no for p in page_payments if p.order_no]
+        order_map = {o.id: o for o in Order.objects.filter(id__in=order_ids)} if order_ids else {}
+
+        envelope['results'] = [
+            {
+                'id': p.id,
+                'order_id': p.order_no or f'ORD-{p.client_detail_id}',
+                'amount': str(p.amount),
+                'date': str(p.date),
+                'method': p.method,
+                'reference': p.reference,
+                'received_by': p.received_by,
+                'notes': p.notes,
+                'synced_to_accounts': p.synced_to_accounts,
+                'customer': p.client_detail.company or p.client_detail.client_name if p.client_detail else '',
+                'core_org_id': getattr(p.client_detail.tenant, 'core_org_id', None) if p.client_detail and p.client_detail.tenant else None,
+                'tenant_name': getattr(p.client_detail.tenant, 'name', '') if p.client_detail and p.client_detail.tenant else '',
+                'order_value': str(order_map[p.order_no].net_amount or order_map[p.order_no].total or '') if p.order_no in order_map else '',
+                'created_at': p.created_at.isoformat() if p.created_at else '',
+            }
+            for p in page_payments
         ]
         return Response(envelope)
 

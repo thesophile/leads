@@ -1,7 +1,12 @@
+import time
+
 from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.settings import api_settings
+
+from . import core_client
+from .core_client import CoreError
 
 
 def _app_code():
@@ -31,6 +36,47 @@ def _core_org_ids(token):
     return {e.get('org') for e in _leases_grants(token) if e.get('org') is not None}
 
 
+# Cache of each user's current SystemSoft profile so a deactivation is enforced
+# promptly without a Core round-trip on every request. Keyed by Core user id,
+# value is (expires_at, profile) where profile is the Core user payload or None
+# when Core was unreachable on the last probe (fail-open).
+_CORE_STATUS_TTL = 30
+_CORE_STATUS_CACHE = {}
+
+
+def _core_profile(core_user_id, bearer):
+    """Return the user's Core profile, cached for a short window (or None)."""
+    now = time.time()
+    cached = _CORE_STATUS_CACHE.get(core_user_id)
+    if cached and cached[0] > now:
+        return cached[1]
+    profile = None
+    try:
+        profile = core_client.get_user(core_user_id, access=bearer)
+    except CoreError:
+        pass  # fail open: a Core outage must not lock users out
+    _CORE_STATUS_CACHE[core_user_id] = (now + _CORE_STATUS_TTL, profile)
+    return profile
+
+
+def _should_be_active(core_user_data):
+    """Whether a Core user record still entitles the user to this application.
+
+    True only when the Core identity is active AND there is an enabled LEADS
+    access grant (SystemSoft deactivation and LEADS-side access revocation both
+    therefore evaluate to False).
+    """
+    if not core_user_data or core_user_data.get('status') != 'active':
+        return False
+    for entry in core_user_data.get('access') or []:
+        if (
+            entry.get('application_code') == _app_code()
+            and entry.get('status') == 'enabled'
+        ):
+            return True
+    return False
+
+
 class CoreJWTAuthentication(JWTAuthentication):
     """Authenticate requests using JWTs issued by SystemSoft Core.
 
@@ -56,6 +102,32 @@ class CoreJWTAuthentication(JWTAuthentication):
         user = self._resolve_user(validated_token, core_user_id)
         if not user.is_active:
             raise AuthenticationFailed('User is inactive.', code='user_inactive')
+        # The LEADS Activate/Deactivate switch is local to LEADS and persists
+        # even while the SystemSoft identity stays active.
+        if user.deny_leads_access:
+            raise AuthenticationFailed(
+                'Your account has been deactivated in this application.',
+                code='user_inactive',
+            )
+
+        # Enforce deactivation on existing sessions. Re-check the user's Core
+        # state (cached ~30s) using the very token being validated; when Core
+        # is unreachable we fail open so an outage does not lock users out.
+        profile = _core_profile(core_user_id, str(validated_token))
+        if profile is not None:
+            if not _should_be_active(profile):
+                # Deactivated in SystemSoft, or LEADS access was removed.
+                if user.is_active:
+                    user.is_active = False
+                    user.save(update_fields=['is_active', 'updated_at'])
+                raise AuthenticationFailed(
+                    'Your account has been deactivated.', code='user_inactive',
+                )
+            if not user.is_active and not user.deny_leads_access:
+                # Reactivated in SystemSoft (and still allowed in LEADS) ->
+                # repair the mirrored local state.
+                user.is_active = True
+                user.save(update_fields=['is_active', 'updated_at'])
 
         # Only override local role permissions when the token actually carries
         # central grants; legacy/local tokens have no ``app_access`` claim and

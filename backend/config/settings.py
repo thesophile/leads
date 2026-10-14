@@ -137,6 +137,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Shared secret for the read-only external orders API (GET /api/external/orders/).
 # Consumers authenticate with "Authorization: Bearer <key>" or "X-API-Key: <key>".
 EXTERNAL_ORDERS_API_KEY = os.environ.get('EXTERNAL_ORDERS_API_KEY', '')
+ACCOUNTS_SOFT_API_URL = os.environ.get('ACCOUNTS_SOFT_API_URL', 'http://127.0.0.1:8001/api/payments/external-sync/')
 
 # Allow the Vite dev server (also proxied via /api, so CORS is a fallback)
 CORS_ALLOWED_ORIGINS = [
@@ -179,6 +180,12 @@ CORE_API_URL = os.environ.get('CORE_API_URL', 'http://localhost:8000').rstrip('/
 
 # Registry code this app authenticates against; must match Core's Application.code.
 CORE_APP_CODE = os.environ.get('CORE_APP_CODE', 'leads')
+
+# ServiceApp credential for server-to-server writes to Core (create staff,
+# grant/update LEADS access, patch identities). Created on Core with the
+# ``create_service_app`` management command. Without it LEADS falls back to the
+# caller's Bearer token for these calls.
+CORE_API_KEY = os.environ.get('CORE_API_KEY', '')
 
 # Email: when EMAIL_HOST is set in the environment, real mail is sent over
 # SMTP and every message is also printed to the terminal. Without EMAIL_HOST

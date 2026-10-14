@@ -139,3 +139,87 @@ frontend must also include the organization switcher (`src/admin/OrgSwitcher.jsx
   accounts that had unusable LEADS passwords keep that state and need a reset.
 - The two JSON files (`leads_users.json`, `leads_staff.json`) and the id maps are
   transient artifacts; delete them from the servers once verification passes.
+
+---
+
+## Part 4 — Continuous staff & user sync with SystemSoft (after migration)
+
+After the one-off migration, LEADS and SystemSoft stay in sync automatically.
+This section describes what to configure and how the two directions behave.
+
+### 4.1 One-time: create the LEADS machine credential on SystemSoft
+
+LEADS writes to Core (creating staff, granting LEADS access, patching identities)
+with a `ServiceApp` API key so the writes never depend on a specific admin's
+token or Core role. Create it once on the **Core** server:
+
+```bash
+ssh core "source /home/systemsoftprogra/virtualenv/backend/3.13/bin/activate && cd /home/systemsoftprogra/backend && python manage.py create_service_app --name leads --application leads --scopes users:read,users:write,memberships:read,memberships:write,subscriptions:read"
+```
+
+The command prints the API key **exactly once**. Put that value into **LEADS**
+`.env.dev` / `.env.prod`:
+
+```
+CORE_API_KEY=<the printed token>
+```
+
+Then redeploy the LEADS backend.
+
+> **No key yet?** LEADS automatically falls back to the acting admin's
+> SystemSoft login token for its server-to-server calls. So sync and writes
+> already work for an organization **owner/admin** without `CORE_API_KEY`; the
+> ServiceApp key additionally lets **managers** create staff and removes the
+> dependency on a specific person's token. With neither, the sync fails
+> silently (the staff list stays on local data) — set `CORE_API_KEY` or use an
+> owner/admin account.
+
+### 4.2 How the sync behaves
+
+- **Employee list in LEADS == SystemSoft users with LEADS access.** Every time
+  the staff list loads, LEADS pulls the organization's Core members and mirrors
+  those who hold LEADS access into its local table. A user granted LEADS access
+  in SystemSoft therefore appears in the LEADS employee list (and can log in).
+  **Active** in LEADS means the SystemSoft identity is active **and** the LEADS
+  access grant is enabled — users whose grant was removed (or who have no Core
+  link) are marked Inactive on the next sync, so the Active count matches
+  SystemSoft. History rows are kept, not deleted.
+  Important: the grant must belong to the **same organization the LEADS company
+  is linked to** (`core_org_id`) — users granted access under a different org
+  (e.g. the default "SystemSoft" org) won't map to a LEADS company.
+- **Adding staff in LEADS** creates the identity in SystemSoft with **no
+  password** and as **Inactive** (with LEADS access carrying the role's
+  permissions). The account stays locked until a **SystemSoft admin** opens
+  User Management → Manage Access → sets a password (setting a password
+  auto-activates an inactive account).
+- **Permissions/role changes work both ways.** Editing a role in the LEADS
+  Roles & Permissions screen pushes the new permission set to every that-role
+  user's LEADS access in SystemSoft. Changing permissions/role in SystemSoft
+  User Management is picked up by LEADS on the next staff-list load or login.
+- **Active/Inactive is owned by SystemSoft and mirrored one-way.** A user who
+  is Active in SystemSoft shows Active in LEADS; one who is Inactive in
+  SystemSoft shows Inactive in LEADS, is signed out of an open LEADS session
+  immediately, and can't log in anywhere. LEADS never writes status back to
+  SystemSoft.
+- **The LEADS Activate/Deactivate button controls LEADS only.** It hides the
+  person from LEADS (staff dropdowns, login) without changing their SystemSoft
+  status — they stay active in SystemSoft and the rest of the suite. A
+  LEADS-side deactivation persists even while SystemSoft is Active; re-enabling
+  it in SystemSoft alone does not bring them back in LEADS.
+- **Granting in SystemSoft is idempotent.** Saving a user's app access updates
+  the existing grant instead of failing with a "must make a unique set" 400, so
+  stale edit screens can't create duplicates.
+- **Password management is SystemSoft-admin-only.** LEADS no longer exposes a
+  "set/reset password" action for staff; managers/members cannot reset
+  passwords. (There is no self-service password reset flow yet.)
+
+### 4.3 Audit trail in SystemSoft User Management
+
+Every user-management action — creating/editing/deleting a user, granting or
+changing app-access/permissions, adding/removing a user from an organization,
+setting a password, employee profile edits, and the one-off imports — is
+recorded in SystemSoft with **who** changed **what**, and **when**. Changes
+pushed from LEADS are attributed to the real human who triggered them (carried
+in the request). An admin views the trail via the **History** button next to
+each user in User Management. The raw rows live in the `audit_logs` table
+(filterable via the Django admin).
