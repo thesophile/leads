@@ -101,7 +101,7 @@ export default function PagedSection({
   const insetEndOverflow = Boolean(insetSection?.endBlock) && showInsetInline && insetPaged.endOverflow
   const inset2EndOverflow = Boolean(nested2?.endBlock) && showNestedInline && inset2Paged.endOverflow
   const endOverflowPage =
-    (mainEndOverflow || insetEndOverflow || inset2EndOverflow) && !atLimit
+    isFinalMain && (mainEndOverflow || insetEndOverflow || inset2EndOverflow) && !atLimit
 
   const insetBox = insetSection ? (
     <div className={`overflow-hidden ${insetSection.boxClass || boxClass} flex flex-col`}>
@@ -116,7 +116,7 @@ export default function PagedSection({
         <div
           ref={insetContentRef}
           className={insetSection.contentClass || contentClass}
-          style={insetPaged.cap ? { maxHeight: insetPaged.cap, overflow: 'hidden' } : undefined}
+          style={typeof insetPaged.cap === 'number' ? { maxHeight: insetPaged.cap, overflow: 'hidden' } : undefined}
           dangerouslySetInnerHTML={{ __html: insetSection.html }}
         />
         {insetPaged.part2Html ? (
@@ -139,7 +139,7 @@ export default function PagedSection({
         <div
           ref={inset2ContentRef}
           className={nested2.contentClass || contentClass}
-          style={inset2Paged.cap ? { maxHeight: inset2Paged.cap, overflow: 'hidden' } : undefined}
+          style={typeof inset2Paged.cap === 'number' ? { maxHeight: inset2Paged.cap, overflow: 'hidden' } : undefined}
           dangerouslySetInnerHTML={{ __html: nested2.html }}
         />
         {inset2Paged.part2Html ? (
@@ -186,7 +186,7 @@ export default function PagedSection({
                 <div
                   ref={contentRef}
                   className={contentClass}
-                  style={paged.cap ? { maxHeight: paged.cap, overflow: 'hidden' } : undefined}
+                  style={typeof paged.cap === 'number' ? { maxHeight: paged.cap, overflow: 'hidden' } : undefined}
                   dangerouslySetInnerHTML={{ __html: html }}
                 />
                 {showContinue ? (
