@@ -1312,6 +1312,38 @@ class QuotationApprovalFlowTests(APITestCase):
         self.assertIn('Manager Two', names)
         self.assertIn('Manager Three', names)
 
+    def test_approvers_list_excludes_inactive_or_denied_managers(self):
+        company = self.approver.company
+        User.objects.create_user(
+            email='inactive_mgr@appr.com', password='x', name='Inactive Manager',
+            role=company.roles.get(code='manager'), company=company, is_active=False,
+        )
+        User.objects.create_user(
+            email='denied_mgr@appr.com', password='x', name='Denied Manager',
+            role=company.roles.get(code='manager'), company=company, is_active=True,
+            deny_leads_access=True,
+        )
+        self.client.force_authenticate(self.staff)
+        resp = self.client.get('/api/transactions/quotations/approvers/')
+        self.assertEqual(resp.status_code, 200)
+        names = set(a['name'] for a in resp.data)
+        self.assertNotIn('Inactive Manager', names)
+        self.assertNotIn('Denied Manager', names)
+        self.assertIn('Manager One', names)
+        self.assertIn('Manager Two', names)
+
+    def test_send_excludes_inactive_approver(self):
+        company = self.approver.company
+        inactive_mgr = User.objects.create_user(
+            email='inactive_mgr2@appr.com', password='x', name='Inactive Mgr 2',
+            role=company.roles.get(code='manager'), company=company, is_active=False,
+        )
+        resp = self._send(approvers=[inactive_mgr.id, self.approver.id])
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['approvalsTotal'], 1)
+        self.assertEqual(QuotationApproval.objects.filter(quotation=self.q, user=inactive_mgr).count(), 0)
+        self.assertEqual(QuotationApproval.objects.filter(quotation=self.q, user=self.approver).count(), 1)
+
     def test_send_creates_one_approval_per_approver(self):
         resp = self._send()
         self.assertEqual(resp.status_code, 200)

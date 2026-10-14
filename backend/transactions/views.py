@@ -23,6 +23,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts import services as account_services
+from accounts.core_client import bearer_token
 from accounts.permissions import can
 from accounts.staff import active_staff_names, staff_names_with_entries
 from master.models import Category, Location, Source
@@ -285,13 +287,20 @@ def resolve_approvers(user, raw_ids):
         return []
     qs = User.objects.filter(
         company=user.company,
+        is_active=True,
+        deny_leads_access=False,
         pk__in=ids,
-    )
+    ).select_related('role')
     approvers = []
     for approver in qs:
         if approver.pk == user.pk:
             continue
-        if not (approver.is_superuser or approver.has_permission('quotation.approve')):
+        if not (
+            approver.is_superuser
+            or approver.has_permission('quotation.approve')
+            or (approver.role and approver.role.code and approver.role.code.lower() in ('admin', 'manager'))
+            or (approver.role and approver.role.name and approver.role.name.lower() in ('admin', 'manager'))
+        ):
             continue
         approvers.append(approver)
     return approvers
@@ -2049,18 +2058,38 @@ class QuotationApproverListView(APIView):
                 {'detail': 'You do not have permission to view quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.company:
+        company = request.user.company
+        if not company:
             return Response([])
-        users = User.objects.filter(company=request.user.company).exclude(pk=request.user.pk)
+
+        # Mirror SystemSoft User Management: sync the latest active staff
+        # from SystemSoft Core before populating the approver list.
+        account_services.sync_staff_from_core(company, access=bearer_token(request))
+
+        users = (
+            User.objects.filter(
+                company=company,
+                is_active=True,
+                deny_leads_access=False,
+            )
+            .select_related('role')
+            .exclude(pk=request.user.pk)
+        )
         result = [
             {
                 'id': user.id,
                 'name': user.name,
+                'email': user.email,
                 'role': (user.role.name if user.role_id else ''),
                 'is_superuser': user.is_superuser,
             }
             for user in users
-            if user.is_superuser or user.has_permission('quotation.approve')
+            if (
+                user.is_superuser
+                or user.has_permission('quotation.approve')
+                or (user.role and user.role.code and user.role.code.lower() in ('admin', 'manager'))
+                or (user.role and user.role.name and user.role.name.lower() in ('admin', 'manager'))
+            )
         ]
         result.sort(key=lambda x: x['name'].lower())
         return Response(result)

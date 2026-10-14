@@ -366,21 +366,23 @@ export default function Managequotation() {
 
   // Real approving users for the "Send for Approval" picker.
   const [approverOptions, setApproverOptions] = useState([])
+  const [loadingApprovers, setLoadingApprovers] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const data = await api.get('/transactions/quotations/approvers/')
-        if (!cancelled && Array.isArray(data)) setApproverOptions(data)
-      } catch {
-        // Leave the approver picker empty if the endpoint is unavailable.
-      }
-    })()
-    return () => {
-      cancelled = true
+  const fetchApproverOptions = useCallback(async () => {
+    setLoadingApprovers(true)
+    try {
+      const data = await api.get('/transactions/quotations/approvers/')
+      if (Array.isArray(data)) setApproverOptions(data)
+    } catch {
+      // Leave the approver picker empty if the endpoint is unavailable.
+    } finally {
+      setLoadingApprovers(false)
     }
   }, [])
+
+  useEffect(() => {
+    fetchApproverOptions()
+  }, [fetchApproverOptions])
 
   function handleToggleMenu(e, id, row) {
     const cardRect = cardRef.current ? cardRef.current.getBoundingClientRect() : { left: 0, top: 0 }
@@ -525,6 +527,7 @@ export default function Managequotation() {
     setApprovalError('')
     setOpenDropdownId(null)
     setApprovalModalOpen(true)
+    fetchApproverOptions()
   }
 
   async function handleConfirmSendForApproval() {
@@ -2796,11 +2799,17 @@ export default function Managequotation() {
               {/* Approver Selection */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admin <span className="text-rose-500">*</span>
+                  Select Approving Admin / Manager <span className="text-rose-500">*</span>
                 </label>
                 <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-52 overflow-y-auto">
-                  {approverOptions.length === 0 && (
-                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No approvers available.</p>
+                  {loadingApprovers && approverOptions.length === 0 && (
+                    <div className="flex items-center gap-2 px-3 py-3 text-[11px] text-slate-500">
+                      <Spinner className="h-3.5 w-3.5 text-brand-600" />
+                      <span>Loading active approvers…</span>
+                    </div>
+                  )}
+                  {!loadingApprovers && approverOptions.length === 0 && (
+                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No active approvers available.</p>
                   )}
                   {approverOptions.map((admin) => {
                     const checked = selectedApprovers.includes(admin.id)
@@ -2820,9 +2829,10 @@ export default function Managequotation() {
                           <span className="block font-semibold text-slate-800 truncate">
                             {admin.name}
                           </span>
-                          <span className="block text-[10px] text-slate-400">
-                            {admin.role ? admin.role : 'Approver'}
-                            {admin.is_superuser ? ' · Super Admin' : ''}
+                          <span className="block text-[10px] text-slate-400 truncate">
+                            {admin.role ? admin.role : (admin.is_superuser ? 'Super Admin' : 'Approver')}
+                            {admin.is_superuser && admin.role ? ' · Super Admin' : ''}
+                            {admin.email ? ` · ${admin.email}` : ''}
                           </span>
                         </span>
                         {checked && (
@@ -2833,7 +2843,7 @@ export default function Managequotation() {
                   })}
                 </div>
                 <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  The selected admin must approve this proposal before it can be sent to the client.
+                  The selected admin or manager must approve this proposal before it can be sent to the client.
                 </p>
               </div>
 

@@ -9,6 +9,7 @@ import { can } from '../../utils/permissions'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
+import Spinner from '../../components/Spinner'
 import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol } from './proposalItemsUtils'
 
 function escapeHtml(value) {
@@ -395,21 +396,24 @@ export default function ProposalPreview() {
     }
   }, [])
 
-  // Fetch approvers once for the send-for-approval picker.
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const data = await api.get('/transactions/quotations/approvers/')
-        if (!cancelled && Array.isArray(data)) setApprovers(data)
-      } catch {
-        // ignore
-      }
-    })()
-    return () => {
-      cancelled = true
+  // Fetch approvers for the send-for-approval picker.
+  const [loadingApprovers, setLoadingApprovers] = useState(false)
+
+  const fetchApprovers = useCallback(async () => {
+    setLoadingApprovers(true)
+    try {
+      const data = await api.get('/transactions/quotations/approvers/')
+      if (Array.isArray(data)) setApprovers(data)
+    } catch {
+      // ignore
+    } finally {
+      setLoadingApprovers(false)
     }
   }, [])
+
+  useEffect(() => {
+    fetchApprovers()
+  }, [fetchApprovers])
 
   // If we arrived without navigation state (e.g. from a notification link),
   // fetch the quotation by id.
@@ -684,6 +688,7 @@ const approvedByRef = useRef(null)
     setApproveNotice('')
     setSendApprovers([])
     setSendOpen(true)
+    fetchApprovers()
   }
 
   function openApprove() {
@@ -1174,11 +1179,17 @@ const approvedByRef = useRef(null)
               </p>
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admin <span className="text-rose-500">*</span>
+                  Select Approving Admin / Manager <span className="text-rose-500">*</span>
                 </label>
                 <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                  {approvers.length === 0 && (
-                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No approvers available.</p>
+                  {loadingApprovers && approvers.length === 0 && (
+                    <div className="flex items-center gap-2 px-3 py-3 text-[11px] text-slate-500">
+                      <Spinner className="h-3.5 w-3.5 text-brand-600" />
+                      <span>Loading active approvers…</span>
+                    </div>
+                  )}
+                  {!loadingApprovers && approvers.length === 0 && (
+                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No active approvers available.</p>
                   )}
                   {approvers.map((a) => {
                     const checked = sendApprovers.includes(a.id)
@@ -1196,8 +1207,10 @@ const approvedByRef = useRef(null)
                         />
                         <span className="flex-1 min-w-0">
                           <span className="block font-semibold text-slate-800 truncate">{a.name}</span>
-                          <span className="block text-[10px] text-slate-400">
-                            {a.role ? a.role : 'Approver'}
+                          <span className="block text-[10px] text-slate-400 truncate">
+                            {a.role ? a.role : (a.is_superuser ? 'Super Admin' : 'Approver')}
+                            {a.is_superuser && a.role ? ' · Super Admin' : ''}
+                            {a.email ? ` · ${a.email}` : ''}
                           </span>
                         </span>
                         {checked && (
@@ -1208,7 +1221,7 @@ const approvedByRef = useRef(null)
                   })}
                 </div>
                 <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  The selected admin must approve this proposal before it is sent to the client.
+                  The selected admin or manager must approve this proposal before it is sent to the client.
                 </p>
               </div>
             </div>
