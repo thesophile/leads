@@ -3,7 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from transactions.views import ExternalCustomersView, ExternalOrdersView
+from transactions.views import ExternalCustomersView, ExternalOrdersView, ExternalPaymentsView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/', include('utilities.urls')),
     path('api/external/orders/', ExternalOrdersView.as_view(), name='external-orders'),
     path('api/external/customers/', ExternalCustomersView.as_view(), name='external-customers'),
+    path('api/external/payments/', ExternalPaymentsView.as_view(), name='external-payments'),
 ]
 
 if settings.DEBUG:

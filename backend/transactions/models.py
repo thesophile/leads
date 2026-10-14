@@ -2,6 +2,10 @@ from django.db import models
 from django.db.models.functions import Lower
 
 
+# Free-text customer fields stored in upper case. Email is always lower case.
+LEAD_UPPER_FIELDS = ('company', 'contact', 'sublocation')
+
+
 class ProposalTemplate(models.Model):
     name = models.CharField(max_length=200)
     category = models.CharField(max_length=100, blank=True)
@@ -153,6 +157,26 @@ class Lead(models.Model):
     locked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Customer details are stored consistently: company/contact/area in
+        # upper case, email in lower case. Kept here (not just at the API edge)
+        # so every write path — create, import, edit, assignment, quotation
+        # sync — stays normalised.
+        update_fields = kwargs.get('update_fields')
+        fields = set(update_fields) if update_fields is not None else None
+        for field in LEAD_UPPER_FIELDS:
+            value = getattr(self, field, '') or ''
+            new_value = value.strip().upper()
+            setattr(self, field, new_value)
+            if fields is not None:
+                fields.add(field)
+        email = self.email or ''
+        self.email = email.strip().lower()
+        if fields is not None:
+            fields.add('email')
+            kwargs['update_fields'] = fields
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['-created_at']
@@ -528,3 +552,23 @@ class Attachment(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ClientPayment(models.Model):
+    client_detail = models.ForeignKey(ClientDetail, on_delete=models.CASCADE, related_name='payments')
+    order_no = models.CharField(max_length=50, blank=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    date = models.DateField()
+    method = models.CharField(max_length=50, default='Bank Transfer')
+    reference = models.CharField(max_length=200, blank=True)
+    received_by = models.CharField(max_length=200, blank=True)
+    notes = models.TextField(blank=True)
+    synced_to_accounts = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Payment {self.id} for {self.client_detail.company} - {self.amount}'
