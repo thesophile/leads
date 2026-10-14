@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import can
+from accounts.staff import active_staff_names, staff_names_with_entries
 from master.models import Category, Location, Source
 from utilities.models import Notification, log_activity
 
@@ -167,8 +168,9 @@ def sync_contact_from_quotation(user, lead, quotation, old_contact):
         # quotation's value but leave the lead (source of truth) untouched.
         logger.warning('Could not mirror contact change to lead %s.', lead.id)
         return []
-    for lead_field, old_value, new_value in pending:
-        log_contact_change(user, lead, lead_field, old_value, new_value)
+    for lead_field, old_value, _ in pending:
+        # Read the saved (normalised) value so the audit trail matches storage.
+        log_contact_change(user, lead, lead_field, old_value, getattr(lead, lead_field))
     return changed_fields
 
 
@@ -298,12 +300,12 @@ def approvals_all_approved(quotation):
 
 
 def assignment_name_set(user):
-    """Names that ``user`` may assign leads to (their company's non-superusers)."""
+    """Names that ``user`` may assign leads to (their company's active non-superusers)."""
     if not user.company:
         return set()
     return set(
         User.objects
-        .filter(company=user.company)
+        .filter(company=user.company, is_active=True)
         .exclude(is_superuser=True)
         .values_list('name', flat=True)
     )
@@ -1401,7 +1403,9 @@ class LeadMetaView(APIView):
 
         facets = {
             'added_by': distinct('added_by'),
-            'assigned_to': distinct('assigned_to'),
+            'assigned_to': sorted(
+                set(distinct('assigned_to')) & active_staff_names(request.user.company)
+            ),
             'sources': distinct('source'),
             'cities': distinct('city'),
             'categories': distinct('category'),
@@ -1523,8 +1527,11 @@ class LeadRegisterView(APIView):
         if facet_qs_no_status.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).exists():
             statuses.add('Converted')
         facets = {
-            'staff': sorted(set(distinct(facet_qs_no_staff, 'assigned_to'))
-                            | set(distinct(facet_qs_no_staff, 'added_by'))),
+            'staff': staff_names_with_entries(
+                request.user.company,
+                set(distinct(facet_qs_no_staff, 'assigned_to'))
+                | set(distinct(facet_qs_no_staff, 'added_by')),
+            ),
             'locations': distinct(facet_qs_no_city, 'city'),
             'categories': distinct(facet_qs_no_category, 'category'),
             'statuses': sorted(statuses),
@@ -1601,13 +1608,17 @@ class QuotationRowsView(APIView):
             synthetic_for_page = lead_scope.exclude(id__in=quoted_lead_ids)
 
         # The staff picker's options ignore the staff filter itself, so picking
-        # a value never collapses the dropdown it belongs to.
-        facet_staff = sorted({
-            first_qr_caller.get(lead_id)
-            for lead_id in scoped_queryset(request.user, Lead.STATUS_QUOTATION)
-            .values_list('id', flat=True)
-            if first_qr_caller.get(lead_id)
-        })
+        # a value never collapses the dropdown it belongs to. Active staff are
+        # always listed; inactive staff stay only while they have a QR entry.
+        facet_staff = staff_names_with_entries(
+            request.user.company,
+            {
+                first_qr_caller.get(lead_id)
+                for lead_id in scoped_queryset(request.user, Lead.STATUS_QUOTATION)
+                .values_list('id', flat=True)
+                if first_qr_caller.get(lead_id)
+            },
+        )
 
         counts = {
             'Quotation Requested': synthetic_all.count(),
@@ -3328,6 +3339,12 @@ class ClientDetailListCreateView(APIView):
                 | Q(category__icontains=search)
             )
         collected_by = request.query_params.get('collected_by')
+        # The staff picker ignores its own filter: active staff are always
+        # listed, inactive staff stay only while stamped on a visible record.
+        facet_staff = staff_names_with_entries(
+            request.user.company,
+            set(qs.exclude(collected_by='').values_list('collected_by', flat=True)),
+        )
         if collected_by:
             qs = qs.filter(collected_by=collected_by)
         status_counts = {
@@ -3351,6 +3368,10 @@ class ClientDetailListCreateView(APIView):
         page_records = page_records.prefetch_related('attachments')
         envelope['results'] = ClientDetailSerializer(page_records, many=True).data
         envelope['counts'] = {'by_status': status_counts, 'total': sum(status_counts.values())}
+        envelope['facets'] = {
+            'staff': facet_staff,
+            'active_staff': sorted(active_staff_names(request.user.company)),
+        }
         return Response(envelope)
 
     def post(self, request):
@@ -3751,9 +3772,12 @@ class OrderRegisterView(APIView):
             )
 
         facets = {
-            'staff': sorted(set(distinct(facet_qs_no_staff, 'staff'))
-                            | set(distinct(facet_qs_no_staff, 'bdm'))
-                            | set(distinct(facet_qs_no_staff, 'proposal_by'))),
+            'staff': staff_names_with_entries(
+                request.user.company,
+                set(distinct(facet_qs_no_staff, 'staff'))
+                | set(distinct(facet_qs_no_staff, 'bdm'))
+                | set(distinct(facet_qs_no_staff, 'proposal_by')),
+            ),
             'categories': distinct(facet_qs_no_category, 'category'),
         }
 
@@ -3829,6 +3853,14 @@ class OrderListCreateView(APIView):
                 | Q(proposal_no__icontains=search)
             )
         staff = request.query_params.get('staff')
+        # The staff picker ignores its own filter: active staff are always
+        # listed, inactive staff stay only while stamped on a visible order.
+        facet_staff = staff_names_with_entries(
+            request.user.company,
+            set(qs.exclude(staff='').values_list('staff', flat=True))
+            | set(qs.exclude(bdm='').values_list('bdm', flat=True))
+            | set(qs.exclude(proposal_by='').values_list('proposal_by', flat=True)),
+        )
         if staff:
             qs = qs.filter(Q(staff=staff) | Q(bdm=staff) | Q(proposal_by=staff))
         counts = {
@@ -3847,6 +3879,7 @@ class OrderListCreateView(APIView):
         page_orders, envelope = paginated_queryset(qs, request)
         envelope['results'] = OrderSerializer(page_orders, many=True).data
         envelope['counts'] = counts
+        envelope['facets'] = {'staff': facet_staff}
         return Response(envelope)
 
     def post(self, request):

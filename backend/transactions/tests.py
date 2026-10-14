@@ -150,6 +150,17 @@ class AssignLeadsToStaffTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
+    def test_assign_rejects_inactive_staff(self):
+        self.target.is_active = False
+        self.target.save(update_fields=['is_active'])
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/leads/assign/', {
+            'assigned_to': 'Shanu VR', 'count': 2,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Unknown staff', resp.data['detail'])
+        self.assertEqual(Lead.objects.filter(status='assigned').count(), 0)
+
     def test_assign_stamps_assigned_at(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.post('/api/transactions/leads/assign/', {
@@ -727,6 +738,14 @@ class AssignableStaffListViewTests(APITestCase):
         resp = self.client.get('/api/auth/assignable-staff/')
         self.assertEqual(resp.status_code, 403)
 
+    def test_inactive_staff_are_not_assignable(self):
+        User.objects.filter(email='priya@acme.com').update(is_active=False)
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/auth/assignable-staff/')
+        self.assertEqual(resp.status_code, 200)
+        names = {s['name'] for s in resp.data}
+        self.assertEqual(names, {'Manager A', 'Shanu VR'})
+
 
 class LeadDuplicateScopingTests(APITestCase):
     def setUp(self):
@@ -829,7 +848,7 @@ class LeadImportTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertFalse(resp.data['updated'])
-        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         self.assertEqual(lead.phone, '9998887776')
 
     def test_import_requires_phone(self):
@@ -864,7 +883,7 @@ class LeadImportTests(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['updated'])
-        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         self.assertEqual(lead.phone, '9998887776')
         self.assertEqual(
             Lead.objects.filter(tenant=self.company, company_key='cafe day').count(), 1
@@ -880,7 +899,7 @@ class LeadImportTests(APITestCase):
             'company': 'Cafe Day', 'phone': '',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
-        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         self.assertEqual(lead.phone, '1112223334')
 
     def test_import_does_not_touch_pipeline_fields(self):
@@ -889,7 +908,7 @@ class LeadImportTests(APITestCase):
             'company': 'Cafe Day', 'phone': '1112223334',
             'category': 'COSMETICS STORE', 'city': 'Kochi',
         }, format='json')
-        lead = Lead.objects.get(company='Cafe Day', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Cafe Day', tenant=self.company)
         lead.status = Lead.STATUS_ASSIGNED
         lead.assigned_to = 'Manager I'
         lead.remarks = 'keep me'
@@ -920,7 +939,7 @@ class LeadImportTests(APITestCase):
             'category': 'cosmetics store', 'city': 'kochi',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
-        lead = Lead.objects.get(company='Lower Case Co', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Lower Case Co', tenant=self.company)
         self.assertEqual(lead.category, 'COSMETICS STORE')
         self.assertEqual(lead.city, 'KOCHI')
         self.assertEqual(lead.location_code, 'LC001')
@@ -933,7 +952,7 @@ class LeadImportTests(APITestCase):
             'category': 'COSMETICS STORE', 'city': 'Other',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
-        lead = Lead.objects.get(company='Other Loc Co', tenant=self.company)
+        lead = Lead.objects.get(company__iexact='Other Loc Co', tenant=self.company)
         self.assertEqual(lead.city, 'Other')
         self.assertEqual(lead.location_code, '')
 
@@ -1788,7 +1807,7 @@ class ContactEditSyncTests(APITestCase):
         self.lead.refresh_from_db()
         self.assertEqual(self.lead.phone, '333')
         self.assertEqual(self.lead.email, 'mail@sync.co')
-        self.assertEqual(self.lead.contact, 'New Person')
+        self.assertEqual(self.lead.contact, 'NEW PERSON')
         rows = {}
         for field, from_value, to_value in (
             LeadContactHistory.objects.filter(lead=self.lead)
@@ -1796,7 +1815,7 @@ class ContactEditSyncTests(APITestCase):
         ):
             rows[field] = (from_value, to_value)
         self.assertEqual(rows['phone'], ('111', '333'))
-        self.assertEqual(rows['contact'], ('Old Person', 'New Person'))
+        self.assertEqual(rows['contact'], ('OLD PERSON', 'NEW PERSON'))
 
     def test_quotation_edit_on_generated_quote_flags_warning(self):
         self.client.force_authenticate(self.manager)
@@ -2777,7 +2796,7 @@ class PaginationAndFilterTests(APITestCase):
         resp = self.client.get('/api/transactions/leads/?status=raw&search=Paged%20Lead%201')
         self.assertEqual(resp.data['count'], 31)
         self.assertTrue(all(
-            'Paged Lead 1' in row['company'] for row in resp.data['results']
+            'PAGED LEAD 1' in row['company'] for row in resp.data['results']
         ))
 
     def test_scoped_staff_filter_is_applied_server_side(self):
@@ -2848,8 +2867,12 @@ class PaginationAndFilterTests(APITestCase):
             {row['leadId'] for row in resp.data['results']},
             {leads[0].id, leads[1].id, leads[2].id},
         )
-        # The picker keeps showing every staff even while one is selected.
-        self.assertEqual(resp.data['facets']['staff'], ['Staff A', 'Staff B'])
+        # The picker keeps showing the active staff plus everyone who requested
+        # a quote, even while one is selected.
+        self.assertEqual(
+            resp.data['facets']['staff'],
+            ['Manager P', 'Staff A', 'Staff B'],
+        )
 
     def test_order_register_pages(self):
         self.client.force_authenticate(self.manager)
@@ -2966,7 +2989,7 @@ class RegisterFacetStabilityTests(APITestCase):
         self.assertEqual(all_resp.status_code, 200)
         self.assertEqual(
             all_resp.data['facets']['staff'],
-            ['BDM X', 'BDM Y', 'Staff A', 'Staff B'],
+            ['BDM X', 'BDM Y', 'Manager F', 'Staff A', 'Staff B'],
         )
 
         filtered = self.client.get(
@@ -2976,13 +2999,117 @@ class RegisterFacetStabilityTests(APITestCase):
         # The Staff dropdown keeps every option even though one is selected.
         self.assertEqual(
             filtered.data['facets']['staff'],
-            ['BDM X', 'BDM Y', 'Staff A', 'Staff B'],
+            ['BDM X', 'BDM Y', 'Manager F', 'Staff A', 'Staff B'],
         )
         # Rows are still correctly filtered to the selected staff.
         self.assertEqual(filtered.data['count'], 1)
         self.assertEqual(filtered.data['results'][0]['staff'], 'Staff A')
         # Sibling category dropdown still narrows to the filtered rows.
         self.assertEqual(filtered.data['facets']['categories'], ['Hospital'])
+
+
+class InactiveStaffFacetTests(APITestCase):
+    """State pickers drop inactive staff; history pickers keep them while they
+    still have an entry, while active staff are always listed."""
+
+    def setUp(self):
+        company = make_company('Inactive Co')
+        self.company = company
+        self.manager = User.objects.create_user(
+            email='mgr@inactive.com', password='x', name='Manager I',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.fresh = User.objects.create_user(
+            email='fresh@inactive.com', password='x', name='Fresh Hire',
+            role=company.roles.get(code='staff'), company=company,
+        )
+        self.retired = User.objects.create_user(
+            email='retired@inactive.com', password='x', name='Retired Staff',
+            role=company.roles.get(code='staff'), company=company,
+            is_active=False,
+        )
+
+    def test_lead_register_keeps_inactive_with_entries_and_lists_active(self):
+        Lead.objects.create(
+            id='IN-LR', company='Lead Co', tenant=self.company,
+            status='assigned', assigned_to='Retired Staff', added_by='Retired Staff',
+            date='2026-01-01',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/leads/register/?statuses=assigned')
+        self.assertEqual(resp.status_code, 200)
+        staff = resp.data['facets']['staff']
+        self.assertIn('Retired Staff', staff)
+        self.assertIn('Fresh Hire', staff)
+        self.assertIn('Manager I', staff)
+
+    def test_quotation_facet_keeps_inactive_caller(self):
+        lead = Lead.objects.create(
+            id='IN-QR', company='Quote Co', tenant=self.company,
+            status=Lead.STATUS_QUOTATION,
+        )
+        CallHistory.objects.create(
+            lead=lead, caller='Retired Staff', status='Quotation Requested',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/quotations/rows/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('Retired Staff', resp.data['facets']['staff'])
+        self.assertIn('Fresh Hire', resp.data['facets']['staff'])
+
+    def test_order_register_keeps_inactive_and_lists_active(self):
+        Order.objects.create(
+            id='IN-OR', company='Order Co', tenant=self.company,
+            staff='Retired Staff', proposal_by='Retired Staff',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/orders/register/')
+        self.assertEqual(resp.status_code, 200)
+        staff = resp.data['facets']['staff']
+        self.assertIn('Retired Staff', staff)
+        self.assertIn('Fresh Hire', staff)
+
+    def test_orders_list_keeps_inactive_and_lists_active(self):
+        Order.objects.create(
+            id='IN-OL', company='Order Co', tenant=self.company,
+            staff='Retired Staff',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/orders/')
+        self.assertEqual(resp.status_code, 200)
+        staff = resp.data['facets']['staff']
+        self.assertIn('Retired Staff', staff)
+        self.assertIn('Fresh Hire', staff)
+
+    def test_client_details_facets_split_history_and_active(self):
+        ClientDetail.objects.create(
+            id='IN-CD', client_name='Client', company='Client Co',
+            order_no='O-IN', collected_by='Retired Staff',
+            status='Details Pending', tenant=self.company,
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/client-details/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('Retired Staff', resp.data['facets']['staff'])
+        self.assertIn('Fresh Hire', resp.data['facets']['staff'])
+        # The selector picker offers only active staff.
+        self.assertNotIn('Retired Staff', resp.data['facets']['active_staff'])
+        self.assertIn('Fresh Hire', resp.data['facets']['active_staff'])
+
+    def test_lead_meta_assigned_to_drops_inactive(self):
+        Lead.objects.create(
+            id='IN-META', company='Meta Co', tenant=self.company,
+            status='assigned', assigned_to='Retired Staff',
+        )
+        Lead.objects.create(
+            id='IN-META-2', company='Meta Co 2', tenant=self.company,
+            status='assigned', assigned_to='Fresh Hire',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/transactions/leads/meta/?status=assigned')
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('Retired Staff', resp.data['facets']['assigned_to'])
+        self.assertIn('Fresh Hire', resp.data['facets']['assigned_to'])
 
 
 class LeadRegisterScopingTests(APITestCase):
@@ -3254,7 +3381,7 @@ class FollowUpReminderTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         row = {r['id']: r for r in resp.data['follow_ups_due_leads']}[self.due_lead.id]
         self.assertTrue(row['isDueToday'])
-        self.assertEqual(row['company'], 'Due Co')
+        self.assertEqual(row['company'], 'DUE CO')
         self.assertEqual(row['due'], f'{self.today.isoformat()} 10:00 AM')
         self.assertNotIn(self.future_lead.id, {
             r['id'] for r in resp.data['follow_ups_due_leads']

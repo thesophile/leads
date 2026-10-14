@@ -456,6 +456,64 @@ class StaffAdminProtectionTests(CoreStubMixin, APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 200)
 
+    def test_manager_can_deactivate_staff_who_only_owns_past_telecall_leads(self):
+        from transactions.models import Lead
+
+        # A lead that has progressed past tele-call keeps the assignee as a
+        # historical snapshot; it is not reassignable and must not block
+        # deactivation.
+        Lead.objects.create(
+            id='QT-1', company='Hospital One', tenant=self.manager.company,
+            assigned_to=self.staff.name, status='quotation',
+        )
+        Lead.objects.create(
+            id='OR-1', company='Hospital Two', tenant=self.manager.company,
+            assigned_to=self.staff.name, status='order',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.staff.refresh_from_db()
+        self.assertFalse(self.staff.is_active)
+
+    def test_manager_cannot_deactivate_staff_who_added_raw_leads(self):
+        from transactions.models import Lead
+
+        # Raw leads the staff entered are still unassigned; they must be
+        # assigned to someone before the staff can be deactivated.
+        Lead.objects.create(
+            id='RL-1', company='Hospital One', tenant=self.manager.company,
+            added_by=self.staff.name, status='raw',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.is_active)
+
+    def test_manager_can_deactivate_after_added_raw_lead_is_assigned(self):
+        from transactions.models import Lead
+
+        lead = Lead.objects.create(
+            id='RL-1', company='Hospital One', tenant=self.manager.company,
+            added_by=self.staff.name, status='raw',
+        )
+        # Assigning the lead moves it out of the raw stage, freeing the staff.
+        lead.status = 'assigned'
+        lead.assigned_to = 'Manager A'
+        lead.save(update_fields=['status', 'assigned_to'])
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.staff.refresh_from_db()
+        self.assertFalse(self.staff.is_active)
+
     def test_admin_can_demote_another_admin(self):
         second_admin = User.objects.create_user(
             email='admin2@acme.com', password='x', name='Admin Two',

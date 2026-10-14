@@ -19,17 +19,6 @@ import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 import { moveToTop } from '../../utils/listOrder'
 
 // Initial dataset of approved orders ready for execution
-const STAFF_LIST = [
-  'All Staff',
-  'Husna',
-  'Bincy',
-  'Alex Joseph',
-  'Priya Sharma',
-  'NIMISHA DAVIS',
-  'Ananya Nair',
-  'Shanu VR',
-]
-
 const STATUS_LIST = [
   'All Status',
   'Sent',
@@ -172,6 +161,7 @@ export default function ManageOrder() {
   const {
     count,
     counts: listCounts,
+    facets,
     loading,
     page,
     totalPages,
@@ -183,6 +173,18 @@ export default function ManageOrder() {
     onData: (orderRows) => setOrdersList(orderRows),
     onError: (msg) => setLoadError(msg || 'Could not load orders.'),
   })
+
+  // Staff choices come from the server-side facets (all active staff plus any
+  // inactive member still stamped on a visible order), falling back to names on
+  // the current page if the facets are unavailable.
+  const staffOptions = useMemo(() => {
+    const names = Array.isArray(facets?.staff) && facets.staff.length
+      ? facets.staff
+      : [...new Set(
+        ordersList.flatMap((o) => [o.staff, o.bdm, o.proposalBy]).filter(Boolean)
+      )]
+    return ['All Staff', ...[...names].sort((a, b) => a.localeCompare(b))]
+  }, [facets, ordersList])
 
   // Modal State for Order Form Editor
   const [orderModalOpen, setOrderModalOpen] = useState(false)
@@ -577,7 +579,7 @@ export default function ManageOrder() {
                     onChange={(e) => setSelectedStaff(e.target.value)}
                     className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none cursor-pointer"
                   >
-                    {STAFF_LIST.map((s) => (
+                    {staffOptions.map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
