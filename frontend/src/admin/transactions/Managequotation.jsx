@@ -23,26 +23,10 @@ import SendForApprovalModal from './SendForApprovalModal'
 let pivotScrollY = null
 
 const QUILL_MODULES = {
-  toolbar: [
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    [{ header: [2, 3, 4, false] }],
-    ['link', 'blockquote'],
-    ['clean'],
-  ],
+  toolbar: [['bold']],
 }
 
-const QUILL_FORMATS = [
-  'header',
-  'bold',
-  'italic',
-  'underline',
-  'strike',
-  'list',
-  'bullet',
-  'link',
-  'blockquote',
-]
+const QUILL_FORMATS = ['bold']
 
 const BLOCKED_PREFIXES = new Set([
   'ASS', 'BIT', 'CUM', 'DAM', 'DIC', 'FAG', 'FUC', 'GAY', 'JAP',

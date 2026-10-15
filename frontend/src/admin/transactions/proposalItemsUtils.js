@@ -58,6 +58,54 @@ function decodeHtml(value) {
     .replace(/&#x27;/gi, "'")
 }
 
+// Convert HTML text (e.g. proposal summary or detail) into an array of lines
+// while preserving bold (<b>, <strong>) formatting and author's line breaks.
+export function htmlToFormattedLines(html) {
+  if (!html) return []
+  let raw = String(html)
+    .replace(/<h[1-6][^>]*>/gi, '<strong>')
+    .replace(/<\/h[1-6]>/gi, '</strong>\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|blockquote|pre|tr|section|article)>/gi, '\n')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\r\n?/g, '\n')
+
+  // Keep only <b>, </b>, <strong>, </strong> tags without attributes.
+  // Strip all other HTML tags.
+  raw = raw.replace(/<(\/?)([a-zA-Z0-9]+)(?:\s[^>]*)?>/g, (match, closing, tag) => {
+    const t = tag.toLowerCase()
+    if (t === 'b' || t === 'strong') {
+      return `<${closing || ''}strong>`
+    }
+    return ''
+  })
+
+  const lines = []
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    const plainText = trimmed.replace(/<[^>]+>/g, '').trim()
+    if (!plainText && (lines.length === 0 || lines[lines.length - 1] === '')) continue
+
+    if (!plainText) {
+      lines.push('')
+    } else {
+      let balanced = trimmed
+      const opens = (balanced.match(/<strong>/g) || []).length
+      const closes = (balanced.match(/<\/strong>/g) || []).length
+      if (opens > closes) {
+        balanced += '</strong>'.repeat(opens - closes)
+      } else if (closes > opens) {
+        for (let i = 0; i < closes - opens; i++) {
+          balanced = balanced.replace(/<\/strong>/, '')
+        }
+      }
+      lines.push(balanced)
+    }
+  }
+  while (lines.length && lines[lines.length - 1] === '') lines.pop()
+  return lines
+}
+
 // Split composed termsConditions HTML into a structured items array plus the
 // remaining free-form rich-text HTML.
 export function proposalItemsFromHtml(html) {

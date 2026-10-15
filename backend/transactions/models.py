@@ -510,6 +510,7 @@ class ClientDetail(models.Model):
     category = models.CharField(max_length=100, blank=True)
     category_code = models.CharField(max_length=20, blank=True, db_index=True)
     accepted_date = models.CharField(max_length=30, blank=True)
+    delivery_date = models.CharField(max_length=50, blank=True)
     collected_by = models.CharField(max_length=120, blank=True)
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=50, default=STATUS_PENDING)

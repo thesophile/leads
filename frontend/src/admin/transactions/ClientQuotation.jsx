@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../api/client'
-import { proposalItemsFromHtml, itemsTotal, fmtAmount } from './proposalItemsUtils'
+import { proposalItemsFromHtml, itemsTotal, fmtAmount, htmlToFormattedLines } from './proposalItemsUtils'
 
 function stripHtml(html) {
   return String(html || '')
@@ -359,8 +359,12 @@ export default function ClientQuotation() {
                   <div className="bg-white p-4 text-[13px] leading-snug text-slate-800">
                     {scopeHtml &&
                       stripHtml(scopeHtml) &&
-                      htmlToPlainLines(scopeHtml).map((line, i) => (
-                        <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                      htmlToFormattedLines(scopeHtml).map((line, i) => (
+                        <div
+                          key={i}
+                          className="min-h-[1.2em]"
+                          dangerouslySetInnerHTML={{ __html: line || '\u00A0' }}
+                        />
                       ))}
 
                     {scopeItems.length > 0 && (
@@ -407,8 +411,13 @@ export default function ClientQuotation() {
                   </div>
                   <div className="bg-white p-4 text-[13px] leading-snug text-slate-800">
                     {detailFreeHtml &&
-                      htmlToPlainLines(detailFreeHtml).map((line, i) => (
-                        <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                      stripHtml(detailFreeHtml) &&
+                      htmlToFormattedLines(detailFreeHtml).map((line, i) => (
+                        <div
+                          key={i}
+                          className="min-h-[1.2em]"
+                          dangerouslySetInnerHTML={{ __html: line || '\u00A0' }}
+                        />
                       ))}
 
                     {detailItems.length > 0 && (

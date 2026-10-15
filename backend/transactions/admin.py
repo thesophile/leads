@@ -60,7 +60,7 @@ class OrderAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
 @admin.register(ClientDetail)
 class ClientDetailAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
     company_field = 'tenant'
-    list_display = ('id', 'order_no', 'company', 'client_name', 'status', 'accepted_date')
+    list_display = ('id', 'order_no', 'company', 'client_name', 'status', 'accepted_date', 'delivery_date')
     list_filter = ('status', 'category', 'collected_by')
     search_fields = ('id', 'order_no', 'company', 'client_name')
 
