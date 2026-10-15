@@ -1969,7 +1969,10 @@ class QuotationView(APIView):
                     {'detail': 'Please select at least one approver.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            quotation.approvals.all().delete()
+            existing_approvals = {a.user_id: a for a in quotation.approvals.all()}
+            approver_ids = [a.id for a in approvers]
+            quotation.approvals.exclude(user_id__in=approver_ids).delete()
+
             quotation.submitted_by = request.user
             quotation.approval_requested_at = timezone.now()
             quotation.approved_at = None
@@ -1985,8 +1988,43 @@ class QuotationView(APIView):
             quotation.approver = None
             quotation.approver_name = ''
             quotation.save()
+            raw_channels = request.data.get('channels') or ['app']
+            if isinstance(raw_channels, str):
+                try:
+                    raw_channels = json.loads(raw_channels)
+                except (TypeError, ValueError):
+                    raw_channels = [raw_channels]
+            channels = list(raw_channels)
+            if 'app' not in channels:
+                channels.append('app')
+            origin = (request.data.get('origin') or '').strip().rstrip('/')
+            custom_message = (request.data.get('message') or '').strip()
+
+            created_approvals = []
             for approver in approvers:
-                quotation.approvals.create(user=approver)
+                approval = existing_approvals.get(approver.id)
+                if not approval:
+                    token = secrets.token_urlsafe(32)
+                    approval = quotation.approvals.create(user=approver, token=token)
+                else:
+                    if not approval.token:
+                        approval.token = secrets.token_urlsafe(32)
+                    approval.status = QuotationApproval.STATUS_PENDING
+                    approval.signed_by = ''
+                    approval.signed_at = None
+                    approval.signature_ref = ''
+                    approval.signature_hash = ''
+                    approval.otp_hash = ''
+                    approval.otp_sent_at = None
+                    approval.otp_expires_at = None
+                    approval.otp_attempts = 0
+                    approval.rejection_reason = ''
+                    approval.save()
+                created_approvals.append(approval)
+
+                approval_link = f'{origin}/approval/{approval.token}' if origin else f'/approval/{approval.token}'
+
+                # 1. In-app notification is ALWAYS sent
                 notify(
                     approver,
                     'Approval',
@@ -1996,6 +2034,33 @@ class QuotationView(APIView):
                     entity_type='quotation',
                     entity_id=quotation.lead_id,
                 )
+
+                # 2. Email if checked and approver has email
+                if 'email' in channels and approver.email:
+                    try:
+                        email_body = (
+                            f'Hi {approver.name},\n\n'
+                            f'Quotation {quotation.id} for {quotation.company} has been submitted by {request.user.name} and is awaiting your approval.\n\n'
+                            f'Amount: {quotation.currency or "₹"} {quotation.net_amount or quotation.total}\n'
+                        )
+                        if custom_message:
+                            email_body += f'\nNote: {custom_message}\n'
+                        email_body += (
+                            f'\nYou can review and approve or reject this proposal directly using the link below:\n\n'
+                            f'{approval_link}\n\n'
+                            f'(No login required. Approval is authorized via a one-time code sent to your email.)\n\n'
+                            f'- LEADS'
+                        )
+                        send_mail(
+                            subject=f'LEADS - Proposal {quotation.id} awaiting your approval',
+                            message=email_body,
+                            from_email=None,
+                            recipient_list=[approver.email],
+                            fail_silently=True,
+                        )
+                    except Exception as exc:
+                        logger.warning('Failed to email approval request for %s to %s: %s', quotation.id, approver.email, exc)
+
             log_activity(
                 request.user,
                 request.user.company,
@@ -2006,6 +2071,14 @@ class QuotationView(APIView):
             )
             data = QuotationSerializer(quotation).data
             data.update(response_flags)
+            first_approval = created_approvals[0] if created_approvals else None
+            if first_approval:
+                data['approvalToken'] = first_approval.token
+                data['approvalLink'] = f'{origin}/approval/{first_approval.token}' if origin else f'/approval/{first_approval.token}'
+                data['approverPhone'] = first_approval.user.phone
+                data['approverEmail'] = first_approval.user.email
+                data['approverName'] = first_approval.user.name
+                data['channels'] = channels
             return Response(data)
         quotation.save()
         log_activity(
@@ -2080,7 +2153,8 @@ class QuotationApproverListView(APIView):
             {
                 'id': user.id,
                 'name': user.name,
-                'email': user.email,
+                'email': user.email or '',
+                'phone': user.phone or '',
                 'role': (user.role.name if user.role_id else ''),
                 'is_superuser': user.is_superuser,
             }
@@ -2318,6 +2392,391 @@ class QuotationRejectView(QuotationApprovalBaseView):
                 entity_id=quotation.lead_id,
             )
         return Response(QuotationSerializer(quotation).data)
+
+
+class QuotationApprovalLinkView(APIView):
+    """Return (or generate) the public approval link for an approver.
+
+    Allows copying or sharing the direct approval link before or after sending.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, lead_id):
+        quotation = find_quotation(lead_id)
+        if quotation is None:
+            return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        approver_id = request.data.get('approver_id')
+        approver = None
+        if approver_id:
+            approver = User.objects.filter(pk=approver_id, company=request.user.company).first()
+        if not approver:
+            existing_approval = quotation.approvals.first()
+            if existing_approval:
+                approver = existing_approval.user
+        if not approver:
+            return Response({'detail': 'Please select an approver.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        approval = quotation.approvals.filter(user=approver).first()
+        if not approval:
+            token = secrets.token_urlsafe(32)
+            approval = quotation.approvals.create(user=approver, token=token)
+        elif not approval.token:
+            approval.token = secrets.token_urlsafe(32)
+            approval.save(update_fields=['token', 'updated_at'])
+
+        origin = (request.data.get('origin') or '').strip().rstrip('/')
+        link = f'{origin}/approval/{approval.token}' if origin else f'/approval/{approval.token}'
+        return Response({
+            'link': link,
+            'token': approval.token,
+            'approver': {
+                'id': approver.id,
+                'name': approver.name,
+                'email': approver.email or '',
+                'phone': approver.phone or '',
+            }
+        })
+
+
+class PublicApprovalDetailView(APIView):
+    """Public, unauthenticated read of a proposal awaiting approval by token."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        approval = (
+            QuotationApproval.objects.filter(token=str(token or ''))
+            .select_related('quotation', 'quotation__tenant', 'user')
+            .first()
+        )
+        if approval is None:
+            return Response(
+                {'detail': 'This approval link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = approval.quotation
+        tenant = quotation.tenant
+        logo_url = ''
+        if tenant and tenant.logo and tenant.logo.name:
+            try:
+                logo_url = tenant.logo.url
+            except Exception:
+                logo_url = ''
+
+        return Response({
+            'token': approval.token,
+            'quotation': {
+                'id': quotation.id,
+                'versionNo': quotation.version_no,
+                'revisionNo': quotation.revision_no,
+                'company': quotation.company,
+                'customer': quotation.customer,
+                'category': quotation.category,
+                'city': quotation.city,
+                'date': quotation.date,
+                'total': quotation.total,
+                'discount': quotation.discount,
+                'netAmount': quotation.net_amount,
+                'currency': quotation.currency or 'INR (₹)',
+                'proposalScope': quotation.proposal_scope,
+                'termsConditions': quotation.terms_conditions,
+                'status': quotation.status,
+                'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
+                'companyName': tenant.name if tenant else '',
+                'companyLogo': logo_url,
+                'companyAddress': tenant.address if tenant else '',
+                'companyEmail': tenant.email if tenant else '',
+                'companyPhone': tenant.phone if tenant else '',
+                'companyWebsite': tenant.website if tenant else '',
+                'submittedBy': quotation.submitted_by.name if quotation.submitted_by else '',
+                'approvalRequestedAt': (
+                    quotation.approval_requested_at.isoformat()
+                    if quotation.approval_requested_at
+                    else None
+                ),
+            },
+            'approval': {
+                'id': approval.id,
+                'status': approval.status,
+                'approverName': approval.user.name,
+                'approverEmail': approval.user.email,
+                'approverRole': approval.user.role.name if approval.user.role else '',
+                'signedBy': approval.signed_by,
+                'signedAt': approval.signed_at.isoformat() if approval.signed_at else None,
+                'signatureRef': approval.signature_ref,
+                'rejectionReason': approval.rejection_reason,
+                'otpSent': bool(
+                    approval.otp_hash
+                    and approval.otp_expires_at
+                    and approval.otp_expires_at > timezone.now()
+                ),
+                'otpExpiresIn': (
+                    max(0, int((approval.otp_expires_at - timezone.now()).total_seconds()))
+                    if (approval.otp_expires_at and approval.otp_expires_at > timezone.now())
+                    else 0
+                ),
+            },
+        })
+
+
+class PublicApprovalOtpView(APIView):
+    """Send a one-time approval code to the approver's email for this link."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    OTP_MINUTES = 5
+
+    def post(self, request, token):
+        approval = (
+            QuotationApproval.objects.filter(token=str(token or ''))
+            .select_related('quotation', 'user')
+            .first()
+        )
+        if approval is None:
+            return Response(
+                {'detail': 'This approval link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = approval.quotation
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if approval.status != QuotationApproval.STATUS_PENDING:
+            return Response(
+                {'detail': 'You have already decided on this proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        code = generate_otp()
+        approval.otp_hash = hash_otp(code, approval.id)
+        approval.otp_sent_at = timezone.now()
+        approval.otp_expires_at = timezone.now() + timedelta(minutes=self.OTP_MINUTES)
+        approval.otp_attempts = 0
+        approval.save(update_fields=['otp_hash', 'otp_sent_at', 'otp_expires_at', 'otp_attempts', 'updated_at'])
+
+        sent = False
+        error = None
+        try:
+            sent = send_mail(
+                subject=f'LEADS - Quotation approval code ({quotation.id})',
+                message=(
+                    f'Hi {approval.user.name},\n\n'
+                    f'You requested to approve quotation {quotation.id} for '
+                    f'{quotation.company}.\n\n'
+                    f'Your one-time approval code is:\n\n    {code}\n\n'
+                    f'It expires in {self.OTP_MINUTES} minutes and can only be used once.\n\n'
+                    f'If you did not request this, you can safely ignore this email.\n\n'
+                    f'- LEADS'
+                ),
+                from_email=None,
+                recipient_list=[approval.user.email],
+                fail_silently=False,
+            ) > 0
+        except Exception as exc:
+            sent = False
+            error = str(exc) or exc.__class__.__name__
+            logger.exception(
+                'Failed to email approval code for quotation %s to %s',
+                quotation.id,
+                approval.user.email,
+            )
+        payload = {
+            'sent': sent,
+            'expires_in': self.OTP_MINUTES * 60,
+            'email': approval.user.email,
+        }
+        if error:
+            payload['detail'] = (
+                f'The approval code could not be emailed to {approval.user.email}. {error}'
+            )
+        return Response(payload)
+
+
+class PublicApprovalApproveView(APIView):
+    """Verify OTP and record approval for the public link."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    MAX_OTP_ATTEMPTS = 5
+
+    def post(self, request, token):
+        approval = (
+            QuotationApproval.objects.filter(token=str(token or ''))
+            .select_related('quotation', 'quotation__tenant', 'user')
+            .first()
+        )
+        if approval is None:
+            return Response(
+                {'detail': 'This approval link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = approval.quotation
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if approval.status != QuotationApproval.STATUS_PENDING:
+            return Response(
+                {'detail': 'You have already decided on this proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        code = str(request.data.get('otp', '')).strip()
+        note = str(request.data.get('note', '') or '').strip()
+        if not code:
+            return Response(
+                {'detail': 'Please enter the approval code.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not approval.otp_hash or not approval.otp_expires_at:
+            return Response(
+                {'detail': 'No approval code was requested. Please request a code first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if timezone.now() > approval.otp_expires_at:
+            return Response(
+                {'detail': 'The approval code has expired. Please request a new one.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if approval.otp_attempts >= self.MAX_OTP_ATTEMPTS:
+            return Response(
+                {'detail': 'Too many incorrect attempts. Please request a new approval code.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if hash_otp(code, approval.id) != approval.otp_hash:
+            approval.otp_attempts += 1
+            approval.save(update_fields=['otp_attempts', 'updated_at'])
+            return Response(
+                {'detail': 'The approval code is invalid. Please try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        approver_user = approval.user
+        approval.status = QuotationApproval.STATUS_APPROVED
+        approval.signed_by = approver_user.name
+        approval.signed_at = timezone.now()
+        approval.signature_ref = f'OTP-{random.randint(10000000, 99999999)}'
+        approval.signature_hash = approval.otp_hash
+        approval.otp_hash = ''
+        approval.otp_expires_at = None
+        approval.otp_sent_at = None
+        approval.save()
+
+        if note:
+            quotation.approval_note = note
+
+        if approvals_all_approved(quotation):
+            quotation.status = 'Approved'
+            quotation.approved_at = timezone.now()
+            quotation.signed_by = approver_user.name
+            quotation.signature_ref = approval.signature_ref
+            quotation.approver = approver_user
+            quotation.approver_name = approver_user.name
+            quotation.save()
+
+            log_activity(
+                approver_user,
+                quotation.tenant,
+                'approved quotation',
+                f'{approver_user.name} approved quotation {quotation.id} - {quotation.company} via link.',
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
+            if quotation.submitted_by_id and quotation.submitted_by_id != approver_user.id:
+                notify(
+                    quotation.submitted_by,
+                    'Approval',
+                    'Proposal approved',
+                    f'{quotation.id} - {quotation.company} approved by {approver_user.name}. Order execution can begin.',
+                    url=proposal_url(quotation),
+                    entity_type='quotation',
+                    entity_id=quotation.lead_id,
+                )
+        else:
+            quotation.save()
+
+        return Response({
+            'status': approval.status,
+            'signedBy': approval.signed_by,
+            'signedAt': approval.signed_at.isoformat() if approval.signed_at else None,
+            'signatureRef': approval.signature_ref,
+            'quotationStatus': quotation.status,
+        })
+
+
+class PublicApprovalRejectView(APIView):
+    """Reject a pending proposal via public link with a reason."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        approval = (
+            QuotationApproval.objects.filter(token=str(token or ''))
+            .select_related('quotation', 'quotation__tenant', 'user')
+            .first()
+        )
+        if approval is None:
+            return Response(
+                {'detail': 'This approval link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = approval.quotation
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if approval.status != QuotationApproval.STATUS_PENDING:
+            return Response(
+                {'detail': 'You have already decided on this proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reason = str(request.data.get('reason', '') or '').strip()
+        if not reason:
+            return Response(
+                {'detail': 'Please provide a reason for rejecting the proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        approver_user = approval.user
+        approval.status = QuotationApproval.STATUS_REJECTED
+        approval.rejection_reason = reason
+        approval.save()
+
+        quotation.status = 'Rejected'
+        quotation.rejected_at = timezone.now()
+        quotation.rejection_reason = reason
+        quotation.approver = approver_user
+        quotation.approver_name = approver_user.name
+        quotation.save()
+
+        log_activity(
+            approver_user,
+            quotation.tenant,
+            'rejected quotation',
+            f'{approver_user.name} rejected quotation {quotation.id} - {quotation.company} via link. Reason: {reason}',
+            entity_type='quotation',
+            entity_id=quotation.lead_id,
+        )
+        if quotation.submitted_by_id and quotation.submitted_by_id != approver_user.id:
+            notify(
+                quotation.submitted_by,
+                'Approval',
+                'Proposal rejected',
+                f'{quotation.id} - {quotation.company} was rejected by {approver_user.name}. Reason: {reason}',
+                url=proposal_url(quotation),
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
+
+        return Response({
+            'status': approval.status,
+            'rejectionReason': approval.rejection_reason,
+            'quotationStatus': quotation.status,
+        })
 
 
 class QuotationSendToClientView(APIView):

@@ -11,6 +11,7 @@ import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
 import Spinner from '../../components/Spinner'
 import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol } from './proposalItemsUtils'
+import SendForApprovalModal from './SendForApprovalModal'
 
 function escapeHtml(value) {
   return String(value)
@@ -1144,101 +1145,19 @@ const approvedByRef = useRef(null)
       )}
 
       {/* Send for Approval */}
-      {sendOpen && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !sending) setSendOpen(false)
-          }}
-        >
-          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                  ✈
-                </span>
-                <h3 className="text-sm font-bold text-slate-900">Send for Approval</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSendOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
-              >
-                <CloseIcon />
-              </button>
-            </div>
-            <div className="p-5 space-y-3">
-              <p className="text-[11px] text-slate-500">
-                Send <span className="font-bold text-slate-700">{proposalData.id}</span> for {proposalData.customerCompany} to approvers.
-              </p>
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admin / Manager <span className="text-rose-500">*</span>
-                </label>
-                <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                  {loadingApprovers && approvers.length === 0 && (
-                    <div className="flex items-center gap-2 px-3 py-3 text-[11px] text-slate-500">
-                      <Spinner className="h-3.5 w-3.5 text-brand-600" />
-                      <span>Loading active approvers…</span>
-                    </div>
-                  )}
-                  {!loadingApprovers && approvers.length === 0 && (
-                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No active approvers available.</p>
-                  )}
-                  {approvers.map((a) => {
-                    const checked = sendApprovers.includes(a.id)
-                    return (
-                      <label
-                        key={a.id}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50 transition"
-                      >
-                        <input
-                          type="radio"
-                          name="approver"
-                          checked={checked}
-                          onChange={() => setSendApprovers([a.id])}
-                          className="h-3.5 w-3.5 rounded-full border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                        />
-                        <span className="flex-1 min-w-0">
-                          <span className="block font-semibold text-slate-800 truncate">{a.name}</span>
-                          <span className="block text-[10px] text-slate-400 truncate">
-                            {a.role ? a.role : (a.is_superuser ? 'Super Admin' : 'Approver')}
-                            {a.is_superuser && a.role ? ' · Super Admin' : ''}
-                            {a.email ? ` · ${a.email}` : ''}
-                          </span>
-                        </span>
-                        {checked && (
-                          <span className="text-[10px] font-bold text-emerald-600">✓ Selected</span>
-                        )}
-                      </label>
-                    )
-                  })}
-                </div>
-                <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  The selected admin or manager must approve this proposal before it is sent to the client.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
-              <button
-                type="button"
-                onClick={() => setSendOpen(false)}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={sendApprovers.length === 0 || sending}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sending ? 'Sending…' : 'Send for Approval'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SendForApprovalModal
+        open={sendOpen}
+        quote={proposal}
+        approverOptions={approvers}
+        onClose={() => setSendOpen(false)}
+        onSent={(updated) => {
+          if (updated) {
+            setProposal(updated)
+            setApproveNotice('✓ Proposal sent for approval.')
+          }
+        }}
+        onToast={(msg) => setApproveNotice(msg)}
+      />
 
       {/* Approve (OTP) */}
       {approveOpen && (
