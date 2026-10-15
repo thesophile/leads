@@ -168,6 +168,7 @@ class QuotationApprovalSerializer(serializers.ModelSerializer):
             'signedAt',
             'signatureRef',
             'rejectionReason',
+            'token',
         ]
 
     def get_signedAt(self, obj):

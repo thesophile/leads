@@ -15,6 +15,7 @@ import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
 import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 import { moveToTop } from '../../utils/listOrder'
+import SendForApprovalModal from './SendForApprovalModal'
 
 // Window scroll position saved just before opening a quotation preview, so
 // returning here from the preview restores exactly where the user was in the
@@ -2734,150 +2735,31 @@ export default function Managequotation() {
         </div>
       )}
 
-      {/* "Send for Approval" Modal (Select Approving Admin) */}
-      {approvalModalOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !approvalDirty) setApprovalModalOpen(false)
-          }}
-        >
-          <div className="w-full max-w-md my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                  <SendIcon className="h-3.5 w-3.5" />
-                </span>
-                <h3 className="text-sm font-bold text-slate-900">Send for Approval</h3>
-              </div>
-              <button
-                type="button"
-                onClick={requestCloseApproval}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
-              >
-                <CloseIcon />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {/* Selected Proposal Summary */}
-              {(() => {
-                const quote = quotationsList.find((q) => q.id === approvalQuoteId)
-                if (!quote) return null
-                return (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-mono text-[10px] font-bold text-brand-600 uppercase tracking-wider">
-                          {quote.id}
-                        </p>
-                        <p className="mt-0.5 text-sm font-bold text-slate-900 truncate">
-                          {quote.company}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-600">
-                          {quote.customer} • {currencySymbol(quote.currency)}{quote.netAmount}
-                        </p>
-                      </div>
-                      <span
-                        className={`rounded-md border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${
-                          quote.status === 'Pending Approval'
-                            ? 'border-amber-200 bg-amber-50 text-amber-700'
-                            : 'border-slate-200 bg-white text-slate-600'
-                        }`}
-                      >
-                        {quote.status}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Approver Selection */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admin <span className="text-rose-500">*</span>
-                </label>
-                <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-52 overflow-y-auto">
-                  {approverOptions.length === 0 && (
-                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No approvers available.</p>
-                  )}
-                  {approverOptions.map((admin) => {
-                    const checked = selectedApprovers.includes(admin.id)
-                    return (
-                      <label
-                        key={admin.id}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50 transition"
-                      >
-                        <input
-                          type="radio"
-                          name="approver"
-                          checked={checked}
-                          onChange={() => toggleApprover(admin.id)}
-                          className="h-3.5 w-3.5 rounded-full border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                        />
-                        <span className="flex-1 min-w-0">
-                          <span className="block font-semibold text-slate-800 truncate">
-                            {admin.name}
-                          </span>
-                          <span className="block text-[10px] text-slate-400">
-                            {admin.role ? admin.role : 'Approver'}
-                            {admin.is_superuser ? ' · Super Admin' : ''}
-                          </span>
-                        </span>
-                        {checked && (
-                          <span className="text-[10px] font-bold text-emerald-600">✓ Selected</span>
-                        )}
-                      </label>
-                    )
-                  })}
-                </div>
-                <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  The selected admin must approve this proposal before it can be sent to the client.
-                </p>
-              </div>
-
-              {/* Success Message */}
-              {approvalSent && (
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
-                  {approvalSent}
-                </div>
-              )}
-
-              {/* Error Message */}
-              {approvalError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs font-medium text-red-600 animate-in fade-in">
-                  {approvalError}
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
-              <button
-                type="button"
-                onClick={requestCloseApproval}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmSendForApproval}
-                disabled={selectedApprovers.length === 0 || sendingApproval}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sendingApproval ? (
-                  <Spinner className="h-3.5 w-3.5" />
-                ) : (
-                  <SendIcon className="h-3.5 w-3.5" />
-                )}
-                {sendingApproval ? 'Sending…' : 'Send for Approval'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* "Send for Approval" Modal */}
+      <SendForApprovalModal
+        open={approvalModalOpen}
+        quote={quotationsList.find((q) => q.id === approvalQuoteId)}
+        approverOptions={approverOptions}
+        onClose={() => setApprovalModalOpen(false)}
+        onSent={(updated) => {
+          if (updated) {
+            setQuotationsList((prev) =>
+              prev.map((item) =>
+                item.id === updated.id
+                  ? {
+                      ...item,
+                      status: updated.status || 'Pending Approval',
+                      approvals: updated.approvals || [],
+                      approvalsTotal: updated.approvalsTotal ?? item.approvalsTotal,
+                      approvalsApproved: updated.approvalsApproved ?? 0,
+                    }
+                  : item
+              )
+            )
+          }
+        }}
+        onToast={(msg) => showToast(msg)}
+      />
 
       {/* "Send to Client" Modal (Email / WhatsApp / Copy link) */}
       {sendClientOpen &&
