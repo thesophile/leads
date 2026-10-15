@@ -1959,7 +1959,10 @@ class QuotationView(APIView):
                     {'detail': 'Please select at least one approver.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            quotation.approvals.all().delete()
+            existing_approvals = {a.user_id: a for a in quotation.approvals.all()}
+            approver_ids = [a.id for a in approvers]
+            quotation.approvals.exclude(user_id__in=approver_ids).delete()
+
             quotation.submitted_by = request.user
             quotation.approval_requested_at = timezone.now()
             quotation.approved_at = None
@@ -1989,8 +1992,24 @@ class QuotationView(APIView):
 
             created_approvals = []
             for approver in approvers:
-                token = secrets.token_urlsafe(32)
-                approval = quotation.approvals.create(user=approver, token=token)
+                approval = existing_approvals.get(approver.id)
+                if not approval:
+                    token = secrets.token_urlsafe(32)
+                    approval = quotation.approvals.create(user=approver, token=token)
+                else:
+                    if not approval.token:
+                        approval.token = secrets.token_urlsafe(32)
+                    approval.status = QuotationApproval.STATUS_PENDING
+                    approval.signed_by = ''
+                    approval.signed_at = None
+                    approval.signature_ref = ''
+                    approval.signature_hash = ''
+                    approval.otp_hash = ''
+                    approval.otp_sent_at = None
+                    approval.otp_expires_at = None
+                    approval.otp_attempts = 0
+                    approval.rejection_reason = ''
+                    approval.save()
                 created_approvals.append(approval)
 
                 approval_link = f'{origin}/approval/{approval.token}' if origin else f'/approval/{approval.token}'
