@@ -9,7 +9,7 @@ import { can } from '../../utils/permissions'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
-import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol } from './proposalItemsUtils'
+import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol, htmlToFormattedLines } from './proposalItemsUtils'
 
 function escapeHtml(value) {
   return String(value)
@@ -47,7 +47,7 @@ function htmlToPlainLines(html) {
 }
 
 function linesToHtml(lines) {
-  return lines.map((line) => `<div>${line ? escapeHtml(line) : '&nbsp;'}</div>`).join('')
+  return lines.map((line) => `<div>${line || '&nbsp;'}</div>`).join('')
 }
 
 
@@ -547,17 +547,17 @@ export default function ProposalPreview() {
   // service/text blocks (bold title, description below, right-aligned amount).
   const detailSplit = proposalItemsFromHtml(proposalData?.proposalInDetailsHtml || '')
   const composedDetailsHtml = [
-    detailSplit.freeHtml ? linesToHtml(htmlToPlainLines(detailSplit.freeHtml)) : '',
+    detailSplit.freeHtml ? linesToHtml(htmlToFormattedLines(detailSplit.freeHtml)) : '',
     itemsPrintHtml(detailSplit.items, currencySymbol(proposalData?.currency), ''),
   ].join('')
   const hasDetails =
-    htmlToPlainLines(detailSplit.freeHtml || '').length > 0 || detailSplit.items.length > 0
+    htmlToFormattedLines(detailSplit.freeHtml || '').length > 0 || detailSplit.items.length > 0
 
   // "Proposal Summary" carries its own optional service/text blocks. Totals are
   // collective (shown once in the financial banner), so no per-section total.
   const summarySplit = proposalItemsFromHtml(proposalData?.proposalSummaryHtml || '')
   const composedSummaryHtml = [
-    summarySplit.freeHtml ? linesToHtml(htmlToPlainLines(summarySplit.freeHtml)) : '',
+    summarySplit.freeHtml ? linesToHtml(htmlToFormattedLines(summarySplit.freeHtml)) : '',
     itemsPrintHtml(summarySplit.items, currencySymbol(proposalData?.currency), ''),
   ].join('')
 
@@ -585,7 +585,7 @@ export default function ProposalPreview() {
   const termsInset = hasFullTerms
     ? {
         title: 'Detailed Terms & Conditions',
-        html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml)),
+        html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml).map(escapeHtml)),
         contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
         boxClass: 'rounded-xl border border-slate-300 bg-white',
         titleClass: 'text-center',

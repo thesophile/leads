@@ -90,6 +90,8 @@ def html_to_pdf_markup(html):
             # Reportlab renders consecutive <p> blocks on the same line unless
             # broken explicitly, so end each paragraph with a line break.
             return '<br/>' if closing else ''
+        if tag in ('b', 'strong'):
+            return f'<{closing}b>'
         if tag in KEEP:
             return f'<{closing}{tag}>'
         if tag in ('div', 'section', 'article', 'table', 'tr'):
