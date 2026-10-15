@@ -157,7 +157,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       if (full.over.length) {
         const unsplit = full.over.length === 1 && full.over[0].height > splitLimit
         if (!unsplit) {
-          nextCap = Math.max(48, full.last)
+          nextCap = full.last > 0 ? full.last : 0
           nextPart2 = full.over.map((o) => o.html).join('')
           nextShowEnd = false
         } else {
@@ -171,7 +171,10 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
         // here; otherwise the content stays put (no reserved blank slot) and
         // the end block rolls onto its own continuation page.
         const contentEnd = full.last
-        const needsEndPage = contentEnd > 0 && contentEnd + endCapHRef.current + 8 > c
+        const needsEndPage =
+          contentEnd > 0 &&
+          endCapHRef.current > 40 &&
+          contentEnd + endCapHRef.current + 8 > c + reserve
         if (needsEndPage) {
           nextShowEnd = false
           nextEndOverflow = true
@@ -186,7 +189,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       if (over.length) {
         const unsplit = over.length === 1 && over[0].height > splitLimit
         if (!unsplit) {
-          nextCap = Math.max(48, last)
+          nextCap = last > 0 ? last : 0
           nextPart2 = over.map((o) => o.html).join('')
         }
       } else {

@@ -1132,17 +1132,7 @@ const approvedByRef = useRef(null)
               pageFooter={<PageFooter company={company} />}
               endBlock={acceptanceEnd}
             />
-          ) : (
-            /* No detail content and no detailed terms — close the document
-               without an empty details box. */
-            <div className={PAGE_CLASS}>
-              <div className="flex flex-1 flex-col">
-                {proposalPageHeader}
-                <div className="flex flex-1 flex-col justify-end">{acceptanceEnd}</div>
-                <PageFooter company={company} />
-              </div>
-            </div>
-          )}
+          ) : null}
 
         </div>
       </div>
