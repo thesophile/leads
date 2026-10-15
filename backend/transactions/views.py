@@ -3324,9 +3324,9 @@ class ClientDetailListCreateView(APIView):
         status_counts.setdefault('Paid', 0)
         tab = request.query_params.get('tab') or 'all'
         if tab == 'active':
-            qs = qs.filter(status__in=['Details Pending', 'In Progress'])
+            qs = qs.filter(status__in=['Details Pending', 'Details Complete', 'In Progress'])
         elif tab == 'completed':
-            qs = qs.filter(status__in=['Details Complete', 'Completed', 'Paid'])
+            qs = qs.filter(status__in=['Completed', 'Paid'])
         status_filter = request.query_params.get('status')
         if status_filter:
             qs = qs.filter(status=status_filter)

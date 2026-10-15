@@ -28,9 +28,6 @@ const CATEGORIES = [
 const STATUS_VALUES = [
   'Details Pending',
   'Details Complete',
-  'In Progress',
-  'Completed',
-  'Paid',
 ]
 
 const STATUS_LIST = ['All Status', ...STATUS_VALUES]
@@ -65,6 +62,7 @@ const EMPTY_FORM = {
   email: '',
   category: 'Dynamic Website',
   acceptedDate: '',
+  deliveryDate: '',
   collectedBy: '',
   notes: '',
 }
@@ -262,6 +260,7 @@ export default function ClientDetails() {
           email: prefilledOrder.email || '',
           category: prefilledOrder.category || 'Dynamic Website',
           acceptedDate: localISO(),
+          deliveryDate: prefilledOrder.deliveryDate || prefilledOrder.delivery_date || '',
           collectedBy: prefilledOrder.proposalBy || prefilledOrder.staff || '',
           notes: '',
         }
@@ -454,6 +453,7 @@ export default function ClientDetails() {
       email: rec.email,
       category: rec.category,
       acceptedDate: rec.acceptedDate,
+      deliveryDate: rec.deliveryDate || '',
       collectedBy: rec.collectedBy,
       notes: rec.notes,
     })
@@ -691,7 +691,7 @@ export default function ClientDetails() {
         </div>
 
         {/* KPI Chips */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total</span>
             <div className="mt-1 flex items-baseline justify-between">
@@ -876,7 +876,7 @@ export default function ClientDetails() {
                           aria-label={`Status for ${rec.clientName}`}
                           className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60 disabled:cursor-not-allowed ${STATUS_STYLES[rec.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}
                         >
-                          {STATUS_VALUES.map((statusValue) => (
+                          {(STATUS_VALUES.includes(rec.status) ? STATUS_VALUES : [rec.status, ...STATUS_VALUES]).map((statusValue) => (
                             <option key={statusValue} value={statusValue}>
                               {statusValue}
                             </option>
@@ -1062,6 +1062,17 @@ export default function ClientDetails() {
                   />
                 </div>
                 <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Client Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.clientName}
+                    onChange={(e) => handleField('clientName', e.target.value)}
+                    placeholder="Contact person"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">Accepted Date</label>
                   <input
                     type="date"
@@ -1072,13 +1083,11 @@ export default function ClientDetails() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Client Name</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Delivery Date</label>
                   <input
-                    type="text"
-                    required
-                    value={form.clientName}
-                    onChange={(e) => handleField('clientName', e.target.value)}
-                    placeholder="Contact person"
+                    type="date"
+                    value={form.deliveryDate}
+                    onChange={(e) => handleField('deliveryDate', e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
@@ -1336,6 +1345,10 @@ export default function ClientDetails() {
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Accepted Date</p>
                   <p className="mt-0.5 text-xs text-slate-800">{viewRecord.acceptedDate || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Delivery Date</p>
+                  <p className="mt-0.5 text-xs text-slate-800">{viewRecord.deliveryDate || '—'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Collected By</p>

@@ -41,6 +41,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
     leadId = serializers.CharField(source='lead_id', required=False, allow_blank=True)
     clientName = serializers.CharField(source='client_name', required=False, allow_blank=True)
     acceptedDate = serializers.CharField(source='accepted_date', required=False, allow_blank=True)
+    deliveryDate = serializers.CharField(source='delivery_date', required=False, allow_blank=True)
     collectedBy = serializers.CharField(source='collected_by', required=False, allow_blank=True)
     attachments = AttachmentSerializer(many=True, read_only=True)
     payments = ClientPaymentSerializer(many=True, read_only=True)
@@ -57,6 +58,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
             'email',
             'category',
             'acceptedDate',
+            'deliveryDate',
             'collectedBy',
             'notes',
             'status',
