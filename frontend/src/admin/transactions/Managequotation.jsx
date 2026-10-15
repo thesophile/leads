@@ -1206,6 +1206,7 @@ export default function Managequotation() {
           nextApprovalId = saved.id
           const newRow = {
             ...targetQuote,
+            ...saved,
             id: saved.id,
             leadId: saved.leadId || (leadLike && leadLike.leadId) || persistLeadId,
             versionNo: saved.versionNo || 2,
@@ -1217,8 +1218,12 @@ export default function Managequotation() {
             approvalsTotal: saved.approvalsTotal || 0,
             approvalsApproved: saved.approvalsApproved || 0,
             clientStatus: saved.clientStatus || 'Pending',
+            hasProposal: true,
           }
+          targetQuote = newRow
           setQuotationsList((prev) => [newRow, ...prev])
+        } else if (saved) {
+          targetQuote = { ...targetQuote, ...saved }
         }
         if (saved && saved.contactChanged && saved.wasGenerated) {
           showToast(

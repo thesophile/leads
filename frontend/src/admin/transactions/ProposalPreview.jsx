@@ -343,10 +343,12 @@ export default function ProposalPreview() {
 
   const canApprove = !!user && (can(user, 'quotation.approve') || user.is_superuser)
 
+  const navProposal = location.state?.proposal
+  const stateMatchesParam = navProposal && (!params.id || navProposal.id === params.id)
   const [company, setCompany] = useState({})
-  const [proposal, setProposal] = useState(() => location.state?.proposal || null)
-  const [clientToken, setClientToken] = useState(() => location.state?.proposal?.clientToken || '')
-  const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.proposal)
+  const [proposal, setProposal] = useState(() => (stateMatchesParam ? navProposal : null))
+  const [clientToken, setClientToken] = useState(() => (stateMatchesParam ? navProposal.clientToken || '' : ''))
+  const [loadingQuote, setLoadingQuote] = useState(() => !stateMatchesParam)
   const [refreshing, setRefreshing] = useState(false)
   const [notFound, setNotFound] = useState(false)
 
@@ -415,11 +417,13 @@ export default function ProposalPreview() {
     fetchApprovers()
   }, [fetchApprovers])
 
-  // If we arrived without navigation state (e.g. from a notification link),
-  // fetch the quotation by id.
+  // If we arrived without navigation state (e.g. from a notification link)
+  // or the loaded proposal does not match the active route ID, fetch by id.
   useEffect(() => {
-    if (proposal || !params.id) return
+    if (!params.id) return
+    if (proposal && proposal.id === params.id) return
     let cancelled = false
+    setLoadingQuote(true)
     ;(async () => {
       try {
         const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)

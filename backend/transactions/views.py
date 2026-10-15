@@ -230,10 +230,11 @@ def duplicate_quotation(source, payload):
     (``Not Sent``, no approvals, signatures, or client token) so it must be
     approved again before it can be sent to the client.
     """
-    version_no = latest_version_no(source.lead_id)
+    base_lead_id = source.lead_id or source.id
+    version_no = latest_version_no(base_lead_id)
     quotation = Quotation(
-        id=f'{source.lead_id}-V{version_no}',
-        lead_id=source.lead_id,
+        id=f'{base_lead_id}-V{version_no}',
+        lead_id=base_lead_id,
         tenant=source.tenant,
         company=payload.get('company') or source.company,
         customer=payload.get('customer') or source.customer,
