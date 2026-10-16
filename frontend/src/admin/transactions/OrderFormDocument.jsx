@@ -266,6 +266,8 @@ export default function OrderFormDocument({ order, company }) {
   const detailsPaged = usePagedContent(detailsContentRef, page2FooterRef, [], 64)
   const legalPaged = usePagedContent(legalTermsContentRef, page3FooterRef, [page3SigRef], 64)
 
+  const hasDetails = htmlToPlainLines(stripItems(order?.orderInDetailsHtml || '')).length > 0
+
   return (
     <div className="space-y-8 print:space-y-0">
       {/* =========================================================================
@@ -365,37 +367,39 @@ export default function OrderFormDocument({ order, company }) {
       </div>
 
       {/* =========================================================================
-          PAGE 2: ANNEXURE - A (1/2) ORDER IN DETAILS
+          PAGE 2: ANNEXURE - A (1/2) ORDER IN DETAILS (only if details exist)
       ========================================================================= */}
-      <div
-        className="print-page mx-auto w-full max-w-[210mm] h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
-        style={{ boxSizing: 'border-box' }}
-      >
-        <div className="flex flex-col flex-1 justify-between">
-          <PageHeader order={order} annexLabel="ANNEXURE - A (1/2)" />
+      {hasDetails && (
+        <div
+          className="print-page mx-auto w-full max-w-[210mm] h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
+          style={{ boxSizing: 'border-box' }}
+        >
+          <div className="flex flex-col flex-1 justify-between">
+            <PageHeader order={order} annexLabel="ANNEXURE - A (1/2)" />
 
-          <div className="mt-3 flex-1 flex flex-col">
-            <SectionBox title="ORDER IN DETAILS" className="flex-1 flex flex-col justify-between min-h-[580px]">
-              <div
-                ref={detailsContentRef}
-                className="text-[13px] leading-snug text-slate-800"
-                style={detailsPaged.cap ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
-              >
-                {htmlToPlainLines(stripItems(order.orderInDetailsHtml)).map((line, i) => (
-                  <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
-                ))}
-              </div>
-              {detailsPaged.part2Html && (
-                <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- Continued ---</p>
-              )}
-            </SectionBox>
+            <div className="mt-3 flex-1 flex flex-col">
+              <SectionBox title="ORDER IN DETAILS" className="flex-1 flex flex-col justify-between min-h-[580px]">
+                <div
+                  ref={detailsContentRef}
+                  className="text-[13px] leading-snug text-slate-800"
+                  style={detailsPaged.cap ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
+                >
+                  {htmlToPlainLines(stripItems(order.orderInDetailsHtml)).map((line, i) => (
+                    <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                  ))}
+                </div>
+                {detailsPaged.part2Html && (
+                  <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- Continued ---</p>
+                )}
+              </SectionBox>
+            </div>
+          </div>
+
+          <div ref={page2FooterRef} className="mt-3">
+            <PageFooter company={company} />
           </div>
         </div>
-
-        <div ref={page2FooterRef} className="mt-3">
-          <PageFooter company={company} />
-        </div>
-      </div>
+      )}
 
       {/* =========================================================================
           TERMS & CONDITIONS (SUMMARY) CONTINUED — placed before the detailed T&C
@@ -473,7 +477,7 @@ export default function OrderFormDocument({ order, company }) {
         />
       )}
 
-      {detailsPaged.part2Html && (
+      {hasDetails && detailsPaged.part2Html && (
         <PagedSection
           html={detailsPaged.part2Html}
           reserve={64}
