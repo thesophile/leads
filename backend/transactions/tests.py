@@ -1603,6 +1603,110 @@ class QuotationApprovalFlowTests(APITestCase):
         self.assertEqual(resp.status_code, 404)
         self.assertTrue(Quotation.objects.filter(lead_id=self.lead.id).exists())
 
+    def test_send_approval_channels_and_link(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(
+            f'/api/transactions/quotations/{self.lead.id}/',
+            {
+                'status': 'Pending Approval',
+                'approvers': [self.approver.id],
+                'channels': ['app', 'email', 'whatsapp'],
+                'origin': 'https://leads.test',
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['approvalLink'].startswith('https://leads.test/approval/'))
+        self.assertTrue(resp.data['approvalToken'])
+        self.assertEqual(resp.data['approverEmail'], self.approver.email)
+
+        # Generating / copying link via approval-link endpoint
+        link_resp = self.client.post(
+            f'/api/transactions/quotations/{self.lead.id}/approval-link/',
+            {'approver_id': self.approver.id, 'origin': 'https://leads.test'},
+            format='json',
+        )
+        self.assertEqual(link_resp.status_code, 200)
+        self.assertTrue(link_resp.data['link'].startswith('https://leads.test/approval/'))
+
+    def test_public_approval_flow_otp_and_approve(self):
+        # Unauthenticated approval flow
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(
+            f'/api/transactions/quotations/{self.lead.id}/',
+            {
+                'status': 'Pending Approval',
+                'approvers': [self.approver.id],
+                'origin': 'https://leads.test',
+            },
+            format='json',
+        )
+        token = resp.data['approvalToken']
+
+        # Log out (public user)
+        self.client.logout()
+
+        # 1. Read detail
+        detail = self.client.get(f'/api/transactions/public/approval/{token}/')
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data['quotation']['id'], self.q.id)
+        self.assertEqual(detail.data['approval']['status'], 'Pending')
+        self.assertEqual(detail.data['approval']['approverName'], self.approver.name)
+
+        # 2. Request OTP
+        mailbox = {}
+
+        def fake_send(subject, message, from_email=None, recipient_list=None, fail_silently=False, **kw):
+            mailbox['message'] = message
+            return 1
+
+        with patch('transactions.views.send_mail', side_effect=fake_send):
+            otp_resp = self.client.post(f'/api/transactions/public/approval/{token}/otp/', {}, format='json')
+        self.assertEqual(otp_resp.status_code, 200)
+        self.assertTrue(otp_resp.data['sent'])
+        code = re.search(r'approval code is:\n\n\s*(\d{6})', mailbox['message']).group(1)
+
+        # 3. Approve with OTP
+        approve_resp = self.client.post(
+            f'/api/transactions/public/approval/{token}/approve/',
+            {'otp': code, 'note': 'Approved via public link'},
+            format='json',
+        )
+        self.assertEqual(approve_resp.status_code, 200)
+        self.assertEqual(approve_resp.data['status'], 'Approved')
+        self.assertEqual(approve_resp.data['quotationStatus'], 'Approved')
+
+        # Check in DB
+        self.q.refresh_from_db()
+        self.assertEqual(self.q.status, 'Approved')
+        self.assertEqual(self.q.signed_by, self.approver.name)
+
+    def test_public_approval_reject(self):
+        self.client.force_authenticate(self.staff)
+        resp = self.client.put(
+            f'/api/transactions/quotations/{self.lead.id}/',
+            {
+                'status': 'Pending Approval',
+                'approvers': [self.approver.id],
+            },
+            format='json',
+        )
+        token = resp.data['approvalToken']
+
+        # Log out (public user)
+        self.client.logout()
+
+        reject_resp = self.client.post(
+            f'/api/transactions/public/approval/{token}/reject/',
+            {'reason': 'Budget too high'},
+            format='json',
+        )
+        self.assertEqual(reject_resp.status_code, 200)
+        self.assertEqual(reject_resp.data['status'], 'Rejected')
+        self.q.refresh_from_db()
+        self.assertEqual(self.q.status, 'Rejected')
+        self.assertEqual(self.q.rejection_reason, 'Budget too high')
+
 
 class QuotationSendWithoutApprovalTests(APITestCase):
     """Users with ``quotation.send_without_approval`` may send a proposal to the

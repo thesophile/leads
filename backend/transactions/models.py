@@ -1,3 +1,4 @@
+import secrets
 from django.db import models
 from django.db.models.functions import Lower
 
@@ -378,6 +379,7 @@ class QuotationApproval(models.Model):
         related_name='quotation_approvals',
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    token = models.CharField(max_length=64, blank=True, null=True, unique=True, db_index=True)
     signed_by = models.CharField(max_length=120, blank=True)
     signed_at = models.DateTimeField(null=True, blank=True)
     signature_ref = models.CharField(max_length=120, blank=True)
@@ -401,6 +403,11 @@ class QuotationApproval(models.Model):
 
     def __str__(self):
         return f'{self.quotation_id} / {self.user_id} / {self.status}'
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
 
 
 class Order(models.Model):

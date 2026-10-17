@@ -18,6 +18,7 @@ import LeadStatus from './admin/transactions/LeadStatus'
 import Managequotation from './admin/transactions/Managequotation'
 import ProposalPreview from './admin/transactions/ProposalPreview'
 import ClientQuotation from './admin/transactions/ClientQuotation'
+import PublicApproval from './admin/transactions/PublicApproval'
 import ClientOrder from './admin/transactions/ClientOrder'
 import ClientUpload from './admin/transactions/ClientUpload'
 import ManageOrder from './admin/transactions/ManageOrder'
@@ -45,6 +46,7 @@ function App() {
 
         {/* Public client-facing pages (no authentication) */}
         <Route path="/quotation/:token" element={<ClientQuotation />} />
+        <Route path="/approval/:token" element={<PublicApproval />} />
         <Route path="/order/:token" element={<ClientOrder />} />
         <Route path="/client-upload/:token" element={<ClientUpload />} />
 

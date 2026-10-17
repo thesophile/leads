@@ -11,6 +11,7 @@ import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
 import Spinner from '../../components/Spinner'
 import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol, htmlToFormattedLines } from './proposalItemsUtils'
+import SendForApprovalModal from './SendForApprovalModal'
 
 function escapeHtml(value) {
   return String(value)
@@ -882,8 +883,8 @@ export default function ProposalPreview() {
                 type="button"
                 onClick={openSend}
                 className={`flex items-center gap-1.5 rounded-xl px-5 py-2 text-xs font-bold text-white shadow-md transition cursor-pointer ${isSent
-                    ? 'cursor-not-allowed bg-emerald-600 opacity-90'
-                    : 'bg-emerald-600 hover:bg-emerald-700'
+                  ? 'cursor-not-allowed bg-emerald-600 opacity-90'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
                   }`}
               >
                 {isSent ? '✓ Sent for Approval' : 'Send for Approval'}
@@ -987,10 +988,10 @@ export default function ProposalPreview() {
                             <div className="flex flex-wrap items-center gap-2">
                               <span
                                 className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${proposalData.status === 'Approved'
-                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                    : proposalData.status === 'Rejected'
-                                      ? 'border-rose-200 bg-rose-50 text-rose-700'
-                                      : 'border-amber-200 bg-amber-50 text-amber-700'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : proposalData.status === 'Rejected'
+                                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                    : 'border-amber-200 bg-amber-50 text-amber-700'
                                   }`}
                               >
                                 {proposalData.status === 'Approved'
@@ -1031,10 +1032,10 @@ export default function ProposalPreview() {
                                 </div>
                                 <span
                                   className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${a.status === 'Approved'
-                                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                      : a.status === 'Rejected'
-                                        ? 'border-rose-200 bg-rose-50 text-rose-700'
-                                        : 'border-amber-200 bg-amber-50 text-amber-700'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    : a.status === 'Rejected'
+                                      ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                      : 'border-amber-200 bg-amber-50 text-amber-700'
                                     }`}
                                 >
                                   {a.status}
@@ -1170,17 +1171,11 @@ export default function ProposalPreview() {
               </p>
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admin / Manager <span className="text-rose-500">*</span>
+                  Select Approving Admin <span className="text-rose-500">*</span>
                 </label>
                 <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                  {loadingApprovers && approvers.length === 0 && (
-                    <div className="flex items-center gap-2 px-3 py-3 text-[11px] text-slate-500">
-                      <Spinner className="h-3.5 w-3.5 text-brand-600" />
-                      <span>Loading active approvers…</span>
-                    </div>
-                  )}
-                  {!loadingApprovers && approvers.length === 0 && (
-                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No active approvers available.</p>
+                  {approvers.length === 0 && (
+                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No approvers available.</p>
                   )}
                   {approvers.map((a) => {
                     const checked = sendApprovers.includes(a.id)
@@ -1198,10 +1193,8 @@ export default function ProposalPreview() {
                         />
                         <span className="flex-1 min-w-0">
                           <span className="block font-semibold text-slate-800 truncate">{a.name}</span>
-                          <span className="block text-[10px] text-slate-400 truncate">
-                            {a.role ? a.role : (a.is_superuser ? 'Super Admin' : 'Approver')}
-                            {a.is_superuser && a.role ? ' · Super Admin' : ''}
-                            {a.email ? ` · ${a.email}` : ''}
+                          <span className="block text-[10px] text-slate-400">
+                            {a.role ? a.role : 'Approver'}
                           </span>
                         </span>
                         {checked && (
@@ -1212,7 +1205,7 @@ export default function ProposalPreview() {
                   })}
                 </div>
                 <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  The selected admin or manager must approve this proposal before it is sent to the client.
+                  The selected admin must approve this proposal before it is sent to the client.
                 </p>
               </div>
             </div>
