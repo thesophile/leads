@@ -1224,15 +1224,16 @@ def render_order_pdf(order):
         elements.append(signature_box(content_width))
         elements.append(Spacer(1, 5 * mm))
 
-        # Order in details.
+        # Order in details (only if provided).
         _, order_details_free = split_proposal_items(order.details)
         details_markup = html_to_pdf_markup(order_details_free)
-        elements.append(section_box(
-            'ORDER IN DETAILS',
-            [Paragraph(details_markup or '&nbsp;', styles['body'])],
-            content_width,
-        ))
-        elements.append(Spacer(1, 5 * mm))
+        if details_markup and details_markup.strip():
+            elements.append(section_box(
+                'ORDER IN DETAILS',
+                [Paragraph(details_markup, styles['body'])],
+                content_width,
+            ))
+            elements.append(Spacer(1, 5 * mm))
 
         # Detailed terms & conditions.
         company_terms_markup = html_to_pdf_markup(

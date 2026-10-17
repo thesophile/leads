@@ -969,7 +969,7 @@ export default function ProposalPreview() {
                     <div
                       ref={termsContentRef}
                       className="text-[11px] leading-snug text-slate-700 text-justify"
-                      style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
+                      style={typeof termsPaged.cap === 'number' ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
                       {htmlToPlainLines(pageOneTermsHtml).map((line, i) => (
                         <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
@@ -1068,7 +1068,7 @@ export default function ProposalPreview() {
                     <div
                       ref={summaryContentRef}
                       className="text-[13.5px] leading-snug text-slate-800"
-                      style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
+                      style={typeof summaryPaged.cap === 'number' ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
                       dangerouslySetInnerHTML={{ __html: composedSummaryHtml }}
                     />
                     {summaryPaged.part2Html ? (

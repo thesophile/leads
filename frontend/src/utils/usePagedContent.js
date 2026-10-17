@@ -117,7 +117,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     }, 0)
     const gaps = (belowRef.current?.length || 0) * 14
     const reserve = typeof reserveRef.current === 'number' ? reserveRef.current : 48
-    const c = Math.max(48, bottom - 16 - contentTop - below - gaps - reserve)
+    const c = Math.max(0, bottom - 16 - contentTop - below - gaps - reserve)
 
     // Measure the end block's real height while it is visible (it mounts
     // visible on every page, so the first pass always captures it). Stored so
@@ -155,7 +155,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       // still overflow are plain fill pages: full height, no end block.
       const full = splitAt(c)
       if (full.over.length) {
-        const unsplit = full.over.length === 1 && full.over[0].height > splitLimit
+        const unsplit = full.last === 0 && full.over.length === 1 && full.over[0].height > splitLimit
         if (!unsplit) {
           nextCap = full.last > 0 ? full.last : 0
           nextPart2 = full.over.map((o) => o.html).join('')
@@ -173,7 +173,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
         const contentEnd = full.last
         const needsEndPage =
           contentEnd > 0 &&
-          endCapHRef.current > 40 &&
+          endCapHRef.current > 70 &&
           contentEnd + endCapHRef.current + 8 > c + reserve
         if (needsEndPage) {
           nextShowEnd = false
@@ -187,7 +187,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       // No end block: plain overflow split (existing behaviour).
       const { last, over } = splitAt(c)
       if (over.length) {
-        const unsplit = over.length === 1 && over[0].height > splitLimit
+        const unsplit = last === 0 && over.length === 1 && over[0].height > splitLimit
         if (!unsplit) {
           nextCap = last > 0 ? last : 0
           nextPart2 = over.map((o) => o.html).join('')
