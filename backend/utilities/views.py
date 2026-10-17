@@ -150,6 +150,7 @@ class NotificationClearDoneView(APIView):
 
     def post(self, request):
         Lead = apps.get_model('transactions', 'Lead')
+        from transactions.views import is_follow_up_due
         user_notifications = Notification.objects.filter(user=request.user)
 
         # 1. Lead IDs from this user's follow-up notifications
@@ -159,22 +160,24 @@ class NotificationClearDoneView(APIView):
             .values_list('entity_id', flat=True)
         )
 
-        # 2. Leads that are "done":
+        # 2. Leads that are "done" or not due:
         # - call status changed away from 'Pending Call'
         # - OR no longer pending follow-up (has_follow_up=False)
+        # - OR follow-up is not due (future date)
         # - OR lead no longer exists
         done_lead_ids = set()
         if follow_up_lead_ids:
-            existing_leads = Lead.objects.filter(id__in=follow_up_lead_ids).values('id', 'call_status', 'has_follow_up')
-            existing_lead_map = {str(item['id']): item for item in existing_leads}
+            existing_leads = Lead.objects.filter(id__in=follow_up_lead_ids).only(
+                'id', 'call_status', 'has_follow_up', 'next_follow_up_date'
+            )
+            existing_lead_map = {str(lead.id): lead for lead in existing_leads}
             for lid in follow_up_lead_ids:
-                lead_data = existing_lead_map.get(str(lid))
-                if not lead_data:
+                lead = existing_lead_map.get(str(lid))
+                if not lead:
                     done_lead_ids.add(str(lid))
                 else:
-                    call_status = lead_data.get('call_status') or 'Pending Call'
-                    has_follow_up = lead_data.get('has_follow_up', False)
-                    if call_status != 'Pending Call' or not has_follow_up:
+                    call_status = lead.call_status or 'Pending Call'
+                    if call_status != 'Pending Call' or not is_follow_up_due(lead):
                         done_lead_ids.add(str(lid))
 
         from django.db.models import Q

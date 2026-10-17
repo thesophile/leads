@@ -496,11 +496,22 @@ def format_display_date(value):
 
 def parse_due_date(value):
     """Best-effort parse of the free-text follow-up due date (ISO or common
-    dd-mm-yyyy / dd/mm/yyyy). Returns a ``date`` or ``None`` when unparseable."""
+    dd-mm-yyyy / dd/mm/yyyy / dd Mon yyyy). Returns a ``date`` or ``None`` when unparseable."""
     if not value:
         return None
     text = str(value).strip()
-    for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%Y/%m/%d'):
+    for fmt in (
+        '%Y-%m-%d',
+        '%d-%m-%Y',
+        '%d/%m/%Y',
+        '%Y/%m/%d',
+        '%d %b %Y',
+        '%d %B %Y',
+        '%b %d, %Y',
+        '%B %d, %Y',
+        '%d-%b-%Y',
+        '%d-%b-%y',
+    ):
         try:
             return datetime.strptime(text, fmt).date()
         except ValueError:
