@@ -58,8 +58,61 @@ function decodeHtml(value) {
     .replace(/&#x27;/gi, "'")
 }
 
+function isSectionHeading(line) {
+  if (!line) return false
+  const plain = line.replace(/<[^>]+>/g, '').trim()
+  if (/^(\d+[\.\)]|\([0-9]+\))\s+[A-Za-z]/.test(plain)) return true
+  if (/^[•\-\*]\s+/.test(plain)) return true
+  if (/^<(strong|b)>.*<\/(strong|b)>$/i.test(line.trim()) && plain.length < 50) return true
+  return false
+}
+
+function joinWrappedLines(prev, next) {
+  const p = prev.trimEnd()
+  const n = next.trimStart()
+  if (!p) return n
+  if (!n) return p
+
+  // 1. Number + percentage (e.g. "50" + "% of ...")
+  if (/\d$/.test(p) && /^%/.test(n)) {
+    return p + n
+  }
+
+  // 2. Trailing hyphen (e.g. "pre-" + "existing")
+  if (p.endsWith('-')) {
+    return p + n
+  }
+
+  // 3. Rejoin words cut in half by column-width wrapping:
+  // e.g. "payable o" + "n", "de" + "livered", "Payments b" + "y", "of applica" + "ble",
+  // "charged a" + "t", "agreed i" + "n", "fol" + "lowed", "afte" + "r", "timeli" + "ne",
+  // "beyon" + "d", "for t" + "he", "form. T" + "he"
+  const choppedPrefixRe = /(?:\b(?:de|applica|fol|afte|timeli|beyon))$/
+  if (choppedPrefixRe.test(p) && /^[a-z]/.test(n)) {
+    return p + n
+  }
+  if (/\b o$/i.test(p) && /^n\s/i.test(n)) {
+    return p + n
+  }
+  if (/\b a$/i.test(p) && /^t\s/i.test(n)) {
+    return p + n
+  }
+  if (/\b i$/i.test(p) && /^n\s/i.test(n)) {
+    return p + n
+  }
+  if (/\b b$/i.test(p) && /^y\s/i.test(n)) {
+    return p + n
+  }
+  if (/\b[tT]$/.test(p) && /^he\s/i.test(n)) {
+    return p + n
+  }
+
+  return p + ' ' + n
+}
+
 // Convert HTML text (e.g. proposal summary or detail) into an array of lines
-// while preserving bold (<b>, <strong>) formatting and author's line breaks.
+// while preserving bold (<b>, <strong>) formatting, unwrapping artificial breaks,
+// and preserving author's section structure.
 export function htmlToFormattedLines(html) {
   if (!html) return []
   let raw = String(html)
@@ -80,14 +133,14 @@ export function htmlToFormattedLines(html) {
     return ''
   })
 
-  const lines = []
+  const rawLines = []
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
     const plainText = trimmed.replace(/<[^>]+>/g, '').trim()
-    if (!plainText && (lines.length === 0 || lines[lines.length - 1] === '')) continue
+    if (!plainText && (rawLines.length === 0 || rawLines[rawLines.length - 1] === '')) continue
 
     if (!plainText) {
-      lines.push('')
+      rawLines.push('')
     } else {
       let balanced = trimmed
       const opens = (balanced.match(/<strong>/g) || []).length
@@ -99,10 +152,52 @@ export function htmlToFormattedLines(html) {
           balanced = balanced.replace(/<\/strong>/, '')
         }
       }
-      lines.push(balanced)
+      rawLines.push(balanced)
     }
   }
-  while (lines.length && lines[lines.length - 1] === '') lines.pop()
+  while (rawLines.length && rawLines[rawLines.length - 1] === '') rawLines.pop()
+
+  // Unpack paragraphs that were pre-wrapped across short lines
+  const combined = []
+  for (let i = 0; i < rawLines.length; i++) {
+    const curr = rawLines[i]
+    if (!curr) {
+      if (combined.length > 0 && combined[combined.length - 1] !== '') {
+        combined.push('')
+      }
+      continue
+    }
+
+    if (combined.length === 0 || combined[combined.length - 1] === '') {
+      combined.push(curr)
+      continue
+    }
+
+    const prev = combined[combined.length - 1]
+
+    if (isSectionHeading(curr)) {
+      combined.push(curr)
+      continue
+    }
+
+    if (isSectionHeading(prev)) {
+      combined.push(curr)
+      continue
+    }
+
+    combined[combined.length - 1] = joinWrappedLines(prev, curr)
+  }
+
+  const lines = []
+  for (const line of combined) {
+    if (!line) {
+      lines.push('')
+    } else if (isSectionHeading(line) && !/^<(strong|b)>/i.test(line)) {
+      lines.push(`<strong>${line}</strong>`)
+    } else {
+      lines.push(line)
+    }
+  }
   return lines
 }
 

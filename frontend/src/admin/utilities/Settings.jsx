@@ -1630,11 +1630,11 @@ export default function Settings() {
               <div className="grid grid-cols-1 items-start gap-8 px-6 py-6 md:px-8 md:py-7 lg:grid-cols-[min-content_minmax(0,1fr)]">
                 <div className="w-fit">
                   <SectionTitle>Terms &amp; Conditions Summary</SectionTitle>
-                  <p className="mt-1.5 w-[233px] text-[11px] text-slate-400">
+                  <p className="mt-1.5 max-w-[340px] text-[11px] text-slate-400">
                     A short version shown in the "Terms &amp; Conditions" box of the proposal and on the first
                     page of the order form.
                   </p>
-                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white" style={{ width: Math.max(300, termsSummaryMaxLinePx() + 60) }}>
+                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white" style={{ width: Math.max(340, termsSummaryMaxLinePx() + 60) }}>
                     <ReactQuill
                       theme="snow"
                       className="quill-terms-17"
@@ -1645,7 +1645,7 @@ export default function Settings() {
                       placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
                     />
                   </div>
-                  <div className="mt-1 flex items-center justify-between" style={{ width: Math.max(300, termsSummaryMaxLinePx() + 60) }}>
+                  <div className="mt-1 flex items-center justify-between" style={{ width: Math.max(340, termsSummaryMaxLinePx() + 60) }}>
                     <p className="text-[10px] font-semibold text-slate-400">
                       Max {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} chars ·{' '}
                       {TERMS_SUMMARY_MAX_LINES} lines
