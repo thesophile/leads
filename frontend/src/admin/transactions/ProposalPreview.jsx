@@ -968,8 +968,12 @@ export default function ProposalPreview() {
                       className="text-[11px] leading-snug text-slate-700 text-justify"
                       style={typeof termsPaged.cap === 'number' ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
-                      {htmlToPlainLines(pageOneTermsHtml).map((line, i) => (
-                        <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                      {htmlToFormattedLines(pageOneTermsHtml).map((line, i) => (
+                        <div
+                          key={i}
+                          className="min-h-[1.2em]"
+                          dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }}
+                        />
                       ))}
                     </div>
                     <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>

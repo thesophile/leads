@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../../api/client'
-import { proposalItemsFromHtml, fmtAmount, currencySymbol } from './proposalItemsUtils'
+import { proposalItemsFromHtml, fmtAmount, currencySymbol, htmlToFormattedLines } from './proposalItemsUtils'
 
 function CheckIcon({ className = 'h-5 w-5' }) {
   return (
@@ -632,8 +632,8 @@ export default function PublicApproval() {
                 Terms & Conditions
               </h3>
               <div className="space-y-1.5 text-xs text-slate-600 leading-relaxed bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                {htmlToPlainLines(detailsSplit.freeHtml || q.companyTerms).map((line, idx) => (
-                  <p key={idx}>{line}</p>
+                {htmlToFormattedLines(detailsSplit.freeHtml || q.companyTerms).map((line, idx) => (
+                  <p key={idx} dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }} />
                 ))}
               </div>
             </div>
