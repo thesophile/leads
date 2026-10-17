@@ -212,9 +212,6 @@ function PageHeader({ proposal, company, clientToken = '' }) {
         <h2 className="text-[24px] font-black uppercase tracking-[0.1em] text-black">
           Proposal Form
         </h2>
-        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-          {company?.name || 'Company'}
-        </p>
         <div className="mt-1.5 flex justify-center">
           <GeMBadge />
         </div>
