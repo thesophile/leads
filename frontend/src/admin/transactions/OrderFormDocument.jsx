@@ -343,7 +343,7 @@ export default function OrderFormDocument({ order, company }) {
               <SectionBox title="TERMS &amp; CONDITIONS" className="h-full">
                 <div
                   ref={termsSummaryContentRef}
-                  className="text-[12px] leading-normal text-slate-800 text-justify space-y-1.5"
+                  className="text-[12.5px] leading-relaxed text-slate-800 text-justify space-y-2"
                   style={typeof termsSummaryPaged.cap === 'number' ? { maxHeight: termsSummaryPaged.cap, overflow: 'hidden' } : undefined}
                 >
                   {htmlToFormattedLines(order.termsSummaryHtml).map((line, i) => (
@@ -412,7 +412,7 @@ export default function OrderFormDocument({ order, company }) {
         <PagedSection
           html={termsSummaryPaged.part2Html}
           reserve={48}
-          contentClass="text-[12px] leading-normal text-slate-800 text-justify space-y-1.5"
+          contentClass="text-[12.5px] leading-relaxed text-slate-800 text-justify space-y-2"
           sectionTitle="TERMS &amp; CONDITIONS (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"

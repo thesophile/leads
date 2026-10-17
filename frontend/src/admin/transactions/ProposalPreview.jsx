@@ -965,7 +965,7 @@ export default function ProposalPreview() {
                   <SectionBox title="Terms &amp; Conditions" className="flex-1" pinBottom>
                     <div
                       ref={termsContentRef}
-                      className="text-[11px] leading-snug text-slate-700 text-justify"
+                      className="text-[10px] leading-tight text-slate-700 text-justify space-y-0.5"
                       style={typeof termsPaged.cap === 'number' ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
                       {htmlToFormattedLines(pageOneTermsHtml).map((line, i) => (
