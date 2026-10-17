@@ -322,7 +322,7 @@ export default function PublicApproval() {
                 Total Net Amount
               </span>
               <p className="mt-0.5 text-xl sm:text-2xl font-black text-slate-900">
-                {currency} {q.netAmount ? fmtAmount(Number(q.netAmount) || q.netAmount) : q.total}
+                {currency} {fmtAmount(q.netAmount || q.total || 0)}
               </p>
               <div className="mt-1 flex items-center justify-end gap-1.5">
                 <span
@@ -578,7 +578,7 @@ export default function PublicApproval() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">
-                        {item.amount ? fmtAmount(Number(item.amount) || item.amount) : '—'}
+                        {item.amount ? fmtAmount(item.amount) : '—'}
                       </td>
                     </tr>
                   ))}
@@ -607,19 +607,19 @@ export default function PublicApproval() {
               <div className="flex justify-between text-slate-600">
                 <span>Subtotal:</span>
                 <span className="font-mono font-semibold text-slate-800">
-                  {currency} {q.total}
+                  {currency} {fmtAmount(q.total || 0)}
                 </span>
               </div>
               {q.discount && q.discount !== '0' && q.discount !== '0.00' && (
                 <div className="flex justify-between text-emerald-600">
                   <span>Discount:</span>
-                  <span className="font-mono font-semibold">- {currency} {q.discount}</span>
+                  <span className="font-mono font-semibold">- {currency} {fmtAmount(q.discount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-1.5">
                 <span>Net Total:</span>
                 <span className="font-mono">
-                  {currency} {q.netAmount ? fmtAmount(Number(q.netAmount) || q.netAmount) : q.total}
+                  {currency} {fmtAmount(q.netAmount || q.total || 0)}
                 </span>
               </div>
             </div>

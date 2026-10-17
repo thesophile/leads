@@ -23,6 +23,7 @@ export function amountDigits(value) {
 }
 
 export function parseAmount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
   const cleaned = amountDigits(value)
   if (!cleaned) return 0
   const n = Number(cleaned)
@@ -30,7 +31,8 @@ export function parseAmount(value) {
 }
 
 export function fmtAmount(n) {
-  const rounded = Math.round(n * 100) / 100
+  const num = typeof n === 'number' && Number.isFinite(n) ? n : parseAmount(n)
+  const rounded = Math.round(num * 100) / 100
   return rounded.toLocaleString('en-IN', { maximumFractionDigits: 2 })
 }
 
