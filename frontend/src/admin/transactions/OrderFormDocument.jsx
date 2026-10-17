@@ -17,7 +17,7 @@ function QRCodeVisual({ value }) {
     <div className="flex h-full w-full items-center justify-center bg-white p-0.5">
       <QRCodeSVG
         value={value || 'NO-LINK'}
-        size={84}
+        size={96}
         level="H"
         fgColor="#000000"
         bgColor="#ffffff"
@@ -237,7 +237,7 @@ function SignatureBlock({ order, company }) {
       <AcceptedByCell order={order} />
 
       <div className="col-span-2 flex items-center justify-center rounded-md border border-black bg-white p-1">
-        <div className="h-[72px] w-[72px]">
+        <div className="h-[90px] w-[90px]">
           <QRCodeVisual value={orderFormLink(order)} />
         </div>
       </div>

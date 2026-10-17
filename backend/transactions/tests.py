@@ -2186,11 +2186,14 @@ class ClientDetailFlowTests(APITestCase):
             'email': 'new@cd.com',
             'category': 'Static Website',
             'acceptedDate': '2026-09-07',
+            'deliveryDate': '2026-09-15',
             'collectedBy': 'Staff CD',
             'status': 'Details Complete',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         record = ClientDetail.objects.get(id=resp.data['id'])
+        self.assertEqual(record.delivery_date, '2026-09-15')
+        self.assertEqual(resp.data['deliveryDate'], '2026-09-15')
         from django.core.files.uploadedfile import SimpleUploadedFile
         f = SimpleUploadedFile('card.jpg', b'fake-img-bytes', content_type='image/jpeg')
         upload = self.client.post(
