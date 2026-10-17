@@ -12,6 +12,7 @@ import {
   richTextLineCount,
   termsSummaryMaxLinePx,
 } from '../transactions/orderFormDocumentUtils'
+import { unwrapTermsSummaryHtml } from '../transactions/proposalItemsUtils'
 import { useAuth } from '../../context/auth-context'
 import { APP_MAJOR_VERSION, FRONTEND_VERSION } from '../../config'
 
@@ -220,7 +221,7 @@ const TERMS_SUMMARY_QUILL_FORMATS = [
   'underline',
 ]
 
-const TERMS_SUMMARY_MAX_CHARS = 650
+const TERMS_SUMMARY_MAX_CHARS = 750
 const TERMS_SUMMARY_MAX_LINES = 27
 
 const MONTH_NAMES = [
@@ -551,7 +552,8 @@ export default function Settings() {
           if (company.address) setCompanyAddress(company.address)
           setCompanyLogo(company.logo || '')
           setCompanySeal(company.seal || '')
-          if (company.termsSummaryHtml !== undefined) setTermsSummaryHtml(company.termsSummaryHtml || '')
+          const cleanSummary = unwrapTermsSummaryHtml(company.termsSummaryHtml || '')
+          if (company.termsSummaryHtml !== undefined) setTermsSummaryHtml(cleanSummary)
           if (company.termsFullHtml !== undefined) setTermsFullHtml(company.termsFullHtml || '')
           if (company.currency) setCurrency(company.currency)
           if (company.gstNo !== undefined) setGstNo(company.gstNo || '')
@@ -567,7 +569,7 @@ export default function Settings() {
             defaultBank: company.defaultBank || '',
           })
           setTemplatesBaseline({
-            summary: company.termsSummaryHtml || '',
+            summary: cleanSummary,
             full: company.termsFullHtml || '',
           })
         }

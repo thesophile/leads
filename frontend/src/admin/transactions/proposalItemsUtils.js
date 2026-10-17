@@ -201,6 +201,15 @@ export function htmlToFormattedLines(html) {
   return lines
 }
 
+// Convert any pre-wrapped or legacy terms summary HTML into clean, unwrapped
+// paragraphs for editing in rich text editors.
+export function unwrapTermsSummaryHtml(html) {
+  if (!html) return ''
+  const lines = htmlToFormattedLines(html)
+  if (!lines || lines.length === 0) return ''
+  return lines.map((line) => (line ? `<p>${line}</p>` : '<p><br></p>')).join('')
+}
+
 // Split composed termsConditions HTML into a structured items array plus the
 // remaining free-form rich-text HTML.
 export function proposalItemsFromHtml(html) {
