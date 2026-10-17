@@ -80,6 +80,17 @@ function InfoIcon({ className = 'h-3.5 w-3.5' }) {
   )
 }
 
+function TrashIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  )
+}
+
 const TYPE_META = {
   Approval: { icon: TypeIcon, bg: 'bg-blue-50 text-blue-600' },
   Payment: { icon: PaymentIcon, bg: 'bg-emerald-50 text-emerald-600' },
@@ -122,6 +133,7 @@ export default function Notifications() {
   const [activeTab, setActiveTab] = useState('All')
   const [loading, setLoading] = useState(true)
 const [markingAll, setMarkingAll] = useState(false)
+const [clearingDone, setClearingDone] = useState(false)
 const [markingIds, setMarkingIds] = useState([])
 const [refreshing, setRefreshing] = useState(false)
 
@@ -196,6 +208,19 @@ const [refreshing, setRefreshing] = useState(false)
     }
   }
 
+  async function clearDoneNotifications() {
+    if (clearingDone) return
+    setClearingDone(true)
+    try {
+      await api.post('/notifications/clear-done/', {})
+      await loadNotifications()
+    } catch {
+      // Keep existing list on failure
+    } finally {
+      setClearingDone(false)
+    }
+  }
+
   return (
     <Layout>
       <div className="space-y-4 max-w-4xl">
@@ -212,11 +237,21 @@ const [refreshing, setRefreshing] = useState(false)
             <button
               type="button"
               onClick={markAllRead}
-              disabled={unreadCount === 0 || markingAll || markingIds.length > 0}
+              disabled={unreadCount === 0 || markingAll || clearingDone || markingIds.length > 0}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               {markingAll ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon />}
               {markingAll ? 'Marking…' : 'Mark all as read'}
+            </button>
+            <button
+              type="button"
+              onClick={clearDoneNotifications}
+              disabled={notifications.length === 0 || clearingDone || markingAll}
+              title="Clear read notifications and follow-up notifications for completed leads"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-50 hover:border-rose-300 hover:text-rose-800 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {clearingDone ? <Spinner className="h-3.5 w-3.5" /> : <TrashIcon />}
+              {clearingDone ? 'Clearing…' : 'Clear Read & Done'}
             </button>
           </div>
         </div>

@@ -145,6 +145,50 @@ class NotificationReadAllView(APIView):
         return Response({'detail': 'All notifications marked as read.'})
 
 
+class NotificationClearDoneView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        Lead = apps.get_model('transactions', 'Lead')
+        user_notifications = Notification.objects.filter(user=request.user)
+
+        # 1. Lead IDs from this user's follow-up notifications
+        follow_up_lead_ids = list(
+            user_notifications.filter(type='Follow-up', entity_type='lead')
+            .exclude(entity_id='')
+            .values_list('entity_id', flat=True)
+        )
+
+        # 2. Leads that are "done":
+        # - call status changed away from 'Pending Call'
+        # - OR no longer pending follow-up (has_follow_up=False)
+        # - OR lead no longer exists
+        done_lead_ids = set()
+        if follow_up_lead_ids:
+            existing_leads = Lead.objects.filter(id__in=follow_up_lead_ids).values('id', 'call_status', 'has_follow_up')
+            existing_lead_map = {str(item['id']): item for item in existing_leads}
+            for lid in follow_up_lead_ids:
+                lead_data = existing_lead_map.get(str(lid))
+                if not lead_data:
+                    done_lead_ids.add(str(lid))
+                else:
+                    call_status = lead_data.get('call_status') or 'Pending Call'
+                    has_follow_up = lead_data.get('has_follow_up', False)
+                    if call_status != 'Pending Call' or not has_follow_up:
+                        done_lead_ids.add(str(lid))
+
+        from django.db.models import Q
+        q_filter = Q(read=True)
+        if done_lead_ids:
+            q_filter |= Q(type='Follow-up', entity_type='lead', entity_id__in=done_lead_ids)
+
+        deleted_count, _ = user_notifications.filter(q_filter).delete()
+        return Response({
+            'detail': 'Read and completed notifications cleared.',
+            'cleared_count': deleted_count,
+        })
+
+
 def _target_scope_filter(queryset, user):
     """Scope target rows to the caller's tenant (superusers see all)."""
     if user.is_superuser:
