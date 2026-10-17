@@ -74,8 +74,8 @@ function Deploy-Backend {
         ssh $sshAlias "cd $remoteHome && unzip -o backend.zip && rm backend.zip"
         if ($LASTEXITCODE -ne 0) { throw "Remote unzip failed" }
 
-        ssh $sshAlias "source $remoteHome/virtualenv/backend/$pythonVersion/bin/activate && cd $remoteHome/backend && python manage.py migrate"
-        if ($LASTEXITCODE -ne 0) { throw "Migration failed" }
+        ssh $sshAlias "source $remoteHome/virtualenv/backend/$pythonVersion/bin/activate && cd $remoteHome/backend && python manage.py migrate && mkdir -p tmp && touch tmp/restart.txt"
+        if ($LASTEXITCODE -ne 0) { throw "Migration or app restart failed" }
     }
 }
 
