@@ -237,8 +237,14 @@ export default function TelecalligRegister() {
               <button
                 type="button"
                 onClick={exportPdf}
-                disabled={isLoading || isExporting}
-                title={isLoading ? 'Wait for the register to load before exporting.' : 'Download register as PDF'}
+                disabled={isLoading || isExporting || count === 0}
+                title={
+                  isLoading
+                    ? 'Wait for the register to load before exporting.'
+                    : count === 0
+                      ? 'No records to export.'
+                      : 'Download register as PDF'
+                }
                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>{isExporting ? '⏳' : '📄'}</span>

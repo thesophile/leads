@@ -27,6 +27,9 @@ class _FakeCore:
     def __init__(self):
         self._next_id = 1000
         self.users = {}
+        self.orgs = {}
+        self.apps = {'leads': {'id': 1, 'code': 'leads'}}
+        self.access = []
         self.patched = []
 
     def _new_id(self):
@@ -38,8 +41,72 @@ class _FakeCore:
         if key in self.users:
             raise CoreError(400, {'email': ['A user with this email already exists.']})
         uid = self._new_id()
-        self.users[key] = {'id': uid, 'password': password}
+        self.users[key] = {'id': uid, 'password': password, 'status': 'active'}
         return {'id': uid, 'email': email, 'name': name, 'phone': phone}
+
+    def provision_staff_user(self, email, name, phone, org_id, application_id,
+                             role_label='', permissions=None, actor=None, access=None, api_key=None):
+        key = (email or '').lower()
+        if key in self.users:
+            raise CoreError(400, {'email': ['A user with this email already exists.']})
+        uid = self._new_id()
+        # No password -> created inactive (mirrors Core's provisioning).
+        self.users[key] = {'id': uid, 'status': 'inactive', 'password': None}
+        self.access.append({
+            'id': self._new_id(), 'user': uid, 'organization': org_id,
+            'application': application_id, 'application_code': 'leads',
+            'role': role_label, 'permissions': permissions or [], 'status': 'enabled',
+        })
+        return {
+            'id': uid, 'email': email, 'name': name, 'phone': phone,
+            'status': 'inactive',
+            'access': [a for a in self.access if a['user'] == uid],
+        }
+
+    def get_application(self, code, access=None, api_key=None):
+        entry = self.apps.get((code or '').lower())
+        return {'id': entry['id'], 'code': entry['code']} if entry else None
+
+    def list_org_users(self, org_id, access=None, api_key=None):
+        users = []
+        for user in self.users.values():
+            if any(a['user'] == user['id'] and a['organization'] == org_id
+                   and a['application_code'] == 'leads' for a in self.access):
+                users.append({
+                    'id': user['id'],
+                    'email': next((e for e, u in self.users.items() if u['id'] == user['id']), ''),
+                    'name': next((e for e, u in self.users.items() if u['id'] == user['id']), ''),
+                    'phone': '',
+                    'status': user['status'],
+                    'access': [a for a in self.access if a['user'] == user['id']],
+                })
+        return users
+
+    def list_user_access(self, org_id, application_id, user_id=None, access=None, api_key=None):
+        return [a for a in self.access
+                if a['organization'] == org_id and a['application'] == application_id
+                and (user_id is None or a['user'] == user_id)]
+
+    def create_user_access(self, org_id, user_id, application_id, role_label='',
+                           permissions=None, status='enabled', actor=None, access=None, api_key=None):
+        self.access.append({
+            'id': self._new_id(), 'user': user_id, 'organization': org_id,
+            'application': application_id, 'application_code': 'leads',
+            'role': role_label, 'permissions': permissions or [], 'status': status,
+        })
+        return {'id': self._next_id}
+
+    def update_user_access(self, access_id, role=None, permissions=None, status=None,
+                           actor=None, access=None, api_key=None):
+        for a in self.access:
+            if a['id'] == access_id:
+                if role is not None:
+                    a['role'] = role
+                if permissions is not None:
+                    a['permissions'] = permissions
+                if status is not None:
+                    a['status'] = status
+        return {'id': access_id}
 
     def login(self, email, password):
         user = self.users.get((email or '').lower())
@@ -71,15 +138,35 @@ class _FakeCore:
                 return {'detail': 'Password changed successfully.'}
         raise CoreError(401, {'detail': 'No active account found.'})
 
-    def create_organization(self, name, access):
-        return {'id': self._new_id(), 'name': name}
+    def create_organization(self, name, access=None, api_key=None):
+        org = {'id': self._new_id(), 'name': name}
+        self.orgs[org['id']] = org
+        return org
 
     def create_membership(self, *args, **kwargs):
         return {'id': self._new_id()}
 
-    def patch_user(self, core_user_id, data, access=None):
+    def patch_user(self, core_user_id, data, access=None, actor=None, api_key=None):
         self.patched.append({'user_id': core_user_id, 'data': data})
+        if core_user_id is not None:
+            for entry in self.users.values():
+                if entry['id'] == core_user_id:
+                    entry.update(data or {})
+                    break
         return {'id': core_user_id}
+
+    def get_user(self, core_user_id, access=None, api_key=None):
+        for email, entry in self.users.items():
+            if entry['id'] == core_user_id:
+                return {
+                    'id': entry['id'],
+                    'email': email,
+                    'name': entry.get('name', ''),
+                    'phone': entry.get('phone', ''),
+                    'status': entry.get('status', 'active'),
+                    'access': [a for a in self.access if a['user'] == core_user_id],
+                }
+        raise CoreError(404, {'detail': 'No User matches the given query.'})
 
     def password_reset_request(self, email):
         return {'detail': 'If an account exists for this email, a reset code has been sent.'}
@@ -93,8 +180,10 @@ class CoreStubMixin:
 
     CORE_METHODS = (
         'register_user', 'login', 'refresh', 'logout', 'logout_all', 'change_password',
-        'create_organization', 'create_membership', 'patch_user',
+        'create_organization', 'create_membership', 'patch_user', 'get_user',
         'password_reset_request', 'password_reset_confirm',
+        'provision_staff_user', 'get_application', 'list_org_users',
+        'list_user_access', 'create_user_access', 'update_user_access',
     )
 
     def setUp(self):
@@ -104,8 +193,16 @@ class CoreStubMixin:
             self.enterContext(patch(f'accounts.core_client.{name}', getattr(self.core, name)))
 
 
+_company_counter = [0]
+
+
 def make_company(name):
-    return Company.objects.get_or_create(name=name)[0]
+    _company_counter[0] += 1
+    company, _ = Company.objects.get_or_create(name=name, defaults={'core_org_id': _company_counter[0]})
+    if company.core_org_id is None:
+        company.core_org_id = _company_counter[0]
+        company.save(update_fields=['core_org_id'])
+    return company
 
 
 def admin_role(company):
@@ -384,6 +481,7 @@ class StaffAdminProtectionTests(CoreStubMixin, APITestCase):
     """
 
     def setUp(self):
+        super().setUp()
         company = make_company('Acme')
         self.admin = User.objects.create_user(
             email='admin@acme.com', password='x', name='Admin A',
@@ -414,15 +512,16 @@ class StaffAdminProtectionTests(CoreStubMixin, APITestCase):
         self.assertEqual(resp.status_code, 403)
 
     def test_manager_cannot_reset_the_admin_password(self):
+        # Password management is removed from the LEADS staff screen entirely:
+        # passwords are set only by a SystemSoft admin. The old staff
+        # reset-password endpoint no longer exists.
         self.client.force_authenticate(self.manager)
         resp = self.client.post(
             f'/api/auth/users/{self.admin.pk}/reset-password/',
             {'new_password': 'Hacked123!'},
             format='json',
         )
-        self.assertEqual(resp.status_code, 403)
-        self.admin.refresh_from_db()
-        self.assertFalse(self.admin.check_password('Hacked123!'))
+        self.assertEqual(resp.status_code, 404)
 
     def test_manager_cannot_deactivate_staff_who_owns_leads(self):
         from transactions.models import Lead
@@ -455,6 +554,67 @@ class StaffAdminProtectionTests(CoreStubMixin, APITestCase):
             'is_active': False,
         }, format='json')
         self.assertEqual(resp.status_code, 200)
+
+    def test_manager_can_deactivate_staff_who_only_owns_past_telecall_leads(self):
+        from transactions.models import Lead
+
+        # A lead that has progressed past tele-call keeps the assignee as a
+        # historical snapshot; it is not reassignable and must not block
+        # deactivation.
+        Lead.objects.create(
+            id='QT-1', company='Hospital One', tenant=self.manager.company,
+            assigned_to=self.staff.name, status='quotation',
+        )
+        Lead.objects.create(
+            id='OR-1', company='Hospital Two', tenant=self.manager.company,
+            assigned_to=self.staff.name, status='order',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.deny_leads_access)
+        # The SystemSoft-mirrored identity status is untouched.
+        self.assertTrue(self.staff.is_active)
+
+    def test_manager_cannot_deactivate_staff_who_added_raw_leads(self):
+        from transactions.models import Lead
+
+        # Raw leads the staff entered are still unassigned; they must be
+        # assigned to someone before the staff can be deactivated.
+        Lead.objects.create(
+            id='RL-1', company='Hospital One', tenant=self.manager.company,
+            added_by=self.staff.name, status='raw',
+        )
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.is_active)
+
+    def test_manager_can_deactivate_after_added_raw_lead_is_assigned(self):
+        from transactions.models import Lead
+
+        lead = Lead.objects.create(
+            id='RL-1', company='Hospital One', tenant=self.manager.company,
+            added_by=self.staff.name, status='raw',
+        )
+        # Assigning the lead moves it out of the raw stage, freeing the staff.
+        lead.status = 'assigned'
+        lead.assigned_to = 'Manager A'
+        lead.save(update_fields=['status', 'assigned_to'])
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(f'/api/auth/users/{self.staff.pk}/', {
+            'is_active': False,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.deny_leads_access)
+        self.assertTrue(self.staff.is_active)
 
     def test_admin_can_demote_another_admin(self):
         second_admin = User.objects.create_user(
@@ -629,7 +789,7 @@ class RoleDuplicateNameTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
 
 
-class RoleEscalationGuardTests(APITestCase):
+class RoleEscalationGuardTests(CoreStubMixin, APITestCase):
     """A role must never grant permissions the actor does not already hold.
 
     This closes the loophole where someone with staff.manage + roles.manage
@@ -638,6 +798,7 @@ class RoleEscalationGuardTests(APITestCase):
     """
 
     def setUp(self):
+        super().setUp()
         self.company = make_company('Escalation Co')
         self.limited_role = Role.objects.create(
             company=self.company,
@@ -941,3 +1102,5 @@ class EmailChangeOtpTests(CoreStubMixin, APITestCase):
         self.assertEqual(resp.status_code, 200)
         staff.refresh_from_db()
         self.assertEqual(staff.email, 'staffnew@emailco.com')
+
+

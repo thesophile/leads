@@ -14,17 +14,6 @@ import { api } from '../../api/client'
 
 const ATTACHMENT_TYPES = ['SRS Document', 'Business Card', 'Voice Clip', 'Other']
 
-const STAFF_LIST = [
-  'All Staff',
-  'Bincy',
-  'Priya Sharma',
-  'Ananya Nair',
-  'Alex Joseph',
-  'Shanu VR',
-  'NIMISHA DAVIS',
-  'Husna',
-]
-
 const CATEGORIES = [
   'All Category',
   'Dynamic Website',
@@ -39,9 +28,6 @@ const CATEGORIES = [
 const STATUS_VALUES = [
   'Details Pending',
   'Details Complete',
-  'In Progress',
-  'Completed',
-  'Paid',
 ]
 
 const STATUS_LIST = ['All Status', ...STATUS_VALUES]
@@ -76,6 +62,7 @@ const EMPTY_FORM = {
   email: '',
   category: 'Dynamic Website',
   acceptedDate: '',
+  deliveryDate: '',
   collectedBy: '',
   notes: '',
 }
@@ -147,6 +134,23 @@ function CopyIcon({ className = 'h-3.5 w-3.5' }) {
   )
 }
 
+function CurrencyIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3h12M6 8h12M6 13l7.5 8M6 8a4.5 4.5 0 0 0 0 5h5" />
+    </svg>
+  )
+}
+
+function CheckCircleIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  )
+}
+
 function CloseIcon() {
   return (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -210,6 +214,16 @@ const TYPE_STYLES = {
   Other: 'bg-slate-100 text-slate-700 border-slate-200',
 }
 
+const PAYMENT_METHODS = [
+  'Bank Transfer',
+  'Cash',
+  'UPI',
+  'Cheque',
+  'Credit Card',
+  'Debit Card',
+  'NEFT / RTGS',
+]
+
 function formatSize(bytes) {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -246,6 +260,7 @@ export default function ClientDetails() {
           email: prefilledOrder.email || '',
           category: prefilledOrder.category || 'Dynamic Website',
           acceptedDate: localISO(),
+          deliveryDate: prefilledOrder.deliveryDate || prefilledOrder.delivery_date || '',
           collectedBy: prefilledOrder.proposalBy || prefilledOrder.staff || '',
           notes: '',
         }
@@ -262,6 +277,16 @@ export default function ClientDetails() {
   const [deletingAttachment, setDeletingAttachment] = useState(null)
   const [statusSavingId, setStatusSavingId] = useState(null)
 
+  // Payment Recording State
+  const [paymentModalRec, setPaymentModalRec] = useState(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentDate, setPaymentDate] = useState(() => localISO())
+  const [paymentMethod, setPaymentMethod] = useState('Bank Transfer')
+  const [paymentReference, setPaymentReference] = useState('')
+  const [paymentReceivedBy, setPaymentReceivedBy] = useState('')
+  const [paymentNotes, setPaymentNotes] = useState('')
+  const [savingPayment, setSavingPayment] = useState(false)
+
   const cardRef = useRef(null)
   const menuRef = useRef(null)
   const [shareMenu, setShareMenu] = useState(null)
@@ -269,6 +294,69 @@ export default function ClientDetails() {
   const [shareLink, setShareLink] = useState('')
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+
+  function openPaymentModal(rec) {
+    setPaymentModalRec(rec)
+    setPaymentAmount('')
+    setPaymentDate(localISO())
+    setPaymentMethod('Bank Transfer')
+    setPaymentReference('')
+    setPaymentReceivedBy(user?.name || rec.collectedBy || '')
+    setPaymentNotes('')
+  }
+
+  function closePaymentModal() {
+    setPaymentModalRec(null)
+    setPaymentAmount('')
+    setSavingPayment(false)
+  }
+
+  async function handleRecordPayment(e) {
+    e.preventDefault()
+    if (!paymentModalRec) return
+    const amt = parseFloat(paymentAmount)
+    if (isNaN(amt) || amt <= 0) {
+      setToastMessage('✗ Please enter a valid positive payment amount.')
+      setTimeout(() => setToastMessage(''), 3000)
+      return
+    }
+
+    setSavingPayment(true)
+    try {
+      const res = await api.post(
+        `/transactions/client-details/${encodeURIComponent(paymentModalRec.id)}/payments/`,
+        {
+          amount: amt,
+          date: paymentDate,
+          method: paymentMethod,
+          reference: paymentReference.trim(),
+          receivedBy: paymentReceivedBy.trim(),
+          notes: paymentNotes.trim(),
+        }
+      )
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === paymentModalRec.id
+            ? { ...r, payments: [res, ...(r.payments || [])] }
+            : r
+        )
+      )
+      if (viewRecord && viewRecord.id === paymentModalRec.id) {
+        setViewRecord((prev) => ({
+          ...prev,
+          payments: [res, ...(prev.payments || [])],
+        }))
+      }
+      closePaymentModal()
+      setToastMessage(`✓ Payment of ₹${amt.toLocaleString('en-IN')} recorded & synced to Account Soft!`)
+      setTimeout(() => setToastMessage(''), 3500)
+    } catch (err) {
+      setToastMessage(`✗ ${err.message || 'Could not record payment.'}`)
+      setTimeout(() => setToastMessage(''), 3500)
+    } finally {
+      setSavingPayment(false)
+    }
+  }
 
   const { dirty, reset } = useDirty(
     modalOpen,
@@ -308,6 +396,7 @@ export default function ClientDetails() {
   const {
     count,
     counts: listCounts,
+    facets,
     loading,
     page,
     totalPages,
@@ -324,6 +413,22 @@ export default function ClientDetails() {
   })
 
   const filteredRecords = records
+
+  // Filter choices: all active staff plus any inactive member still stamped on
+  // a visible record. The "Collected By" input additionally offers only active
+  // staff (plus the record's current value so editing never drops it).
+  const staffOptions = useMemo(
+    () => ['All Staff', ...(facets?.staff || [])],
+    [facets]
+  )
+
+  const collectedByOptions = useMemo(() => {
+    const active = facets?.active_staff || []
+    if (form.collectedBy && !active.includes(form.collectedBy)) {
+      return [form.collectedBy, ...active]
+    }
+    return active
+  }, [facets, form.collectedBy])
 
   const totalCount = listCounts.total ?? count
   const statusCounts = STATUS_VALUES.map((status) => ({
@@ -348,6 +453,7 @@ export default function ClientDetails() {
       email: rec.email,
       category: rec.category,
       acceptedDate: rec.acceptedDate,
+      deliveryDate: rec.deliveryDate || '',
       collectedBy: rec.collectedBy,
       notes: rec.notes,
     })
@@ -585,7 +691,7 @@ export default function ClientDetails() {
         </div>
 
         {/* KPI Chips */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total</span>
             <div className="mt-1 flex items-baseline justify-between">
@@ -649,7 +755,7 @@ export default function ClientDetails() {
                    onChange={(e) => setSelectedStaff(e.target.value)}
                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 transition focus:border-brand-500 focus:outline-none cursor-pointer"
                  >
-                   {STAFF_LIST.map((s) => (
+                   {staffOptions.map((s) => (
                      <option key={s} value={s}>
                        {s}
                      </option>
@@ -697,6 +803,7 @@ export default function ClientDetails() {
                   <th className="pb-2.5 pr-2 font-semibold">Mobile</th>
                   <th className="pb-2.5 pr-2 font-semibold">Category</th>
                   <th className="pb-2.5 pr-2 font-semibold">Collected By</th>
+                  <th className="pb-2.5 pr-2 font-semibold">Payments</th>
                   <th className="pb-2.5 pr-2 font-semibold">Attachments</th>
                   <th className="pb-2.5 pr-2 font-semibold">Status</th>
                   <th className="pb-2.5 pr-2 font-semibold text-center">Action</th>
@@ -721,6 +828,20 @@ export default function ClientDetails() {
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800">
                           {rec.collectedBy}
                         </span>
+                      </td>
+                      <td className="py-0.5 pr-3">
+                        {rec.payments && rec.payments.length > 0 ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-bold text-emerald-700">
+                              ₹{rec.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0).toLocaleString('en-IN')}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {rec.payments.length} {rec.payments.length === 1 ? 'payment' : 'payments'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">No payments</span>
+                        )}
                       </td>
                       <td className="py-0.5 pr-3">
                         {rec.attachments.length > 0 ? (
@@ -755,7 +876,7 @@ export default function ClientDetails() {
                           aria-label={`Status for ${rec.clientName}`}
                           className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60 disabled:cursor-not-allowed ${STATUS_STYLES[rec.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}
                         >
-                          {STATUS_VALUES.map((statusValue) => (
+                          {(STATUS_VALUES.includes(rec.status) ? STATUS_VALUES : [rec.status, ...STATUS_VALUES]).map((statusValue) => (
                             <option key={statusValue} value={statusValue}>
                               {statusValue}
                             </option>
@@ -764,6 +885,17 @@ export default function ClientDetails() {
                       </td>
                       <td className="py-0.5 pr-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openPaymentModal(rec)
+                            }}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 transition cursor-pointer"
+                            title="Record Payment & Sync to Account Soft"
+                          >
+                            <CurrencyIcon className="h-3.5 w-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => handleShareClick(e, rec)}
@@ -790,19 +922,19 @@ export default function ClientDetails() {
                   ))
                 ) : loading ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
                       Loading client details...
                     </td>
                   </tr>
                 ) : loadError ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-rose-500">
+                    <td colSpan={9} className="py-8 text-center text-xs text-rose-500">
                       {loadError}
                     </td>
                   </tr>
                 ) : (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
                       No client detail records found matching criteria.
                     </td>
                   </tr>
@@ -930,6 +1062,17 @@ export default function ClientDetails() {
                   />
                 </div>
                 <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Client Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.clientName}
+                    onChange={(e) => handleField('clientName', e.target.value)}
+                    placeholder="Contact person"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">Accepted Date</label>
                   <input
                     type="date"
@@ -940,13 +1083,11 @@ export default function ClientDetails() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Client Name</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Delivery Date</label>
                   <input
-                    type="text"
-                    required
-                    value={form.clientName}
-                    onChange={(e) => handleField('clientName', e.target.value)}
-                    placeholder="Contact person"
+                    type="date"
+                    value={form.deliveryDate}
+                    onChange={(e) => handleField('deliveryDate', e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
@@ -1003,7 +1144,7 @@ export default function ClientDetails() {
                     onChange={(e) => handleField('collectedBy', e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none cursor-pointer"
                   >
-                    {STAFF_LIST.filter((s) => s !== 'All Staff').map((s) => (
+                    {collectedByOptions.map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
@@ -1206,6 +1347,10 @@ export default function ClientDetails() {
                   <p className="mt-0.5 text-xs text-slate-800">{viewRecord.acceptedDate || '—'}</p>
                 </div>
                 <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Delivery Date</p>
+                  <p className="mt-0.5 text-xs text-slate-800">{viewRecord.deliveryDate || '—'}</p>
+                </div>
+                <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Collected By</p>
                   <p className="mt-0.5 text-xs text-slate-800">{viewRecord.collectedBy || '—'}</p>
                 </div>
@@ -1219,6 +1364,78 @@ export default function ClientDetails() {
                   </p>
                 </div>
               )}
+
+              {/* Payments Section */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-slate-900">
+                        Payments & Account Soft Sync
+                      </p>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                        {viewRecord.payments?.length || 0} recorded
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-slate-500">
+                      Total Paid: ₹{(viewRecord.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openPaymentModal(viewRecord)}
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer"
+                  >
+                    <CurrencyIcon className="h-3.5 w-3.5" />
+                    <span>Record Payment</span>
+                  </button>
+                </div>
+
+                {viewRecord.payments && viewRecord.payments.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {viewRecord.payments.map((p) => (
+                      <div key={p.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-emerald-700">
+                              ₹{Number(p.amount).toLocaleString('en-IN')}
+                            </span>
+                            <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                              {p.method}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-medium text-slate-500">
+                              {p.date}
+                            </span>
+                            {p.syncedToAccounts ? (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                <CheckCircleIcon className="h-3 w-3" />
+                                Synced to Account Soft
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                Local Record
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {(p.reference || p.receivedBy || p.notes) && (
+                          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+                            {p.reference && <span><strong className="font-semibold text-slate-600">Ref:</strong> {p.reference}</span>}
+                            {p.receivedBy && <span><strong className="font-semibold text-slate-600">Received By:</strong> {p.receivedBy}</span>}
+                            {p.notes && <span className="text-slate-600 italic">“{p.notes}”</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-[11px] text-slate-400">
+                    No payments recorded yet for this client order.
+                  </p>
+                )}
+              </div>
 
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -1307,6 +1524,14 @@ export default function ClientDetails() {
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-6 py-3.5">
+              <button
+                type="button"
+                onClick={() => openPaymentModal(viewRecord)}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer"
+              >
+                <CurrencyIcon className="h-3.5 w-3.5" />
+                <span>Record Payment</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1410,6 +1635,196 @@ export default function ClientDetails() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record Payment Modal */}
+      {paymentModalRec && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !savingPayment) closePaymentModal()
+          }}
+        >
+          <div className="w-full max-w-lg my-8 rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="border-b border-slate-200 px-6 py-4 bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200">
+                    <CurrencyIcon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Record Payment</h3>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      {paymentModalRec.orderNo} · {paymentModalRec.company || paymentModalRec.clientName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePaymentModal}
+                  disabled={savingPayment}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer disabled:opacity-50"
+                  aria-label="Close"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleRecordPayment}>
+              <div className="max-h-[65vh] overflow-y-auto p-6 space-y-4 text-xs">
+                {/* Summary banner */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Recorded</p>
+                    <p className="mt-0.5 text-base font-bold text-emerald-700">
+                      ₹{(paymentModalRec.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Payments Count</p>
+                    <p className="mt-0.5 text-base font-bold text-slate-800">
+                      {(paymentModalRec.payments || []).length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Payment Amount <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="1"
+                        required
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-7 pr-3 text-xs font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-xs font-bold text-slate-400">
+                        ₹
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Payment Date <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Payment Method <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none cursor-pointer"
+                    >
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Transaction / Reference No.
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentReference}
+                      onChange={(e) => setPaymentReference(e.target.value)}
+                      placeholder="e.g. TXN-1002384"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Received By
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentReceivedBy}
+                      onChange={(e) => setPaymentReceivedBy(e.target.value)}
+                      placeholder="Staff name"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Notes / Remarks
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={paymentNotes}
+                      onChange={(e) => setPaymentNotes(e.target.value)}
+                      placeholder="e.g. Advance payment received via IMPS transfer..."
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Account soft sync notice */}
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-start gap-2.5">
+                  <span className="mt-0.5 text-emerald-600">
+                    <CheckCircleIcon className="h-4 w-4" />
+                  </span>
+                  <div className="text-[11px] text-emerald-800 leading-relaxed">
+                    <strong className="font-semibold">Automatic Account Soft Sync:</strong> This payment will be recorded in Leads and automatically synced to the order and payment records in Account Soft.
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-6 py-3.5">
+                <button
+                  type="button"
+                  onClick={closePaymentModal}
+                  disabled={savingPayment}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPayment || !paymentAmount}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingPayment ? (
+                    <>
+                      <Spinner className="h-3.5 w-3.5 text-white" />
+                      <span>Recording & Syncing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CurrencyIcon className="h-3.5 w-3.5" />
+                      <span>Record Payment</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -23,7 +23,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts import services as account_services
+from accounts.core_client import bearer_token
 from accounts.permissions import can
+from accounts.staff import active_staff_names, staff_names_with_entries
 from master.models import Category, Location, Source
 from utilities.models import Notification, log_activity
 
@@ -32,6 +35,7 @@ from .models import (
     Attachment,
     CallHistory,
     ClientDetail,
+    ClientPayment,
     Lead,
     LeadContactHistory,
     Order,
@@ -43,6 +47,7 @@ from .models import (
 from .serializers import (
     AttachmentSerializer,
     ClientDetailSerializer,
+    ClientPaymentSerializer,
     LeadSerializer,
     OrderSerializer,
     ProposalDraftSerializer,
@@ -57,6 +62,7 @@ from .services import (
     create_client_detail_from_order,
     order_approval_info,
     render_order_pdf,
+    sync_payment_to_accounts_soft,
 )
 
 User = get_user_model()
@@ -167,8 +173,9 @@ def sync_contact_from_quotation(user, lead, quotation, old_contact):
         # quotation's value but leave the lead (source of truth) untouched.
         logger.warning('Could not mirror contact change to lead %s.', lead.id)
         return []
-    for lead_field, old_value, new_value in pending:
-        log_contact_change(user, lead, lead_field, old_value, new_value)
+    for lead_field, old_value, _ in pending:
+        # Read the saved (normalised) value so the audit trail matches storage.
+        log_contact_change(user, lead, lead_field, old_value, getattr(lead, lead_field))
     return changed_fields
 
 
@@ -223,10 +230,11 @@ def duplicate_quotation(source, payload):
     (``Not Sent``, no approvals, signatures, or client token) so it must be
     approved again before it can be sent to the client.
     """
-    version_no = latest_version_no(source.lead_id)
+    base_lead_id = source.lead_id or source.id
+    version_no = latest_version_no(base_lead_id)
     quotation = Quotation(
-        id=f'{source.lead_id}-V{version_no}',
-        lead_id=source.lead_id,
+        id=f'{base_lead_id}-V{version_no}',
+        lead_id=base_lead_id,
         tenant=source.tenant,
         company=payload.get('company') or source.company,
         customer=payload.get('customer') or source.customer,
@@ -280,13 +288,20 @@ def resolve_approvers(user, raw_ids):
         return []
     qs = User.objects.filter(
         company=user.company,
+        is_active=True,
+        deny_leads_access=False,
         pk__in=ids,
-    )
+    ).select_related('role')
     approvers = []
     for approver in qs:
         if approver.pk == user.pk:
             continue
-        if not (approver.is_superuser or approver.has_permission('quotation.approve')):
+        if not (
+            approver.is_superuser
+            or approver.has_permission('quotation.approve')
+            or (approver.role and approver.role.code and approver.role.code.lower() in ('admin', 'manager'))
+            or (approver.role and approver.role.name and approver.role.name.lower() in ('admin', 'manager'))
+        ):
             continue
         approvers.append(approver)
     return approvers
@@ -298,12 +313,12 @@ def approvals_all_approved(quotation):
 
 
 def assignment_name_set(user):
-    """Names that ``user`` may assign leads to (their company's non-superusers)."""
+    """Names that ``user`` may assign leads to (their company's active non-superusers)."""
     if not user.company:
         return set()
     return set(
         User.objects
-        .filter(company=user.company)
+        .filter(company=user.company, is_active=True, deny_leads_access=False)
         .exclude(is_superuser=True)
         .values_list('name', flat=True)
     )
@@ -917,16 +932,15 @@ class LeadListView(APIView):
 
 
 class LeadImportView(APIView):
-    """Create-or-update a single raw lead row from a CSV import.
+    """Create a single raw lead row from a CSV import.
 
     Every row must carry a company, a phone number, a category and a location;
     a row missing any is rejected so the frontend can report it and hand it
     back for correction.
 
-    When a lead with the same (tenant, company) already exists, the incoming
-    row overwrites its contact fields instead of being skipped as a duplicate,
-    so re-importing a corrected CSV updates the record. The pipeline fields
-    (status, remarks, assignment, dates) are never touched by an import.
+    When a lead with the same (tenant, company) already exists, the row is
+    rejected as a duplicate — exactly like the manual Add Raw Data form — so an
+    import never overwrites an existing record.
     """
     permission_classes = [IsAuthenticated]
 
@@ -969,7 +983,7 @@ class LeadImportView(APIView):
 
         existing = find_duplicate_lead(request.user, company)
         if existing is not None:
-            return self._update(request, existing, company, category, source, location)
+            return duplicate_response(existing)
 
         saved = None
         last_error = None
@@ -1002,7 +1016,7 @@ class LeadImportView(APIView):
                 last_error = exc
                 existing = find_duplicate_lead(request.user, company)
                 if existing is not None:
-                    return self._update(request, existing, company, category, source, location)
+                    return duplicate_response(existing)
         if saved is None:
             raise last_error
         log_activity(
@@ -1017,41 +1031,6 @@ class LeadImportView(APIView):
             {'updated': False, 'lead': LeadSerializer(saved).data},
             status=status.HTTP_201_CREATED,
         )
-
-    def _update(self, request, lead, company, category, source, location):
-        changed_fields = []
-        fields = (
-            ('company', company),
-            ('contact', request.data.get('contact', '').strip()),
-            ('phone', request.data.get('phone', '').strip()),
-            ('email', request.data.get('email', '').strip()),
-            ('category', category),
-            ('source', source),
-            ('city', location),
-            ('sublocation', request.data.get('sublocation', '').strip()),
-        )
-        for field, new_value in fields:
-            new_value = '' if new_value is None else new_value
-            old_value = getattr(lead, field) or ''
-            if old_value != new_value:
-                log_contact_change(request.user, lead, field, old_value, new_value)
-                setattr(lead, field, new_value)
-                changed_fields.append(field)
-        changed_fields += stamp_codes(lead, request.user.company)
-        if changed_fields:
-            lead.save(update_fields=changed_fields + ['updated_at'])
-            sync_lead_contact_to_quotation(lead, changed_fields)
-        else:
-            lead.save(update_fields=['updated_at'])
-        log_activity(
-            request.user,
-            request.user.company,
-            'updated lead',
-            f'{request.user.name} updated lead {lead.id} - {lead.company} via import.',
-            entity_type='lead',
-            entity_id=lead.id,
-        )
-        return Response({'updated': True, 'lead': LeadSerializer(lead).data})
 
 
 class LeadDetailView(APIView):
@@ -1401,7 +1380,9 @@ class LeadMetaView(APIView):
 
         facets = {
             'added_by': distinct('added_by'),
-            'assigned_to': distinct('assigned_to'),
+            'assigned_to': sorted(
+                set(distinct('assigned_to')) & active_staff_names(request.user.company)
+            ),
             'sources': distinct('source'),
             'cities': distinct('city'),
             'categories': distinct('category'),
@@ -1523,8 +1504,11 @@ class LeadRegisterView(APIView):
         if facet_qs_no_status.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT]).exists():
             statuses.add('Converted')
         facets = {
-            'staff': sorted(set(distinct(facet_qs_no_staff, 'assigned_to'))
-                            | set(distinct(facet_qs_no_staff, 'added_by'))),
+            'staff': staff_names_with_entries(
+                request.user.company,
+                set(distinct(facet_qs_no_staff, 'assigned_to'))
+                | set(distinct(facet_qs_no_staff, 'added_by')),
+            ),
             'locations': distinct(facet_qs_no_city, 'city'),
             'categories': distinct(facet_qs_no_category, 'category'),
             'statuses': sorted(statuses),
@@ -1601,13 +1585,17 @@ class QuotationRowsView(APIView):
             synthetic_for_page = lead_scope.exclude(id__in=quoted_lead_ids)
 
         # The staff picker's options ignore the staff filter itself, so picking
-        # a value never collapses the dropdown it belongs to.
-        facet_staff = sorted({
-            first_qr_caller.get(lead_id)
-            for lead_id in scoped_queryset(request.user, Lead.STATUS_QUOTATION)
-            .values_list('id', flat=True)
-            if first_qr_caller.get(lead_id)
-        })
+        # a value never collapses the dropdown it belongs to. Active staff are
+        # always listed; inactive staff stay only while they have a QR entry.
+        facet_staff = staff_names_with_entries(
+            request.user.company,
+            {
+                first_qr_caller.get(lead_id)
+                for lead_id in scoped_queryset(request.user, Lead.STATUS_QUOTATION)
+                .values_list('id', flat=True)
+                if first_qr_caller.get(lead_id)
+            },
+        )
 
         counts = {
             'Quotation Requested': synthetic_all.count(),
@@ -1981,7 +1969,10 @@ class QuotationView(APIView):
                     {'detail': 'Please select at least one approver.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            quotation.approvals.all().delete()
+            existing_approvals = {a.user_id: a for a in quotation.approvals.all()}
+            approver_ids = [a.id for a in approvers]
+            quotation.approvals.exclude(user_id__in=approver_ids).delete()
+
             quotation.submitted_by = request.user
             quotation.approval_requested_at = timezone.now()
             quotation.approved_at = None
@@ -1997,8 +1988,43 @@ class QuotationView(APIView):
             quotation.approver = None
             quotation.approver_name = ''
             quotation.save()
+            raw_channels = request.data.get('channels') or ['app']
+            if isinstance(raw_channels, str):
+                try:
+                    raw_channels = json.loads(raw_channels)
+                except (TypeError, ValueError):
+                    raw_channels = [raw_channels]
+            channels = list(raw_channels)
+            if 'app' not in channels:
+                channels.append('app')
+            origin = (request.data.get('origin') or '').strip().rstrip('/')
+            custom_message = (request.data.get('message') or '').strip()
+
+            created_approvals = []
             for approver in approvers:
-                quotation.approvals.create(user=approver)
+                approval = existing_approvals.get(approver.id)
+                if not approval:
+                    token = secrets.token_urlsafe(32)
+                    approval = quotation.approvals.create(user=approver, token=token)
+                else:
+                    if not approval.token:
+                        approval.token = secrets.token_urlsafe(32)
+                    approval.status = QuotationApproval.STATUS_PENDING
+                    approval.signed_by = ''
+                    approval.signed_at = None
+                    approval.signature_ref = ''
+                    approval.signature_hash = ''
+                    approval.otp_hash = ''
+                    approval.otp_sent_at = None
+                    approval.otp_expires_at = None
+                    approval.otp_attempts = 0
+                    approval.rejection_reason = ''
+                    approval.save()
+                created_approvals.append(approval)
+
+                approval_link = f'{origin}/approval/{approval.token}' if origin else f'/approval/{approval.token}'
+
+                # 1. In-app notification is ALWAYS sent
                 notify(
                     approver,
                     'Approval',
@@ -2008,6 +2034,33 @@ class QuotationView(APIView):
                     entity_type='quotation',
                     entity_id=quotation.lead_id,
                 )
+
+                # 2. Email if checked and approver has email
+                if 'email' in channels and approver.email:
+                    try:
+                        email_body = (
+                            f'Hi {approver.name},\n\n'
+                            f'Quotation {quotation.id} for {quotation.company} has been submitted by {request.user.name} and is awaiting your approval.\n\n'
+                            f'Amount: {quotation.currency or "₹"} {quotation.net_amount or quotation.total}\n'
+                        )
+                        if custom_message:
+                            email_body += f'\nNote: {custom_message}\n'
+                        email_body += (
+                            f'\nYou can review and approve or reject this proposal directly using the link below:\n\n'
+                            f'{approval_link}\n\n'
+                            f'(No login required. Approval is authorized via a one-time code sent to your email.)\n\n'
+                            f'- LEADS'
+                        )
+                        send_mail(
+                            subject=f'LEADS - Proposal {quotation.id} awaiting your approval',
+                            message=email_body,
+                            from_email=None,
+                            recipient_list=[approver.email],
+                            fail_silently=True,
+                        )
+                    except Exception as exc:
+                        logger.warning('Failed to email approval request for %s to %s: %s', quotation.id, approver.email, exc)
+
             log_activity(
                 request.user,
                 request.user.company,
@@ -2018,6 +2071,14 @@ class QuotationView(APIView):
             )
             data = QuotationSerializer(quotation).data
             data.update(response_flags)
+            first_approval = created_approvals[0] if created_approvals else None
+            if first_approval:
+                data['approvalToken'] = first_approval.token
+                data['approvalLink'] = f'{origin}/approval/{first_approval.token}' if origin else f'/approval/{first_approval.token}'
+                data['approverPhone'] = first_approval.user.phone
+                data['approverEmail'] = first_approval.user.email
+                data['approverName'] = first_approval.user.name
+                data['channels'] = channels
             return Response(data)
         quotation.save()
         log_activity(
@@ -2071,18 +2132,39 @@ class QuotationApproverListView(APIView):
                 {'detail': 'You do not have permission to view quotations.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.company:
+        company = request.user.company
+        if not company:
             return Response([])
-        users = User.objects.filter(company=request.user.company).exclude(pk=request.user.pk)
+
+        # Mirror SystemSoft User Management: sync the latest active staff
+        # from SystemSoft Core before populating the approver list.
+        account_services.sync_staff_from_core(company, access=bearer_token(request))
+
+        users = (
+            User.objects.filter(
+                company=company,
+                is_active=True,
+                deny_leads_access=False,
+            )
+            .select_related('role')
+            .exclude(pk=request.user.pk)
+        )
         result = [
             {
                 'id': user.id,
                 'name': user.name,
+                'email': user.email or '',
+                'phone': user.phone or '',
                 'role': (user.role.name if user.role_id else ''),
                 'is_superuser': user.is_superuser,
             }
             for user in users
-            if user.is_superuser or user.has_permission('quotation.approve')
+            if (
+                user.is_superuser
+                or user.has_permission('quotation.approve')
+                or (user.role and user.role.code and user.role.code.lower() in ('admin', 'manager'))
+                or (user.role and user.role.name and user.role.name.lower() in ('admin', 'manager'))
+            )
         ]
         result.sort(key=lambda x: x['name'].lower())
         return Response(result)
@@ -2310,6 +2392,391 @@ class QuotationRejectView(QuotationApprovalBaseView):
                 entity_id=quotation.lead_id,
             )
         return Response(QuotationSerializer(quotation).data)
+
+
+class QuotationApprovalLinkView(APIView):
+    """Return (or generate) the public approval link for an approver.
+
+    Allows copying or sharing the direct approval link before or after sending.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, lead_id):
+        quotation = find_quotation(lead_id)
+        if quotation is None:
+            return Response({'detail': 'Quotation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        approver_id = request.data.get('approver_id')
+        approver = None
+        if approver_id:
+            approver = User.objects.filter(pk=approver_id, company=request.user.company).first()
+        if not approver:
+            existing_approval = quotation.approvals.first()
+            if existing_approval:
+                approver = existing_approval.user
+        if not approver:
+            return Response({'detail': 'Please select an approver.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        approval = quotation.approvals.filter(user=approver).first()
+        if not approval:
+            token = secrets.token_urlsafe(32)
+            approval = quotation.approvals.create(user=approver, token=token)
+        elif not approval.token:
+            approval.token = secrets.token_urlsafe(32)
+            approval.save(update_fields=['token', 'updated_at'])
+
+        origin = (request.data.get('origin') or '').strip().rstrip('/')
+        link = f'{origin}/approval/{approval.token}' if origin else f'/approval/{approval.token}'
+        return Response({
+            'link': link,
+            'token': approval.token,
+            'approver': {
+                'id': approver.id,
+                'name': approver.name,
+                'email': approver.email or '',
+                'phone': approver.phone or '',
+            }
+        })
+
+
+class PublicApprovalDetailView(APIView):
+    """Public, unauthenticated read of a proposal awaiting approval by token."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        approval = (
+            QuotationApproval.objects.filter(token=str(token or ''))
+            .select_related('quotation', 'quotation__tenant', 'user')
+            .first()
+        )
+        if approval is None:
+            return Response(
+                {'detail': 'This approval link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = approval.quotation
+        tenant = quotation.tenant
+        logo_url = ''
+        if tenant and tenant.logo and tenant.logo.name:
+            try:
+                logo_url = tenant.logo.url
+            except Exception:
+                logo_url = ''
+
+        return Response({
+            'token': approval.token,
+            'quotation': {
+                'id': quotation.id,
+                'versionNo': quotation.version_no,
+                'revisionNo': quotation.revision_no,
+                'company': quotation.company,
+                'customer': quotation.customer,
+                'category': quotation.category,
+                'city': quotation.city,
+                'date': quotation.date,
+                'total': quotation.total,
+                'discount': quotation.discount,
+                'netAmount': quotation.net_amount,
+                'currency': quotation.currency or 'INR (₹)',
+                'proposalScope': quotation.proposal_scope,
+                'termsConditions': quotation.terms_conditions,
+                'status': quotation.status,
+                'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
+                'companyName': tenant.name if tenant else '',
+                'companyLogo': logo_url,
+                'companyAddress': tenant.address if tenant else '',
+                'companyEmail': tenant.email if tenant else '',
+                'companyPhone': tenant.phone if tenant else '',
+                'companyWebsite': tenant.website if tenant else '',
+                'submittedBy': quotation.submitted_by.name if quotation.submitted_by else '',
+                'approvalRequestedAt': (
+                    quotation.approval_requested_at.isoformat()
+                    if quotation.approval_requested_at
+                    else None
+                ),
+            },
+            'approval': {
+                'id': approval.id,
+                'status': approval.status,
+                'approverName': approval.user.name,
+                'approverEmail': approval.user.email,
+                'approverRole': approval.user.role.name if approval.user.role else '',
+                'signedBy': approval.signed_by,
+                'signedAt': approval.signed_at.isoformat() if approval.signed_at else None,
+                'signatureRef': approval.signature_ref,
+                'rejectionReason': approval.rejection_reason,
+                'otpSent': bool(
+                    approval.otp_hash
+                    and approval.otp_expires_at
+                    and approval.otp_expires_at > timezone.now()
+                ),
+                'otpExpiresIn': (
+                    max(0, int((approval.otp_expires_at - timezone.now()).total_seconds()))
+                    if (approval.otp_expires_at and approval.otp_expires_at > timezone.now())
+                    else 0
+                ),
+            },
+        })
+
+
+class PublicApprovalOtpView(APIView):
+    """Send a one-time approval code to the approver's email for this link."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    OTP_MINUTES = 5
+
+    def post(self, request, token):
+        approval = (
+            QuotationApproval.objects.filter(token=str(token or ''))
+            .select_related('quotation', 'user')
+            .first()
+        )
+        if approval is None:
+            return Response(
+                {'detail': 'This approval link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = approval.quotation
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if approval.status != QuotationApproval.STATUS_PENDING:
+            return Response(
+                {'detail': 'You have already decided on this proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        code = generate_otp()
+        approval.otp_hash = hash_otp(code, approval.id)
+        approval.otp_sent_at = timezone.now()
+        approval.otp_expires_at = timezone.now() + timedelta(minutes=self.OTP_MINUTES)
+        approval.otp_attempts = 0
+        approval.save(update_fields=['otp_hash', 'otp_sent_at', 'otp_expires_at', 'otp_attempts', 'updated_at'])
+
+        sent = False
+        error = None
+        try:
+            sent = send_mail(
+                subject=f'LEADS - Quotation approval code ({quotation.id})',
+                message=(
+                    f'Hi {approval.user.name},\n\n'
+                    f'You requested to approve quotation {quotation.id} for '
+                    f'{quotation.company}.\n\n'
+                    f'Your one-time approval code is:\n\n    {code}\n\n'
+                    f'It expires in {self.OTP_MINUTES} minutes and can only be used once.\n\n'
+                    f'If you did not request this, you can safely ignore this email.\n\n'
+                    f'- LEADS'
+                ),
+                from_email=None,
+                recipient_list=[approval.user.email],
+                fail_silently=False,
+            ) > 0
+        except Exception as exc:
+            sent = False
+            error = str(exc) or exc.__class__.__name__
+            logger.exception(
+                'Failed to email approval code for quotation %s to %s',
+                quotation.id,
+                approval.user.email,
+            )
+        payload = {
+            'sent': sent,
+            'expires_in': self.OTP_MINUTES * 60,
+            'email': approval.user.email,
+        }
+        if error:
+            payload['detail'] = (
+                f'The approval code could not be emailed to {approval.user.email}. {error}'
+            )
+        return Response(payload)
+
+
+class PublicApprovalApproveView(APIView):
+    """Verify OTP and record approval for the public link."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    MAX_OTP_ATTEMPTS = 5
+
+    def post(self, request, token):
+        approval = (
+            QuotationApproval.objects.filter(token=str(token or ''))
+            .select_related('quotation', 'quotation__tenant', 'user')
+            .first()
+        )
+        if approval is None:
+            return Response(
+                {'detail': 'This approval link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = approval.quotation
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if approval.status != QuotationApproval.STATUS_PENDING:
+            return Response(
+                {'detail': 'You have already decided on this proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        code = str(request.data.get('otp', '')).strip()
+        note = str(request.data.get('note', '') or '').strip()
+        if not code:
+            return Response(
+                {'detail': 'Please enter the approval code.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not approval.otp_hash or not approval.otp_expires_at:
+            return Response(
+                {'detail': 'No approval code was requested. Please request a code first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if timezone.now() > approval.otp_expires_at:
+            return Response(
+                {'detail': 'The approval code has expired. Please request a new one.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if approval.otp_attempts >= self.MAX_OTP_ATTEMPTS:
+            return Response(
+                {'detail': 'Too many incorrect attempts. Please request a new approval code.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if hash_otp(code, approval.id) != approval.otp_hash:
+            approval.otp_attempts += 1
+            approval.save(update_fields=['otp_attempts', 'updated_at'])
+            return Response(
+                {'detail': 'The approval code is invalid. Please try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        approver_user = approval.user
+        approval.status = QuotationApproval.STATUS_APPROVED
+        approval.signed_by = approver_user.name
+        approval.signed_at = timezone.now()
+        approval.signature_ref = f'OTP-{random.randint(10000000, 99999999)}'
+        approval.signature_hash = approval.otp_hash
+        approval.otp_hash = ''
+        approval.otp_expires_at = None
+        approval.otp_sent_at = None
+        approval.save()
+
+        if note:
+            quotation.approval_note = note
+
+        if approvals_all_approved(quotation):
+            quotation.status = 'Approved'
+            quotation.approved_at = timezone.now()
+            quotation.signed_by = approver_user.name
+            quotation.signature_ref = approval.signature_ref
+            quotation.approver = approver_user
+            quotation.approver_name = approver_user.name
+            quotation.save()
+
+            log_activity(
+                approver_user,
+                quotation.tenant,
+                'approved quotation',
+                f'{approver_user.name} approved quotation {quotation.id} - {quotation.company} via link.',
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
+            if quotation.submitted_by_id and quotation.submitted_by_id != approver_user.id:
+                notify(
+                    quotation.submitted_by,
+                    'Approval',
+                    'Proposal approved',
+                    f'{quotation.id} - {quotation.company} approved by {approver_user.name}. Order execution can begin.',
+                    url=proposal_url(quotation),
+                    entity_type='quotation',
+                    entity_id=quotation.lead_id,
+                )
+        else:
+            quotation.save()
+
+        return Response({
+            'status': approval.status,
+            'signedBy': approval.signed_by,
+            'signedAt': approval.signed_at.isoformat() if approval.signed_at else None,
+            'signatureRef': approval.signature_ref,
+            'quotationStatus': quotation.status,
+        })
+
+
+class PublicApprovalRejectView(APIView):
+    """Reject a pending proposal via public link with a reason."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        approval = (
+            QuotationApproval.objects.filter(token=str(token or ''))
+            .select_related('quotation', 'quotation__tenant', 'user')
+            .first()
+        )
+        if approval is None:
+            return Response(
+                {'detail': 'This approval link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quotation = approval.quotation
+        if quotation.status != 'Pending Approval':
+            return Response(
+                {'detail': 'This proposal is not awaiting approval.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if approval.status != QuotationApproval.STATUS_PENDING:
+            return Response(
+                {'detail': 'You have already decided on this proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reason = str(request.data.get('reason', '') or '').strip()
+        if not reason:
+            return Response(
+                {'detail': 'Please provide a reason for rejecting the proposal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        approver_user = approval.user
+        approval.status = QuotationApproval.STATUS_REJECTED
+        approval.rejection_reason = reason
+        approval.save()
+
+        quotation.status = 'Rejected'
+        quotation.rejected_at = timezone.now()
+        quotation.rejection_reason = reason
+        quotation.approver = approver_user
+        quotation.approver_name = approver_user.name
+        quotation.save()
+
+        log_activity(
+            approver_user,
+            quotation.tenant,
+            'rejected quotation',
+            f'{approver_user.name} rejected quotation {quotation.id} - {quotation.company} via link. Reason: {reason}',
+            entity_type='quotation',
+            entity_id=quotation.lead_id,
+        )
+        if quotation.submitted_by_id and quotation.submitted_by_id != approver_user.id:
+            notify(
+                quotation.submitted_by,
+                'Approval',
+                'Proposal rejected',
+                f'{quotation.id} - {quotation.company} was rejected by {approver_user.name}. Reason: {reason}',
+                url=proposal_url(quotation),
+                entity_type='quotation',
+                entity_id=quotation.lead_id,
+            )
+
+        return Response({
+            'status': approval.status,
+            'rejectionReason': approval.rejection_reason,
+            'quotationStatus': quotation.status,
+        })
 
 
 class QuotationSendToClientView(APIView):
@@ -3328,6 +3795,12 @@ class ClientDetailListCreateView(APIView):
                 | Q(category__icontains=search)
             )
         collected_by = request.query_params.get('collected_by')
+        # The staff picker ignores its own filter: active staff are always
+        # listed, inactive staff stay only while stamped on a visible record.
+        facet_staff = staff_names_with_entries(
+            request.user.company,
+            set(qs.exclude(collected_by='').values_list('collected_by', flat=True)),
+        )
         if collected_by:
             qs = qs.filter(collected_by=collected_by)
         status_counts = {
@@ -3340,9 +3813,9 @@ class ClientDetailListCreateView(APIView):
         status_counts.setdefault('Paid', 0)
         tab = request.query_params.get('tab') or 'all'
         if tab == 'active':
-            qs = qs.filter(status__in=['Details Pending', 'In Progress'])
+            qs = qs.filter(status__in=['Details Pending', 'Details Complete', 'In Progress'])
         elif tab == 'completed':
-            qs = qs.filter(status__in=['Details Complete', 'Completed', 'Paid'])
+            qs = qs.filter(status__in=['Completed', 'Paid'])
         status_filter = request.query_params.get('status')
         if status_filter:
             qs = qs.filter(status=status_filter)
@@ -3351,6 +3824,10 @@ class ClientDetailListCreateView(APIView):
         page_records = page_records.prefetch_related('attachments')
         envelope['results'] = ClientDetailSerializer(page_records, many=True).data
         envelope['counts'] = {'by_status': status_counts, 'total': sum(status_counts.values())}
+        envelope['facets'] = {
+            'staff': facet_staff,
+            'active_staff': sorted(active_staff_names(request.user.company)),
+        }
         return Response(envelope)
 
     def post(self, request):
@@ -3501,6 +3978,101 @@ class ClientDetailDetailView(APIView):
             entity_id=label,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ClientDetailPaymentView(APIView):
+    """List or record a payment for a particular client detail and sync it automatically to Account Soft."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_scoped_record(self, request, pk):
+        return scoped_client_details(request.user).filter(pk=pk).first()
+
+    def get(self, request, pk):
+        if not can(request.user, 'client.view'):
+            return Response(
+                {'detail': 'You do not have permission to view client payments.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+        payments = record.payments.all()
+        return Response(ClientPaymentSerializer(payments, many=True).data)
+
+    def post(self, request, pk):
+        if not can(request.user, 'client.create', 'client.edit'):
+            return Response(
+                {'detail': 'You do not have permission to record payments.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        record = self._get_scoped_record(request, pk)
+        if record is None:
+            return Response({'detail': 'Client detail not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        amount_val = request.data.get('amount')
+        try:
+            amount = float(amount_val)
+            if amount <= 0:
+                raise ValueError('Amount must be positive')
+        except (ValueError, TypeError):
+            return Response({'error': 'A valid positive amount is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        date_str = (request.data.get('date') or request.data.get('payment_date') or '').strip()
+        method_str = (request.data.get('method') or request.data.get('payment_method') or 'Bank Transfer').strip()
+        reference_str = (request.data.get('reference') or request.data.get('reference_no') or '').strip()
+        received_by_str = (request.data.get('receivedBy') or request.data.get('received_by') or request.user.name or '').strip()
+        notes_str = (request.data.get('notes') or '').strip()
+
+        from django.utils.dateparse import parse_date
+
+        p_date = parse_date(date_str)
+        if not p_date:
+            p_date = timezone.now().date()
+
+        payment = ClientPayment.objects.create(
+            client_detail=record,
+            order_no=record.order_no or f'ORD-{record.id}',
+            amount=amount,
+            date=p_date,
+            method=method_str,
+            reference=reference_str,
+            received_by=received_by_str,
+            notes=notes_str,
+            synced_to_accounts=False,
+        )
+
+        order_obj = Order.objects.filter(id=record.order_no).first() if record.order_no else None
+        order_val = (order_obj.net_amount or order_obj.total or None) if order_obj else None
+
+        synced = sync_payment_to_accounts_soft(
+            order_id=record.order_no or f'ORD-{record.id}',
+            customer=record.company or record.client_name,
+            amount=amount,
+            date=str(p_date),
+            method=method_str,
+            reference=reference_str,
+            received_by=received_by_str,
+            notes=notes_str,
+            tenant=record.tenant,
+            order_value=order_val,
+        )
+        if synced:
+            payment.synced_to_accounts = True
+            payment.save(update_fields=['synced_to_accounts', 'updated_at'])
+
+        log_activity(
+            request.user,
+            request.user.company,
+            'recorded client payment',
+            f'{request.user.name} recorded payment of ₹{amount} for {record.company} ({record.order_no or record.id}).',
+            entity_type='client',
+            entity_id=record.id,
+        )
+
+        res_data = ClientPaymentSerializer(payment).data
+        res_data['syncedToAccounts'] = payment.synced_to_accounts
+        return Response(res_data, status=status.HTTP_201_CREATED)
 
 
 def _get_client_detail_by_token(token):
@@ -3666,7 +4238,7 @@ class PublicClientDetailAttachmentView(APIView):
     @staticmethod
     def _notify_staff(record, attachment):
         """In-app notification to the tenant's staff who can view client details."""
-        users = User.objects.filter(is_active=True)
+        users = User.objects.filter(is_active=True, deny_leads_access=False)
         if record.tenant_id:
             users = users.filter(company_id=record.tenant_id)
         else:
@@ -3751,9 +4323,12 @@ class OrderRegisterView(APIView):
             )
 
         facets = {
-            'staff': sorted(set(distinct(facet_qs_no_staff, 'staff'))
-                            | set(distinct(facet_qs_no_staff, 'bdm'))
-                            | set(distinct(facet_qs_no_staff, 'proposal_by'))),
+            'staff': staff_names_with_entries(
+                request.user.company,
+                set(distinct(facet_qs_no_staff, 'staff'))
+                | set(distinct(facet_qs_no_staff, 'bdm'))
+                | set(distinct(facet_qs_no_staff, 'proposal_by')),
+            ),
             'categories': distinct(facet_qs_no_category, 'category'),
         }
 
@@ -3829,6 +4404,14 @@ class OrderListCreateView(APIView):
                 | Q(proposal_no__icontains=search)
             )
         staff = request.query_params.get('staff')
+        # The staff picker ignores its own filter: active staff are always
+        # listed, inactive staff stay only while stamped on a visible order.
+        facet_staff = staff_names_with_entries(
+            request.user.company,
+            set(qs.exclude(staff='').values_list('staff', flat=True))
+            | set(qs.exclude(bdm='').values_list('bdm', flat=True))
+            | set(qs.exclude(proposal_by='').values_list('proposal_by', flat=True)),
+        )
         if staff:
             qs = qs.filter(Q(staff=staff) | Q(bdm=staff) | Q(proposal_by=staff))
         counts = {
@@ -3847,6 +4430,7 @@ class OrderListCreateView(APIView):
         page_orders, envelope = paginated_queryset(qs, request)
         envelope['results'] = OrderSerializer(page_orders, many=True).data
         envelope['counts'] = counts
+        envelope['facets'] = {'staff': facet_staff}
         return Response(envelope)
 
     def post(self, request):
@@ -4199,6 +4783,21 @@ class ExternalOrdersView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         qs = Order.objects.select_related('tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(tenant__name__iexact=tenant_name)
         company = (request.query_params.get('company') or '').strip()
         if company:
             qs = qs.filter(company__icontains=company)
@@ -4250,6 +4849,21 @@ class ExternalCustomersView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         qs = ClientDetail.objects.select_related('tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(tenant__name__iexact=tenant_name)
         page_customers, envelope = paginated_queryset(qs, request)
         envelope.update(
             external_page_links(
@@ -4272,6 +4886,74 @@ class ExternalCustomersView(APIView):
                 'status': customer.status,
             }
             for customer in page_customers
+        ]
+        return Response(envelope)
+
+
+class ExternalPaymentsView(APIView):
+    """Read-only payments feed for external systems (e.g. ERP / accounting).
+
+    Authenticates with an API key (``Authorization: Bearer <key>`` or ``X-API-Key``).
+    Returns paginated ClientPayment records across tenants.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not external_key_authorized(request):
+            return Response(
+                {'detail': 'Invalid or missing API key.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = ClientPayment.objects.select_related('client_detail', 'client_detail__tenant').order_by('-created_at')
+        core_org_id = request.query_params.get('core_org_id') or request.query_params.get('tenant_core_org_id') or request.headers.get('X-Core-Org-Id')
+        tenant_id = request.query_params.get('tenant_id') or request.headers.get('X-Tenant-Id')
+        tenant_name = (request.query_params.get('tenant_name') or '').strip()
+        if core_org_id:
+            try:
+                qs = qs.filter(client_detail__tenant__core_org_id=int(core_org_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_id:
+            try:
+                qs = qs.filter(client_detail__tenant_id=int(tenant_id))
+            except (ValueError, TypeError):
+                pass
+        elif tenant_name:
+            qs = qs.filter(client_detail__tenant__name__iexact=tenant_name)
+
+        order_no = (request.query_params.get('order_id') or request.query_params.get('order_no') or '').strip()
+        if order_no:
+            qs = qs.filter(order_no__iexact=order_no)
+
+        page_payments, envelope = paginated_queryset(qs, request)
+        envelope.update(
+            external_page_links(
+                request, envelope['page'], envelope['page_size'], envelope['count']
+            )
+        )
+        order_ids = [p.order_no for p in page_payments if p.order_no]
+        order_map = {o.id: o for o in Order.objects.filter(id__in=order_ids)} if order_ids else {}
+
+        envelope['results'] = [
+            {
+                'id': p.id,
+                'order_id': p.order_no or f'ORD-{p.client_detail_id}',
+                'amount': str(p.amount),
+                'date': str(p.date),
+                'method': p.method,
+                'reference': p.reference,
+                'received_by': p.received_by,
+                'notes': p.notes,
+                'synced_to_accounts': p.synced_to_accounts,
+                'customer': p.client_detail.company or p.client_detail.client_name if p.client_detail else '',
+                'core_org_id': getattr(p.client_detail.tenant, 'core_org_id', None) if p.client_detail and p.client_detail.tenant else None,
+                'tenant_name': getattr(p.client_detail.tenant, 'name', '') if p.client_detail and p.client_detail.tenant else '',
+                'order_value': str(order_map[p.order_no].net_amount or order_map[p.order_no].total or '') if p.order_no in order_map else '',
+                'created_at': p.created_at.isoformat() if p.created_at else '',
+            }
+            for p in page_payments
         ]
         return Response(envelope)
 

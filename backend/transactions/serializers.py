@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Attachment, CallHistory, ClientDetail, Lead, LeadContactHistory, Order, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+from .models import Attachment, CallHistory, ClientDetail, ClientPayment, Lead, LeadContactHistory, Order, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
 from .services import order_approval_info
 
 
@@ -11,13 +11,40 @@ class AttachmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+class ClientPaymentSerializer(serializers.ModelSerializer):
+    receivedBy = serializers.CharField(source='received_by', required=False, allow_blank=True)
+    syncedToAccounts = serializers.BooleanField(source='synced_to_accounts', read_only=True)
+    createdAt = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClientPayment
+        fields = [
+            'id',
+            'order_no',
+            'amount',
+            'date',
+            'method',
+            'reference',
+            'receivedBy',
+            'notes',
+            'syncedToAccounts',
+            'createdAt',
+        ]
+        read_only_fields = ['id', 'syncedToAccounts', 'createdAt']
+
+    def get_createdAt(self, obj):
+        return obj.created_at.isoformat() if obj.created_at else ''
+
+
 class ClientDetailSerializer(serializers.ModelSerializer):
     orderNo = serializers.CharField(source='order_no', required=False, allow_blank=True)
     leadId = serializers.CharField(source='lead_id', required=False, allow_blank=True)
     clientName = serializers.CharField(source='client_name', required=False, allow_blank=True)
     acceptedDate = serializers.CharField(source='accepted_date', required=False, allow_blank=True)
+    deliveryDate = serializers.CharField(source='delivery_date', required=False, allow_blank=True)
     collectedBy = serializers.CharField(source='collected_by', required=False, allow_blank=True)
     attachments = AttachmentSerializer(many=True, read_only=True)
+    payments = ClientPaymentSerializer(many=True, read_only=True)
 
     class Meta:
         model = ClientDetail
@@ -31,10 +58,12 @@ class ClientDetailSerializer(serializers.ModelSerializer):
             'email',
             'category',
             'acceptedDate',
+            'deliveryDate',
             'collectedBy',
             'notes',
             'status',
             'attachments',
+            'payments',
             'createdAt',
         ]
         read_only_fields = ['id', 'createdAt']
@@ -43,6 +72,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
 
     def get_createdAt(self, obj):
         return obj.created_at.isoformat() if obj.created_at else ''
+
 
 
 class CallHistorySerializer(serializers.ModelSerializer):
@@ -140,6 +170,7 @@ class QuotationApprovalSerializer(serializers.ModelSerializer):
             'signedAt',
             'signatureRef',
             'rejectionReason',
+            'token',
         ]
 
     def get_signedAt(self, obj):

@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
-import PasswordInput from '../../components/PasswordInput'
 import { can } from '../../utils/permissions'
 import Spinner from '../../components/Spinner'
 import RefreshButton from '../../components/RefreshButton'
@@ -76,15 +75,6 @@ function PhoneIcon({ className = 'w-3.5 h-3.5' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
-    </svg>
-  )
-}
-
-function LockIcon({ className = 'w-3.5 h-3.5' }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   )
 }
@@ -249,14 +239,12 @@ export default function Staff() {
   })
   const [editingId, setEditingId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [showCredentials, setShowCredentials] = useState(null) // newly created creds
-  const [resetModal, setResetModal] = useState(null) // user object for reset
-  const [resetPw, setResetPw] = useState('')
+  const [statusFilter, setStatusFilter] = useState('active')
   const [selfEmailModal, setSelfEmailModal] = useState(null) // { stage, otp, busy, error }
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null) // { message, type: 'success' | 'error' }
   const [saving, setSaving] = useState(false)
   const [togglingId, setTogglingId] = useState(null)
-  const [resettingPw, setResettingPw] = useState(false)
+  const toastTimerRef = useRef(null)
 
   // Roles & Permissions editor state
   const [editingRole, setEditingRole] = useState(null) // role object being edited
@@ -283,7 +271,7 @@ export default function Staff() {
           setPermissionCatalog(permRes.length ? permRes : [])
         }
       } catch (err) {
-        if (!cancelled) setError(err.message)
+        if (!cancelled) showToast(err.message, 'error')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -295,9 +283,10 @@ export default function Staff() {
     }
   }, [])
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+  function showToast(msg, type = 'success') {
+    setToast({ message: msg, type })
+    window.clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 3000)
   }
 
   async function refreshData() {
@@ -311,7 +300,7 @@ export default function Staff() {
       setStaffList(users)
       setBranches(branchRes)
     } catch (err) {
-      setError(err.message)
+      showToast(err.message, 'error')
     } finally {
       setLoading(false)
     }
@@ -323,11 +312,7 @@ export default function Staff() {
     if (saving) return
 
     if (!formData.name.trim() || !formData.email.trim()) {
-      setError('Name and email are required.')
-      return
-    }
-    if (!editingId && formData.password.length < 8) {
-      setError('Initial password must be at least 8 characters.')
+      showToast('Name and email are required.', 'error')
       return
     }
 
@@ -363,16 +348,16 @@ export default function Staff() {
           mobile: formData.phone,
           branch: formData.branch,
           role: formData.role,
-          password: formData.password,
         })
-        setShowCredentials({ email: created.email, password: formData.password })
-        showToast('Employee added.')
+        showToast(
+          `${created.name} added. The account is inactive until an admin sets their password in SystemSoft.`,
+        )
       }
       setFormData({ name: '', email: '', phone: '', branch: '', role: null, password: '' })
       setEditingId(null)
       await refreshData()
     } catch (err) {
-      setError(err.message)
+      showToast(err.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -400,35 +385,15 @@ export default function Staff() {
   async function handleToggleActive(emp) {
     if (togglingId) return
     setTogglingId(emp.id)
+    const wasActiveInLeads = emp.active_in_leads ?? emp.is_active
     try {
-      await api.patch(`/auth/users/${emp.id}/`, { is_active: !emp.is_active })
-      showToast(emp.is_active ? `Deactivated ${emp.name}.` : `Activated ${emp.name}.`)
+      await api.patch(`/auth/users/${emp.id}/`, { is_active: !wasActiveInLeads })
+      showToast(wasActiveInLeads ? `Deactivated ${emp.name} in LEADS.` : `Activated ${emp.name} in LEADS.`)
       await refreshData()
     } catch (err) {
-      setError(err.message)
+      showToast(err.message, 'error')
     } finally {
       setTogglingId(null)
-    }
-  }
-
-  async function handleResetPassword(e) {
-    e.preventDefault()
-    setError('')
-    if (resettingPw) return
-    if (resetPw.length < 8) {
-      setError('New password must be at least 8 characters.')
-      return
-    }
-    setResettingPw(true)
-    try {
-      await api.post(`/auth/users/${resetModal.id}/reset-password/`, { new_password: resetPw })
-      showToast(`Password updated for ${resetModal.name}.`)
-      setResetModal(null)
-      setResetPw('')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setResettingPw(false)
     }
   }
 
@@ -477,16 +442,19 @@ export default function Staff() {
   }
 
   const filteredStaff = useMemo(() => {
-    if (!searchQuery.trim()) return staffList
+    const byStatus = staffList.filter((s) =>
+      statusFilter === 'all' ? true : statusFilter === 'active' ? s.is_active : !s.is_active
+    )
+    if (!searchQuery.trim()) return byStatus
     const q = searchQuery.toLowerCase()
-    return staffList.filter(
+    return byStatus.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         (s.email || '').toLowerCase().includes(q) ||
         (s.staff_code || '').toLowerCase().includes(q) ||
         (s.role_name || '').toLowerCase().includes(q)
     )
-  }, [staffList, searchQuery])
+  }, [staffList, searchQuery, statusFilter])
 
   // The full catalog (from /auth/permissions/), used to compute which roles the
   // acting user may assign. Authority is a pure permission-set subset relation:
@@ -521,11 +489,15 @@ export default function Staff() {
     <Layout>
       <div className="space-y-6">
         {toast && (
-          <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+          <div className={`fixed top-4 right-4 z-50 flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3 shadow-lg ${toast.type === 'error' ? 'border-red-200' : 'border-slate-200'}`}>
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full ${toast.type === 'error' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+              {toast.type === 'error' ? (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+              )}
             </span>
-            <span className="text-xs font-semibold text-slate-800">{toast}</span>
+            <span className={`text-xs font-semibold ${toast.type === 'error' ? 'text-red-700' : 'text-slate-800'}`}>{toast.message}</span>
           </div>
         )}
 
@@ -570,12 +542,6 @@ export default function Staff() {
           </div>
         )}
 
-        {error && !resetModal && !selfEmailModal && !showCredentials && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-            {error}
-          </div>
-        )}
-
         {tab === 'roles' ? (
           <RolesEditor
             roles={roles}
@@ -592,7 +558,6 @@ export default function Staff() {
             setIsNewRole={setIsNewRole}
             setRoles={setRoles}
             showToast={showToast}
-            setError={setError}
           />
         ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr] items-start">
@@ -655,12 +620,10 @@ export default function Staff() {
               )}
 
               {!isEditing && (
-                <>
-                  <FloatingField label="Password" id="emp_pw" type="password" value={formData.password} onChange={(v) => setFormData({ ...formData, password: v })} icon={<LockIcon />} />
-                  <p className="text-[10px] text-slate-400">
-                    This is the password the employee uses to sign in.
-                  </p>
-                </>
+                <p className="sm:col-span-2 text-[10px] text-slate-400 -mt-1">
+                  No password is set here. The new employee stays inactive until a SystemSoft
+                  admin sets their password and activates the account in User Management.
+                </p>
               )}
 
               <div className={`flex items-center gap-2 pt-1 ${isEditing ? '' : 'justify-end'}`}>
@@ -721,6 +684,27 @@ export default function Staff() {
               </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-1 pt-3">
+              {[
+                { key: 'active', label: 'Active' },
+                { key: 'inactive', label: 'Inactive' },
+                { key: 'all', label: 'All' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStatusFilter(key)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    statusFilter === key
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <SpinnerIcon />
@@ -740,7 +724,9 @@ export default function Staff() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black">
-                    {filteredStaff.map((emp) => (
+                    {filteredStaff.map((emp) => {
+                    const activeInLeads = emp.active_in_leads ?? emp.is_active
+                    return (
                       <tr key={emp.id} onClick={() => handleEditClick(emp)} className={`text-slate-600 transition-colors cursor-pointer ${editingId === emp.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/50'}`}>
                         <td className="py-0.5 pr-2">
                           <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[11px] font-bold">
@@ -758,13 +744,13 @@ export default function Staff() {
                           <span className="capitalize text-slate-600">{emp.role_name || '—'}</span>
                         </td>
                         <td className="py-0.5 pr-2">
-                          {emp.is_active ? (
+                          {activeInLeads ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-500">
-                              <span className="h-1.5 w-1.5 rounded-full bg-red-400" /> Inactive
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-400" /> {emp.is_active ? 'Inactive in LEADS' : 'Inactive'}
                             </span>
                           )}
                         </td>
@@ -781,46 +767,41 @@ export default function Staff() {
                             >
                               <EditIcon />
                             </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setResetModal(emp)
-                                setResetPw('')
-                              }}
-                              title="Reset password"
-                              className="rounded-lg p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
-                            >
-                              <KeyIcon />
-                            </button>
-                            {emp.email !== user?.email && (
+                            {emp.email !== user?.email && emp.is_active && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   handleToggleActive(emp)
                                 }}
-                                title={emp.is_active ? 'Deactivate' : 'Activate'}
+                                title={activeInLeads ? 'Deactivate in LEADS' : 'Activate in LEADS'}
                                 disabled={togglingId !== null}
                                 className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                               >
                                 {togglingId === emp.id ? (
                                   <Spinner className="h-3.5 w-3.5 text-emerald-500" />
                                 ) : (
-                                  <PowerIcon active={emp.is_active} />
+                                  <PowerIcon active={activeInLeads} />
                                 )}
                               </button>
                             )}
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )
+                  })}
                   </tbody>
                 </table>
               </div>
             ) : (
               <div className="py-10 text-center text-xs text-slate-400">
-                {searchQuery ? `No employees match "${searchQuery}".` : 'No employees yet. Use the form to add your first employee.'}
+                {searchQuery
+                  ? `No employees match "${searchQuery}".`
+                  : statusFilter === 'inactive'
+                    ? 'No inactive employees.'
+                    : statusFilter === 'active'
+                      ? 'No active employees. Use the form to add your first employee.'
+                      : 'No employees yet. Use the form to add your first employee.'}
               </div>
             )}
           </div>
@@ -828,101 +809,7 @@ export default function Staff() {
         )}
       </div>
 
-      {/* New employee credentials modal */}
-      {showCredentials && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowCredentials(null)
-              setResetModal(null)
-            }
-          }}
-        >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-              </span>
-              <h3 className="text-base font-bold text-slate-900">Employee added</h3>
-            </div>
-            <p className="mt-2 text-sm text-slate-500">
-              Share these login credentials with the employee.
-            </p>
-            <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">Email</span>
-                <span className="font-mono font-semibold text-slate-800">{showCredentials.email}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">Password</span>
-                <span className="font-mono font-semibold text-slate-800">{showCredentials.password}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowCredentials(null)}
-              className="mt-5 w-full rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Reset password modal */}
-      {resetModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowCredentials(null)
-              setResetModal(null)
-            }
-          }}
-        >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
-            <h3 className="text-base font-bold text-slate-900">Reset password</h3>
-            <p className="mt-2 text-sm text-slate-500">
-              Set a new password for <span className="font-semibold text-slate-700">{resetModal.name}</span>.
-            </p>
-            {error && (
-              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-600 animate-in fade-in">
-                {error}
-              </div>
-            )}
-            <form onSubmit={handleResetPassword} className="mt-4 space-y-3">
-              <PasswordInput
-                id="reset_pw"
-                value={resetPw}
-                onChange={setResetPw}
-                autoComplete="new-password"
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100"
-                placeholder="New password (min 8 chars)"
-              />
-              <div className="flex justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setResetModal(null)}
-                  disabled={resettingPw}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={resettingPw}
-                  className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {resettingPw && <Spinner className="h-3.5 w-3.5" />}
-                  {resettingPw ? 'Saving…' : 'Save password'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    {/* Self email change (OTP) modal */}
+{/* Self email change (OTP) modal */}
       {selfEmailModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
@@ -1041,7 +928,6 @@ function RolesEditor({
   setIsNewRole,
   setRoles,
   showToast,
-  setError,
 }) {
   const [saveError, setSaveError] = useState('')
   const [roleSaving, setRoleSaving] = useState(false)
@@ -1112,7 +998,6 @@ function RolesEditor({
       setRoleFormCode('')
       setRoleFormPermissions([])
     } catch (err) {
-      setError(err.message)
       setSaveError(err.message)
     } finally {
       setRoleSaving(false)
@@ -1133,7 +1018,6 @@ function RolesEditor({
         setEditingRole(null)
       }
     } catch (err) {
-      setError(err.message)
       setSaveError(err.message)
     } finally {
       setRoleDeleting(false)

@@ -9,7 +9,9 @@ import { can } from '../../utils/permissions'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import RefreshButton from '../../components/RefreshButton'
-import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol } from './proposalItemsUtils'
+import Spinner from '../../components/Spinner'
+import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol, htmlToFormattedLines } from './proposalItemsUtils'
+import SendForApprovalModal from './SendForApprovalModal'
 
 function escapeHtml(value) {
   return String(value)
@@ -47,7 +49,7 @@ function htmlToPlainLines(html) {
 }
 
 function linesToHtml(lines) {
-  return lines.map((line) => `<div>${line ? escapeHtml(line) : '&nbsp;'}</div>`).join('')
+  return lines.map((line) => `<div>${line || '&nbsp;'}</div>`).join('')
 }
 
 
@@ -246,8 +248,8 @@ function PageFooter({ company }) {
   )
 }
 
-const ONES = ['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen']
-const TENS = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety']
+const ONES = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
 const BIG = [
   { value: 10000000, word: 'Crore' },
   { value: 100000, word: 'Lakh' },
@@ -342,10 +344,12 @@ export default function ProposalPreview() {
 
   const canApprove = !!user && (can(user, 'quotation.approve') || user.is_superuser)
 
+  const navProposal = location.state?.proposal
+  const stateMatchesParam = navProposal && (!params.id || navProposal.id === params.id)
   const [company, setCompany] = useState({})
-  const [proposal, setProposal] = useState(() => location.state?.proposal || null)
-  const [clientToken, setClientToken] = useState(() => location.state?.proposal?.clientToken || '')
-  const [loadingQuote, setLoadingQuote] = useState(() => !location.state?.proposal)
+  const [proposal, setProposal] = useState(() => (stateMatchesParam ? navProposal : null))
+  const [clientToken, setClientToken] = useState(() => (stateMatchesParam ? navProposal.clientToken || '' : ''))
+  const [loadingQuote, setLoadingQuote] = useState(() => !stateMatchesParam)
   const [refreshing, setRefreshing] = useState(false)
   const [notFound, setNotFound] = useState(false)
 
@@ -382,56 +386,61 @@ export default function ProposalPreview() {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      try {
-        const data = await api.get('/auth/company/')
-        if (!cancelled) setCompany(data || {})
-      } catch (err) {
-        console.error('Failed to load company profile', err)
-      }
-    })()
+      ; (async () => {
+        try {
+          const data = await api.get('/auth/company/')
+          if (!cancelled) setCompany(data || {})
+        } catch (err) {
+          console.error('Failed to load company profile', err)
+        }
+      })()
     return () => {
       cancelled = true
     }
   }, [])
 
-  // Fetch approvers once for the send-for-approval picker.
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const data = await api.get('/transactions/quotations/approvers/')
-        if (!cancelled && Array.isArray(data)) setApprovers(data)
-      } catch {
-        // ignore
-      }
-    })()
-    return () => {
-      cancelled = true
+  // Fetch approvers for the send-for-approval picker.
+  const [loadingApprovers, setLoadingApprovers] = useState(false)
+
+  const fetchApprovers = useCallback(async () => {
+    setLoadingApprovers(true)
+    try {
+      const data = await api.get('/transactions/quotations/approvers/')
+      if (Array.isArray(data)) setApprovers(data)
+    } catch {
+      // ignore
+    } finally {
+      setLoadingApprovers(false)
     }
   }, [])
 
-  // If we arrived without navigation state (e.g. from a notification link),
-  // fetch the quotation by id.
   useEffect(() => {
-    if (proposal || !params.id) return
+    fetchApprovers()
+  }, [fetchApprovers])
+
+  // If we arrived without navigation state (e.g. from a notification link)
+  // or the loaded proposal does not match the active route ID, fetch by id.
+  useEffect(() => {
+    if (!params.id) return
+    if (proposal && proposal.id === params.id) return
     let cancelled = false
-    ;(async () => {
-      try {
-        const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
-        if (!cancelled) {
-          setProposal(data || null)
-          if (!data) setNotFound(true)
+    setLoadingQuote(true)
+      ; (async () => {
+        try {
+          const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
+          if (!cancelled) {
+            setProposal(data || null)
+            if (!data) setNotFound(true)
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setNotFound(true)
+            setActionError(err.message)
+          }
+        } finally {
+          if (!cancelled) setLoadingQuote(false)
         }
-      } catch (err) {
-        if (!cancelled) {
-          setNotFound(true)
-          setActionError(err.message)
-        }
-      } finally {
-        if (!cancelled) setLoadingQuote(false)
-      }
-    })()
+      })()
     return () => {
       cancelled = true
     }
@@ -446,14 +455,14 @@ export default function ProposalPreview() {
       if (isPending && hasNoApprovals) {
         approvalRefetchedRef.current = true
         let cancelled = false
-        ;(async () => {
-          try {
-            const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
-            if (!cancelled && data) setProposal(data)
-          } catch {
-            // ignore
-          }
-        })()
+          ; (async () => {
+            try {
+              const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
+              if (!cancelled && data) setProposal(data)
+            } catch {
+              // ignore
+            }
+          })()
         return () => {
           cancelled = true
         }
@@ -473,18 +482,18 @@ export default function ProposalPreview() {
   useEffect(() => {
     if (!proposal || liveToken || !params.id) return
     let cancelled = false
-    ;(async () => {
-      try {
-        const data = await api.get(
-          `/transactions/quotations/${encodeURIComponent(params.id)}/client-link/`
-        )
-        if (!cancelled && data?.clientToken && data.clientToken !== liveToken) {
-          setClientToken(data.clientToken)
+      ; (async () => {
+        try {
+          const data = await api.get(
+            `/transactions/quotations/${encodeURIComponent(params.id)}/client-link/`
+          )
+          if (!cancelled && data?.clientToken && data.clientToken !== liveToken) {
+            setClientToken(data.clientToken)
+          }
+        } catch {
+          // keep the gentle "Link unavailable" placeholder
         }
-      } catch {
-        // keep the gentle "Link unavailable" placeholder
-      }
-    })()
+      })()
     return () => {
       cancelled = true
     }
@@ -547,17 +556,17 @@ export default function ProposalPreview() {
   // service/text blocks (bold title, description below, right-aligned amount).
   const detailSplit = proposalItemsFromHtml(proposalData?.proposalInDetailsHtml || '')
   const composedDetailsHtml = [
-    detailSplit.freeHtml ? linesToHtml(htmlToPlainLines(detailSplit.freeHtml)) : '',
+    detailSplit.freeHtml ? linesToHtml(htmlToFormattedLines(detailSplit.freeHtml)) : '',
     itemsPrintHtml(detailSplit.items, currencySymbol(proposalData?.currency), ''),
   ].join('')
   const hasDetails =
-    htmlToPlainLines(detailSplit.freeHtml || '').length > 0 || detailSplit.items.length > 0
+    htmlToFormattedLines(detailSplit.freeHtml || '').length > 0 || detailSplit.items.length > 0
 
   // "Proposal Summary" carries its own optional service/text blocks. Totals are
   // collective (shown once in the financial banner), so no per-section total.
   const summarySplit = proposalItemsFromHtml(proposalData?.proposalSummaryHtml || '')
   const composedSummaryHtml = [
-    summarySplit.freeHtml ? linesToHtml(htmlToPlainLines(summarySplit.freeHtml)) : '',
+    summarySplit.freeHtml ? linesToHtml(htmlToFormattedLines(summarySplit.freeHtml)) : '',
     itemsPrintHtml(summarySplit.items, currencySymbol(proposalData?.currency), ''),
   ].join('')
 
@@ -584,33 +593,33 @@ export default function ProposalPreview() {
   // The Details box is omitted entirely when there is no detail content.
   const termsInset = hasFullTerms
     ? {
-        title: 'Detailed Terms & Conditions',
-        html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml)),
-        contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
-        boxClass: 'rounded-xl border border-slate-300 bg-white',
-        titleClass: 'text-center',
-        reserve: 64,
-        minFraction: 0.25,
-        pageHeader: proposalPageHeader,
-        pageFooter: <PageFooter company={company} />,
-        endBlock: acceptanceEnd,
-      }
+      title: 'Detailed Terms & Conditions',
+      html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml).map(escapeHtml)),
+      contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
+      boxClass: 'rounded-xl border border-slate-300 bg-white',
+      titleClass: 'text-center',
+      reserve: 64,
+      minFraction: 0.25,
+      pageHeader: proposalPageHeader,
+      pageFooter: <PageFooter company={company} />,
+      endBlock: acceptanceEnd,
+    }
     : null
 
   const detailsInset = hasDetails
     ? {
-        title: 'Proposal in Details & Specifications',
-        html: composedDetailsHtml,
-        contentClass: 'text-[13px] leading-snug text-slate-800',
-        boxClass: 'rounded-xl border border-slate-300 bg-white',
-        titleClass: 'text-center',
-        reserve: 64,
-        minFraction: 0.25,
-        pageHeader: proposalPageHeader,
-        pageFooter: <PageFooter company={company} />,
-        endBlock: hasFullTerms ? null : acceptanceEnd,
-        insetSection: termsInset,
-      }
+      title: 'Proposal in Details & Specifications',
+      html: composedDetailsHtml,
+      contentClass: 'text-[13px] leading-snug text-slate-800',
+      boxClass: 'rounded-xl border border-slate-300 bg-white',
+      titleClass: 'text-center',
+      reserve: 64,
+      minFraction: 0.25,
+      pageHeader: proposalPageHeader,
+      pageFooter: <PageFooter company={company} />,
+      endBlock: hasFullTerms ? null : acceptanceEnd,
+      insetSection: termsInset,
+    }
     : null
 
   const isSent = proposalData?.status === 'Pending Approval'
@@ -627,7 +636,7 @@ export default function ProposalPreview() {
   const approvals = proposalData?.approvals || []
   const approvalsApproved = approvalCountBy(approvals, 'Approved')
 
-const approvedByRef = useRef(null)
+  const approvedByRef = useRef(null)
   const financialRef = useRef(null)
   const page1FooterRef = useRef(null)
   const termsContentRef = useRef(null)
@@ -684,6 +693,7 @@ const approvedByRef = useRef(null)
     setApproveNotice('')
     setSendApprovers([])
     setSendOpen(true)
+    fetchApprovers()
   }
 
   function openApprove() {
@@ -872,11 +882,10 @@ const approvedByRef = useRef(null)
               <button
                 type="button"
                 onClick={openSend}
-                className={`flex items-center gap-1.5 rounded-xl px-5 py-2 text-xs font-bold text-white shadow-md transition cursor-pointer ${
-                  isSent
-                    ? 'cursor-not-allowed bg-emerald-600 opacity-90'
-                    : 'bg-emerald-600 hover:bg-emerald-700'
-                }`}
+                className={`flex items-center gap-1.5 rounded-xl px-5 py-2 text-xs font-bold text-white shadow-md transition cursor-pointer ${isSent
+                  ? 'cursor-not-allowed bg-emerald-600 opacity-90'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
               >
                 {isSent ? '✓ Sent for Approval' : 'Send for Approval'}
               </button>
@@ -894,190 +903,188 @@ const approvedByRef = useRef(null)
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
           <div className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">
-    <PageHeader proposal={proposalData} company={company} clientToken={liveToken} />
+              <PageHeader proposal={proposalData} company={company} clientToken={liveToken} />
 
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 print:grid-cols-3">
-              <SectionBox title="Customer Details">
-                <div className="space-y-1">
-                  <p className="text-[13.5px] font-bold leading-snug text-slate-900">
-                    {proposalData.customerCompany}
-                  </p>
-                  <p className="text-[13.5px] font-medium text-slate-700">
-                    {proposalData.customerPerson}
-                  </p>
-                  <p className="font-mono text-[13px] text-slate-800">{proposalData.customerPhone}</p>
-                  <p className="text-[12.5px] text-slate-500">{proposalData.customerLocation}</p>
-                </div>
-              </SectionBox>
-
-              <SectionBox title="Proposal Details">
-                <div className="space-y-1.5 text-[13px] leading-relaxed text-slate-700">
-                  <p>
-                    <span className="font-bold text-slate-900">BDM:</span> {proposalData.bdm}
-                  </p>
-                  <p>
-                    <span className="font-bold text-slate-900">
-                      {(proposalData.versionNo || 1) > 1
-                        ? `Revision ${(proposalData.versionNo || 1) - 1}:`
-                        : 'Revision:'}
-                    </span>{' '}
-                    {String(proposalData.revisionNo || '')
-                      .replace(/\s*\(Rev\s*\d+\)\s*$/i, '')
-                      .trim() || '—'}
-                  </p>
-                  <p>
-                    <span className="font-bold text-slate-900">Quotation By:</span>{' '}
-                    {proposalData.quotationBy}
-                  </p>
-                </div>
-              </SectionBox>
-
-              <SectionBox title="Project Details">
-                <div className="space-y-1.5 text-[13px] leading-relaxed text-slate-700">
-                  <p>
-                    <span className="font-bold text-slate-900">Category:</span>{' '}
-                    {proposalData.category}
-                  </p>
-                  <p>
-                    <span className="font-bold text-slate-900">Customer Type:</span>{' '}
-                    {proposalData.customerType || '-'}
-                  </p>
-                  <p>
-                    <span className="font-bold text-slate-900">Sources:</span> {proposalData.sources}
-                  </p>
-                </div>
-              </SectionBox>
-            </div>
-
-            <p className="mt-3 text-[12px] italic leading-relaxed text-slate-500">
-              This Proposal form is issued in connection with the proposed project, and confirms our
-              intent to proceed with the implementation as per the agreed terms and conditions.
-            </p>
-
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 print:grid-cols-12 flex-1">
-              <div className="flex flex-col justify-between gap-3 lg:col-span-4 print:col-span-4">
-                <SectionBox title="Terms &amp; Conditions" className="flex-1" pinBottom>
-                  <div
-                    ref={termsContentRef}
-                    className="text-[11px] leading-snug text-slate-700 text-justify"
-                    style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
-                  >
-                    {htmlToPlainLines(pageOneTermsHtml).map((line, i) => (
-                      <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
-                    ))}
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 print:grid-cols-3">
+                <SectionBox title="Customer Details">
+                  <div className="space-y-1">
+                    <p className="text-[13.5px] font-bold leading-snug text-slate-900">
+                      {proposalData.customerCompany}
+                    </p>
+                    <p className="text-[13.5px] font-medium text-slate-700">
+                      {proposalData.customerPerson}
+                    </p>
+                    <p className="font-mono text-[13px] text-slate-800">{proposalData.customerPhone}</p>
+                    <p className="text-[12.5px] text-slate-500">{proposalData.customerLocation}</p>
                   </div>
-                  <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                 </SectionBox>
 
-                <div ref={approvedByRef}>
-                  <SectionBox title="Approved By">
-                  <div style={{ height: APPROVED_BY_BASE_HEIGHT + approvals.length * APPROVED_BY_ROW_HEIGHT }}>
-                  {approvals.length === 0 ? (
-                    <p className="text-[11px] text-slate-400 py-0.5">No approvers selected yet.</p>
-                  ) : (
-                    <div className="space-y-2 py-0.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                            proposalData.status === 'Approved'
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : proposalData.status === 'Rejected'
-                              ? 'border-rose-200 bg-rose-50 text-rose-700'
-                              : 'border-amber-200 bg-amber-50 text-amber-700'
-                          }`}
-                        >
-                          {proposalData.status === 'Approved'
-                            ? '✓ Approved'
-                            : proposalData.status === 'Rejected'
-                            ? '✗ Rejected'
-                            : '⏳ Awaiting approval'}
-                        </span>
-                        <span className="text-[10px] font-semibold text-slate-500">
-                          {approvalsApproved}/{approvals.length} approved
-                        </span>
-                      </div>
+                <SectionBox title="Proposal Details">
+                  <div className="space-y-1.5 text-[13px] leading-relaxed text-slate-700">
+                    <p>
+                      <span className="font-bold text-slate-900">BDM:</span> {proposalData.bdm}
+                    </p>
+                    <p>
+                      <span className="font-bold text-slate-900">
+                        {(proposalData.versionNo || 1) > 1
+                          ? `Revision ${(proposalData.versionNo || 1) - 1}:`
+                          : 'Revision:'}
+                      </span>{' '}
+                      {String(proposalData.revisionNo || '')
+                        .replace(/\s*\(Rev\s*\d+\)\s*$/i, '')
+                        .trim() || '—'}
+                    </p>
+                    <p>
+                      <span className="font-bold text-slate-900">Quotation By:</span>{' '}
+                      {proposalData.quotationBy}
+                    </p>
+                  </div>
+                </SectionBox>
 
-                      {approvals.map((a) => (
-                        <div
-                          key={a.id}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2 py-1.5"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[12px] font-bold text-slate-900 flex items-center gap-1">
-                              {a.userName}
-                              {a.user === user?.id && <span className="text-[9px] font-bold text-brand-600">you</span>}
-                            </p>
-                            {a.status === 'Approved' && (
-                              <p className="text-[10px] text-slate-500 leading-tight">
-                                Digitally signed (OTP) •{' '}
-                                {a.signedAt ? new Date(a.signedAt).toLocaleString() : ''}
-                              </p>
-                            )}
-                            {a.status === 'Rejected' && (
-                              <p className="text-[10px] text-rose-600 leading-tight">
-                                Rejected: {a.rejectionReason || 'No reason recorded.'}
-                              </p>
-                            )}
-                            {a.status === 'Pending' && (
-                              <p className="text-[10px] text-amber-600 leading-tight">Awaiting this approver</p>
-                            )}
-                          </div>
-                          <span
-                            className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                              a.status === 'Approved'
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : a.status === 'Rejected'
-                                ? 'border-rose-200 bg-rose-50 text-rose-700'
-                                : 'border-amber-200 bg-amber-50 text-amber-700'
-                            }`}
-                          >
-                            {a.status}
-                          </span>
-                        </div>
+                <SectionBox title="Project Details">
+                  <div className="space-y-1.5 text-[13px] leading-relaxed text-slate-700">
+                    <p>
+                      <span className="font-bold text-slate-900">Category:</span>{' '}
+                      {proposalData.category}
+                    </p>
+                    <p>
+                      <span className="font-bold text-slate-900">Customer Type:</span>{' '}
+                      {proposalData.customerType || '-'}
+                    </p>
+                    <p>
+                      <span className="font-bold text-slate-900">Sources:</span> {proposalData.sources}
+                    </p>
+                  </div>
+                </SectionBox>
+              </div>
+
+              <p className="mt-3 text-[12px] italic leading-relaxed text-slate-500">
+                This Proposal form is issued in connection with the proposed project, and confirms our
+                intent to proceed with the implementation as per the agreed terms and conditions.
+              </p>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 print:grid-cols-12 flex-1">
+                <div className="flex flex-col justify-between gap-3 lg:col-span-4 print:col-span-4">
+                  <SectionBox title="Terms &amp; Conditions" className="flex-1" pinBottom>
+                    <div
+                      ref={termsContentRef}
+                      className="text-[11px] leading-snug text-slate-700 text-justify"
+                      style={termsPaged.cap ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
+                    >
+                      {htmlToPlainLines(pageOneTermsHtml).map((line, i) => (
+                        <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
                       ))}
+                    </div>
+                    <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                  </SectionBox>
 
-                      {proposalData.status === 'Approved' && (
-                        <div className="flex items-center justify-between gap-2 pt-1">
-                          <div className="space-y-0.5 text-left min-w-0 flex-1">
-                            <p className="text-[12px] font-bold text-slate-900 flex items-center gap-1">
-                              <span className="text-emerald-700 font-extrabold">✓</span> All signatures valid (OTP verified)
-                            </p>
-                            {proposalData.signatureRef && (
-                              <p className="font-mono text-[10px] text-slate-500">Ref: {proposalData.signatureRef}</p>
+                  <div ref={approvedByRef}>
+                    <SectionBox title="Approved By">
+                      <div style={{ height: APPROVED_BY_BASE_HEIGHT + approvals.length * APPROVED_BY_ROW_HEIGHT }}>
+                        {approvals.length === 0 ? (
+                          <p className="text-[11px] text-slate-400 py-0.5">No approvers selected yet.</p>
+                        ) : (
+                          <div className="space-y-2 py-0.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${proposalData.status === 'Approved'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : proposalData.status === 'Rejected'
+                                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                    : 'border-amber-200 bg-amber-50 text-amber-700'
+                                  }`}
+                              >
+                                {proposalData.status === 'Approved'
+                                  ? '✓ Approved'
+                                  : proposalData.status === 'Rejected'
+                                    ? '✗ Rejected'
+                                    : '⏳ Awaiting approval'}
+                              </span>
+                              <span className="text-[10px] font-semibold text-slate-500">
+                                {approvalsApproved}/{approvals.length} approved
+                              </span>
+                            </div>
+
+                            {approvals.map((a) => (
+                              <div
+                                key={a.id}
+                                className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2 py-1.5"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[12px] font-bold text-slate-900 flex items-center gap-1">
+                                    {a.userName}
+                                    {a.user === user?.id && <span className="text-[9px] font-bold text-brand-600">you</span>}
+                                  </p>
+                                  {a.status === 'Approved' && (
+                                    <p className="text-[10px] text-slate-500 leading-tight">
+                                      Digitally signed (OTP) •{' '}
+                                      {a.signedAt ? new Date(a.signedAt).toLocaleString() : ''}
+                                    </p>
+                                  )}
+                                  {a.status === 'Rejected' && (
+                                    <p className="text-[10px] text-rose-600 leading-tight">
+                                      Rejected: {a.rejectionReason || 'No reason recorded.'}
+                                    </p>
+                                  )}
+                                  {a.status === 'Pending' && (
+                                    <p className="text-[10px] text-amber-600 leading-tight">Awaiting this approver</p>
+                                  )}
+                                </div>
+                                <span
+                                  className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${a.status === 'Approved'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    : a.status === 'Rejected'
+                                      ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                      : 'border-amber-200 bg-amber-50 text-amber-700'
+                                    }`}
+                                >
+                                  {a.status}
+                                </span>
+                              </div>
+                            ))}
+
+                            {proposalData.status === 'Approved' && (
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <div className="space-y-0.5 text-left min-w-0 flex-1">
+                                  <p className="text-[12px] font-bold text-slate-900 flex items-center gap-1">
+                                    <span className="text-emerald-700 font-extrabold">✓</span> All signatures valid (OTP verified)
+                                  </p>
+                                  {proposalData.signatureRef && (
+                                    <p className="font-mono text-[10px] text-slate-500">Ref: {proposalData.signatureRef}</p>
+                                  )}
+                                </div>
+                                <SignatureStamp bdm={proposalData.signedBy || 'Approved'} />
+                              </div>
                             )}
                           </div>
-                          <SignatureStamp bdm={proposalData.signedBy || 'Approved'} />
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    </SectionBox>
                   </div>
-                </SectionBox>
+                </div>
+
+                <div className="flex flex-col justify-between gap-3 lg:col-span-8 print:col-span-8">
+                  <SectionBox title="Proposal Summary" className="flex-1" pinBottom>
+                    <div
+                      ref={summaryContentRef}
+                      className="text-[13.5px] leading-snug text-slate-800"
+                      style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
+                      dangerouslySetInnerHTML={{ __html: composedSummaryHtml }}
+                    />
+                    {summaryPaged.part2Html ? (
+                      <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                    ) : null}
+                  </SectionBox>
+
+                  <div ref={financialRef}>
+                    <FinancialBanner proposal={proposalData} />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col justify-between gap-3 lg:col-span-8 print:col-span-8">
-                <SectionBox title="Proposal Summary" className="flex-1" pinBottom>
-                  <div
-                    ref={summaryContentRef}
-                    className="text-[13.5px] leading-snug text-slate-800"
-                    style={summaryPaged.cap ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
-                    dangerouslySetInnerHTML={{ __html: composedSummaryHtml }}
-                  />
-                  {summaryPaged.part2Html ? (
-                    <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
-                  ) : null}
-                </SectionBox>
-
-                <div ref={financialRef}>
-                  <FinancialBanner proposal={proposalData} />
-                </div>
+              <div ref={page1FooterRef} className="mt-auto pt-4">
+                <PageFooter company={company} />
               </div>
-            </div>
-
-            <div ref={page1FooterRef} className="mt-auto pt-4">
-              <PageFooter company={company} />
-            </div>
             </div>
           </div>
 
@@ -1123,17 +1130,7 @@ const approvedByRef = useRef(null)
               pageFooter={<PageFooter company={company} />}
               endBlock={acceptanceEnd}
             />
-          ) : (
-            /* No detail content and no detailed terms — close the document
-               without an empty details box. */
-            <div className={PAGE_CLASS}>
-              <div className="flex flex-1 flex-col">
-                {proposalPageHeader}
-                <div className="flex flex-1 flex-col justify-end">{acceptanceEnd}</div>
-                <PageFooter company={company} />
-              </div>
-            </div>
-          )}
+          ) : null}
 
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
@@ -15,6 +15,7 @@ import PaginationBar from '../../components/PaginationBar'
 import useDirty from '../../utils/useDirty'
 import usePagedList, { useDebouncedValue } from '../../utils/usePagedList'
 import { moveToTop } from '../../utils/listOrder'
+import SendForApprovalModal from './SendForApprovalModal'
 
 // Window scroll position saved just before opening a quotation preview, so
 // returning here from the preview restores exactly where the user was in the
@@ -22,26 +23,10 @@ import { moveToTop } from '../../utils/listOrder'
 let pivotScrollY = null
 
 const QUILL_MODULES = {
-  toolbar: [
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    [{ header: [2, 3, 4, false] }],
-    ['link', 'blockquote'],
-    ['clean'],
-  ],
+  toolbar: [['bold']],
 }
 
-const QUILL_FORMATS = [
-  'header',
-  'bold',
-  'italic',
-  'underline',
-  'strike',
-  'list',
-  'bullet',
-  'link',
-  'blockquote',
-]
+const QUILL_FORMATS = ['bold']
 
 const BLOCKED_PREFIXES = new Set([
   'ASS', 'BIT', 'CUM', 'DAM', 'DIC', 'FAG', 'FUC', 'GAY', 'JAP',
@@ -298,6 +283,177 @@ function currencySymbol(currency) {
   return m ? m[1] : (currency || '₹')
 }
 
+function GripVerticalIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <circle cx="9" cy="6" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" />
+      <circle cx="9" cy="18" r="1.5" />
+      <circle cx="15" cy="6" r="1.5" />
+      <circle cx="15" cy="12" r="1.5" />
+      <circle cx="15" cy="18" r="1.5" />
+    </svg>
+  )
+}
+
+function SortableBlockList({
+  items,
+  section,
+  currencyVal,
+  onEdit,
+  onDelete,
+  draggedBlock,
+  dragOverBlock,
+  canDragItem,
+  setCanDragItem,
+  setDraggedBlock,
+  setDragOverBlock,
+  reorderBlocks,
+  resetDrag,
+}) {
+  if (!items || items.length === 0) {
+    return (
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (draggedBlock) {
+            reorderBlocks(draggedBlock.section, draggedBlock.index, section, 0)
+          }
+          resetDrag()
+        }}
+        className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 text-center text-[11px] text-slate-400"
+      >
+        No services or text blocks yet — add one above.
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="space-y-1.5"
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+      }}
+      onDrop={(e) => {
+        if (e.target === e.currentTarget && draggedBlock) {
+          e.preventDefault()
+          reorderBlocks(draggedBlock.section, draggedBlock.index, section, items.length)
+          resetDrag()
+        }
+      }}
+    >
+      {items.map((it, i) => {
+        const isBeingDragged =
+          draggedBlock?.section === section && draggedBlock?.index === i
+        const isDragOver =
+          dragOverBlock?.section === section &&
+          dragOverBlock?.index === i &&
+          !isBeingDragged
+
+        return (
+          <div
+            key={i}
+            draggable={
+              canDragItem?.section === section && canDragItem?.index === i
+            }
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData('text/plain', `${section}:${i}`)
+              setDraggedBlock({ section, index: i })
+            }}
+            onDragEnd={resetDrag}
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              if (
+                dragOverBlock?.section !== section ||
+                dragOverBlock?.index !== i
+              ) {
+                setDragOverBlock({ section, index: i })
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              if (draggedBlock) {
+                reorderBlocks(draggedBlock.section, draggedBlock.index, section, i)
+              }
+              resetDrag()
+            }}
+            className={`rounded-lg border bg-white px-3 py-2 transition-all duration-150 ${
+              isBeingDragged
+                ? 'opacity-40 border-dashed border-brand-400 bg-brand-50/20'
+                : isDragOver
+                ? 'border-brand-500 ring-2 ring-brand-200/60 bg-brand-50/30'
+                : 'border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                {it.type === 'service' ? (
+                  <>
+                    <p className="text-[12.5px] font-bold text-slate-900">{it.title}</p>
+                    <p className="mt-0.5 text-[11.5px] text-slate-600 leading-snug">
+                      {it.description}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[12.5px] text-slate-700 whitespace-pre-line">{it.text}</p>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {it.type === 'service' && (
+                  <span className="font-mono text-[12.5px] font-bold text-slate-900">
+                    {currencySymbol(currencyVal)}{fmtAmount(itemsTotal([it]))}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onEdit(i)}
+                  className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600 cursor-pointer"
+                  title="Edit"
+                >
+                  <PencilIcon className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(i)}
+                  className="rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                  title="Delete"
+                >
+                  <TrashIcon className="h-3.5 w-3.5" />
+                </button>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  title="Drag to rearrange"
+                  aria-label="Drag to rearrange"
+                  onMouseEnter={() => setCanDragItem({ section, index: i })}
+                  onMouseLeave={() => {
+                    if (!draggedBlock) setCanDragItem(null)
+                  }}
+                  onMouseDown={() => setCanDragItem({ section, index: i })}
+                  onMouseUp={() => {
+                    if (!draggedBlock) setCanDragItem(null)
+                  }}
+                  onTouchStart={() => setCanDragItem({ section, index: i })}
+                  className="cursor-grab active:cursor-grabbing rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 select-none"
+                >
+                  <GripVerticalIcon className="h-3.5 w-3.5" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function Managequotation() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -366,21 +522,23 @@ export default function Managequotation() {
 
   // Real approving users for the "Send for Approval" picker.
   const [approverOptions, setApproverOptions] = useState([])
+  const [loadingApprovers, setLoadingApprovers] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const data = await api.get('/transactions/quotations/approvers/')
-        if (!cancelled && Array.isArray(data)) setApproverOptions(data)
-      } catch {
-        // Leave the approver picker empty if the endpoint is unavailable.
-      }
-    })()
-    return () => {
-      cancelled = true
+  const fetchApproverOptions = useCallback(async () => {
+    setLoadingApprovers(true)
+    try {
+      const data = await api.get('/transactions/quotations/approvers/')
+      if (Array.isArray(data)) setApproverOptions(data)
+    } catch {
+      // Leave the approver picker empty if the endpoint is unavailable.
+    } finally {
+      setLoadingApprovers(false)
     }
   }, [])
+
+  useEffect(() => {
+    fetchApproverOptions()
+  }, [fetchApproverOptions])
 
   function handleToggleMenu(e, id, row) {
     const cardRect = cardRef.current ? cardRef.current.getBoundingClientRect() : { left: 0, top: 0 }
@@ -525,6 +683,7 @@ export default function Managequotation() {
     setApprovalError('')
     setOpenDropdownId(null)
     setApprovalModalOpen(true)
+    fetchApproverOptions()
   }
 
   async function handleConfirmSendForApproval() {
@@ -613,6 +772,49 @@ export default function Managequotation() {
   const [summaryItemDraft, setSummaryItemDraft] = useState(null)
   const [editingSummaryItemId, setEditingSummaryItemId] = useState(null)
   const [validationErrors, setValidationErrors] = useState({})
+
+  const [draggedBlock, setDraggedBlock] = useState(null)
+  const [dragOverBlock, setDragOverBlock] = useState(null)
+  const [canDragItem, setCanDragItem] = useState(null)
+
+  function resetDrag() {
+    setDraggedBlock(null)
+    setDragOverBlock(null)
+    setCanDragItem(null)
+  }
+
+  function reorderBlocks(fromSection, fromIndex, toSection, toIndex) {
+    if (fromSection === toSection && fromIndex === toIndex) return
+    cancelItemDraft()
+    cancelSummaryItemDraft()
+
+    let nextSummary = [...summaryItems]
+    let nextProposal = [...proposalItems]
+    let moved = null
+
+    if (fromSection === 'summary') {
+      if (fromIndex < 0 || fromIndex >= nextSummary.length) return
+      moved = nextSummary.splice(fromIndex, 1)[0]
+    } else {
+      if (fromIndex < 0 || fromIndex >= nextProposal.length) return
+      moved = nextProposal.splice(fromIndex, 1)[0]
+    }
+
+    if (!moved) return
+
+    if (toSection === 'summary') {
+      const targetIdx = Math.min(Math.max(0, toIndex), nextSummary.length)
+      nextSummary.splice(targetIdx, 0, moved)
+    } else {
+      const targetIdx = Math.min(Math.max(0, toIndex), nextProposal.length)
+      nextProposal.splice(targetIdx, 0, moved)
+    }
+
+    setSummaryItems(nextSummary)
+    setProposalItems(nextProposal)
+    syncAutoTotal(nextProposal, nextSummary)
+    clearError('totalVal')
+  }
 
   function clearError(field) {
     setValidationErrors((prev) => {
@@ -1203,6 +1405,7 @@ export default function Managequotation() {
           nextApprovalId = saved.id
           const newRow = {
             ...targetQuote,
+            ...saved,
             id: saved.id,
             leadId: saved.leadId || (leadLike && leadLike.leadId) || persistLeadId,
             versionNo: saved.versionNo || 2,
@@ -1214,8 +1417,12 @@ export default function Managequotation() {
             approvalsTotal: saved.approvalsTotal || 0,
             approvalsApproved: saved.approvalsApproved || 0,
             clientStatus: saved.clientStatus || 'Pending',
+            hasProposal: true,
           }
+          targetQuote = newRow
           setQuotationsList((prev) => [newRow, ...prev])
+        } else if (saved) {
+          targetQuote = { ...targetQuote, ...saved }
         }
         if (saved && saved.contactChanged && saved.wasGenerated) {
           showToast(
@@ -2281,29 +2488,31 @@ export default function Managequotation() {
                 {summaryItemDraft && (
                   <div className="mb-2.5 rounded-lg border border-slate-300 bg-white p-3 space-y-2 animate-in fade-in duration-150">
                     {summaryItemDraft.type === 'service' ? (
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <input
-                          type="text"
-                          placeholder="Title"
-                          value={summaryItemDraft.title}
-                          onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, title: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <input
+                            type="text"
+                            placeholder="Title"
+                            value={summaryItemDraft.title}
+                            onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, title: e.target.value })}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder={`Amount ${currencySymbol(currencyVal)}`}
+                            value={summaryItemDraft.amount}
+                            onChange={(e) =>
+                              setSummaryItemDraft({ ...summaryItemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
+                            }
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
                           placeholder="Description"
                           value={summaryItemDraft.description}
                           onChange={(e) => setSummaryItemDraft({ ...summaryItemDraft, description: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder={`Amount ${currencySymbol(currencyVal)}`}
-                          value={summaryItemDraft.amount}
-                          onChange={(e) =>
-                            setSummaryItemDraft({ ...summaryItemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
-                          }
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         />
                       </div>
                     ) : (
@@ -2334,58 +2543,21 @@ export default function Managequotation() {
                   </div>
                 )}
 
-                {summaryItems.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {summaryItems.map((it, i) => (
-                      <div
-                        key={i}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            {it.type === 'service' ? (
-                              <>
-                                <p className="text-[12.5px] font-bold text-slate-900">{it.title}</p>
-                                <p className="mt-0.5 text-[11.5px] text-slate-600 leading-snug">
-                                  {it.description}
-                                </p>
-                              </>
-                            ) : (
-                              <p className="text-[12.5px] text-slate-700 whitespace-pre-line">{it.text}</p>
-                            )}
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            {it.type === 'service' && (
-                              <span className="font-mono text-[12.5px] font-bold text-slate-900">
-                                {currencySymbol(currencyVal)}{fmtAmount(itemsTotal([it]))}
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => startEditSummaryItem(i)}
-                              className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600 cursor-pointer"
-                              title="Edit"
-                            >
-                              <PencilIcon className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteSummaryItem(i)}
-                              className="rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-                              title="Delete"
-                            >
-                              <TrashIcon className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 text-center text-[11px] text-slate-400">
-                    No services or text blocks yet — add one above.
-                  </p>
-                )}
+                <SortableBlockList
+                  items={summaryItems}
+                  section="summary"
+                  currencyVal={currencyVal}
+                  onEdit={startEditSummaryItem}
+                  onDelete={deleteSummaryItem}
+                  draggedBlock={draggedBlock}
+                  dragOverBlock={dragOverBlock}
+                  canDragItem={canDragItem}
+                  setCanDragItem={setCanDragItem}
+                  setDraggedBlock={setDraggedBlock}
+                  setDragOverBlock={setDragOverBlock}
+                  reorderBlocks={reorderBlocks}
+                  resetDrag={resetDrag}
+                />
               </div>
 
               {/* Rich Text Editor 2 - Proposal in Detail */}
@@ -2441,29 +2613,31 @@ export default function Managequotation() {
                 {itemDraft && (
                   <div className="mb-2.5 rounded-lg border border-slate-300 bg-white p-3 space-y-2 animate-in fade-in duration-150">
                     {itemDraft.type === 'service' ? (
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <input
-                          type="text"
-                          placeholder="Title"
-                          value={itemDraft.title}
-                          onChange={(e) => setItemDraft({ ...itemDraft, title: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <input
-                          type="text"
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <input
+                            type="text"
+                            placeholder="Title"
+                            value={itemDraft.title}
+                            onChange={(e) => setItemDraft({ ...itemDraft, title: e.target.value })}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder={`Amount ${currencySymbol(currencyVal)}`}
+                            value={itemDraft.amount}
+                            onChange={(e) =>
+                              setItemDraft({ ...itemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
+                            }
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
                           placeholder="Description"
                           value={itemDraft.description}
                           onChange={(e) => setItemDraft({ ...itemDraft, description: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder={`Amount ${currencySymbol(currencyVal)}`}
-                          value={itemDraft.amount}
-                          onChange={(e) =>
-                            setItemDraft({ ...itemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
-                          }
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         />
                       </div>
                     ) : (
@@ -2494,58 +2668,21 @@ export default function Managequotation() {
                   </div>
                 )}
 
-                {proposalItems.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {proposalItems.map((it, i) => (
-                      <div
-                        key={i}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            {it.type === 'service' ? (
-                              <>
-                                <p className="text-[12.5px] font-bold text-slate-900">{it.title}</p>
-                                <p className="mt-0.5 text-[11.5px] text-slate-600 leading-snug">
-                                  {it.description}
-                                </p>
-                              </>
-                            ) : (
-                              <p className="text-[12.5px] text-slate-700 whitespace-pre-line">{it.text}</p>
-                            )}
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            {it.type === 'service' && (
-                              <span className="font-mono text-[12.5px] font-bold text-slate-900">
-                                {currencySymbol(currencyVal)}{fmtAmount(itemsTotal([it]))}
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => startEditItem(i)}
-                              className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600 cursor-pointer"
-                              title="Edit"
-                            >
-                              <PencilIcon className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteItem(i)}
-                              className="rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-                              title="Delete"
-                            >
-                              <TrashIcon className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 text-center text-[11px] text-slate-400">
-                    No services or text blocks yet — add one above.
-                  </p>
-                )}
+                <SortableBlockList
+                  items={proposalItems}
+                  section="proposal"
+                  currencyVal={currencyVal}
+                  onEdit={startEditItem}
+                  onDelete={deleteItem}
+                  draggedBlock={draggedBlock}
+                  dragOverBlock={dragOverBlock}
+                  canDragItem={canDragItem}
+                  setCanDragItem={setCanDragItem}
+                  setDraggedBlock={setDraggedBlock}
+                  setDragOverBlock={setDragOverBlock}
+                  reorderBlocks={reorderBlocks}
+                  resetDrag={resetDrag}
+                />
               </div>
 
               {/* Financial & Source Grid */}
@@ -2730,150 +2867,31 @@ export default function Managequotation() {
         </div>
       )}
 
-      {/* "Send for Approval" Modal (Select Approving Admin) */}
-      {approvalModalOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !approvalDirty) setApprovalModalOpen(false)
-          }}
-        >
-          <div className="w-full max-w-md my-8 rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white">
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                  <SendIcon className="h-3.5 w-3.5" />
-                </span>
-                <h3 className="text-sm font-bold text-slate-900">Send for Approval</h3>
-              </div>
-              <button
-                type="button"
-                onClick={requestCloseApproval}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
-              >
-                <CloseIcon />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {/* Selected Proposal Summary */}
-              {(() => {
-                const quote = quotationsList.find((q) => q.id === approvalQuoteId)
-                if (!quote) return null
-                return (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-mono text-[10px] font-bold text-brand-600 uppercase tracking-wider">
-                          {quote.id}
-                        </p>
-                        <p className="mt-0.5 text-sm font-bold text-slate-900 truncate">
-                          {quote.company}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-600">
-                          {quote.customer} • {currencySymbol(quote.currency)}{quote.netAmount}
-                        </p>
-                      </div>
-                      <span
-                        className={`rounded-md border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${
-                          quote.status === 'Pending Approval'
-                            ? 'border-amber-200 bg-amber-50 text-amber-700'
-                            : 'border-slate-200 bg-white text-slate-600'
-                        }`}
-                      >
-                        {quote.status}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Approver Selection */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  Select Approving Admin <span className="text-rose-500">*</span>
-                </label>
-                <div className="rounded-lg border border-slate-300 bg-white divide-y divide-slate-100 max-h-52 overflow-y-auto">
-                  {approverOptions.length === 0 && (
-                    <p className="px-3 py-2.5 text-[11px] text-slate-400">No approvers available.</p>
-                  )}
-                  {approverOptions.map((admin) => {
-                    const checked = selectedApprovers.includes(admin.id)
-                    return (
-                      <label
-                        key={admin.id}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50 transition"
-                      >
-                        <input
-                          type="radio"
-                          name="approver"
-                          checked={checked}
-                          onChange={() => toggleApprover(admin.id)}
-                          className="h-3.5 w-3.5 rounded-full border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                        />
-                        <span className="flex-1 min-w-0">
-                          <span className="block font-semibold text-slate-800 truncate">
-                            {admin.name}
-                          </span>
-                          <span className="block text-[10px] text-slate-400">
-                            {admin.role ? admin.role : 'Approver'}
-                            {admin.is_superuser ? ' · Super Admin' : ''}
-                          </span>
-                        </span>
-                        {checked && (
-                          <span className="text-[10px] font-bold text-emerald-600">✓ Selected</span>
-                        )}
-                      </label>
-                    )
-                  })}
-                </div>
-                <p className="mt-1.5 text-[10.5px] text-slate-400 leading-relaxed">
-                  The selected admin must approve this proposal before it can be sent to the client.
-                </p>
-              </div>
-
-              {/* Success Message */}
-              {approvalSent && (
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs font-bold text-emerald-700 text-center animate-in fade-in">
-                  {approvalSent}
-                </div>
-              )}
-
-              {/* Error Message */}
-              {approvalError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs font-medium text-red-600 animate-in fade-in">
-                  {approvalError}
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
-              <button
-                type="button"
-                onClick={requestCloseApproval}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmSendForApproval}
-                disabled={selectedApprovers.length === 0 || sendingApproval}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sendingApproval ? (
-                  <Spinner className="h-3.5 w-3.5" />
-                ) : (
-                  <SendIcon className="h-3.5 w-3.5" />
-                )}
-                {sendingApproval ? 'Sending…' : 'Send for Approval'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* "Send for Approval" Modal */}
+      <SendForApprovalModal
+        open={approvalModalOpen}
+        quote={quotationsList.find((q) => q.id === approvalQuoteId)}
+        approverOptions={approverOptions}
+        onClose={() => setApprovalModalOpen(false)}
+        onSent={(updated) => {
+          if (updated) {
+            setQuotationsList((prev) =>
+              prev.map((item) =>
+                item.id === updated.id
+                  ? {
+                      ...item,
+                      status: updated.status || 'Pending Approval',
+                      approvals: updated.approvals || [],
+                      approvalsTotal: updated.approvalsTotal ?? item.approvalsTotal,
+                      approvalsApproved: updated.approvalsApproved ?? 0,
+                    }
+                  : item
+              )
+            )
+          }
+        }}
+        onToast={(msg) => showToast(msg)}
+      />
 
       {/* "Send to Client" Modal (Email / WhatsApp / Copy link) */}
       {sendClientOpen &&

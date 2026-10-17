@@ -90,6 +90,8 @@ def html_to_pdf_markup(html):
             # Reportlab renders consecutive <p> blocks on the same line unless
             # broken explicitly, so end each paragraph with a line break.
             return '<br/>' if closing else ''
+        if tag in ('b', 'strong'):
+            return f'<{closing}b>'
         if tag in KEEP:
             return f'<{closing}{tag}>'
         if tag in ('div', 'section', 'article', 'table', 'tr'):
@@ -1884,6 +1886,188 @@ def create_client_detail_from_order(order):
         category=order.category,
         category_code=order.category_code,
         accepted_date=date.today().strftime('%Y-%m-%d'),
+        delivery_date=getattr(order, 'delivery_date', '') or '',
         collected_by=order.proposal_by or order.staff,
         status=ClientDetail.STATUS_PENDING,
     )
+
+
+def sync_payment_to_accounts_soft(order_id, customer, amount, date, method, reference='', received_by='', notes='', tenant=None, order_value=None):
+    """Syncs a payment recorded against a client detail in Lead Soft to Account Soft.
+
+    Tries HTTP endpoints first, then falls back to direct sqlite database update if local.
+    """
+    import json
+    import re
+    import sqlite3
+    import urllib.error
+    import urllib.request
+    from pathlib import Path
+
+    payload = {
+        'order_id': order_id,
+        'customer': customer,
+        'amount': amount,
+        'date': str(date),
+        'method': method,
+        'reference': reference,
+        'notes': notes,
+        'received_by': received_by,
+    }
+    if order_value is not None:
+        payload['order_value'] = order_value
+    if tenant:
+        payload['core_org_id'] = getattr(tenant, 'core_org_id', None)
+        payload['tenant_name'] = getattr(tenant, 'name', '')
+        payload['tenant_id'] = getattr(tenant, 'id', None)
+
+    # 1. Attempt HTTP API call to accounts-soft external sync endpoint
+    target_urls = []
+    custom_url = getattr(settings, 'ACCOUNTS_SOFT_API_URL', '')
+    if custom_url:
+        target_urls.append(custom_url)
+    target_urls.extend([
+        'http://127.0.0.1:8001/api/payments/external-sync/',
+        'http://127.0.0.1:8000/api/payments/external-sync/',
+        'http://127.0.0.1:8003/api/payments/external-sync/',
+    ])
+
+    for url in target_urls:
+        try:
+            req_data = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(
+                url, data=req_data, headers={'Content-Type': 'application/json'}
+            )
+            with urllib.request.urlopen(req, timeout=0.8) as response:
+                if response.status in (200, 201):
+                    logger.info("Synced payment to Account Soft via HTTP endpoint %s", url)
+                    return True
+        except Exception as exc:
+            logger.debug("HTTP payment sync attempt to %s failed: %s", url, exc)
+
+    # 2. Direct SQLite DB Fallback
+    try:
+        acc_db_path = Path(settings.BASE_DIR).parent.parent / 'accounts-soft' / 'backend' / 'db.sqlite3'
+        if acc_db_path.exists():
+            conn = sqlite3.connect(str(acc_db_path))
+            cursor = conn.cursor()
+            now_iso = timezone.now().isoformat()
+
+            # Find or insert order
+            cursor.execute("SELECT id, final_amount, total_received FROM orders WHERE lower(order_id) = lower(?)", (order_id,))
+            row = cursor.fetchone()
+            if row:
+                order_pk, final_amt, tot_rec = row[0], float(row[1] or 0), float(row[2] or 0)
+            else:
+                cursor.execute("PRAGMA table_info(orders)")
+                order_cols = {c[1] for c in cursor.fetchall()}
+                order_data = {
+                    'order_id': order_id,
+                    'lead_soft_ref': order_id,
+                    'customer': customer,
+                    'order_date': str(date),
+                    'delivery_date': str(date),
+                    'subtotal': amount,
+                    'discount': 0,
+                    'tax_amount': 0,
+                    'final_amount': amount,
+                    'total_received': 0,
+                    'pending_amount': amount,
+                    'order_status': 'Pending',
+                    'payment_status': 'Unpaid',
+                    'delivery_status': 'Pending',
+                    'sales_person': received_by,
+                    'notes': '',
+                    'is_cancelled': 0,
+                    'created_at': now_iso,
+                    'updated_at': now_iso,
+                }
+                if 'project_hours' in order_cols:
+                    order_data['project_hours'] = 0
+
+                valid_order_keys = [k for k in order_data if k in order_cols]
+                order_placeholders = ', '.join(['?'] * len(valid_order_keys))
+                order_cols_str = ', '.join(valid_order_keys)
+                cursor.execute(
+                    f"INSERT INTO orders ({order_cols_str}) VALUES ({order_placeholders})",
+                    [order_data[k] for k in valid_order_keys]
+                )
+                order_pk = cursor.lastrowid
+                final_amt = float(amount)
+
+            # Find or insert payment method
+            cursor.execute("SELECT id FROM payment_methods WHERE lower(name) = lower(?)", (method,))
+            m_row = cursor.fetchone()
+            if m_row:
+                method_pk = m_row[0]
+            else:
+                method_code = re.sub(r'[^A-Z0-9]', '', method.upper())[:10] or 'METHOD'
+                cursor.execute(
+                    "INSERT INTO payment_methods (name, code, description, is_active, created_at) VALUES (?, ?, '', 1, ?)",
+                    (method, method_code, now_iso)
+                )
+                method_pk = cursor.lastrowid
+
+            # Find payment status 'Received'
+            cursor.execute("SELECT id FROM payment_statuses WHERE lower(name) = 'received' OR lower(label) = 'received' LIMIT 1")
+            s_row = cursor.fetchone()
+            if s_row:
+                status_pk = s_row[0]
+            else:
+                cursor.execute("SELECT id FROM payment_statuses LIMIT 1")
+                s_row = cursor.fetchone()
+                status_pk = s_row[0] if s_row else None
+
+            # Insert payment
+            cursor.execute("PRAGMA table_info(payments)")
+            pay_cols = {c[1] for c in cursor.fetchall()}
+            pay_data = {
+                'order_id': order_pk,
+                'amount': amount,
+                'date': str(date),
+                'method_id': method_pk,
+                'status_id': status_pk,
+                'reference': reference,
+                'notes': notes,
+                'received_by': received_by,
+                'bank_name': '',
+                'invoice_id': '',
+                'is_refunded': 0,
+                'created_at': now_iso,
+                'updated_at': now_iso,
+            }
+            if 'plan_stage' in pay_cols:
+                pay_data['plan_stage'] = ''
+
+            valid_pay_keys = [k for k in pay_data if k in pay_cols]
+            pay_placeholders = ', '.join(['?'] * len(valid_pay_keys))
+            pay_cols_str = ', '.join(valid_pay_keys)
+            cursor.execute(
+                f"INSERT INTO payments ({pay_cols_str}) VALUES ({pay_placeholders})",
+                [pay_data[k] for k in valid_pay_keys]
+            )
+
+            # Update order total received & pending
+            cursor.execute("SELECT SUM(amount) FROM payments WHERE order_id = ?", (order_pk,))
+            sum_row = cursor.fetchone()
+            new_total_rec = float(sum_row[0] or 0)
+            new_pending = max(0.0, final_amt - new_total_rec)
+            pay_stat = 'Unpaid'
+            if final_amt > 0:
+                if new_total_rec >= final_amt:
+                    pay_stat = 'Paid'
+                elif new_total_rec > 0:
+                    pay_stat = 'Partially Paid'
+
+            cursor.execute(
+                "UPDATE orders SET total_received = ?, pending_amount = ?, payment_status = ?, updated_at = ? WHERE id = ?",
+                (new_total_rec, new_pending, pay_stat, now_iso, order_pk)
+            )
+            conn.commit()
+            conn.close()
+            logger.info("Successfully synced payment to Account Soft SQLite database directly.")
+            return True
+    except Exception as exc:
+        logger.error("Direct SQLite sync to Account Soft failed: %s", exc)
+
+    return False
