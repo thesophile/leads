@@ -118,7 +118,7 @@ export default function PublicApproval() {
   const scopeSplit = useMemo(() => proposalItemsFromHtml(q?.proposalScope || ''), [q?.proposalScope])
   const detailsSplit = useMemo(() => proposalItemsFromHtml(q?.termsConditions || ''), [q?.termsConditions])
   const termsSummaryHtml = q?.termsSummaryHtml || q?.companyTerms || ''
-  const termsFullHtml = q?.termsFullHtml && q.termsFullHtml !== termsSummaryHtml ? q.termsFullHtml : ''
+  const termsFullHtml = q?.termsFullHtml || ''
   const hasDetails = Boolean(
     (detailsSplit.freeHtml && detailsSplit.freeHtml.trim()) ||
     detailsSplit.items.length > 0
