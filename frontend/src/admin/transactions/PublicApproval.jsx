@@ -117,6 +117,12 @@ export default function PublicApproval() {
 
   const scopeSplit = useMemo(() => proposalItemsFromHtml(q?.proposalScope || ''), [q?.proposalScope])
   const detailsSplit = useMemo(() => proposalItemsFromHtml(q?.termsConditions || ''), [q?.termsConditions])
+  const termsSummaryHtml = q?.termsSummaryHtml || q?.companyTerms || ''
+  const termsFullHtml = q?.termsFullHtml && q.termsFullHtml !== termsSummaryHtml ? q.termsFullHtml : ''
+  const hasDetails = Boolean(
+    (detailsSplit.freeHtml && detailsSplit.freeHtml.trim()) ||
+    detailsSplit.items.length > 0
+  )
 
   async function handleSendOtp() {
     setActionError('')
@@ -369,8 +375,202 @@ export default function PublicApproval() {
           </div>
         </section>
 
-        {/* Action Panel for Pending Approvals */}
-        {!isDecided && (
+        {/* 1. Proposal Summary */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="text-sm font-bold text-slate-900">
+              Proposal Summary
+            </h2>
+            <span className="text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider">
+              Scope &amp; Deliverables
+            </span>
+          </div>
+
+          {/* Free text in scope */}
+          {scopeSplit.freeHtml && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="space-y-1 text-xs text-slate-700 leading-relaxed">
+                {htmlToFormattedLines(scopeSplit.freeHtml).map((line, idx) => (
+                  <p key={idx} dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Service items table */}
+          {scopeSplit.items.filter((it) => it.type === 'service').length > 0 && (
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3">#</th>
+                    <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3 text-right">Amount ({currency})</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {scopeSplit.items
+                    .filter((it) => it.type === 'service')
+                    .map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-800">{item.title}</div>
+                          {item.desc && (
+                            <div className="text-[11px] text-slate-500 mt-0.5">{item.desc}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">
+                          {item.amount ? fmtAmount(item.amount) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Text blocks in scope */}
+          {scopeSplit.items
+            .filter((it) => it.type === 'text')
+            .map((it, idx) => (
+              <div key={idx} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 text-xs text-slate-700 whitespace-pre-line">
+                {it.text}
+              </div>
+            ))}
+
+          {/* Totals Summary */}
+          <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 flex justify-end">
+            <div className="w-full max-w-xs space-y-1.5 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Subtotal:</span>
+                <span className="font-mono font-semibold text-slate-800">
+                  {currency} {fmtAmount(q.total || 0)}
+                </span>
+              </div>
+              {q.discount && q.discount !== '0' && q.discount !== '0.00' && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Discount:</span>
+                  <span className="font-mono font-semibold">- {currency} {fmtAmount(q.discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-1.5">
+                <span>Net Total:</span>
+                <span className="font-mono">
+                  {currency} {fmtAmount(q.netAmount || q.total || 0)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 2. T&C Summary */}
+        {termsSummaryHtml && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-sm font-bold text-slate-900">
+                Terms &amp; Conditions (Summary)
+              </h2>
+              <span className="text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider">
+                T&amp;C Summary
+              </span>
+            </div>
+            <div className="space-y-1.5 text-xs text-slate-600 leading-relaxed bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+              {htmlToFormattedLines(termsSummaryHtml).map((line, idx) => (
+                <p key={idx} dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 3. Proposal in Details */}
+        {hasDetails && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-sm font-bold text-slate-900">
+                Proposal in Details
+              </h2>
+              <span className="text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider">
+                Specifications
+              </span>
+            </div>
+
+            {/* Free text in details */}
+            {detailsSplit.freeHtml && (
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <div className="space-y-1.5 text-xs text-slate-700 leading-relaxed">
+                  {htmlToFormattedLines(detailsSplit.freeHtml).map((line, idx) => (
+                    <p key={idx} dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Service items in details */}
+            {detailsSplit.items.filter((it) => it.type === 'service').length > 0 && (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">#</th>
+                      <th className="px-4 py-3">Specification / Service</th>
+                      <th className="px-4 py-3 text-right">Amount ({currency})</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {detailsSplit.items
+                      .filter((it) => it.type === 'service')
+                      .map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                          <td className="px-4 py-3">
+                            <div className="font-semibold text-slate-800">{item.title}</div>
+                            {item.desc && (
+                              <div className="text-[11px] text-slate-500 mt-0.5">{item.desc}</div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">
+                            {item.amount ? fmtAmount(item.amount) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Text blocks in details */}
+            {detailsSplit.items
+              .filter((it) => it.type === 'text')
+              .map((it, idx) => (
+                <div key={idx} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 text-xs text-slate-700 whitespace-pre-line">
+                  {it.text}
+                </div>
+              ))}
+          </section>
+        )}
+
+        {/* 4. T&C in Details */}
+        {termsFullHtml && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-sm font-bold text-slate-900">
+                Detailed Terms &amp; Conditions
+              </h2>
+              <span className="text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider">
+                T&amp;C in Details
+              </span>
+            </div>
+            <div className="space-y-1.5 text-xs text-slate-600 leading-relaxed bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+              {htmlToFormattedLines(termsFullHtml).map((line, idx) => (
+                <p key={idx} dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 5. Proposal Decision */}
+        {!isDecided ? (
           <section className="rounded-2xl border-2 border-brand-500/30 bg-white p-5 sm:p-6 shadow-md">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
@@ -548,97 +748,37 @@ export default function PublicApproval() {
               </div>
             )}
           </section>
-        )}
-
-        {/* Proposal Scope & Line Items */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs space-y-6">
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3">
-            Proposal Scope & Line Items
-          </h2>
-
-          {/* Service items table */}
-          {scopeSplit.items.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3">#</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3 text-right">Amount ({currency})</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {scopeSplit.items.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-800">{item.title}</div>
-                        {item.desc && (
-                          <div className="text-[11px] text-slate-500 mt-0.5">{item.desc}</div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">
-                        {item.amount ? fmtAmount(item.amount) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Free text in scope */}
-          {scopeSplit.freeHtml && (
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                Scope of Work Details
-              </span>
-              <div className="space-y-1 text-xs text-slate-700 leading-relaxed">
-                {htmlToPlainLines(scopeSplit.freeHtml).map((line, idx) => (
-                  <p key={idx}>{line}</p>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Totals Summary */}
-          <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 flex justify-end">
-            <div className="w-full max-w-xs space-y-1.5 text-xs">
-              <div className="flex justify-between text-slate-600">
-                <span>Subtotal:</span>
-                <span className="font-mono font-semibold text-slate-800">
-                  {currency} {fmtAmount(q.total || 0)}
-                </span>
-              </div>
-              {q.discount && q.discount !== '0' && q.discount !== '0.00' && (
-                <div className="flex justify-between text-emerald-600">
-                  <span>Discount:</span>
-                  <span className="font-mono font-semibold">- {currency} {fmtAmount(q.discount)}</span>
+        ) : (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs">
+            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <ShieldCheckIcon className="h-4 w-4 text-slate-600" />
+              Proposal Decision
+            </h2>
+            <div className="mt-4">
+              {q.status === 'Approved' ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-xs text-emerald-900">
+                  <p className="font-bold text-emerald-950 text-sm">✓ This Proposal is Approved</p>
+                  <p className="mt-1 text-emerald-800">
+                    Authorized by <span className="font-semibold">{a.signedBy || a.approverName}</span>
+                    {a.signedAt ? ` on ${new Date(a.signedAt).toLocaleString()}` : ''}.
+                  </p>
+                  {a.signatureRef && (
+                    <p className="mt-1 font-mono text-[11px] text-emerald-700">Signature Ref: {a.signatureRef}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-4 text-xs text-rose-900">
+                  <p className="font-bold text-rose-950 text-sm">✗ This Proposal was Rejected</p>
+                  {a.rejectionReason && (
+                    <p className="mt-1 text-rose-800">
+                      <span className="font-semibold">Reason:</span> {a.rejectionReason}
+                    </p>
+                  )}
                 </div>
               )}
-              <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-1.5">
-                <span>Net Total:</span>
-                <span className="font-mono">
-                  {currency} {fmtAmount(q.netAmount || q.total || 0)}
-                </span>
-              </div>
             </div>
-          </div>
-
-          {/* Terms & Conditions */}
-          {(detailsSplit.freeHtml || q.companyTerms) && (
-            <div className="border-t border-slate-100 pt-5 space-y-3">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Terms & Conditions
-              </h3>
-              <div className="space-y-1.5 text-xs text-slate-600 leading-relaxed bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                {htmlToFormattedLines(detailsSplit.freeHtml || q.companyTerms).map((line, idx) => (
-                  <p key={idx} dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }} />
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* Company contact info footer */}
         <footer className="text-center text-xs text-slate-400 py-4 space-y-1">

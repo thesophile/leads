@@ -2483,6 +2483,8 @@ class PublicApprovalDetailView(APIView):
                 'termsConditions': quotation.terms_conditions,
                 'status': quotation.status,
                 'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
+                'termsSummaryHtml': (tenant.terms_summary_html or '') if tenant else '',
+                'termsFullHtml': (tenant.terms_full_html or '') if tenant else '',
                 'companyName': tenant.name if tenant else '',
                 'companyLogo': logo_url,
                 'companyAddress': tenant.address if tenant else '',
