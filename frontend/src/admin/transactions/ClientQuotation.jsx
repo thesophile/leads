@@ -463,8 +463,12 @@ export default function ClientQuotation() {
                     </span>
                   </div>
                   <div className="bg-white p-4 text-[12.5px] leading-snug text-slate-700">
-                    {htmlToPlainLines(companyTerms).map((line, i) => (
-                      <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                    {htmlToFormattedLines(companyTerms).map((line, i) => (
+                      <div
+                        key={i}
+                        className="min-h-[1.2em]"
+                        dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }}
+                      />
                     ))}
                   </div>
                 </div>

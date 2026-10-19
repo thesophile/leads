@@ -4,29 +4,19 @@
 
 DEFAULT_TERMS_SUMMARY = """
 <h4>1. Payment Terms</h4>
-<p>Non-refundable 50% advance on</p>
-<p>acceptance; balance due before</p>
-<p>delivery, paid by bank transfer.</p>
+<p>Non-refundable 50% advance on acceptance; balance due before delivery, paid by bank transfer.</p>
 
 <h4>2. Taxes</h4>
-<p>Prices exclude applicable taxes;</p>
-<p>charged at prevailing rates.</p>
+<p>Prices exclude applicable taxes; charged at prevailing rates.</p>
 
 <h4>3. Delivery Timeline</h4>
-<p>Agreed scope and timelines are</p>
-<p>followed strictly; variations may</p>
-<p>affect the timeline and cost.</p>
+<p>Agreed scope and timelines are followed strictly; variations may affect the timeline and cost.</p>
 
 <h4>4. Support &amp; Warranty</h4>
-<p>Post-delivery support as per the</p>
-<p>order form for the agreed period;</p>
-<p>beyond it, billed separately.</p>
+<p>Post-delivery support as per the order form for the agreed period; beyond it, billed separately.</p>
 
 <h4>5. Scope of Work</h4>
-<p>Services will be provided according</p>
-<p>to the agreed scope; additional</p>
-<p>requirements or changes may incur</p>
-<p>extra charges.</p>
+<p>Services will be provided according to the agreed scope; additional requirements or changes may incur extra charges.</p>
 """.strip()
 
 DEFAULT_TERMS_FULL = """

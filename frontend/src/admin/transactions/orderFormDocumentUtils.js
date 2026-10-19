@@ -96,7 +96,7 @@ export function measureTextWidth(text) {
 }
 
 export function termsSummaryMaxLinePx() {
-  if (_termsSummaryMaxLinePx == null) _termsSummaryMaxLinePx = measureTextWidth('WWWWWWWWWWWWWWWW')
+  if (_termsSummaryMaxLinePx == null) _termsSummaryMaxLinePx = measureTextWidth('WWWWWWWWWWWWWWWWWWWWWWW')
   return _termsSummaryMaxLinePx
 }
 

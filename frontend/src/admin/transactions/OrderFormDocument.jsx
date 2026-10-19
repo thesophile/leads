@@ -4,7 +4,7 @@ import Barcode from 'react-barcode'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import { htmlToPlainLines } from './orderFormDocumentUtils'
-import { stripItems } from './proposalItemsUtils'
+import { stripItems, htmlToFormattedLines } from './proposalItemsUtils'
 
 function orderFormLink(order) {
   const token = order && order.clientToken
@@ -343,11 +343,15 @@ export default function OrderFormDocument({ order, company }) {
               <SectionBox title="TERMS &amp; CONDITIONS" className="h-full">
                 <div
                   ref={termsSummaryContentRef}
-                  className="text-[11px] leading-snug text-slate-700 text-justify"
+                  className="text-[12.5px] leading-relaxed text-slate-800 text-justify space-y-2"
                   style={typeof termsSummaryPaged.cap === 'number' ? { maxHeight: termsSummaryPaged.cap, overflow: 'hidden' } : undefined}
                 >
-                  {htmlToPlainLines(order.termsSummaryHtml).map((line, i) => (
-                    <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
+                  {htmlToFormattedLines(order.termsSummaryHtml).map((line, i) => (
+                    <div
+                      key={i}
+                      className="min-h-[1.2em]"
+                      dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }}
+                    />
                   ))}
                 </div>
                 <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
@@ -408,7 +412,7 @@ export default function OrderFormDocument({ order, company }) {
         <PagedSection
           html={termsSummaryPaged.part2Html}
           reserve={48}
-          contentClass="text-[11px] leading-snug text-slate-700 text-justify"
+          contentClass="text-[12.5px] leading-relaxed text-slate-800 text-justify space-y-2"
           sectionTitle="TERMS &amp; CONDITIONS (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"

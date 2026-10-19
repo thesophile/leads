@@ -7,11 +7,12 @@ import 'react-quill-new/dist/quill.snow.css'
 import Spinner from '../../components/Spinner'
 import { downloadBackup, restoreBackup } from '../../utils/backup'
 import {
-  htmlToPlainLines,
-  linesToHtml,
-  measureTextWidth,
+  limitRichHtml,
+  richTextCharCount,
+  richTextLineCount,
   termsSummaryMaxLinePx,
 } from '../transactions/orderFormDocumentUtils'
+import { unwrapTermsSummaryHtml } from '../transactions/proposalItemsUtils'
 import { useAuth } from '../../context/auth-context'
 import { APP_MAJOR_VERSION, FRONTEND_VERSION } from '../../config'
 
@@ -206,7 +207,21 @@ const QUILL_FORMATS = [
   'blockquote',
 ]
 
-const TERMS_SUMMARY_MAX_CHARS = 650
+const TERMS_SUMMARY_QUILL_MODULES = {
+  toolbar: [
+    ['bold', 'italic', 'underline'],
+    ['clean'],
+  ],
+}
+
+const TERMS_SUMMARY_QUILL_FORMATS = [
+  'header',
+  'bold',
+  'italic',
+  'underline',
+]
+
+const TERMS_SUMMARY_MAX_CHARS = 750
 const TERMS_SUMMARY_MAX_LINES = 27
 
 const MONTH_NAMES = [
@@ -537,7 +552,8 @@ export default function Settings() {
           if (company.address) setCompanyAddress(company.address)
           setCompanyLogo(company.logo || '')
           setCompanySeal(company.seal || '')
-          if (company.termsSummaryHtml !== undefined) setTermsSummaryHtml(htmlToPlainLines(company.termsSummaryHtml || '').join('\n'))
+          const cleanSummary = unwrapTermsSummaryHtml(company.termsSummaryHtml || '')
+          if (company.termsSummaryHtml !== undefined) setTermsSummaryHtml(cleanSummary)
           if (company.termsFullHtml !== undefined) setTermsFullHtml(company.termsFullHtml || '')
           if (company.currency) setCurrency(company.currency)
           if (company.gstNo !== undefined) setGstNo(company.gstNo || '')
@@ -553,7 +569,7 @@ export default function Settings() {
             defaultBank: company.defaultBank || '',
           })
           setTemplatesBaseline({
-            summary: htmlToPlainLines(company.termsSummaryHtml || '').join('\n'),
+            summary: cleanSummary,
             full: company.termsFullHtml || '',
           })
         }
@@ -773,42 +789,10 @@ export default function Settings() {
     }
   }
 
-  function fitLinePrefixLen(text, budgetPx) {
-    if (budgetPx <= 0) return 0
-    let lo = 0
-    let hi = text.length
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1
-      if (measureTextWidth(text.slice(0, mid)) <= budgetPx) lo = mid
-      else hi = mid - 1
-    }
-    return lo
-  }
-
-  function wrapLineToWidth(line, maxPx) {
-    const out = []
-    let remaining = line
-    while (remaining && measureTextWidth(remaining) > maxPx) {
-      const fit = fitLinePrefixLen(remaining, maxPx)
-      out.push(remaining.slice(0, Math.max(1, fit)))
-      remaining = remaining.slice(Math.max(1, fit))
-    }
-    if (remaining || out.length === 0) out.push(remaining)
-    return out
-  }
-
   function handleTermsSummaryChange(value) {
     let next = value
-    if (next.length > TERMS_SUMMARY_MAX_CHARS) {
-      next = next.slice(0, TERMS_SUMMARY_MAX_CHARS)
-    }
-    next = next
-      .split('\n')
-      .flatMap((line) => wrapLineToWidth(line, termsSummaryMaxLinePx()))
-      .join('\n')
-    const lines = next.split('\n')
-    if (lines.length > TERMS_SUMMARY_MAX_LINES) {
-      next = lines.slice(0, TERMS_SUMMARY_MAX_LINES).join('\n')
+    if (richTextCharCount(next) > TERMS_SUMMARY_MAX_CHARS) {
+      next = limitRichHtml(next, TERMS_SUMMARY_MAX_CHARS)
     }
     setTermsSummaryHtml(next)
   }
@@ -819,7 +803,7 @@ export default function Settings() {
     setSavingTemplates(true)
     try {
       await api.patch('/auth/company/', {
-        termsSummaryHtml: linesToHtml(termsSummaryHtml.split('\n')),
+        termsSummaryHtml,
         termsFullHtml,
       })
       setTemplatesBaseline({
@@ -1139,8 +1123,8 @@ export default function Settings() {
 
   const monthLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`
 
-  const summaryCharCount = termsSummaryHtml.trim().length
-  const summaryLineCount = termsSummaryHtml === '' ? 0 : termsSummaryHtml.split('\n').length
+  const summaryCharCount = richTextCharCount(termsSummaryHtml)
+  const summaryLineCount = richTextLineCount(termsSummaryHtml)
 
   const unsavedLabel = activeTab === 'general' ? 'General & Finance' : 'Terms & Conditions'
 
@@ -1648,25 +1632,25 @@ export default function Settings() {
               <div className="grid grid-cols-1 items-start gap-8 px-6 py-6 md:px-8 md:py-7 lg:grid-cols-[min-content_minmax(0,1fr)]">
                 <div className="w-fit">
                   <SectionTitle>Terms &amp; Conditions Summary</SectionTitle>
-                  <p className="mt-1.5 w-[233px] text-[11px] text-slate-400">
+                  <p className="mt-1.5 max-w-[340px] text-[11px] text-slate-400">
                     A short version shown in the "Terms &amp; Conditions" box of the proposal and on the first
                     page of the order form.
                   </p>
-                  <div className="mt-3">
-                    <textarea
+                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white" style={{ width: Math.max(340, termsSummaryMaxLinePx() + 60) }}>
+                    <ReactQuill
+                      theme="snow"
+                      className="quill-terms-17"
                       value={termsSummaryHtml}
-                      onChange={(e) => handleTermsSummaryChange(e.target.value)}
-                      rows={TERMS_SUMMARY_MAX_LINES}
-                      maxLength={TERMS_SUMMARY_MAX_CHARS}
-                      className={'resize-none overflow-hidden rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-xs transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/15'}
-                      style={{ width: termsSummaryMaxLinePx() + 54 }}
+                      onChange={handleTermsSummaryChange}
+                      modules={TERMS_SUMMARY_QUILL_MODULES}
+                      formats={TERMS_SUMMARY_QUILL_FORMATS}
                       placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
                     />
                   </div>
-                  <div className="mt-1 flex items-center justify-between">
+                  <div className="mt-1 flex items-center justify-between" style={{ width: Math.max(340, termsSummaryMaxLinePx() + 60) }}>
                     <p className="text-[10px] font-semibold text-slate-400">
                       Max {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} chars ·{' '}
-                      {TERMS_SUMMARY_MAX_LINES} lines · ~{Math.round(termsSummaryMaxLinePx())}px per line
+                      {TERMS_SUMMARY_MAX_LINES} lines
                     </p>
                     <p
                       className={`font-mono text-[10px] ${

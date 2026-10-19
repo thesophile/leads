@@ -2468,6 +2468,14 @@ class PublicApprovalDetailView(APIView):
             )
         quotation = approval.quotation
         tenant = quotation.tenant
+        if not tenant:
+            from accounts.models import Company
+            tenant = Company.objects.first()
+
+        from accounts.defaults import DEFAULT_TERMS_SUMMARY, DEFAULT_TERMS_FULL
+        terms_summary = (tenant.terms_summary_html if tenant and tenant.terms_summary_html else '') or DEFAULT_TERMS_SUMMARY
+        terms_full = (tenant.terms_full_html if tenant and tenant.terms_full_html else '') or DEFAULT_TERMS_FULL
+
         logo_url = ''
         if tenant and tenant.logo and tenant.logo.name:
             try:
@@ -2493,7 +2501,9 @@ class PublicApprovalDetailView(APIView):
                 'proposalScope': quotation.proposal_scope,
                 'termsConditions': quotation.terms_conditions,
                 'status': quotation.status,
-                'companyTerms': (tenant.terms_summary_html or tenant.terms_full_html) if tenant else '',
+                'companyTerms': terms_summary or terms_full,
+                'termsSummaryHtml': terms_summary,
+                'termsFullHtml': terms_full,
                 'companyName': tenant.name if tenant else '',
                 'companyLogo': logo_url,
                 'companyAddress': tenant.address if tenant else '',
