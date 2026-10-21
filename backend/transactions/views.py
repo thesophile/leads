@@ -4885,7 +4885,7 @@ class ExternalCustomersView(APIView):
                 pass
         elif tenant_name:
             qs = qs.filter(tenant__name__iexact=tenant_name)
-        page_customers, envelope = paginated_queryset(qs, request)
+        page_customers, envelope = paginated_queryset(qs.prefetch_related('attachments'), request)
         envelope.update(
             external_page_links(
                 request, envelope['page'], envelope['page_size'], envelope['count']
@@ -4905,10 +4905,31 @@ class ExternalCustomersView(APIView):
                 'email': customer.email,
                 'category': customer.category,
                 'status': customer.status,
+                'order_no': customer.order_no,
+                'accepted_date': customer.accepted_date,
+                'delivery_date': customer.delivery_date,
+                'collected_by': customer.collected_by,
+                'attachments': [
+                    {
+                        'id': att.id,
+                        'name': att.name,
+                        'type': att.type,
+                        'size': att.size,
+                        'mime': att.mime,
+                        'url': att.url or (att.file.url if att.file else ''),
+                        'created_at': att.created_at.isoformat() if att.created_at else '',
+                    }
+                    for att in customer.attachments.all()
+                ],
             }
             for customer in page_customers
         ]
         return Response(envelope)
+
+
+class ExternalClientFilesView(ExternalCustomersView):
+    """Dedicated feed of client details and their uploaded attachments for Project Soft."""
+    pass
 
 
 class ExternalPaymentsView(APIView):
