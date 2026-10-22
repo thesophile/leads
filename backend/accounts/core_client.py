@@ -176,6 +176,28 @@ def create_membership(core_user_id, core_org_id, access=None, api_key=None, role
     )
 
 
+def get_organization(org_id, access=None, api_key=None):
+    try:
+        if access:
+            return _request('GET', f'/api/v1/organizations/{org_id}/', access=access)
+        return _request('GET', f'/api/v1/organizations/{org_id}/', api_key=api_key or _server_key())
+    except CoreError:
+        if access and (api_key or _server_key()):
+            return _request('GET', f'/api/v1/organizations/{org_id}/', api_key=api_key or _server_key())
+        raise
+
+
+def update_organization(org_id, data, access=None, api_key=None, actor=None):
+    try:
+        if access:
+            return _request('PATCH', f'/api/v1/organizations/{org_id}/', json=data, access=access, actor=actor)
+        return _request('PATCH', f'/api/v1/organizations/{org_id}/', json=data, api_key=api_key or _server_key(), actor=actor)
+    except CoreError:
+        if access and (api_key or _server_key()):
+            return _request('PATCH', f'/api/v1/organizations/{org_id}/', json=data, api_key=api_key or _server_key(), actor=actor)
+        raise
+
+
 # --- Identity / staff provisioning -------------------------------------------
 
 def provision_staff_user(email, name, phone, org_id, application_id, role_label='', permissions=None, actor=None, access=None, api_key=None):

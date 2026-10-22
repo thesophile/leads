@@ -577,33 +577,67 @@ class CompanyDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self, request):
-        if not getattr(request.user, 'company', None):
-            return None
-        return request.user.company
+        company = getattr(request.user, 'company', None)
+        if company is not None:
+            return company
+        token = getattr(request, 'auth', None)
+        if token and getattr(request.user, 'core_user_id', None):
+            from .authentication import CoreJWTAuthentication, _core_role_name
+            from .models import Company, Role
+            company = CoreJWTAuthentication._match_company(token, Company, access=bearer_token(request))
+            if company is not None:
+                request.user.company = company
+                role_name = _core_role_name(token)
+                if not request.user.role_id and role_name:
+                    role = Role.objects.filter(company=company, name__iexact=role_name).first() or \
+                           Role.objects.filter(company=company, code__iexact=role_name).first()
+                    if role:
+                        request.user.role = role
+                request.user.save()
+                return company
+        return None
 
     def get(self, request):
+        company = self.get_object(request)
         if not can(request.user, 'company.view'):
             return Response(
                 {'detail': 'You do not have permission to view the company profile.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        company = self.get_object(request)
         if company is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not company.email or not company.phone or not company.gstin:
+            from .authentication import CoreJWTAuthentication
+            CoreJWTAuthentication._sync_company_details(company, company.core_org_id, access=bearer_token(request))
         return Response(CompanySerializer(company).data)
 
     def patch(self, request):
+        company = self.get_object(request)
         if not can(request.user, 'company.edit'):
             return Response(
                 {'detail': 'You do not have permission to edit the company profile.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        company = self.get_object(request)
         if company is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = CompanySerializer(company, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        if company.core_org_id:
+            try:
+                core_client.update_organization(
+                    company.core_org_id,
+                    {
+                        'name': company.name,
+                        'email': company.email,
+                        'phone': company.phone,
+                        'gstin': company.gstin,
+                    },
+                    access=bearer_token(request),
+                    actor=request.user,
+                )
+            except CoreError:
+                pass
         log_activity(
             request.user,
             company,
@@ -628,6 +662,30 @@ SEAL_TARGET = (400, 400)
 SEAL_MAX_BYTES = 1024 * 1024  # 1MB
 
 
+def _get_company_for_edit(request):
+    company = getattr(request.user, 'company', None)
+    if company is None:
+        token = getattr(request, 'auth', None)
+        if token and getattr(request.user, 'core_user_id', None):
+            from .authentication import CoreJWTAuthentication, _core_role_name
+            from .models import Company, Role
+            company = CoreJWTAuthentication._match_company(token, Company, access=bearer_token(request))
+            if company is not None:
+                request.user.company = company
+                role_name = _core_role_name(token)
+                if not request.user.role_id and role_name:
+                    role = Role.objects.filter(company=company, name__iexact=role_name).first() or \
+                           Role.objects.filter(company=company, code__iexact=role_name).first()
+                    if role:
+                        request.user.role = role
+                request.user.save()
+    if company is None:
+        return None
+    if not can(request.user, 'company.edit'):
+        return None
+    return company
+
+
 class CompanyLogoUploadView(APIView):
     """Upload / update / remove the tenant company logo.
 
@@ -645,12 +703,7 @@ class CompanyLogoUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_company(self, request):
-        company = getattr(request.user, 'company', None)
-        if company is None:
-            return None
-        if not can(request.user, 'company.edit'):
-            return None
-        return company
+        return _get_company_for_edit(request)
 
     def post(self, request):
         company = self._get_company(request)
@@ -783,12 +836,7 @@ class CompanySealUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_company(self, request):
-        company = getattr(request.user, 'company', None)
-        if company is None:
-            return None
-        if not can(request.user, 'company.edit'):
-            return None
-        return company
+        return _get_company_for_edit(request)
 
     def post(self, request):
         company = self._get_company(request)

@@ -21,7 +21,11 @@ def _leases_grants(token):
 def _core_permissions(token):
     permissions = []
     for entry in _leases_grants(token):
-        permissions.extend(entry.get('permissions') or [])
+        perms = entry.get('permissions') or []
+        if not perms and (entry.get('role') or '').lower() == 'admin':
+            from .rbac import FLAT_PERMISSIONS
+            perms = FLAT_PERMISSIONS
+        permissions.extend(perms)
     return sorted(set(permissions))
 
 
@@ -139,9 +143,11 @@ class CoreJWTAuthentication(JWTAuthentication):
     def _resolve_user(self, token, core_user_id):
         from .models import Company, Role, User
 
+        token_str = str(token) if token else None
+
         user = User.objects.filter(core_user_id=core_user_id).first()
         if user is not None:
-            self._sync_identity(user, token, Company, Role)
+            self._sync_identity(user, token, Company, Role, access=token_str)
             return user
 
         email = (token.get('email') or '').strip().lower()
@@ -152,14 +158,15 @@ class CoreJWTAuthentication(JWTAuthentication):
             if user is not None:
                 if user.core_user_id is None:
                     user.core_user_id = core_user_id
-                self._sync_identity(user, token, Company, Role)
+                self._sync_identity(user, token, Company, Role, access=token_str)
                 return user
 
-        company = self._match_company(token, Company)
+        company = self._match_company(token, Company, access=token_str)
         role = None
         role_name = _core_role_name(token)
         if company is not None and role_name:
-            role = Role.objects.filter(company=company, name__iexact=role_name).first()
+            role = Role.objects.filter(company=company, name__iexact=role_name).first() or \
+                   Role.objects.filter(company=company, code__iexact=role_name).first()
 
         name = token.get('name') or (email.split('@')[0] if email else f'User {core_user_id}')
         user = User(
@@ -174,29 +181,109 @@ class CoreJWTAuthentication(JWTAuthentication):
         user.save()
         return user
 
-    def _sync_identity(self, user, token, Company, Role):
+    def _sync_identity(self, user, token, Company, Role, access=None):
         changed = False
         name = token.get('name')
         if name and user.name != name:
             user.name = name
             changed = True
+        token_str = access or (str(token) if token else None)
         if user.company_id is None:
-            company = self._match_company(token, Company)
+            company = self._match_company(token, Company, access=token_str)
             if company is not None:
                 user.company = company
                 changed = True
+        elif user.company:
+            if not user.company.email or not user.company.phone or not user.company.gstin:
+                self._sync_company_details(user.company, user.company.core_org_id, access=token_str)
+
         role_name = _core_role_name(token)
         if user.role_id is None and user.company_id and role_name:
-            role = Role.objects.filter(company_id=user.company_id, name__iexact=role_name).first()
+            role = Role.objects.filter(company_id=user.company_id, name__iexact=role_name).first() or \
+                   Role.objects.filter(company_id=user.company_id, code__iexact=role_name).first()
             if role is not None:
                 user.role = role
                 changed = True
         if changed:
             user.save()
 
-    @staticmethod
-    def _match_company(token, Company):
+    @classmethod
+    def _match_company(cls, token, Company, access=None):
         org_ids = _core_org_ids(token)
         if not org_ids:
             return None
-        return Company.objects.filter(core_org_id__in=org_ids).first()
+        company = Company.objects.filter(core_org_id__in=org_ids).first()
+        token_str = access or (str(token) if token else None)
+
+        if company is not None:
+            if not company.email or not company.phone or not company.gstin:
+                cls._sync_company_details(company, company.core_org_id, access=token_str)
+            return company
+
+        org_id = next(iter(org_ids))
+        return cls._provision_company_from_core(org_id, Company, access=token_str)
+
+    @classmethod
+    def _provision_company_from_core(cls, org_id, Company, access=None):
+        org = None
+        try:
+            org = core_client.get_organization(org_id, access=access)
+        except Exception:
+            pass
+
+        org_name = ((org.get('name') if org else '') or '').strip() or f'Company {org_id}'
+        org_email = ((org.get('email') if org else '') or '').strip()
+        org_phone = ((org.get('phone') if org else '') or '').strip()
+        org_gstin = ((org.get('gstin') if org else '') or '').strip()
+
+        # Link to an existing unlinked company if one matches by name
+        existing = Company.objects.filter(name__iexact=org_name, core_org_id__isnull=True).first()
+        if existing:
+            existing.core_org_id = org_id
+            if not existing.email and org_email:
+                existing.email = org_email
+            if not existing.phone and org_phone:
+                existing.phone = org_phone
+            if not existing.gstin and org_gstin:
+                existing.gstin = org_gstin
+            existing.save()
+            return existing
+
+        name = org_name
+        if Company.objects.filter(name__iexact=name).exists():
+            name = f'{org_name} ({org_id})'
+
+        company = Company.objects.create(
+            core_org_id=org_id,
+            name=name,
+            email=org_email,
+            phone=org_phone,
+            gstin=org_gstin,
+        )
+        return company
+
+    @staticmethod
+    def _sync_company_details(company, org_id, access=None):
+        if not org_id:
+            return
+        try:
+            org = core_client.get_organization(org_id, access=access)
+        except Exception:
+            return
+        if not org or not isinstance(org, dict):
+            return
+        changed = False
+        org_email = (org.get('email') or '').strip()
+        org_phone = (org.get('phone') or '').strip()
+        org_gstin = (org.get('gstin') or '').strip()
+        if not company.email and org_email:
+            company.email = org_email
+            changed = True
+        if not company.phone and org_phone:
+            company.phone = org_phone
+            changed = True
+        if not company.gstin and org_gstin:
+            company.gstin = org_gstin
+            changed = True
+        if changed:
+            company.save()

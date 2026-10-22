@@ -187,8 +187,10 @@ class User(AbstractBaseUser, PermissionsMixin):
         """
         if self.is_superuser:
             return set(FLAT_PERMISSIONS)
+        if self.role and (self.role.code == 'admin' or self.role.name.lower() == 'admin'):
+            return set(FLAT_PERMISSIONS)
         core = getattr(self, 'core_permissions', None)
-        if core is not None:
+        if core:
             return set(core)
         if self.role_id:
             return self.role.permission_names
