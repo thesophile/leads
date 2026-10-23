@@ -3520,6 +3520,7 @@ class FollowUpReminderTests(APITestCase):
             status='assigned', assigned_to='Owner S', call_status='Follow Up',
             has_follow_up=True, next_follow_up_date=self.today.isoformat(),
             next_follow_up_time='10:00 AM',
+            date=self.today,
         )
         self.future_lead = Lead.objects.create(
             id='FU-FUT', company='Future Co', contact='F', phone='555',
@@ -3527,7 +3528,42 @@ class FollowUpReminderTests(APITestCase):
             status='assigned', assigned_to='Owner S', call_status='Follow Up',
             has_follow_up=True,
             next_follow_up_date=(self.today + timedelta(days=5)).isoformat(),
+            date=self.today,
         )
+
+    def test_manager_does_not_receive_follow_up_notification_for_staff_lead(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.get('/api/notifications/unread-count/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Notification.objects.filter(
+            user=self.manager, type='Follow-up', entity_type='lead',
+        ).exists())
+
+    def test_legacy_unassigned_follow_up_notifications_are_pruned(self):
+        Notification.objects.create(
+            user=self.manager, type='Follow-up', title='Follow-up due',
+            message='Due', url='/tele-calling', entity_type='lead',
+            entity_id=str(self.due_lead.id),
+        )
+        self.client.force_authenticate(self.manager)
+        self.client.get('/api/notifications/unread-count/')
+        self.assertFalse(Notification.objects.filter(
+            user=self.manager, type='Follow-up', entity_id=str(self.due_lead.id),
+        ).exists())
+
+    def test_manager_receives_follow_up_notification_for_own_lead(self):
+        manager_lead = Lead.objects.create(
+            id='FU-MGR', company='Mgr Co', contact='M', phone='999',
+            category='IT', city='Kochi', tenant=self.company,
+            status='assigned', assigned_to=self.manager.name, call_status='Follow Up',
+            has_follow_up=True, next_follow_up_date=self.today.isoformat(),
+            date=self.today,
+        )
+        self.client.force_authenticate(self.manager)
+        self.client.get('/api/notifications/unread-count/')
+        self.assertTrue(Notification.objects.filter(
+            user=self.manager, type='Follow-up', entity_id=str(manager_lead.id),
+        ).exists())
 
     def test_unread_count_creates_one_notification_per_due_lead(self):
         self.client.force_authenticate(self.staff)

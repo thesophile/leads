@@ -16,6 +16,7 @@ import {
   Pie,
 } from 'recharts'
 import Layout from '../Layout/Layout'
+import { useAuth } from '../context/auth-context'
 import { api } from '../api/client'
 import RefreshButton from '../components/RefreshButton'
 
@@ -128,6 +129,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const { user } = useAuth()
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false)
   const followUpModalShownRef = useRef(false)
 
@@ -218,7 +220,8 @@ export default function Dashboard() {
       setStats(data || EMPTY)
       const dueList = (data && data.follow_ups_due_leads) || []
       const dismissed = readDismissedFollowUps()
-      const pending = dueList.filter((l) => !dismissed.has(l.id))
+      const myDueList = dueList.filter((l) => !l.assignedTo || l.assignedTo === user?.name)
+      const pending = myDueList.filter((l) => !dismissed.has(l.id))
       if (pending.length && !followUpModalShownRef.current) {
         followUpModalShownRef.current = true
         setFollowUpModalOpen(true)

@@ -529,15 +529,30 @@ def is_follow_up_due(lead):
 
 
 def create_due_follow_up_notifications(user):
-    """Create one in-app 'Follow-up' reminder per due lead the user can see.
+    """Create one in-app 'Follow-up' reminder per due lead assigned to the user.
+
+    Follow-up reminders are operational tasks scoped exclusively to the
+    lead's assigned owner (assigned_to). Managers/admins do not receive
+    reminders for other staff's leads, keeping their notification tray clean
+    for managerial approvals and alerts.
 
     Rate-limited per user (once a minute) and fully set-based so it never sits
     in a request hot path or contends on row locks. Reminders that already
     exist are skipped in bulk; missing ones are inserted in a single batch.
-    Legacy duplicate reminders are collapsed to the newest row per lead.
+    Legacy duplicate or unassigned reminders are pruned.
     """
-    if user is None or not getattr(user, 'pk', None):
+    if user is None or not getattr(user, 'pk', None) or not getattr(user, 'name', None):
         return
+
+    # Prune any existing follow-up reminders in this user's tray for leads
+    # that are not assigned to them (e.g. legacy manager notifications).
+    Notification.objects.filter(
+        user=user,
+        type='Follow-up',
+        entity_type='lead',
+    ).exclude(
+        entity_id__in=Lead.objects.filter(assigned_to=user.name).values_list('id', flat=True)
+    ).delete()
 
     # Throttle the sweep so concurrent requests (bell + dashboard) can't both
     # run it. cache.add is atomic, so only the first requester proceeds.
@@ -545,9 +560,16 @@ def create_due_follow_up_notifications(user):
     if not cache.add(throttle_key, 1, timeout=60):
         return
 
+    base_qs = Lead.objects.all()
+    if not user.is_superuser:
+        base_qs = base_qs.filter(tenant=user.company)
+
     due_leads = [
         lead
-        for lead in scoped_queryset(user).filter(has_follow_up=True).only(
+        for lead in base_qs.filter(
+            assigned_to=user.name,
+            has_follow_up=True,
+        ).only(
             'id', 'company', 'phone', 'has_follow_up',
             'next_follow_up_date', 'next_follow_up_time',
         )
