@@ -4,7 +4,7 @@ import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
-import { localISO } from '../../utils/date'
+import { localISO, addMonths } from '../../utils/date'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
 import StaffMultiSelect from '../../components/StaffMultiSelect'
@@ -407,6 +407,30 @@ export default function Telecall() {
       source: lead.source || '',
     })
     openDrawer()
+  }
+
+  function handleCallStatusChange(newStatus) {
+    let nextDate = formData.nextFollowUpDate
+    const hasInitialFollowUp = Boolean(
+      activeLead?.nextFollowUpDate && String(activeLead.nextFollowUpDate).trim()
+    )
+
+    if (hasInitialFollowUp) {
+      const initialStatus = activeLead.callStatus || 'Pending Call'
+      if (newStatus === initialStatus) {
+        nextDate = activeLead.nextFollowUpDate
+      } else if (newStatus === 'Not Interested' || newStatus === 'Pending Call') {
+        nextDate = ''
+      } else {
+        nextDate = addMonths(new Date(), 3)
+      }
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      callStatus: newStatus,
+      nextFollowUpDate: nextDate,
+    }))
   }
 
   async function handleSaveCall(e) {
@@ -1360,7 +1384,7 @@ export default function Telecall() {
                         </label>
                         <select
                           value={formData.callStatus}
-                          onChange={(e) => setFormData({ ...formData, callStatus: e.target.value })}
+                          onChange={(e) => handleCallStatusChange(e.target.value)}
                           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         >
                           <option value="Pending Call">Pending Call (Not Called Yet)</option>
