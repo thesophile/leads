@@ -859,7 +859,7 @@ export default function Settings() {
   async function uploadLogo(confirm = false) {
     if (!logoFile) return
     setLogoUploading(true)
-    setLogoWarning(null)
+    if (!confirm) setLogoWarning(null)
     setLogoModalError('')
     try {
       const fd = new FormData()
@@ -873,6 +873,7 @@ export default function Settings() {
       }
       if (data?.logo) setCompanyLogo(data.logo)
       setLogoFile(null)
+      setLogoWarning(null)
       setLogoModalOpen(false)
       showToast('Company logo updated successfully.')
     } catch (err) {
@@ -952,7 +953,7 @@ export default function Settings() {
   async function uploadSeal(confirm = false) {
     if (!sealFile) return
     setSealUploading(true)
-    setSealWarning(null)
+    if (!confirm) setSealWarning(null)
     setSealModalError('')
     try {
       const fd = new FormData()
@@ -966,6 +967,7 @@ export default function Settings() {
       }
       if (data?.seal) setCompanySeal(data.seal)
       setSealFile(null)
+      setSealWarning(null)
       setSealModalOpen(false)
       showToast('Company seal updated successfully.')
     } catch (err) {
@@ -1892,7 +1894,8 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={handleCancelLogoWarning}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer"
+                disabled={logoUploading}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -1933,7 +1936,8 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={handleCancelSealWarning}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer"
+                disabled={sealUploading}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
