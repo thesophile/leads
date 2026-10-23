@@ -3633,4 +3633,95 @@ class FollowUpReminderTests(APITestCase):
             entity_id=str(self.due_lead.id),
         ).count(), 1)
 
+    def test_past_due_date_lead_gets_no_reminder(self):
+        past_lead = Lead.objects.create(
+            id='FU-PAST', company='Past Co', contact='P', phone='111',
+            category='IT', city='Kochi', tenant=self.company,
+            status='assigned', assigned_to=self.staff.name, call_status='Follow Up',
+            has_follow_up=True,
+            next_follow_up_date=(self.today - timedelta(days=2)).isoformat(),
+            date=self.today,
+        )
+        self.client.force_authenticate(self.staff)
+        self.client.get('/api/notifications/unread-count/')
+        self.assertFalse(Notification.objects.filter(
+            user=self.staff, entity_id=str(past_lead.id),
+        ).exists())
+
+    def test_already_updated_lead_gets_no_reminder(self):
+        updated_lead = Lead.objects.create(
+            id='FU-UPD', company='Updated Co', contact='U', phone='222',
+            category='IT', city='Kochi', tenant=self.company,
+            status='assigned', assigned_to=self.staff.name, call_status='Interested',
+            has_follow_up=True, next_follow_up_date=self.today.isoformat(),
+            date=self.today,
+        )
+        self.client.force_authenticate(self.staff)
+        self.client.get('/api/notifications/unread-count/')
+        self.assertFalse(Notification.objects.filter(
+            user=self.staff, entity_id=str(updated_lead.id),
+        ).exists())
+
+    def test_clear_done_removes_past_and_updated_reminders_without_recreation(self):
+        past_lead = Lead.objects.create(
+            id='FU-PCLR', company='Past Clear Co', contact='PC', phone='333',
+            category='IT', city='Kochi', tenant=self.company,
+            status='assigned', assigned_to=self.staff.name, call_status='Follow Up',
+            has_follow_up=True,
+            next_follow_up_date=(self.today - timedelta(days=3)).isoformat(),
+            date=self.today,
+        )
+        updated_lead = Lead.objects.create(
+            id='FU-UCLR', company='Upd Clear Co', contact='UC', phone='444',
+            category='IT', city='Kochi', tenant=self.company,
+            status='assigned', assigned_to=self.staff.name, call_status='Called',
+            has_follow_up=True, next_follow_up_date=self.today.isoformat(),
+            date=self.today,
+        )
+        Notification.objects.create(
+            user=self.staff, type='Follow-up', title='Follow-up due',
+            message='Due', url='/tele-calling', entity_type='lead',
+            entity_id=str(past_lead.id),
+        )
+        Notification.objects.create(
+            user=self.staff, type='Follow-up', title='Follow-up due',
+            message='Due', url='/tele-calling', entity_type='lead',
+            entity_id=str(updated_lead.id),
+        )
+
+        self.client.force_authenticate(self.staff)
+        resp = self.client.post('/api/notifications/clear-done/', {})
+        self.assertEqual(resp.status_code, 200)
+
+        # Stale notifications for past and updated leads are cleared
+        self.assertFalse(Notification.objects.filter(
+            user=self.staff, entity_id=str(past_lead.id),
+        ).exists())
+        self.assertFalse(Notification.objects.filter(
+            user=self.staff, entity_id=str(updated_lead.id),
+        ).exists())
+
+        # Polling notifications list or unread count does NOT re-create them
+        resp = self.client.get('/api/notifications/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Notification.objects.filter(
+            user=self.staff, entity_id__in=[str(past_lead.id), str(updated_lead.id)],
+        ).exists())
+
+    def test_clear_done_preserves_active_today_unread_reminder(self):
+        self.client.force_authenticate(self.staff)
+        # Create the reminder for today's active lead
+        self.client.get('/api/notifications/unread-count/')
+        self.assertTrue(Notification.objects.filter(
+            user=self.staff, entity_id=str(self.due_lead.id), read=False,
+        ).exists())
+
+        # Clear done should keep active unread follow-up due today
+        resp = self.client.post('/api/notifications/clear-done/', {})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(Notification.objects.filter(
+            user=self.staff, entity_id=str(self.due_lead.id), read=False,
+        ).exists())
+
+
 

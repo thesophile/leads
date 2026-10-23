@@ -160,25 +160,21 @@ class NotificationClearDoneView(APIView):
             .values_list('entity_id', flat=True)
         )
 
-        # 2. Leads that are "done" or not due:
-        # - call status changed away from 'Pending Call'
+        # 2. Leads that are "done" or not due today:
+        # - call status changed away from 'Pending Call' / 'Follow Up'
         # - OR no longer pending follow-up (has_follow_up=False)
-        # - OR follow-up is not due (future date)
+        # - OR follow-up is not due today (due date has passed or in future)
         # - OR lead no longer exists
         done_lead_ids = set()
         if follow_up_lead_ids:
             existing_leads = Lead.objects.filter(id__in=follow_up_lead_ids).only(
-                'id', 'call_status', 'has_follow_up', 'next_follow_up_date'
+                'id', 'call_status', 'has_follow_up', 'next_follow_up_date', 'status'
             )
             existing_lead_map = {str(lead.id): lead for lead in existing_leads}
             for lid in follow_up_lead_ids:
                 lead = existing_lead_map.get(str(lid))
-                if not lead:
+                if not lead or not is_follow_up_due(lead):
                     done_lead_ids.add(str(lid))
-                else:
-                    call_status = lead.call_status or 'Pending Call'
-                    if call_status != 'Pending Call' or not is_follow_up_due(lead):
-                        done_lead_ids.add(str(lid))
 
         from django.db.models import Q
         q_filter = Q(read=True)

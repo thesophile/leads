@@ -520,12 +520,18 @@ def parse_due_date(value):
 
 
 def is_follow_up_due(lead):
-    """True when a lead is flagged for follow-up and its due date has already
-    arrived (or is unparseable — treat as overdue so it still surfaces)."""
-    if not lead.has_follow_up:
+    """True when a lead is actively pending follow-up and its scheduled
+    date is today. Completed/updated leads and leads whose due date has
+    already passed are considered done and do not trigger reminders."""
+    if not lead or not getattr(lead, 'has_follow_up', False):
         return False
-    due = parse_due_date(lead.next_follow_up_date)
-    return due is None or due <= date.today()
+    if getattr(lead, 'status', None) not in (Lead.STATUS_RAW, Lead.STATUS_ASSIGNED):
+        return False
+    call_status = getattr(lead, 'call_status', None) or 'Pending Call'
+    if call_status not in ('Follow Up', 'Pending Call'):
+        return False
+    due = parse_due_date(getattr(lead, 'next_follow_up_date', None))
+    return due is not None and due == date.today()
 
 
 def create_due_follow_up_notifications(user):
@@ -569,9 +575,12 @@ def create_due_follow_up_notifications(user):
         for lead in base_qs.filter(
             assigned_to=user.name,
             has_follow_up=True,
+            call_status__in=['Follow Up', 'Pending Call'],
+            status__in=[Lead.STATUS_RAW, Lead.STATUS_ASSIGNED],
         ).only(
             'id', 'company', 'phone', 'has_follow_up',
             'next_follow_up_date', 'next_follow_up_time',
+            'status', 'call_status',
         )
         if is_follow_up_due(lead)
     ]
