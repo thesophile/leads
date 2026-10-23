@@ -119,6 +119,18 @@ export class ApiError extends Error {
   }
 }
 
+const STATUS_FALLBACKS = {
+  400: 'Bad request. Please check your input.',
+  401: 'Your session has expired. Please sign in again.',
+  403: 'You do not have permission to perform this action.',
+  404: 'The requested resource was not found.',
+  413: 'The uploaded file is too large for the server.',
+  500: 'Internal server error. Please try again later.',
+  502: 'Server is temporarily unavailable. Please try again.',
+  503: 'Service unavailable. Please try again later.',
+  504: 'Gateway timeout. The server took too long to respond.',
+}
+
 function extractMessage(data) {
   if (!data) return ''
   if (typeof data === 'string') return data
@@ -127,6 +139,8 @@ function extractMessage(data) {
     if (Array.isArray(data.detail)) return data.detail[0]
     return JSON.stringify(data.detail)
   }
+  if (data.message && typeof data.message === 'string') return data.message
+  if (data.error && typeof data.error === 'string') return data.error
   if (data.non_field_errors && Array.isArray(data.non_field_errors)) return data.non_field_errors[0]
   const firstKey = Object.keys(data)[0]
   if (!firstKey) return ''
@@ -195,7 +209,8 @@ async function request(path, { method = 'GET', body, headers = {}, auth = true, 
   const data = res.status === 204 ? null : await res.json().catch(() => null)
 
   if (!res.ok) {
-    throw new ApiError(extractMessage(data) || `Request failed (${res.status})`, res.status, data)
+    const message = extractMessage(data) || STATUS_FALLBACKS[res.status] || `Request failed (${res.status})`
+    throw new ApiError(message, res.status, data)
   }
   if (canCache) writeResponseCache(cacheKey(path, params), data)
   return data
@@ -213,7 +228,7 @@ export const api = {
     const headers = access ? { Authorization: `Bearer ${access}` } : {}
     const res = await fetch(url, { headers })
     if (!res.ok) {
-      let message = `Request failed (${res.status})`
+      let message = STATUS_FALLBACKS[res.status] || `Request failed (${res.status})`
       try {
         message = extractMessage(await res.json()) || message
       } catch {
