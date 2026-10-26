@@ -100,6 +100,8 @@ class Lead(models.Model):
         'Not Interested',
         'For Future',
         'Called',
+        'Direct Visit',
+        'Direct visit',
     ]
 
     id = models.CharField(max_length=20, primary_key=True)

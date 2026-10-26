@@ -492,6 +492,8 @@ export default function TelecalligRegister() {
                                 ? 'bg-purple-600 text-white'
                                 : row.status === 'Converted'
                                 ? 'bg-emerald-600 text-white'
+                                : row.status === 'Direct Visit' || row.status === 'Direct visit'
+                                ? 'bg-indigo-600 text-white'
                                 : 'bg-slate-500 text-white'
                             }`}
                           >

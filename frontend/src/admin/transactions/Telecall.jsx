@@ -19,7 +19,11 @@ const STATUSES = [
   'Not Interested',
   'For Future',
   'Called',
+  'Direct Visit',
 ]
+
+const isFollowUpRequired = (status) =>
+  !['Pending Call', 'Quotation Requested', 'Not Interested'].includes(status)
 
 // Valid country calling codes (without a leading +). Used to recognise an
 // international number that was typed without a '+'.
@@ -435,12 +439,16 @@ export default function Telecall() {
 
   async function handleSaveCall(e) {
     e.preventDefault()
-    if (isSaving || !activeLead) return
+    if (isFollowUpRequired(formData.callStatus) && !formData.nextFollowUpDate?.trim()) {
+      setError('Next follow-up date is required for this call outcome.')
+      return
+    }
 
     const isFollowUp =
       formData.callStatus === 'Follow Up' ||
       formData.callStatus === 'Interested' ||
       formData.callStatus === 'Quotation Requested' ||
+      formData.callStatus === 'Direct Visit' ||
       Boolean(formData.nextFollowUpDate)
 
     const isActuallyCalled = formData.callStatus !== 'Pending Call'
@@ -985,6 +993,8 @@ export default function Telecall() {
                                   ? 'bg-blue-500'
                                   : lead.callStatus === 'For Future'
                                   ? 'bg-teal-500'
+                                  : lead.callStatus === 'Direct Visit' || lead.callStatus === 'Direct visit'
+                                  ? 'bg-indigo-500'
                                   : 'bg-rose-500'
                               }`}
                             />
@@ -1002,6 +1012,8 @@ export default function Telecall() {
                                   ? 'text-blue-700'
                                   : lead.callStatus === 'For Future'
                                   ? 'text-teal-700'
+                                  : lead.callStatus === 'Direct Visit' || lead.callStatus === 'Direct visit'
+                                  ? 'text-indigo-700'
                                   : 'text-rose-700'
                               }`}
                             >
@@ -1394,6 +1406,7 @@ export default function Telecall() {
                           <option value="Not Interested">Not Interested</option>
                           <option value="For Future">For Future</option>
                           <option value="Called">Called</option>
+                          <option value="Direct Visit">Direct Visit</option>
                         </select>
                       </div>
                     </div>
@@ -1447,7 +1460,10 @@ export default function Telecall() {
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
                       <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                        Next Follow-Up
+                        Next Follow-Up{' '}
+                        {isFollowUpRequired(formData.callStatus) && (
+                          <span className="text-rose-500 font-bold">*</span>
+                        )}
                       </h4>
                       <button
                         type="button"
@@ -1467,9 +1483,14 @@ export default function Telecall() {
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <input
                         type="date"
+                        required={isFollowUpRequired(formData.callStatus)}
                         value={formData.nextFollowUpDate}
                         onChange={(e) => setFormData({ ...formData, nextFollowUpDate: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        className={`w-full rounded-lg border px-2.5 py-2 text-xs text-slate-800 transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${
+                          isFollowUpRequired(formData.callStatus) && !formData.nextFollowUpDate
+                            ? 'border-amber-400 bg-amber-50/20'
+                            : 'border-slate-300 bg-white'
+                        }`}
                       />
                       <select
                         value={formData.nextFollowUpTime}
@@ -1672,6 +1693,8 @@ export default function Telecall() {
                                     ? 'bg-purple-50 text-purple-700 border border-purple-200/70'
                                     : h.status === 'Follow Up'
                                     ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                    : h.status === 'Direct Visit' || h.status === 'Direct visit'
+                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/60'
                                     : 'bg-slate-100 text-slate-600 border border-slate-200/60'
                                 }`}
                               >
