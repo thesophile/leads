@@ -829,11 +829,31 @@ export default function Telecall() {
 
         {/* Main Table Container */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs sm:p-4">
-          {/* Instruction Tip */}
-          <div className="border-b border-slate-100 pb-3.5 mb-3.5">
+          {/* Instruction Tip & Save as PDF */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3.5 mb-3.5">
             <p className="text-xs text-slate-500">
               💡 <em>Click on any lead row to view its Follow Up History &amp; Call Log.</em>
             </p>
+            <button
+              type="button"
+              onClick={() => handleExportPdf(false)}
+              disabled={isLoading || isExporting || count === 0}
+              title={
+                isLoading
+                  ? 'Wait for records to load before saving.'
+                  : count === 0
+                    ? 'No tele-call records to save.'
+                    : 'Save tele-call leads as PDF'
+              }
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:text-slate-900 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer self-start sm:self-auto shrink-0"
+            >
+              {isExporting ? (
+                <Spinner className="h-3.5 w-3.5 text-slate-500" />
+              ) : (
+                <PdfIcon className="h-3.5 w-3.5 text-red-500" />
+              )}
+              <span>{isExporting ? 'Saving…' : 'Save as PDF'}</span>
+            </button>
           </div>
 
           {/* Table Toolbar (Caller Filter + Status Filter + Priority Pills + Search Box) */}
@@ -912,50 +932,27 @@ export default function Telecall() {
                 </div>
               </div>
 
-              {/* Right: Export PDF + Search Box */}
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              {/* Right Search Box */}
+              <div className="flex items-center w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-60">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search company, phone..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-l-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
                 <button
                   type="button"
-                  onClick={() => handleExportPdf(false)}
-                  disabled={isLoading || isExporting || count === 0}
-                  title={
-                    isLoading
-                      ? 'Wait for records to load before exporting.'
-                      : count === 0
-                        ? 'No tele-call records to export.'
-                        : 'Export tele-call leads to PDF'
-                  }
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:text-slate-900 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                  aria-label="Search"
+                  className="flex h-[34px] w-9 items-center justify-center rounded-r-lg bg-brand-600 text-white transition hover:bg-brand-700 cursor-pointer"
                 >
-                  {isExporting ? (
-                    <Spinner className="h-3.5 w-3.5 text-slate-500" />
-                  ) : (
-                    <PdfIcon className="h-3.5 w-3.5 text-red-500" />
-                  )}
-                  <span>{isExporting ? 'Exporting…' : 'Export to PDF'}</span>
+                  <SearchIcon />
                 </button>
-
-                <div className="flex items-center w-full sm:w-auto">
-                  <div className="relative flex-1 sm:w-60">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
-                      <SearchIcon />
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="Search company, phone..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-l-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Search"
-                    className="flex h-[34px] w-9 items-center justify-center rounded-r-lg bg-brand-600 text-white transition hover:bg-brand-700 cursor-pointer"
-                  >
-                    <SearchIcon />
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -994,10 +991,10 @@ export default function Telecall() {
                   onClick={() => handleExportPdf(true)}
                   disabled={isExporting}
                   className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-bold text-brand-800 shadow-2xs transition hover:bg-brand-100 active:scale-[0.98] cursor-pointer"
-                  title="Export only selected leads to PDF"
+                  title="Save only selected leads as PDF"
                 >
                   <PdfIcon className="h-3.5 w-3.5 text-red-500" />
-                  <span>Export Selected ({selectedIds.size})</span>
+                  <span>Save Selected ({selectedIds.size}) as PDF</span>
                 </button>
                 <button
                   type="button"
