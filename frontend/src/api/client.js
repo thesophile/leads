@@ -150,7 +150,7 @@ function extractMessage(data) {
   return JSON.stringify(data)
 }
 
-async function request(path, { method = 'GET', body, headers = {}, auth = true, params = null, cache = true } = {}) {
+async function request(path, { method = 'GET', body, headers = {}, auth = true, params = null, cache = true, signal = null } = {}) {
   const canCache = method === 'GET' && cache
   if (canCache) {
     const hit = readResponseCache(cacheKey(path, params))
@@ -166,6 +166,7 @@ async function request(path, { method = 'GET', body, headers = {}, auth = true, 
   const config = {
     method,
     headers: { ...headers },
+    ...(signal ? { signal } : {}),
   }
   const isForm = body instanceof FormData
   if (!isForm) config.headers['Content-Type'] = 'application/json'

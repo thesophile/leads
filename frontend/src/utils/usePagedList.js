@@ -18,11 +18,23 @@ export function useDebouncedValue(value, delay = 300) {
  * ``params`` should exclude ``page`` / ``page_size``; pages are walked with the
  * same 25-row page size the app uses.
  */
-export async function fetchAllPaged(url, params = {}, pageSize = DEFAULT_PAGE_SIZE) {
+export async function fetchAllPaged(url, params = {}, pageSize = DEFAULT_PAGE_SIZE, options = {}) {
+  const signal = options?.signal || (typeof pageSize === 'object' ? pageSize?.signal : null)
+  const size = typeof pageSize === 'number' ? pageSize : DEFAULT_PAGE_SIZE
   const collected = []
   let page = 1
   for (;;) {
-    const data = await api.get(url, { params: { ...params, page, page_size: pageSize }, cache: false })
+    if (signal?.aborted) {
+      const err = new Error('Aborted')
+      err.name = 'AbortError'
+      throw err
+    }
+    const data = await api.get(url, { params: { ...params, page, page_size: size }, cache: false, signal })
+    if (signal?.aborted) {
+      const err = new Error('Aborted')
+      err.name = 'AbortError'
+      throw err
+    }
     const results = Array.isArray(data?.results) ? data.results : []
     collected.push(...results)
     if (!data || collected.length >= (data.count || 0) || results.length === 0) break

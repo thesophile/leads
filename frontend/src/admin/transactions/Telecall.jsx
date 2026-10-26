@@ -155,9 +155,9 @@ function WhatsAppIcon({ className = 'h-4 w-4' }) {
   )
 }
 
-function CloseIcon() {
+function CloseIcon({ className = 'h-4.5 w-4.5' }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
@@ -672,19 +672,34 @@ export default function Telecall() {
   }
 
   const [isExporting, setIsExporting] = useState(false)
+  const abortControllerRef = useRef(null)
+
+  function handleCancelExport() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setIsExporting(false)
+  }
 
   async function handleExportPdf(onlySelected = false) {
     if (isExporting) return
     setIsExporting(true)
     setError('')
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       let leads = []
       if (onlySelected && selectedIds.size > 0) {
-        const all = await fetchAllPaged('/transactions/leads/', listParams, 500)
+        const all = await fetchAllPaged('/transactions/leads/', listParams, 500, { signal: controller.signal })
+        if (controller.signal.aborted) return
         leads = all.filter((l) => selectedIds.has(l.id))
       } else {
-        leads = await fetchAllPaged('/transactions/leads/', listParams, 500)
+        leads = await fetchAllPaged('/transactions/leads/', listParams, 500, { signal: controller.signal })
       }
+
+      if (controller.signal.aborted) return
 
       if (!leads.length) {
         setError('No telecall records found to export.')
@@ -751,6 +766,8 @@ export default function Telecall() {
             5: { cellWidth: 75 },
           }
 
+      if (controller.signal.aborted) return
+
       await exportRegisterPdf({
         title: 'TELECALL LEADS',
         fileNamePrefix: 'Telecall_Leads',
@@ -766,9 +783,13 @@ export default function Telecall() {
         columnStyles,
       })
     } catch (err) {
+      if (err.name === 'AbortError' || err.message === 'Aborted') {
+        return
+      }
       setError(err.message || 'Failed to export PDF.')
     } finally {
       setIsExporting(false)
+      abortControllerRef.current = null
     }
   }
 
@@ -834,26 +855,40 @@ export default function Telecall() {
             <p className="text-xs text-slate-500">
               💡 <em>Click on any lead row to view its Follow Up History &amp; Call Log.</em>
             </p>
-            <button
-              type="button"
-              onClick={() => handleExportPdf(false)}
-              disabled={isLoading || isExporting || count === 0}
-              title={
-                isLoading
-                  ? 'Wait for records to load before saving.'
-                  : count === 0
-                    ? 'No tele-call records to save.'
-                    : 'Save tele-call leads as PDF'
-              }
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:text-slate-900 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer self-start sm:self-auto shrink-0"
-            >
-              {isExporting ? (
-                <Spinner className="h-3.5 w-3.5 text-slate-500" />
-              ) : (
+            {isExporting ? (
+              <div className="flex items-center rounded-lg border border-slate-200 bg-white shadow-2xs self-start sm:self-auto shrink-0">
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                  <Spinner className="h-3.5 w-3.5 text-slate-500" />
+                  <span>Saving…</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelExport}
+                  title="Cancel saving"
+                  className="flex items-center justify-center border-l border-slate-200 px-2 py-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer rounded-r-lg"
+                  aria-label="Cancel saving"
+                >
+                  <CloseIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleExportPdf(false)}
+                disabled={isLoading || count === 0}
+                title={
+                  isLoading
+                    ? 'Wait for records to load before saving.'
+                    : count === 0
+                      ? 'No tele-call records to save.'
+                      : 'Save tele-call leads as PDF'
+                }
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:text-slate-900 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer self-start sm:self-auto shrink-0"
+              >
                 <PdfIcon className="h-3.5 w-3.5 text-red-500" />
-              )}
-              <span>{isExporting ? 'Saving…' : 'Save as PDF'}</span>
-            </button>
+                <span>Save as PDF</span>
+              </button>
+            )}
           </div>
 
           {/* Table Toolbar (Caller Filter + Status Filter + Priority Pills + Search Box) */}
@@ -986,16 +1021,33 @@ export default function Telecall() {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleExportPdf(true)}
-                  disabled={isExporting}
-                  className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-bold text-brand-800 shadow-2xs transition hover:bg-brand-100 active:scale-[0.98] cursor-pointer"
-                  title="Save only selected leads as PDF"
-                >
-                  <PdfIcon className="h-3.5 w-3.5 text-red-500" />
-                  <span>Save Selected ({selectedIds.size}) as PDF</span>
-                </button>
+                {isExporting ? (
+                  <div className="flex items-center rounded-lg border border-brand-300 bg-white shadow-2xs">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-brand-800">
+                      <Spinner className="h-3.5 w-3.5 text-brand-600" />
+                      <span>Saving…</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCancelExport}
+                      title="Cancel saving"
+                      className="flex items-center justify-center border-l border-brand-200 px-2 py-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer rounded-r-lg"
+                      aria-label="Cancel saving"
+                    >
+                      <CloseIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleExportPdf(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-bold text-brand-800 shadow-2xs transition hover:bg-brand-100 active:scale-[0.98] cursor-pointer"
+                    title="Save only selected leads as PDF"
+                  >
+                    <PdfIcon className="h-3.5 w-3.5 text-red-500" />
+                    <span>Save Selected ({selectedIds.size}) as PDF</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setReassignOpen(true)}
