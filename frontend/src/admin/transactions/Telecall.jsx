@@ -8,7 +8,9 @@ import { localISO, addMonths } from '../../utils/date'
 import RefreshButton from '../../components/RefreshButton'
 import PaginationBar from '../../components/PaginationBar'
 import StaffMultiSelect from '../../components/StaffMultiSelect'
+import Spinner from '../../components/Spinner'
 import usePagedList, { useDebouncedValue, fetchAllPaged } from '../../utils/usePagedList'
+import { exportRegisterPdf } from '../../utils/exportRegisterPdf'
 
 const STATUSES = [
   'All Status',
@@ -106,6 +108,29 @@ function isSameDay(a, b) {
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
+  )
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
+function toDmyDate(text) {
+  if (!text) return ''
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(text).trim())
+  if (m) return `${pad2(m[3])}-${pad2(m[2])}-${m[1]}`
+  return text
+}
+
+function PdfIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
+    </svg>
   )
 }
 
@@ -646,9 +671,122 @@ export default function Telecall() {
     }
   }
 
+  const [isExporting, setIsExporting] = useState(false)
+
+  async function handleExportPdf(onlySelected = false) {
+    if (isExporting) return
+    setIsExporting(true)
+    setError('')
+    try {
+      let leads = []
+      if (onlySelected && selectedIds.size > 0) {
+        const all = await fetchAllPaged('/transactions/leads/', listParams, 500)
+        leads = all.filter((l) => selectedIds.has(l.id))
+      } else {
+        leads = await fetchAllPaged('/transactions/leads/', listParams, 500)
+      }
+
+      if (!leads.length) {
+        setError('No telecall records found to export.')
+        return
+      }
+
+      const columns = [
+        'Company',
+        'Mobile',
+        'Category',
+        ...(canViewAll ? ['Assigned To'] : []),
+        'Call Status',
+        'Priority',
+        'Next Follow-Up',
+      ]
+
+      const rows = []
+      leads.forEach((lead) => {
+        const followUpDisplay = lead.nextFollowUpDate
+          ? `${toDmyDate(lead.nextFollowUpDate)}${lead.nextFollowUpTime ? ' ' + lead.nextFollowUpTime : ''}`
+          : '-'
+        const cells = [
+          lead.company || '-',
+          lead.phone || '-',
+          lead.category || '-',
+          ...(canViewAll ? [lead.assignedTo || 'Unassigned'] : []),
+          lead.callStatus || 'Pending Call',
+          lead.priority || '-',
+          followUpDisplay,
+        ]
+
+        if (lead.remarks && String(lead.remarks).trim()) {
+          cells[0] = { content: cells[0], rowSpan: 2 }
+          cells[1] = { content: cells[1], rowSpan: 2 }
+          rows.push(cells)
+          rows.push([
+            {
+              content: `Remarks: ${String(lead.remarks).trim()}`,
+              colSpan: columns.length - 2,
+              styles: { fontStyle: 'italic', textColor: [80, 80, 80], fontSize: 7 },
+            },
+          ])
+        } else {
+          rows.push(cells)
+        }
+      })
+
+      const columnStyles = canViewAll
+        ? {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 70 },
+            2: { cellWidth: 65 },
+            3: { cellWidth: 65 },
+            4: { cellWidth: 70 },
+            5: { cellWidth: 45 },
+            6: { cellWidth: 65 },
+          }
+        : {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 80 },
+            2: { cellWidth: 75 },
+            3: { cellWidth: 80 },
+            4: { cellWidth: 50 },
+            5: { cellWidth: 75 },
+          }
+
+      await exportRegisterPdf({
+        title: 'TELECALL LEADS',
+        fileNamePrefix: 'Telecall_Leads',
+        columns,
+        rows,
+        filters: {
+          Caller: canViewAll && selectedCaller !== 'All Callers' ? selectedCaller : (!canViewAll && user?.name ? user.name : ''),
+          Status: selectedStatus !== 'All Status' ? selectedStatus : '',
+          Priority: selectedPriority !== 'All' ? selectedPriority : '',
+          Search: searchDebounced || '',
+          ...(onlySelected && selectedIds.size > 0 ? { Selection: `${selectedIds.size} Selected` } : {}),
+        },
+        columnStyles,
+      })
+    } catch (err) {
+      setError(err.message || 'Failed to export PDF.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <Layout>
       <div className="space-y-4">
+        {error && !drawerVisible && !reassignOpen && (
+          <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-600">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => setError('')}
+              className="ml-2 font-bold text-red-500 hover:text-red-700 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {/* Top Header Card */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div>
@@ -774,27 +912,50 @@ export default function Telecall() {
                 </div>
               </div>
 
-              {/* Right Search Box */}
-              <div className="flex items-center w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-60">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
-                    <SearchIcon />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Search company, phone..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-l-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
+              {/* Right: Export PDF + Search Box */}
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                 <button
                   type="button"
-                  aria-label="Search"
-                  className="flex h-[34px] w-9 items-center justify-center rounded-r-lg bg-brand-600 text-white transition hover:bg-brand-700 cursor-pointer"
+                  onClick={() => handleExportPdf(false)}
+                  disabled={isLoading || isExporting || count === 0}
+                  title={
+                    isLoading
+                      ? 'Wait for records to load before exporting.'
+                      : count === 0
+                        ? 'No tele-call records to export.'
+                        : 'Export tele-call leads to PDF'
+                  }
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:text-slate-900 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                 >
-                  <SearchIcon />
+                  {isExporting ? (
+                    <Spinner className="h-3.5 w-3.5 text-slate-500" />
+                  ) : (
+                    <PdfIcon className="h-3.5 w-3.5 text-red-500" />
+                  )}
+                  <span>{isExporting ? 'Exporting…' : 'Export to PDF'}</span>
                 </button>
+
+                <div className="flex items-center w-full sm:w-auto">
+                  <div className="relative flex-1 sm:w-60">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
+                      <SearchIcon />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Search company, phone..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full rounded-l-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Search"
+                    className="flex h-[34px] w-9 items-center justify-center rounded-r-lg bg-brand-600 text-white transition hover:bg-brand-700 cursor-pointer"
+                  >
+                    <SearchIcon />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -827,14 +988,26 @@ export default function Telecall() {
                   Clear
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setReassignOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98] cursor-pointer"
-              >
-                <UsersIcon className="h-3.5 w-3.5 text-white" />
-                <span>Reassign</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExportPdf(true)}
+                  disabled={isExporting}
+                  className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-bold text-brand-800 shadow-2xs transition hover:bg-brand-100 active:scale-[0.98] cursor-pointer"
+                  title="Export only selected leads to PDF"
+                >
+                  <PdfIcon className="h-3.5 w-3.5 text-red-500" />
+                  <span>Export Selected ({selectedIds.size})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReassignOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98] cursor-pointer"
+                >
+                  <UsersIcon className="h-3.5 w-3.5 text-white" />
+                  <span>Reassign</span>
+                </button>
+              </div>
             </div>
           )}
 
