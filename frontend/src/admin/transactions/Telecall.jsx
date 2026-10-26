@@ -23,7 +23,7 @@ const STATUSES = [
 ]
 
 const isFollowUpRequired = (status) =>
-  !['Pending Call', 'Quotation Requested', 'Not Interested'].includes(status)
+  !['Pending Call', 'Quotation Requested', 'Not Interested', 'Called'].includes(status)
 
 // Valid country calling codes (without a leading +). Used to recognise an
 // international number that was typed without a '+'.
