@@ -190,7 +190,7 @@ function InfoBlock({ label, value }) {
 function SectionBox({ title, children, className = '', overflowVisible = false, pinBottom = false }) {
   return (
     <div
-      className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-slate-300 ${pinBottom ? 'flex flex-col ' : ''}${className}`}
+      className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border-2 border-black ${pinBottom ? 'flex flex-col ' : ''}${className}`}
     >
       <div className="flex items-center justify-center bg-black px-3 py-2">
         <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
@@ -697,6 +697,29 @@ export default function ProposalPreview() {
 
   const [exportingPdf, setExportingPdf] = useState(false)
 
+  // Pre-fetch logo as a data URL so html2canvas can embed it (no CORS issue).
+  async function fetchLogoDataUrl(logoUrl) {
+    if (!logoUrl) return null
+    try {
+      const access =
+        localStorage.getItem('leads_access') ||
+        sessionStorage.getItem('leads_access') ||
+        ''
+      const headers = access ? { Authorization: `Bearer ${access}` } : {}
+      const res = await fetch(logoUrl, { headers })
+      if (!res.ok) return null
+      const blob = await res.blob()
+      return await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = () => resolve(null)
+        reader.readAsDataURL(blob)
+      })
+    } catch {
+      return null
+    }
+  }
+
   async function handleSaveAsPdf() {
     const root = docRef.current
     if (!root || exportingPdf) return
@@ -757,6 +780,9 @@ export default function ProposalPreview() {
       return createStyleProxy(style)
     }
 
+    // Pre-fetch logo so html2canvas can embed it without hitting CORS.
+    const logoDataUrl = await fetchLogoDataUrl(company?.logo)
+
     try {
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -781,9 +807,32 @@ export default function ProposalPreview() {
               }
             }
 
+            // Swap any oklch/oklab etc in style tags.
             clonedDoc.querySelectorAll('style').forEach((st) => {
-              if (st.textContent && st.textContent.includes('oklch')) {
+              if (st.textContent && UNSUPPORTED_COLOR_RE.test(st.textContent)) {
+                UNSUPPORTED_COLOR_RE.lastIndex = 0
                 st.textContent = toRgb(st.textContent)
+              }
+            })
+
+            // Inject logo data URL so the <img> loads without CORS restriction.
+            if (logoDataUrl) {
+              clonedDoc.querySelectorAll('img').forEach((img) => {
+                if (img.src && company?.logo && img.src.includes(new URL(company.logo).pathname.split('/').pop())) {
+                  img.src = logoDataUrl
+                  img.removeAttribute('crossorigin')
+                }
+              })
+            }
+
+            // Bold black borders on all section boxes.
+            clonedDoc.querySelectorAll('[class*="border"]').forEach((el) => {
+              const cls = el.getAttribute('class') || ''
+              if (cls.includes('border-slate') || cls.includes('border-2') || cls.includes('rounded-xl')) {
+                if (!cls.includes('bg-black') && !cls.includes('border-b-2')) {
+                  el.style.borderColor = '#000000'
+                  el.style.borderWidth = '2px'
+                }
               }
             })
 
