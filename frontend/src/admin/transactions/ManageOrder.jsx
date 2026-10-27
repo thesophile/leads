@@ -8,7 +8,7 @@ import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import { PROPOSAL_TEMPLATES } from './proposalTemplates'
 import { limitRichHtml, richTextCharCount } from './orderFormDocumentUtils'
-import { stripItems } from './proposalItemsUtils'
+import { proposalItemsFromHtml, buildItemsHtml, stripItems } from './proposalItemsUtils'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import useDirty from '../../utils/useDirty'
 import SendToClientModal from './SendToClientModal'
@@ -204,6 +204,8 @@ export default function ManageOrder() {
 
   const [orderSummaryHtml, setOrderSummaryHtml] = useState('')
   const [orderInDetailsHtml, setOrderInDetailsHtml] = useState('')
+  const [summaryItems, setSummaryItems] = useState([])
+  const [detailItems, setDetailItems] = useState([])
 
   const [totalVal, setTotalVal] = useState('50,000')
   const [discountVal, setDiscountVal] = useState('5,000')
@@ -300,6 +302,8 @@ export default function ManageOrder() {
     setSelectedTemplateId(templateId)
     const tpl = PROPOSAL_TEMPLATES.find((t) => t.id === templateId)
     if (tpl) {
+      setSummaryItems([])
+      setDetailItems([])
       setOrderSummaryHtml(tpl.scopeHtml)
       setOrderInDetailsHtml(tpl.detailHtml)
       setCategoryName(tpl.category)
@@ -337,8 +341,12 @@ export default function ManageOrder() {
       setProposalDate(order.proposalDate || todayStr())
       setDeliveryDate(order.deliveryDate || '')
       setProposalNo(order.proposalNo || order.id || nextOrderNumber())
-      setOrderSummaryHtml(stripItems(order.scope || order.orderSummaryHtml || ''))
-      setOrderInDetailsHtml(stripItems(order.details || order.orderInDetailsHtml || ''))
+      const { items: sItems, freeHtml: sFree } = proposalItemsFromHtml(order.scope || order.orderSummaryHtml || '')
+      const { items: dItems, freeHtml: dFree } = proposalItemsFromHtml(order.details || order.orderInDetailsHtml || '')
+      setSummaryItems(sItems)
+      setOrderSummaryHtml(sFree)
+      setDetailItems(dItems)
+      setOrderInDetailsHtml(dFree)
       setTotalVal(order.total || '50,000')
       setDiscountVal(order.discount || '5,000')
       setNetVal(order.netAmount || '45,000.00')
@@ -356,6 +364,8 @@ export default function ManageOrder() {
       setProposalDate(todayStr())
       setDeliveryDate('')
       setProposalNo(nextOrderNumber())
+      setSummaryItems([])
+      setDetailItems([])
       setOrderSummaryHtml('')
       setOrderInDetailsHtml('')
       setTotalVal('50,000')
@@ -377,6 +387,9 @@ export default function ManageOrder() {
     }
     setSavingOrder(true)
     try {
+      const finalScope = buildItemsHtml(summaryItems) + orderSummaryHtml
+      const finalDetails = buildItemsHtml(detailItems) + orderInDetailsHtml
+
       if (editingOrderId) {
         // Update existing
         const updated = await api.put(
@@ -397,8 +410,8 @@ export default function ManageOrder() {
             discount: discountVal,
             netAmount: netVal,
             remarks: remarksVal,
-            scope: orderSummaryHtml,
-            details: orderInDetailsHtml,
+            scope: finalScope,
+            details: finalDetails,
           }
         )
         setOrdersList((prev) => moveToTop(prev, editingOrderId, updated))
@@ -427,8 +440,8 @@ export default function ManageOrder() {
           currency: 'INR (₹)',
           category: categoryName,
           remarks: remarksVal,
-          scope: orderSummaryHtml,
-          details: orderInDetailsHtml,
+          scope: finalScope,
+          details: finalDetails,
         }
         const created = await api.post('/transactions/orders/', newOrder)
         setOrdersList((prev) => [created, ...prev])

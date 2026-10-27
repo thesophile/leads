@@ -173,7 +173,7 @@ def _indian_amount(value):
     return ','.join(reversed(groups)) + ',' + tail
 
 
-def items_table(elements, items, currency, body_style, show_total=True):
+def items_table(elements, items, currency, body_style, show_total=True, col_widths=None):
     """Append a right-aligned service breakdown table to the PDF flowables."""
     item_money = ParagraphStyle(
         'itemmoney',
@@ -219,9 +219,13 @@ def items_table(elements, items, currency, body_style, show_total=True):
             '',
             Paragraph(f'TOTAL: {currency_code} {_indian_amount(round(total))}', total_money),
         ])
+    if not rows:
+        return
+    if col_widths is None:
+        col_widths = [142 * mm, 40 * mm]
     table = Table(
         rows,
-        colWidths=[142 * mm, 40 * mm],
+        colWidths=col_widths,
         style=TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (0, -1), 0),
@@ -1181,17 +1185,33 @@ def render_order_pdf(order):
         # Page 1 middle: Order Summary + financial (left) and Terms (right).
         left_width = content_width * 7 / 12 - 1 * mm
         right_width = content_width * 5 / 12 - 1 * mm
-        _, order_scope_free = split_proposal_items(order.scope)
+        scope_items, order_scope_free = split_proposal_items(order.scope)
         summary_markup = html_to_pdf_markup(order_scope_free)
         terms_summary_markup = html_to_pdf_markup(
             getattr(company, 'terms_summary_html', '') if company else ''
         )
+        left_flowables = []
+        if summary_markup and summary_markup.strip():
+            left_flowables.append(Paragraph(summary_markup, styles['body']))
+        if scope_items:
+            if left_flowables:
+                left_flowables.append(Spacer(1, 2 * mm))
+            order_summary_col_widths = [left_width - 4 * mm - 26 * mm, 26 * mm]
+            items_table(
+                left_flowables,
+                scope_items,
+                order.currency,
+                styles['body_small'],
+                show_total=False,
+                col_widths=order_summary_col_widths,
+            )
+        if not left_flowables:
+            left_flowables.append(Paragraph('&nbsp;', styles['body']))
+        left_flowables.append(Spacer(1, 2 * mm))
+        left_flowables.append(Paragraph('Continued…', styles['end']))
+
         left_column = [
-            section_box('ORDER SUMMARY', [
-                Paragraph(summary_markup, styles['body']),
-                Spacer(1, 2 * mm),
-                Paragraph('Continued…', styles['end']),
-            ], left_width),
+            section_box('ORDER SUMMARY', left_flowables, left_width),
             Spacer(1, 2 * mm),
             financial_box(left_width),
         ]
@@ -1225,12 +1245,27 @@ def render_order_pdf(order):
         elements.append(Spacer(1, 5 * mm))
 
         # Order in details (only if provided).
-        _, order_details_free = split_proposal_items(order.details)
+        detail_items, order_details_free = split_proposal_items(order.details)
         details_markup = html_to_pdf_markup(order_details_free)
-        if details_markup and details_markup.strip():
+        if (details_markup and details_markup.strip()) or detail_items:
+            details_flowables = []
+            if details_markup and details_markup.strip():
+                details_flowables.append(Paragraph(details_markup, styles['body']))
+            if detail_items:
+                if details_flowables:
+                    details_flowables.append(Spacer(1, 3 * mm))
+                order_details_col_widths = [content_width - 4 * mm - 35 * mm, 35 * mm]
+                items_table(
+                    details_flowables,
+                    detail_items,
+                    order.currency,
+                    styles['body'],
+                    show_total=False,
+                    col_widths=order_details_col_widths,
+                )
             elements.append(section_box(
                 'ORDER IN DETAILS',
-                [Paragraph(details_markup, styles['body'])],
+                details_flowables,
                 content_width,
             ))
             elements.append(Spacer(1, 5 * mm))

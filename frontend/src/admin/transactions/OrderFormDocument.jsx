@@ -4,7 +4,16 @@ import Barcode from 'react-barcode'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
 import { htmlToPlainLines } from './orderFormDocumentUtils'
-import { stripItems, htmlToFormattedLines } from './proposalItemsUtils'
+import {
+  proposalItemsFromHtml,
+  itemsPrintHtml,
+  currencySymbol,
+  htmlToFormattedLines,
+} from './proposalItemsUtils'
+
+function linesToHtml(lines) {
+  return lines.map((line) => `<div>${line || '&nbsp;'}</div>`).join('')
+}
 
 function orderFormLink(order) {
   const token = order && order.clientToken
@@ -268,7 +277,19 @@ export default function OrderFormDocument({ order, company }) {
   const detailsPaged = usePagedContent(detailsContentRef, page2FooterRef, [], 64)
   const legalPaged = usePagedContent(legalTermsContentRef, page3FooterRef, [page3SigRef], 64)
 
-  const hasDetails = htmlToPlainLines(stripItems(order?.orderInDetailsHtml || '')).length > 0
+  const summarySplit = proposalItemsFromHtml(order?.orderSummaryHtml || '')
+  const composedSummaryHtml = [
+    summarySplit.freeHtml ? linesToHtml(htmlToFormattedLines(summarySplit.freeHtml)) : '',
+    itemsPrintHtml(summarySplit.items, currencySymbol(order?.currency), ''),
+  ].join('')
+
+  const detailSplit = proposalItemsFromHtml(order?.orderInDetailsHtml || '')
+  const composedDetailsHtml = [
+    detailSplit.freeHtml ? linesToHtml(htmlToFormattedLines(detailSplit.freeHtml)) : '',
+    itemsPrintHtml(detailSplit.items, currencySymbol(order?.currency), ''),
+  ].join('')
+  const hasDetails =
+    htmlToFormattedLines(detailSplit.freeHtml || '').length > 0 || detailSplit.items.length > 0
 
   return (
     <div className="space-y-8 print:space-y-0">
@@ -329,11 +350,8 @@ export default function OrderFormDocument({ order, company }) {
                   ref={summaryContentRef}
                   className="text-[13px] leading-snug text-black"
                   style={typeof summaryPaged.cap === 'number' ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
-                >
-                  {htmlToPlainLines(stripItems(order.orderSummaryHtml)).map((line, i) => (
-                    <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
-                  ))}
-                </div>
+                  dangerouslySetInnerHTML={{ __html: composedSummaryHtml }}
+                />
                 {summaryPaged.part2Html && (
                   <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                 )}
@@ -408,11 +426,8 @@ export default function OrderFormDocument({ order, company }) {
                   ref={detailsContentRef}
                   className="text-[13px] leading-snug text-slate-800"
                   style={typeof detailsPaged.cap === 'number' ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
-                >
-                  {htmlToPlainLines(stripItems(order.orderInDetailsHtml)).map((line, i) => (
-                    <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
-                  ))}
-                </div>
+                  dangerouslySetInnerHTML={{ __html: composedDetailsHtml }}
+                />
                 {detailsPaged.part2Html && (
                   <p className="mt-3 text-right text-[11px] font-bold text-slate-400">--- Continued ---</p>
                 )}
