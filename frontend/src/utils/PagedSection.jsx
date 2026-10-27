@@ -178,9 +178,13 @@ export default function PagedSection({
           <div className={`mt-3 flex flex-col ${endBlock ? '' : 'flex-1'}`}>
             <div className={`overflow-hidden ${boxClass} flex flex-col`}>
               <div
-                className={`shrink-0 bg-black px-3 pt-[6px] pb-[8.5px] flex items-center justify-center ${titleClass}`}
+                className={`shrink-0 flex h-8 items-center justify-center bg-black px-3 text-center ${titleClass}`}
+                style={{ height: '32px' }}
               >
-                <span className="text-[13px] font-bold uppercase tracking-wider text-white leading-none">
+                <span
+                  className="text-[13px] font-bold uppercase tracking-wider text-white leading-none -translate-y-0.5"
+                  style={{ lineHeight: 1, transform: 'translateY(-2px)' }}
+                >
                   {sectionTitle}
                 </span>
               </div>

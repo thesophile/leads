@@ -192,8 +192,16 @@ function SectionBox({ title, children, className = '', overflowVisible = false, 
     <div
       className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-black ${pinBottom ? 'flex flex-col ' : ''}${className}`}
     >
-      <div className="flex items-center justify-center rounded-t-[11px] bg-black px-3 pt-[6px] pb-[8.5px] text-center">
-        <span className="text-[13px] font-bold uppercase tracking-wider text-white leading-none">{title}</span>
+      <div
+        className="flex h-8 items-center justify-center rounded-t-[11px] bg-black px-3 text-center shrink-0"
+        style={{ height: '32px' }}
+      >
+        <span
+          className="text-[13px] font-bold uppercase tracking-wider text-white leading-none -translate-y-0.5"
+          style={{ lineHeight: 1, transform: 'translateY(-2px)' }}
+        >
+          {title}
+        </span>
       </div>
       <div className={`${pinBottom ? 'flex flex-1 flex-col ' : ''}rounded-b-[11px] p-3.5 pb-4 bg-white`}>{children}</div>
     </div>
