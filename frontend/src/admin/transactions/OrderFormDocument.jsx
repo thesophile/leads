@@ -117,8 +117,10 @@ function PageHeader({ order, annexLabel }) {
 function SectionBox({ title, children, className = '' }) {
   return (
     <div className={`overflow-hidden rounded-md border border-black bg-white flex flex-col ${className}`}>
-      <div className="border-b border-black bg-black px-3 py-1.5 text-[13px] font-bold uppercase tracking-wider text-white text-center shrink-0">
-        {title}
+      <div className="border-b border-black bg-black px-3 pt-[6px] pb-[8.5px] flex items-center justify-center text-center shrink-0">
+        <span className="text-[13px] font-bold uppercase tracking-wider text-white leading-none">
+          {title}
+        </span>
       </div>
       <div className="p-3.5 text-[13px] leading-relaxed text-black flex-1 flex flex-col justify-start">
         {children}

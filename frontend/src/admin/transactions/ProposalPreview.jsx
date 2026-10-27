@@ -192,8 +192,8 @@ function SectionBox({ title, children, className = '', overflowVisible = false, 
     <div
       className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-black ${pinBottom ? 'flex flex-col ' : ''}${className}`}
     >
-      <div className="flex items-center justify-center rounded-t-[11px] bg-black px-3 py-2">
-        <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
+      <div className="flex items-center justify-center rounded-t-[11px] bg-black px-3 pt-[6px] pb-[8.5px] text-center">
+        <span className="text-[13px] font-bold uppercase tracking-wider text-white leading-none">{title}</span>
       </div>
       <div className={`${pinBottom ? 'flex flex-1 flex-col ' : ''}rounded-b-[11px] p-3.5 pb-4 bg-white`}>{children}</div>
     </div>
@@ -837,6 +837,11 @@ export default function ProposalPreview() {
               p.style.borderRadius = '0'
               p.style.margin = '0'
             })
+
+            // Prevent Tailwind img display: block preflight from causing html2canvas text shifts
+            const imgStyle = clonedDoc.createElement('style')
+            imgStyle.textContent = 'img { display: inline-block !important; }'
+            clonedDoc.head.appendChild(imgStyle)
           },
         })
 
