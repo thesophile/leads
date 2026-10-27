@@ -656,8 +656,8 @@ export default function ProposalPreview() {
   const docRef = useRef(null)
   const [totalPages, setTotalPages] = useState(null)
   const approvalRefetchedRef = useRef(false)
-  const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 16)
-  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 16)
+  const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 48)
+  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 48)
 
   // Stamp each A4 page footer with "Page N of TOTAL". The total is only known
   // after layout settles (fonts, async continuation pages), so this runs on
@@ -1137,7 +1137,7 @@ export default function ProposalPreview() {
                   <SectionBox title="Terms &amp; Conditions" className="flex-1" pinBottom>
                     <div
                       ref={termsContentRef}
-                      className="text-[10px] leading-tight text-slate-700 text-justify space-y-0.5"
+                      className="shrink-0 text-[10px] leading-tight text-slate-700 text-justify space-y-0.5"
                       style={typeof termsPaged.cap === 'number' ? { maxHeight: termsPaged.cap, overflow: 'hidden' } : undefined}
                     >
                       {htmlToFormattedLines(pageOneTermsHtml).map((line, i) => (
@@ -1240,7 +1240,7 @@ export default function ProposalPreview() {
                   <SectionBox title="Proposal Summary" className="flex-1" pinBottom>
                     <div
                       ref={summaryContentRef}
-                      className="text-[13.5px] leading-snug text-slate-800"
+                      className="shrink-0 text-[13.5px] leading-snug text-slate-800"
                       style={typeof summaryPaged.cap === 'number' ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
                       dangerouslySetInnerHTML={{ __html: composedSummaryHtml }}
                     />
@@ -1267,7 +1267,7 @@ export default function ProposalPreview() {
           {summaryPaged.part2Html ? (
             <PagedSection
               html={summaryPaged.part2Html}
-              reserve={16}
+              reserve={48}
               contentClass="text-[13.5px] leading-snug text-slate-800"
               sectionTitle="Proposal Summary (Continued)"
               boxClass="rounded-xl border border-black bg-white"

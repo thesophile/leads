@@ -115,12 +115,12 @@ export default function PagedSection({
       <div className={`flex-1 flex flex-col justify-start ${insetSection.paddingClass || paddingClass}`}>
         <div
           ref={insetContentRef}
-          className={insetSection.contentClass || contentClass}
+          className={`shrink-0 ${insetSection.contentClass || contentClass}`}
           style={typeof insetPaged.cap === 'number' ? { maxHeight: insetPaged.cap, overflow: 'hidden' } : undefined}
           dangerouslySetInnerHTML={{ __html: insetSection.html }}
         />
         {insetPaged.part2Html ? (
-          <p className="mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+          <p className="shrink-0 mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
         ) : null}
       </div>
     </div>
@@ -138,12 +138,12 @@ export default function PagedSection({
       <div className={`flex-1 flex flex-col justify-start ${nested2.paddingClass || paddingClass}`}>
         <div
           ref={inset2ContentRef}
-          className={nested2.contentClass || contentClass}
+          className={`shrink-0 ${nested2.contentClass || contentClass}`}
           style={typeof inset2Paged.cap === 'number' ? { maxHeight: inset2Paged.cap, overflow: 'hidden' } : undefined}
           dangerouslySetInnerHTML={{ __html: nested2.html }}
         />
         {inset2Paged.part2Html ? (
-          <p className="mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+          <p className="shrink-0 mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
         ) : null}
       </div>
     </div>
@@ -185,12 +185,12 @@ export default function PagedSection({
               <div className={`flex-1 flex flex-col justify-start ${paddingClass}`}>
                 <div
                   ref={contentRef}
-                  className={contentClass}
+                  className={`shrink-0 ${contentClass}`}
                   style={typeof paged.cap === 'number' ? { maxHeight: paged.cap, overflow: 'hidden' } : undefined}
                   dangerouslySetInnerHTML={{ __html: html }}
                 />
                 {showContinue ? (
-                  <p className="mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                  <p className="shrink-0 mt-2 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                 ) : null}
               </div>
             </div>

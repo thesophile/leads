@@ -116,7 +116,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       return sum + (el && el.offsetHeight ? el.offsetHeight : 0)
     }, 0)
     const gaps = (belowRef.current?.length || 0) * 14
-    const reserve = typeof reserveRef.current === 'number' ? reserveRef.current : 48
+    const reserve = Math.max(48, typeof reserveRef.current === 'number' ? reserveRef.current : 48)
     const c = Math.max(0, bottom - 16 - contentTop - below - gaps - reserve)
 
     // Measure the end block's real height while it is visible (it mounts
@@ -125,17 +125,51 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     const endEl = endBlockRefRef.current && endBlockRefRef.current.current
     if (endEl && endEl.offsetHeight > 0) endCapHRef.current = endEl.offsetHeight
 
+    // Temporarily unconstrain contentEl so child bounding rects reflect their
+    // full, unclipped layout height rather than an already-applied maxHeight.
+    const prevMaxH = contentEl.style.maxHeight
+    const prevOverflow = contentEl.style.overflow
+    contentEl.style.maxHeight = 'none'
+    contentEl.style.overflow = 'visible'
+
+    const isHeadingChild = (el) => {
+      if (!el) return false
+      const text = (el.innerText || el.textContent || '').trim()
+      if (!text || text.length > 70) return false
+      if (/^(\d+[\.\)]|\([0-9]+\))\s+[A-Za-z]/.test(text)) return true
+      if (el.querySelector && el.querySelector('strong, b, h1, h2, h3, h4, h5, h6') && text.length < 50) return true
+      return false
+    }
+
     const base = contentEl.getBoundingClientRect().top
     // `limit` is the max distance from the content top a block may reach.
     const splitAt = (limit) => {
       let last = 0
+      const fits = []
       const over = []
       for (const child of contentEl.children) {
         const rect = child.getBoundingClientRect()
-        const cb = rect.top + rect.height - base
-        if (cb > limit) over.push({ html: child.outerHTML, height: rect.height })
-        else last = cb
+        const childH = Math.max(rect.height, child.offsetHeight || 0, child.scrollHeight || 0)
+        const cb = rect.top + childH - base
+        if (cb > limit) {
+          over.push({ html: child.outerHTML, height: childH })
+        } else {
+          fits.push({ child, cb, height: childH })
+          last = cb
+        }
       }
+
+      // If the last item that fit is a section heading and content follows in `over`,
+      // push the heading to `over` so it is not orphaned alone at the bottom of the page.
+      if (fits.length > 0 && over.length > 0) {
+        const lastFit = fits[fits.length - 1]
+        if (isHeadingChild(lastFit.child)) {
+          fits.pop()
+          over.unshift({ html: lastFit.child.outerHTML, height: lastFit.height })
+          last = fits.length > 0 ? fits[fits.length - 1].cb : 0
+        }
+      }
+
       return { last, over }
     }
 
@@ -157,7 +191,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       if (full.over.length) {
         const unsplit = full.last === 0 && full.over.length === 1 && full.over[0].height > splitLimit
         if (!unsplit) {
-          nextCap = full.last > 0 ? full.last : 0
+          nextCap = full.last > 0 ? Math.ceil(full.last) + 4 : 0
           nextPart2 = full.over.map((o) => o.html).join('')
           nextShowEnd = false
         } else {
@@ -189,7 +223,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       if (over.length) {
         const unsplit = last === 0 && over.length === 1 && over[0].height > splitLimit
         if (!unsplit) {
-          nextCap = last > 0 ? last : 0
+          nextCap = last > 0 ? Math.ceil(last) + 4 : 0
           nextPart2 = over.map((o) => o.html).join('')
         }
       } else {
@@ -198,6 +232,10 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
         nextFreePx = Math.max(0, c - last)
       }
     }
+
+    // Restore prior styles while React state update is pending
+    contentEl.style.maxHeight = prevMaxH
+    contentEl.style.overflow = prevOverflow
 
     // A once-final page stays final.
     const prev = committed.current
