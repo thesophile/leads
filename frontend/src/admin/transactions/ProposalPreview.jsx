@@ -816,9 +816,10 @@ export default function ProposalPreview() {
             })
 
             // Inject logo data URL so the <img> loads without CORS restriction.
-            if (logoDataUrl) {
+            if (logoDataUrl && company?.logo) {
+              const logoFilename = company.logo.split('/').pop()
               clonedDoc.querySelectorAll('img').forEach((img) => {
-                if (img.src && company?.logo && img.src.includes(new URL(company.logo).pathname.split('/').pop())) {
+                if (img.src && logoFilename && img.src.includes(logoFilename)) {
                   img.src = logoDataUrl
                   img.removeAttribute('crossorigin')
                 }
