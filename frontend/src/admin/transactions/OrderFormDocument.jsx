@@ -118,9 +118,9 @@ function SectionBox({ title, children, className = '' }) {
   )
 }
 
-function FinancialBanner({ order }) {
+function FinancialBanner({ order, bannerRef }) {
   return (
-    <div className="rounded-md border border-black bg-white p-2 text-black mt-1.5 shrink-0">
+    <div ref={bannerRef} className="rounded-md border border-black bg-white p-2 text-black mt-1.5 shrink-0">
       <div className="border-b border-slate-300 pb-1 text-center text-[10.5px] font-bold uppercase tracking-wider text-black">
         All Amt In | No Additional Service Or Items | E&amp;O
       </div>
@@ -253,6 +253,8 @@ function SignatureBlock({ order, company }) {
  * document shape (see ``mapOrder`` in OrderPreview).
  */
 export default function OrderFormDocument({ order, company }) {
+  const page1FooterRef = useRef(null)
+  const financialBannerRef = useRef(null)
   const approvedRowRef = useRef(null)
   const page2FooterRef = useRef(null)
   const page3SigRef = useRef(null)
@@ -261,8 +263,8 @@ export default function OrderFormDocument({ order, company }) {
   const termsSummaryContentRef = useRef(null)
   const detailsContentRef = useRef(null)
   const legalTermsContentRef = useRef(null)
-  const summaryPaged = usePagedContent(summaryContentRef, approvedRowRef, [], 48)
-  const termsSummaryPaged = usePagedContent(termsSummaryContentRef, approvedRowRef, [], 48)
+  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialBannerRef, approvedRowRef], 48)
+  const termsSummaryPaged = usePagedContent(termsSummaryContentRef, page1FooterRef, [approvedRowRef], 48)
   const detailsPaged = usePagedContent(detailsContentRef, page2FooterRef, [], 64)
   const legalPaged = usePagedContent(legalTermsContentRef, page3FooterRef, [page3SigRef], 64)
 
@@ -337,7 +339,7 @@ export default function OrderFormDocument({ order, company }) {
                 )}
               </SectionBox>
 
-              <FinancialBanner order={order} />
+              <FinancialBanner order={order} bannerRef={financialBannerRef} />
             </div>
 
             {/* Right Column (col-span-5): Terms & Conditions */}
@@ -367,7 +369,7 @@ export default function OrderFormDocument({ order, company }) {
           </div>
         </div>
 
-        <div className="mt-2.5">
+        <div ref={page1FooterRef} className="mt-2.5">
           <PageFooter company={company} />
         </div>
       </div>
