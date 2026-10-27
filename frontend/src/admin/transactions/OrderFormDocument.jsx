@@ -332,7 +332,9 @@ export default function OrderFormDocument({ order, company }) {
                     <div key={i} className="min-h-[1.2em]">{line || '\u00A0'}</div>
                   ))}
                 </div>
-                <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                {summaryPaged.part2Html && (
+                  <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                )}
               </SectionBox>
 
               <FinancialBanner order={order} />
@@ -371,7 +373,24 @@ export default function OrderFormDocument({ order, company }) {
       </div>
 
       {/* =========================================================================
-          PAGE 2: ANNEXURE - A (1/2) ORDER IN DETAILS (only if details exist)
+          PAGE 1 (CONTINUED): ORDER SUMMARY (only if summary overflows page 1)
+      ========================================================================= */}
+      {summaryPaged.part2Html && (
+        <PagedSection
+          html={summaryPaged.part2Html}
+          reserve={48}
+          contentClass="text-[13px] leading-snug text-black"
+          sectionTitle="ORDER SUMMARY (CONTINUED)"
+          boxClass="rounded-md border border-black bg-white"
+          titleClass="text-center border-b border-black"
+          pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (1/2)" />}
+          pageFooter={<PageFooter company={company} />}
+          continueNote={false}
+        />
+      )}
+
+      {/* =========================================================================
+          ORDER IN DETAILS (only if details exist)
       ========================================================================= */}
       {hasDetails && (
         <div
@@ -405,25 +424,24 @@ export default function OrderFormDocument({ order, company }) {
         </div>
       )}
 
-      {/* =========================================================================
-          TERMS & CONDITIONS (SUMMARY) CONTINUED — placed before the detailed T&C
-      ========================================================================= */}
-      {termsSummaryPaged.part2Html && (
+      {hasDetails && detailsPaged.part2Html && (
         <PagedSection
-          html={termsSummaryPaged.part2Html}
-          reserve={48}
-          contentClass="text-[12.5px] leading-relaxed text-slate-800 text-justify space-y-2"
-          sectionTitle="TERMS &amp; CONDITIONS (CONTINUED)"
+          html={detailsPaged.part2Html}
+          reserve={64}
+          contentClass="text-[13px] leading-snug text-slate-800"
+          sectionTitle="ORDER IN DETAILS (CONTINUED)"
           boxClass="rounded-md border border-black bg-white"
           titleClass="text-center border-b border-black"
-          pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (2/2)" />}
+          pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (1/2)" />}
           pageFooter={<PageFooter company={company} />}
+          pageFooterWrapClass="mt-3"
           continueNote={false}
         />
       )}
 
       {/* =========================================================================
-          PAGE 3: ANNEXURE - A (2/2) TERMS & CONDITIONS
+          LAST PAGE(S): DETAILED TERMS & CONDITIONS
+          Ending with the seal and QR code (only on the first and last page)
       ========================================================================= */}
       <div
         className="print-page mx-auto w-full max-w-[210mm] h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm flex flex-col justify-between"
@@ -448,7 +466,7 @@ export default function OrderFormDocument({ order, company }) {
               ) : null}
             </SectionBox>
 
-            {/* Final Signatures & QR Block — only on the last page (page 3 when nothing continues) */}
+            {/* Final Signatures & QR Block — only on the last page */}
             <div ref={page3SigRef} className="mt-2.5">
               {!legalPaged.part2Html && (
                 <SignatureBlock order={order} company={company} />
@@ -461,40 +479,6 @@ export default function OrderFormDocument({ order, company }) {
           <PageFooter company={company} />
         </div>
       </div>
-
-      {/* =========================================================================
-          CONTINUED PAGES (only rendered when a section overflows)
-          Each renders on an A4 page and paginates itself recursively so a
-          very long section never clips.
-      ========================================================================= */}
-      {summaryPaged.part2Html && (
-        <PagedSection
-          html={summaryPaged.part2Html}
-          reserve={48}
-          contentClass="text-[13px] leading-snug text-black"
-          sectionTitle="ORDER SUMMARY (CONTINUED)"
-          boxClass="rounded-md border border-black bg-white"
-          titleClass="text-center border-b border-black"
-          pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (1/2)" />}
-          pageFooter={<PageFooter company={company} />}
-          continueNote={false}
-        />
-      )}
-
-      {hasDetails && detailsPaged.part2Html && (
-        <PagedSection
-          html={detailsPaged.part2Html}
-          reserve={64}
-          contentClass="text-[13px] leading-snug text-slate-800"
-          sectionTitle="ORDER IN DETAILS (CONTINUED)"
-          boxClass="rounded-md border border-black bg-white"
-          titleClass="text-center border-b border-black"
-          pageHeader={<PageHeader order={order} annexLabel="ANNEXURE - A (2/2)" />}
-          pageFooter={<PageFooter company={company} />}
-          pageFooterWrapClass="mt-3"
-          continueNote={false}
-        />
-      )}
 
       {legalPaged.part2Html && (
         <PagedSection
