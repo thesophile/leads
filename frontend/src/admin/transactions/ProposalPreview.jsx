@@ -190,7 +190,7 @@ function InfoBlock({ label, value }) {
 function SectionBox({ title, children, className = '', overflowVisible = false, pinBottom = false }) {
   return (
     <div
-      className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border-2 border-black ${pinBottom ? 'flex flex-col ' : ''}${className}`}
+      className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-black ${pinBottom ? 'flex flex-col ' : ''}${className}`}
     >
       <div className="flex items-center justify-center bg-black px-3 py-2">
         <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
@@ -608,7 +608,7 @@ export default function ProposalPreview() {
       title: 'Detailed Terms & Conditions',
       html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml).map(escapeHtml)),
       contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
-      boxClass: 'rounded-xl border border-slate-300 bg-white',
+      boxClass: 'rounded-xl border border-black bg-white',
       titleClass: 'text-center',
       reserve: 64,
       minFraction: 0.25,
@@ -623,7 +623,7 @@ export default function ProposalPreview() {
       title: 'Proposal in Details & Specifications',
       html: composedDetailsHtml,
       contentClass: 'text-[13px] leading-snug text-slate-800',
-      boxClass: 'rounded-xl border border-slate-300 bg-white',
+      boxClass: 'rounded-xl border border-black bg-white',
       titleClass: 'text-center',
       reserve: 64,
       minFraction: 0.25,
@@ -825,17 +825,6 @@ export default function ProposalPreview() {
                 }
               })
             }
-
-            // Bold black borders on all section boxes.
-            clonedDoc.querySelectorAll('[class*="border"]').forEach((el) => {
-              const cls = el.getAttribute('class') || ''
-              if (cls.includes('border-slate') || cls.includes('border-2') || cls.includes('rounded-xl')) {
-                if (!cls.includes('bg-black') && !cls.includes('border-b-2')) {
-                  el.style.borderColor = '#000000'
-                  el.style.borderWidth = '2px'
-                }
-              }
-            })
 
             const clonedPages = clonedDoc.querySelectorAll('.print-page')
             clonedPages.forEach((p) => {
@@ -1281,7 +1270,7 @@ export default function ProposalPreview() {
               reserve={16}
               contentClass="text-[13.5px] leading-snug text-slate-800"
               sectionTitle="Proposal Summary (Continued)"
-              boxClass="rounded-xl border border-slate-300 bg-white"
+              boxClass="rounded-xl border border-black bg-white"
               titleClass="text-center"
               pageHeader={proposalPageHeader}
               pageFooter={<PageFooter company={company} />}
@@ -1294,7 +1283,7 @@ export default function ProposalPreview() {
               reserve={64}
               contentClass="text-[13px] leading-snug text-slate-800"
               sectionTitle="Proposal in Details &amp; Specifications"
-              boxClass="rounded-xl border border-slate-300 bg-white"
+              boxClass="rounded-xl border border-black bg-white"
               titleClass="text-center"
               pageHeader={proposalPageHeader}
               pageFooter={<PageFooter company={company} />}
