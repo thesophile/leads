@@ -656,8 +656,8 @@ export default function ProposalPreview() {
   const docRef = useRef(null)
   const [totalPages, setTotalPages] = useState(null)
   const approvalRefetchedRef = useRef(false)
-  const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 48)
-  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 48)
+  const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 16)
+  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 16)
 
   // Stamp each A4 page footer with "Page N of TOTAL". The total is only known
   // after layout settles (fonts, async continuation pages), so this runs on

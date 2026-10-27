@@ -116,7 +116,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       return sum + (el && el.offsetHeight ? el.offsetHeight : 0)
     }, 0)
     const gaps = (belowRef.current?.length || 0) * 14
-    const reserve = Math.max(72, typeof reserveRef.current === 'number' ? reserveRef.current : 72)
+    const reserve = typeof reserveRef.current === 'number' ? reserveRef.current : 16
     const c = Math.max(0, bottom - 16 - contentTop - below - gaps - reserve)
 
     // Measure the end block's real height while it is visible (it mounts
@@ -191,7 +191,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       if (full.over.length) {
         const unsplit = full.last === 0 && full.over.length === 1 && full.over[0].height > splitLimit
         if (!unsplit) {
-          nextCap = full.last > 0 ? Math.ceil(full.last) + 6 : 0
+          nextCap = full.last > 0 ? Math.ceil(full.last) : 0
           nextPart2 = full.over.map((o) => o.html).join('')
           nextShowEnd = false
         } else {
@@ -222,7 +222,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       if (over.length) {
         const unsplit = last === 0 && over.length === 1 && over[0].height > splitLimit
         if (!unsplit) {
-          nextCap = last > 0 ? Math.ceil(last) + 6 : 0
+          nextCap = last > 0 ? Math.ceil(last) : 0
           nextPart2 = over.map((o) => o.html).join('')
         }
       } else {
