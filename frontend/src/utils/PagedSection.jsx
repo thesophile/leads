@@ -33,7 +33,7 @@ export default function PagedSection({
   sectionTitle = '',
   boxClass = 'rounded-md border border-black bg-white',
   titleClass = 'text-center border-b border-black',
-  paddingClass = 'p-3.5',
+  paddingClass = 'p-3.5 pb-4.5',
   pageHeader,
   pageFooter,
   pageFooterWrapClass = 'mt-2.5',

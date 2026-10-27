@@ -195,7 +195,7 @@ function SectionBox({ title, children, className = '', overflowVisible = false, 
       <div className="flex items-center justify-center bg-black px-3 py-2">
         <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
       </div>
-      <div className={`${pinBottom ? 'flex flex-1 flex-col ' : ''}p-3.5 bg-white`}>{children}</div>
+      <div className={`${pinBottom ? 'flex flex-1 flex-col ' : ''}p-3.5 pb-4 bg-white`}>{children}</div>
     </div>
   )
 }

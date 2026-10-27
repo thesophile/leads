@@ -116,7 +116,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       return sum + (el && el.offsetHeight ? el.offsetHeight : 0)
     }, 0)
     const gaps = (belowRef.current?.length || 0) * 14
-    const reserve = Math.max(48, typeof reserveRef.current === 'number' ? reserveRef.current : 48)
+    const reserve = Math.max(72, typeof reserveRef.current === 'number' ? reserveRef.current : 72)
     const c = Math.max(0, bottom - 16 - contentTop - below - gaps - reserve)
 
     // Measure the end block's real height while it is visible (it mounts
@@ -173,7 +173,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       return { last, over }
     }
 
-    let nextCap = c
+    let nextCap = undefined
     let nextPart2 = ''
     let nextShowEnd = true
     let nextFreePx = 0
@@ -191,7 +191,7 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       if (full.over.length) {
         const unsplit = full.last === 0 && full.over.length === 1 && full.over[0].height > splitLimit
         if (!unsplit) {
-          nextCap = full.last > 0 ? Math.ceil(full.last) + 4 : 0
+          nextCap = full.last > 0 ? Math.ceil(full.last) + 6 : 0
           nextPart2 = full.over.map((o) => o.html).join('')
           nextShowEnd = false
         } else {
@@ -201,9 +201,8 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
         }
       } else {
         // Phase 2 — the content fits this page, so the end block follows it
-        // naturally. If the block fits under the last content line it renders
-        // here; otherwise the content stays put (no reserved blank slot) and
-        // the end block rolls onto its own continuation page.
+        // naturally. Content fits completely, so do NOT cap maxHeight.
+        nextCap = undefined
         const contentEnd = full.last
         const needsEndPage =
           contentEnd > 0 &&
@@ -223,12 +222,12 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       if (over.length) {
         const unsplit = last === 0 && over.length === 1 && over[0].height > splitLimit
         if (!unsplit) {
-          nextCap = last > 0 ? Math.ceil(last) + 4 : 0
+          nextCap = last > 0 ? Math.ceil(last) + 6 : 0
           nextPart2 = over.map((o) => o.html).join('')
         }
       } else {
-        // Settled final page — expose how many px are left over after the last
-        // line, so callers can (for example) place an inset section inline.
+        // Settled final page — content fits completely, do NOT cap maxHeight.
+        nextCap = undefined
         nextFreePx = Math.max(0, c - last)
       }
     }
