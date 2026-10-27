@@ -1702,19 +1702,29 @@ class QuotationRowsView(APIView):
                     results.append(self._row_from_lead(lead))
 
         if request.user.is_superuser:
-            accepted_qs = Quotation.objects.filter(status='Accepted')
+            order_scope = Order.objects.all()
+            lead_scope_all = Lead.objects.all()
+            quote_scope_all = Quotation.objects.all()
         elif request.user.has_permission('leads.view_all'):
-            accepted_qs = Quotation.objects.filter(
-                tenant=request.user.company, status='Accepted'
-            )
+            order_scope = Order.objects.filter(tenant=request.user.company)
+            lead_scope_all = Lead.objects.filter(tenant=request.user.company)
+            quote_scope_all = Quotation.objects.filter(tenant=request.user.company)
         else:
             user_leads = my_leads_queryset(request.user)
-            accepted_qs = Quotation.objects.filter(
-                lead_id__in=user_leads.values('id'), status='Accepted'
-            )
+            order_scope = Order.objects.filter(lead_id__in=user_leads.values('id'))
+            lead_scope_all = user_leads
+            quote_scope_all = Quotation.objects.filter(lead_id__in=user_leads.values('id'))
 
         if search:
-            accepted_qs = accepted_qs.filter(
+            order_scope = order_scope.filter(
+                Q(customer__icontains=search)
+                | Q(company__icontains=search)
+                | Q(mobile__icontains=search)
+                | Q(staff__icontains=search)
+                | Q(id__icontains=search)
+                | Q(proposal_no__icontains=search)
+            )
+            quote_scope_all = quote_scope_all.filter(
                 Q(customer__icontains=search)
                 | Q(company__icontains=search)
                 | Q(mobile__icontains=search)
@@ -1723,26 +1733,62 @@ class QuotationRowsView(APIView):
             )
 
         if staff_filter:
-            accepted_qs = accepted_qs.filter(
+            order_scope = order_scope.filter(
+                Q(staff=staff_filter)
+                | Q(proposal_by=staff_filter)
+                | Q(bdm=staff_filter)
+            )
+            quote_scope_all = quote_scope_all.filter(
                 Q(staff=staff_filter)
                 | Q(qtn_by=staff_filter)
                 | Q(bdm=staff_filter)
                 | Q(lead_id__in=[lid for lid, c in first_qr_caller.items() if c == staff_filter])
             )
 
-        if status_filter and status_filter != 'Quotation Requested':
-            accepted_qs = accepted_qs.filter(status=status_filter)
+        order_proposal_ids = set(order_scope.values_list('proposal_no', flat=True))
+        order_ids = set(order_scope.values_list('id', flat=True))
+        order_lead_ids = set(order_scope.values_list('lead_id', flat=True))
+        stage_lead_ids = set(
+            lead_scope_all.filter(status__in=[Lead.STATUS_ORDER, Lead.STATUS_CLIENT])
+            .values_list('id', flat=True)
+        )
 
-        accepted_quotes = list(accepted_qs.prefetch_related('approvals').order_by('-updated_at')[:100])
+        accepted_quotes_qs = quote_scope_all.filter(
+            Q(status='Accepted')
+            | Q(client_status='Accepted')
+            | Q(id__in=order_proposal_ids)
+            | Q(id__in=order_ids)
+            | Q(lead_id__in=order_lead_ids)
+            | Q(lead_id__in=stage_lead_ids)
+        )
+
+        if status_filter and status_filter != 'Quotation Requested':
+            accepted_quotes_qs = accepted_quotes_qs.filter(status=status_filter)
+
+        accepted_quotes = list(accepted_quotes_qs.prefetch_related('approvals').order_by('-updated_at')[:100])
         extra_lead_ids = [q.lead_id for q in accepted_quotes if q.lead_id and q.lead_id not in lead_map]
         if extra_lead_ids:
             for lead in Lead.objects.filter(id__in=extra_lead_ids).prefetch_related('contact_history'):
                 lead_map[lead.id] = lead
 
-        accepted_rows = [
-            self._row_from_quotation(lead_map.get(q.lead_id), q)
-            for q in accepted_quotes
-        ]
+        accepted_rows = []
+        for q in accepted_quotes:
+            row = self._row_from_quotation(lead_map.get(q.lead_id), q)
+            if (
+                q.status == 'Accepted'
+                or q.id in order_proposal_ids
+                or q.id in order_ids
+                or q.lead_id in order_lead_ids
+                or q.lead_id in stage_lead_ids
+            ):
+                row['status'] = 'Accepted'
+            accepted_rows.append(row)
+
+        seen_quote_ids = {q.id for q in accepted_quotes}
+        for o in order_scope:
+            if o.id not in seen_quote_ids and o.proposal_no not in seen_quote_ids:
+                accepted_rows.append(self._row_from_order(o))
+                seen_quote_ids.add(o.id)
 
         seen_history_ids = set()
         history = []
@@ -1761,6 +1807,30 @@ class QuotationRowsView(APIView):
             'results': results,
             'history': history,
         })
+
+    @staticmethod
+    def _row_from_order(order):
+        return {
+            'id': order.proposal_no or order.id,
+            'leadId': order.lead_id or '',
+            'customer': order.customer or '',
+            'company': order.company or '',
+            'mobile': order.mobile or '',
+            'email': order.email or '',
+            'category': order.category or '',
+            'city': order.city or '',
+            'bdm': order.bdm or '',
+            'qtnBy': order.proposal_by or order.staff or '',
+            'staff': order.staff or order.proposal_by or '',
+            'date': order.proposal_date or order.date or '',
+            'status': 'Accepted',
+            'total': order.total or '',
+            'discount': order.discount or '0',
+            'netAmount': order.net_amount or '',
+            'currency': order.currency or 'INR (₹)',
+            'remarks': order.remarks or '',
+            'hasProposal': True,
+        }
 
     @staticmethod
     def _lead_history(lead):
