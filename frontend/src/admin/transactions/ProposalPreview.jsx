@@ -710,13 +710,21 @@ export default function ProposalPreview() {
     canvasHelper.height = 1
     const helperCtx = canvasHelper.getContext('2d')
 
+    // html2canvas only supports hsl/hsla/rgb/rgba. Tailwind v4 emits oklch,
+    // oklab, lch, lab, color(), etc. Convert any unsupported function to a
+    // plain hex value via a tiny 2D-canvas colour parse (browser handles it).
+    const UNSUPPORTED_COLOR_RE =
+      /\b(oklch|oklab|lch|lab|color)\s*\([^)]*\)/gi
+
     function toRgb(str) {
-      if (!str || typeof str !== 'string' || !str.includes('oklch')) return str
-      return str.replace(/oklch\([^)]+\)/gi, (m) => {
+      if (!str || typeof str !== 'string') return str
+      if (!UNSUPPORTED_COLOR_RE.test(str)) return str
+      UNSUPPORTED_COLOR_RE.lastIndex = 0
+      return str.replace(UNSUPPORTED_COLOR_RE, (m) => {
         try {
           helperCtx.fillStyle = '#000000'
           helperCtx.fillStyle = m
-          return helperCtx.fillStyle || m
+          return helperCtx.fillStyle || '#000000'
         } catch {
           return '#000000'
         }
