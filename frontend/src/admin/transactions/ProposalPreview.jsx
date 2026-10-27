@@ -192,10 +192,10 @@ function SectionBox({ title, children, className = '', overflowVisible = false, 
     <div
       className={`${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-xl border border-black ${pinBottom ? 'flex flex-col ' : ''}${className}`}
     >
-      <div className="flex items-center justify-center bg-black px-3 py-2">
+      <div className="flex items-center justify-center rounded-t-[11px] bg-black px-3 py-2">
         <span className="text-[13px] font-bold uppercase tracking-wider text-white">{title}</span>
       </div>
-      <div className={`${pinBottom ? 'flex flex-1 flex-col ' : ''}p-3.5 pb-4 bg-white`}>{children}</div>
+      <div className={`${pinBottom ? 'flex flex-1 flex-col ' : ''}rounded-b-[11px] p-3.5 pb-4 bg-white`}>{children}</div>
     </div>
   )
 }
@@ -345,8 +345,8 @@ function approvalCountBy(approvals, status) {
 // box always fits its content (status row + one card per approver + the fully
 // approved signature block) without clipping, while leaving stable empty space
 // when there is less content, which is fine for PDF export.
-const APPROVED_BY_BASE_HEIGHT = 110
-const APPROVED_BY_ROW_HEIGHT = 54
+const APPROVED_BY_BASE_HEIGHT = 80
+const APPROVED_BY_ROW_HEIGHT = 44
 
 export default function ProposalPreview() {
   const navigate = useNavigate()
@@ -725,6 +725,10 @@ export default function ProposalPreview() {
     if (!root || exportingPdf) return
     const pages = Array.from(root.querySelectorAll('.print-page'))
     if (!pages.length) return
+
+    if (typeof document !== 'undefined' && document.fonts) {
+      await document.fonts.ready
+    }
 
     setExportingPdf(true)
     const origGetComputedStyle = window.getComputedStyle
@@ -1134,7 +1138,7 @@ export default function ProposalPreview() {
 
               <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 print:grid-cols-12 flex-1">
                 <div className="flex flex-col justify-between gap-3 lg:col-span-4 print:col-span-4">
-                  <SectionBox title="Terms &amp; Conditions" className="flex-1" pinBottom>
+                  <SectionBox title="Terms &amp; Conditions" className="flex-1" pinBottom overflowVisible>
                     <div
                       ref={termsContentRef}
                       className="shrink-0 text-[10px] leading-tight text-slate-700 text-justify space-y-0.5"
@@ -1148,7 +1152,9 @@ export default function ProposalPreview() {
                         />
                       ))}
                     </div>
-                    <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                    {hasFullTerms || termsPaged.part2Html ? (
+                      <p className="shrink-0 mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                    ) : null}
                   </SectionBox>
 
                   <div ref={approvedByRef}>
@@ -1237,7 +1243,7 @@ export default function ProposalPreview() {
                 </div>
 
                 <div className="flex flex-col justify-between gap-3 lg:col-span-8 print:col-span-8">
-                  <SectionBox title="Proposal Summary" className="flex-1" pinBottom>
+                  <SectionBox title="Proposal Summary" className="flex-1" pinBottom overflowVisible>
                     <div
                       ref={summaryContentRef}
                       className="shrink-0 text-[13.5px] leading-snug text-slate-800"
@@ -1245,7 +1251,7 @@ export default function ProposalPreview() {
                       dangerouslySetInnerHTML={{ __html: composedSummaryHtml }}
                     />
                     {summaryPaged.part2Html ? (
-                      <p className="mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
+                      <p className="shrink-0 mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                     ) : null}
                   </SectionBox>
 
