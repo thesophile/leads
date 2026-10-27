@@ -1701,6 +1701,57 @@ class QuotationRowsView(APIView):
                 if lead is not None:
                     results.append(self._row_from_lead(lead))
 
+        if request.user.is_superuser:
+            accepted_qs = Quotation.objects.filter(status='Accepted')
+        elif request.user.has_permission('leads.view_all'):
+            accepted_qs = Quotation.objects.filter(
+                tenant=request.user.company, status='Accepted'
+            )
+        else:
+            user_leads = my_leads_queryset(request.user)
+            accepted_qs = Quotation.objects.filter(
+                lead_id__in=user_leads.values('id'), status='Accepted'
+            )
+
+        if search:
+            accepted_qs = accepted_qs.filter(
+                Q(customer__icontains=search)
+                | Q(company__icontains=search)
+                | Q(mobile__icontains=search)
+                | Q(staff__icontains=search)
+                | Q(id__icontains=search)
+            )
+
+        if staff_filter:
+            accepted_qs = accepted_qs.filter(
+                Q(staff=staff_filter)
+                | Q(qtn_by=staff_filter)
+                | Q(bdm=staff_filter)
+                | Q(lead_id__in=[lid for lid, c in first_qr_caller.items() if c == staff_filter])
+            )
+
+        if status_filter and status_filter != 'Quotation Requested':
+            accepted_qs = accepted_qs.filter(status=status_filter)
+
+        accepted_quotes = list(accepted_qs.prefetch_related('approvals').order_by('-updated_at')[:100])
+        extra_lead_ids = [q.lead_id for q in accepted_quotes if q.lead_id and q.lead_id not in lead_map]
+        if extra_lead_ids:
+            for lead in Lead.objects.filter(id__in=extra_lead_ids).prefetch_related('contact_history'):
+                lead_map[lead.id] = lead
+
+        accepted_rows = [
+            self._row_from_quotation(lead_map.get(q.lead_id), q)
+            for q in accepted_quotes
+        ]
+
+        seen_history_ids = set()
+        history = []
+        for r in list(results) + accepted_rows:
+            rid = r.get('id')
+            if rid and rid not in seen_history_ids:
+                seen_history_ids.add(rid)
+                history.append(r)
+
         return Response({
             'count': count,
             'page': page,
@@ -1708,6 +1759,7 @@ class QuotationRowsView(APIView):
             'counts': counts,
             'facets': {'staff': facet_staff},
             'results': results,
+            'history': history,
         })
 
     @staticmethod

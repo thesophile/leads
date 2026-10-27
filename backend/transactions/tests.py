@@ -2979,6 +2979,23 @@ class PaginationAndFilterTests(APITestCase):
         self.assertEqual(len(resp.data['results']), 100)
         self.assertTrue(resp.data['results'][0]['hasProposal'])
 
+    def test_quotation_history_includes_accepted_quotations(self):
+        self.client.force_authenticate(self.manager)
+        lead = Lead.objects.create(
+            id='LD-ACC', company='Accepted Co', tenant=self.company,
+            status=Lead.STATUS_ORDER,
+        )
+        Quotation.objects.create(
+            id='QT-ACC', lead_id=lead.id, company='Accepted Co',
+            tenant=self.company, staff='Manager P', status='Accepted',
+        )
+        resp = self.client.get('/api/transactions/quotations/rows/')
+        self.assertEqual(resp.status_code, 200)
+        # Accepted quotation must NOT appear in results (top manage quotations table)
+        self.assertFalse(any(r['id'] == 'QT-ACC' for r in resp.data['results']))
+        # Accepted quotation MUST appear in history (quotation history table)
+        self.assertTrue(any(r['id'] == 'QT-ACC' and r['status'] == 'Accepted' for r in resp.data.get('history', [])))
+
     def test_quotation_staff_filter_matches_who_requested_the_quote(self):
         self.client.force_authenticate(self.manager)
         Lead.objects.filter(status='raw').update(status='quotation')

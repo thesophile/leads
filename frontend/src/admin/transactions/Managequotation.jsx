@@ -108,7 +108,6 @@ const STATUS_LIST = [
   'Approved',
   'Rejected',
   'Sent to Client',
-  'Accepted',
   'Declined',
 ]
 
@@ -461,6 +460,7 @@ export default function Managequotation() {
   const canSendToClient = !!user && (can(user, 'quotation.send') || user.is_superuser)
   const canSendWithoutApproval = !!user && (can(user, 'quotation.send_without_approval') || user.is_superuser)
   const [quotationsList, setQuotationsList] = useState([])
+  const [historyQuotations, setHistoryQuotations] = useState([])
   const [error, setError] = useState('')
   const [selectedStaff, setSelectedStaff] = useState('All Staff')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
@@ -508,7 +508,14 @@ export default function Managequotation() {
   } = usePagedList({
     url: '/transactions/quotations/rows/',
     params: listParams,
-    onData: (pageRows) => setQuotationsList(pageRows),
+    onData: (pageRows, envelope) => {
+      setQuotationsList(pageRows)
+      if (envelope && Array.isArray(envelope.history)) {
+        setHistoryQuotations(envelope.history)
+      } else {
+        setHistoryQuotations(pageRows)
+      }
+    },
     onError: (msg) => setError(msg),
   })
 
@@ -2100,68 +2107,76 @@ export default function Managequotation() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredQuotations.map((item) => (
-                  <tr key={`hist-${item.id}`} onClick={() => handleViewProposal(item)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
-                    <td className="py-0.5 pr-3 font-mono font-bold text-slate-900 whitespace-nowrap">{item.id}</td>
-                    <td className="hidden md:table-cell py-0.5 pr-3 font-mono text-[11px] whitespace-nowrap">{item.date}</td>
-                    <td className="py-0.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">{currencySymbol(item.currency)}{item.total}</td>
-                    <td className="hidden sm:table-cell py-0.5 pr-3 font-mono text-slate-500 whitespace-nowrap">{currencySymbol(item.currency)}{item.discount}</td>
-                    <td className="hidden md:table-cell py-0.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.qtnBy || item.staff}>{item.qtnBy || item.staff}</td>
-                    <td className="hidden lg:table-cell py-0.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.bdm || 'Husna'}>{item.bdm || 'Husna'}</td>
-                    <td className="py-0.5 pr-3 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${
-                          item.status === 'Quotation Requested'
-                            ? 'bg-purple-50 text-purple-700 border-purple-200'
-                            : item.status === 'Not Sent'
-                            ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
-                            : item.status === 'Pending Approval'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : item.status === 'Approved'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : item.status === 'Rejected'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : item.status === 'Accepted'
-                            ? 'bg-teal-50 text-teal-700 border-teal-200'
-                            : item.status === 'Declined'
-                            ? 'bg-orange-50 text-orange-700 border-orange-200'
-                            : item.status === 'Sent to Client'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-slate-50 text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="hidden md:table-cell py-0.5 pr-3 text-slate-500 max-w-xs truncate">{item.remarks || item.notes || '-'}</td>
-                    <td className="py-0.5 pr-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleViewProposal(item)
-                          }}
-                          className="rounded p-1 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition"
-                          title="View Proposal Form"
+                {historyQuotations.length > 0 ? (
+                  historyQuotations.map((item) => (
+                    <tr key={`hist-${item.id}`} onClick={() => handleViewProposal(item)} className="text-slate-600 hover:bg-slate-50/60 transition-colors cursor-pointer">
+                      <td className="py-0.5 pr-3 font-mono font-bold text-slate-900 whitespace-nowrap">{item.id}</td>
+                      <td className="hidden md:table-cell py-0.5 pr-3 font-mono text-[11px] whitespace-nowrap">{item.date}</td>
+                      <td className="py-0.5 pr-3 font-mono font-semibold text-slate-900 whitespace-nowrap">{currencySymbol(item.currency)}{item.total}</td>
+                      <td className="hidden sm:table-cell py-0.5 pr-3 font-mono text-slate-500 whitespace-nowrap">{currencySymbol(item.currency)}{item.discount}</td>
+                      <td className="hidden md:table-cell py-0.5 pr-3 font-medium text-slate-800 truncate max-w-[140px]" title={item.qtnBy || item.staff}>{item.qtnBy || item.staff}</td>
+                      <td className="hidden lg:table-cell pb-2.5 pr-2 font-medium text-slate-800 truncate max-w-[140px]" title={item.bdm || 'Husna'}>{item.bdm || 'Husna'}</td>
+                      <td className="py-0.5 pr-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${
+                            item.status === 'Quotation Requested'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : item.status === 'Not Sent'
+                              ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                              : item.status === 'Pending Approval'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : item.status === 'Approved'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : item.status === 'Rejected'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : item.status === 'Accepted'
+                              ? 'bg-teal-50 text-teal-700 border-teal-200'
+                              : item.status === 'Declined'
+                              ? 'bg-orange-50 text-orange-700 border-orange-200'
+                              : item.status === 'Sent to Client'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-slate-50 text-slate-600 border-slate-200'
+                          }`}
                         >
-                          <EyeIcon className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleOpenNewProposalModal(item)
-                          }}
-                          className="rounded p-1 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 transition"
-                          title="Edit Proposal"
-                        >
-                          <PencilIcon className="h-4 w-4" />
-                        </button>
-                      </div>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="hidden md:table-cell py-0.5 pr-3 text-slate-500 max-w-xs truncate">{item.remarks || item.notes || '-'}</td>
+                      <td className="py-0.5 pr-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleViewProposal(item)
+                            }}
+                            className="rounded p-1 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition"
+                            title="View Proposal Form"
+                          >
+                            <EyeIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenNewProposalModal(item, LOCKED_STATUSES.includes(item.status))
+                            }}
+                            className="rounded p-1 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 transition"
+                            title="Edit Proposal"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={9} className="py-6 text-center text-xs text-slate-400">
+                      {isLoading ? 'Loading quotation history...' : 'No quotation records found.'}
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
