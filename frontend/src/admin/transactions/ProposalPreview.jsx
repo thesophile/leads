@@ -2,6 +2,8 @@ import { useMemo, useState, useEffect, useRef, useCallback, useLayoutEffect } fr
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import Barcode from 'react-barcode'
+import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
 import Layout from '../../Layout/Layout'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
@@ -12,6 +14,18 @@ import RefreshButton from '../../components/RefreshButton'
 import Spinner from '../../components/Spinner'
 import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol, htmlToFormattedLines } from './proposalItemsUtils'
 import SendForApprovalModal from './SendForApprovalModal'
+
+function PdfIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
+    </svg>
+  )
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -96,6 +110,7 @@ function ProgramersLogo({ logo, companyName }) {
         <img
           src={logo}
           alt={companyName || 'Company logo'}
+          crossOrigin="anonymous"
           className="h-10 w-auto max-w-[200px] object-contain"
         />
       ) : (
@@ -680,9 +695,117 @@ export default function ProposalPreview() {
     }
   }, [])
 
+  const [exportingPdf, setExportingPdf] = useState(false)
 
-  function handlePrint() {
-    window.print()
+  async function handleSaveAsPdf() {
+    const root = docRef.current
+    if (!root || exportingPdf) return
+    const pages = Array.from(root.querySelectorAll('.print-page'))
+    if (!pages.length) return
+
+    setExportingPdf(true)
+    const origGetComputedStyle = window.getComputedStyle
+    const canvasHelper = document.createElement('canvas')
+    canvasHelper.width = 1
+    canvasHelper.height = 1
+    const helperCtx = canvasHelper.getContext('2d')
+
+    function toRgb(str) {
+      if (!str || typeof str !== 'string' || !str.includes('oklch')) return str
+      return str.replace(/oklch\([^)]+\)/gi, (m) => {
+        try {
+          helperCtx.fillStyle = '#000000'
+          helperCtx.fillStyle = m
+          return helperCtx.fillStyle || m
+        } catch {
+          return '#000000'
+        }
+      })
+    }
+
+    function createStyleProxy(style) {
+      return new Proxy(style, {
+        get(target, prop) {
+          if (prop === 'getPropertyValue') {
+            return function (name) {
+              const val = target.getPropertyValue(name)
+              return toRgb(val)
+            }
+          }
+          const val = target[prop]
+          if (typeof val === 'string') {
+            return toRgb(val)
+          }
+          if (typeof val === 'function') {
+            return val.bind(target)
+          }
+          return val
+        },
+      })
+    }
+
+    window.getComputedStyle = function (el, pseudo) {
+      const style = origGetComputedStyle.call(window, el, pseudo)
+      return createStyleProxy(style)
+    }
+
+    try {
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      })
+
+      for (let i = 0; i < pages.length; i++) {
+        const pageEl = pages[i]
+        const canvas = await html2canvas(pageEl, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          logging: false,
+          backgroundColor: '#ffffff',
+          onclone: (clonedDoc) => {
+            if (clonedDoc.defaultView && clonedDoc.defaultView !== window) {
+              const origIframeStyle = clonedDoc.defaultView.getComputedStyle
+              clonedDoc.defaultView.getComputedStyle = function (el, pseudo) {
+                const s = origIframeStyle.call(clonedDoc.defaultView, el, pseudo)
+                return createStyleProxy(s)
+              }
+            }
+
+            clonedDoc.querySelectorAll('style').forEach((st) => {
+              if (st.textContent && st.textContent.includes('oklch')) {
+                st.textContent = toRgb(st.textContent)
+              }
+            })
+
+            const clonedPages = clonedDoc.querySelectorAll('.print-page')
+            clonedPages.forEach((p) => {
+              p.style.boxShadow = 'none'
+              p.style.border = 'none'
+              p.style.borderRadius = '0'
+              p.style.margin = '0'
+            })
+          },
+        })
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.98)
+        if (i > 0) {
+          pdf.addPage('a4', 'portrait')
+        }
+        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST')
+      }
+
+      const fileName = `${proposalData?.id || 'proposal'}.pdf`
+      pdf.save(fileName)
+      setApproveNotice('✓ Proposal PDF saved.')
+    } catch (err) {
+      console.error('Failed to export PDF:', err)
+      setActionError(err.message || 'Failed to export proposal as PDF.')
+    } finally {
+      window.getComputedStyle = origGetComputedStyle
+      setExportingPdf(false)
+    }
   }
 
   function openSend() {
@@ -852,10 +975,12 @@ export default function ProposalPreview() {
             )}
             <button
               type="button"
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 rounded-xl bg-slate-800 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-slate-900 cursor-pointer"
+              onClick={handleSaveAsPdf}
+              disabled={exportingPdf}
+              className="flex items-center gap-1.5 rounded-xl bg-slate-800 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-slate-900 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Print All Pages
+              <PdfIcon className="h-3.5 w-3.5 text-rose-400" />
+              <span>{exportingPdf ? 'Saving PDF…' : 'Save as PDF'}</span>
             </button>
             {canApproveNow && (
               <>
