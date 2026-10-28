@@ -349,17 +349,17 @@ export default function ClientQuotation() {
 
             {/* Scope & details */}
             <div className="space-y-3 px-5 pb-5">
-              {(scopeHtml && stripHtml(scopeHtml)) || scopeItems.length > 0 ? (
+              {(detailFreeHtml && stripHtml(detailFreeHtml)) || detailItems.length > 0 ? (
                 <div className="overflow-hidden rounded-xl border border-slate-300">
                   <div className="bg-black px-3 py-2 text-center">
                     <span className="text-[12px] font-bold uppercase tracking-wider text-white">
-                      Proposal Summary
+                      Proposal Details
                     </span>
                   </div>
                   <div className="bg-white p-4 text-[13px] leading-snug text-slate-800">
-                    {scopeHtml &&
-                      stripHtml(scopeHtml) &&
-                      htmlToFormattedLines(scopeHtml).map((line, i) => (
+                    {detailFreeHtml &&
+                      stripHtml(detailFreeHtml) &&
+                      htmlToFormattedLines(detailFreeHtml).map((line, i) => (
                         <div
                           key={i}
                           className="min-h-[1.2em]"
@@ -367,9 +367,9 @@ export default function ClientQuotation() {
                         />
                       ))}
 
-                    {scopeItems.length > 0 && (
+                    {detailItems.length > 0 && (
                       <div>
-                        {scopeItems.map((it, i) =>
+                        {detailItems.map((it, i) =>
                           it.type === 'text' ? (
                             <p
                               key={i}
@@ -402,17 +402,17 @@ export default function ClientQuotation() {
                 </div>
               ) : null}
 
-              {(detailFreeHtml && stripHtml(detailFreeHtml)) || detailItems.length > 0 ? (
+              {(scopeHtml && stripHtml(scopeHtml)) || scopeItems.length > 0 ? (
                 <div className="overflow-hidden rounded-xl border border-slate-300">
                   <div className="bg-black px-3 py-2 text-center">
                     <span className="text-[12px] font-bold uppercase tracking-wider text-white">
-                      Proposal in Detail
+                      Proposal Summary
                     </span>
                   </div>
                   <div className="bg-white p-4 text-[13px] leading-snug text-slate-800">
-                    {detailFreeHtml &&
-                      stripHtml(detailFreeHtml) &&
-                      htmlToFormattedLines(detailFreeHtml).map((line, i) => (
+                    {scopeHtml &&
+                      stripHtml(scopeHtml) &&
+                      htmlToFormattedLines(scopeHtml).map((line, i) => (
                         <div
                           key={i}
                           className="min-h-[1.2em]"
@@ -420,9 +420,9 @@ export default function ClientQuotation() {
                         />
                       ))}
 
-                    {detailItems.length > 0 && (
+                    {scopeItems.length > 0 && (
                       <div>
-                        {detailItems.map((it, i) =>
+                        {scopeItems.map((it, i) =>
                           it.type === 'text' ? (
                             <p
                               key={i}

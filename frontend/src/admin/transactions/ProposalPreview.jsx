@@ -615,6 +615,8 @@ export default function ProposalPreview() {
     summarySplit.freeHtml ? linesToHtml(htmlToFormattedLines(summarySplit.freeHtml)) : '',
     itemsPrintHtml(summarySplit.items, currencySymbol(proposalData?.currency), ''),
   ].join('')
+  const hasSummary =
+    htmlToFormattedLines(summarySplit.freeHtml || '').length > 0 || summarySplit.items.length > 0
 
   // Temporarily hide the client acceptance box. Flip back to true to restore it.
   const SHOW_CLIENT_ACCEPTANCE = false
@@ -632,11 +634,11 @@ export default function ProposalPreview() {
     <PageHeader proposal={proposalData} company={company} clientToken={liveToken} />
   )
 
-  // The "Proposal in Details" box and the "Detailed Terms" box are configured
-  // as a chain so that, when the Proposal Summary overflows page 1, each one
+  // The "Proposal Summary" box and the "Detailed Terms" box are configured
+  // as a chain so that, when the Proposal Details overflows page 1, each one
   // follows the previous box inline as long as that box leaves at least
   // `minFraction` (25%) of the page free; otherwise the section starts fresh.
-  // The Details box is omitted entirely when there is no detail content.
+  // The Summary box is omitted entirely when there is no summary content.
   const termsInset = hasFullTerms
     ? {
       title: 'Detailed Terms & Conditions',
@@ -652,14 +654,14 @@ export default function ProposalPreview() {
     }
     : null
 
-  const detailsInset = hasDetails
+  const summaryInset = hasSummary
     ? {
-      title: 'Proposal in Details & Specifications',
-      html: composedDetailsHtml,
-      contentClass: 'text-[13px] leading-snug text-slate-800',
+      title: 'Proposal Summary',
+      html: composedSummaryHtml,
+      contentClass: 'text-[13.5px] leading-snug text-slate-800',
       boxClass: 'rounded-xl border border-black bg-white',
       titleClass: 'text-center',
-      reserve: 64,
+      reserve: 48,
       minFraction: 0.25,
       pageHeader: proposalPageHeader,
       pageFooter: <PageFooter company={company} />,
@@ -686,12 +688,12 @@ export default function ProposalPreview() {
   const financialRef = useRef(null)
   const page1FooterRef = useRef(null)
   const termsContentRef = useRef(null)
-  const summaryContentRef = useRef(null)
+  const detailsContentRef = useRef(null)
   const docRef = useRef(null)
   const [totalPages, setTotalPages] = useState(null)
   const approvalRefetchedRef = useRef(false)
   const termsPaged = usePagedContent(termsContentRef, page1FooterRef, [approvedByRef], 16)
-  const summaryPaged = usePagedContent(summaryContentRef, page1FooterRef, [financialRef], 16)
+  const detailsPaged = usePagedContent(detailsContentRef, page1FooterRef, [financialRef], 16)
 
   // Stamp each A4 page footer with "Page N of TOTAL". The total is only known
   // after layout settles (fonts, async continuation pages), so this runs on
@@ -1298,14 +1300,14 @@ export default function ProposalPreview() {
                 </div>
 
                 <div className="flex flex-col justify-between gap-3 lg:col-span-8 print:col-span-8">
-                  <SectionBox title="Proposal Summary" className="flex-1" pinBottom overflowVisible>
+                  <SectionBox title="Proposal Details" className="flex-1" pinBottom overflowVisible>
                     <div
-                      ref={summaryContentRef}
-                      className="shrink-0 text-[13.5px] leading-snug text-slate-800"
-                      style={typeof summaryPaged.cap === 'number' ? { maxHeight: summaryPaged.cap, overflow: 'hidden' } : undefined}
-                      dangerouslySetInnerHTML={{ __html: composedSummaryHtml }}
+                      ref={detailsContentRef}
+                      className="shrink-0 text-[13px] leading-snug text-slate-800"
+                      style={typeof detailsPaged.cap === 'number' ? { maxHeight: detailsPaged.cap, overflow: 'hidden' } : undefined}
+                      dangerouslySetInnerHTML={{ __html: composedDetailsHtml }}
                     />
-                    {summaryPaged.part2Html ? (
+                    {detailsPaged.part2Html ? (
                       <p className="shrink-0 mt-auto pt-1 text-right text-[11px] font-bold text-slate-400">Continued…</p>
                     ) : null}
                   </SectionBox>
@@ -1322,28 +1324,29 @@ export default function ProposalPreview() {
             </div>
           </div>
 
-          {/* "Proposal Summary (Continued)" page. Details and Detailed Terms
+          {/* "Proposal Details (Continued)" page. Proposal Summary and Detailed Terms
               follow it inline when at least 25% of the page is left free;
               otherwise each starts on a fresh page. */}
-          {summaryPaged.part2Html ? (
+          {detailsPaged.part2Html ? (
             <PagedSection
-              html={summaryPaged.part2Html}
-              reserve={48}
-              contentClass="text-[13.5px] leading-snug text-slate-800"
-              sectionTitle="Proposal Summary (Continued)"
+              html={detailsPaged.part2Html}
+              reserve={64}
+              contentClass="text-[13px] leading-snug text-slate-800"
+              sectionTitle="Proposal Details (Continued)"
               boxClass="rounded-xl border border-black bg-white"
               titleClass="text-center"
               pageHeader={proposalPageHeader}
               pageFooter={<PageFooter company={company} />}
-              insetSection={detailsInset || termsInset}
+              endBlock={hasSummary || hasFullTerms ? null : acceptanceEnd}
+              insetSection={summaryInset || termsInset}
             />
-          ) : hasDetails ? (
-            /* -------------------- PAGE 2+ (PROPOSAL IN DETAILS & SPECIFICATIONS + DETAILED TERMS & CONDITIONS) -------------------- */
+          ) : hasSummary ? (
+            /* -------------------- PAGE 2+ (PROPOSAL SUMMARY + DETAILED TERMS & CONDITIONS) -------------------- */
             <PagedSection
-              html={composedDetailsHtml}
-              reserve={64}
-              contentClass="text-[13px] leading-snug text-slate-800"
-              sectionTitle="Proposal in Details &amp; Specifications"
+              html={composedSummaryHtml}
+              reserve={48}
+              contentClass="text-[13.5px] leading-snug text-slate-800"
+              sectionTitle="Proposal Summary"
               boxClass="rounded-xl border border-black bg-white"
               titleClass="text-center"
               pageHeader={proposalPageHeader}
@@ -1352,7 +1355,7 @@ export default function ProposalPreview() {
               insetSection={termsInset}
             />
           ) : hasFullTerms ? (
-            /* No detail content — render only the Detailed Terms box. */
+            /* No summary content — render only the Detailed Terms box. */
             <PagedSection
               html={termsInset.html}
               reserve={termsInset.reserve}

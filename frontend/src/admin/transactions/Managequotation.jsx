@@ -878,6 +878,7 @@ export default function Managequotation() {
     setProposalItems(next)
     syncAutoTotal(next, summaryItems)
     clearError('totalVal')
+    clearError('termsHtml')
     setEditingItemId(null)
     setItemDraft(null)
   }
@@ -919,6 +920,7 @@ export default function Managequotation() {
     setSummaryItems(next)
     syncAutoTotal(proposalItems, next)
     clearError('totalVal')
+    clearError('scopeHtml')
     setEditingSummaryItemId(null)
     setSummaryItemDraft(null)
   }
@@ -1293,6 +1295,7 @@ export default function Managequotation() {
     const stripHtml = (html) => (html ? String(html).replace(/<[^>]*>/g, '').trim() : '')
     const rules = [
       { key: 'customerPerson', label: 'Client Name', value: customerPerson.trim() },
+      { key: 'termsHtml', label: 'Proposal Details', value: stripHtml(termsHtml) || (proposalItems.length > 0 ? 'x' : '') },
       { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) || (summaryItems.length > 0 ? 'x' : '') },
     ]
     rules.forEach(({ key, label, value }) => {
@@ -2460,7 +2463,132 @@ export default function Managequotation() {
                 </div>
               </div>
 
-              {/* Rich Text Editor 1 - Proposal Proposal Summary */}
+              {/* Rich Text Editor - Proposal Details */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Proposal Details
+                </label>
+                <div className={`rounded-lg border overflow-hidden bg-white shadow-2xs ${validationErrors.termsHtml ? 'border-rose-400' : 'border-slate-300'}`}>
+                  <ReactQuill
+                    theme="snow"
+                    className="quill-tall"
+                    value={termsHtml}
+                    onChange={(value) => {
+                      setTermsHtml(value)
+                      clearError('termsHtml')
+                    }}
+                    modules={QUILL_MODULES}
+                    formats={QUILL_FORMATS}
+                    placeholder="Enter detailed technical architecture, module breakdown, milestone roadmap, SLA, warranty, and commercial terms..."
+                  />
+                </div>
+                {validationErrors.termsHtml && (
+                  <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                    {validationErrors.termsHtml}
+                  </p>
+                )}
+              </div>
+
+              {/* Services / Text blocks below the detail editor */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-600">
+                    Add services or text blocks below the detail text
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startAddItem('text')}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-100 cursor-pointer"
+                    >
+                      ＋ Add text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startAddItem('service')}
+                      className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-[11px] font-bold text-brand-700 transition hover:bg-brand-100 cursor-pointer"
+                    >
+                      ＋ Add service
+                    </button>
+                  </div>
+                </div>
+
+                {itemDraft && (
+                  <div className="mb-2.5 rounded-lg border border-slate-300 bg-white p-3 space-y-2 animate-in fade-in duration-150">
+                    {itemDraft.type === 'service' ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <input
+                            type="text"
+                            placeholder="Title"
+                            value={itemDraft.title}
+                            onChange={(e) => setItemDraft({ ...itemDraft, title: e.target.value })}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder={`Amount ${currencySymbol(currencyVal)}`}
+                            value={itemDraft.amount}
+                            onChange={(e) =>
+                              setItemDraft({ ...itemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
+                            }
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
+                          placeholder="Description"
+                          value={itemDraft.description}
+                          onChange={(e) => setItemDraft({ ...itemDraft, description: e.target.value })}
+                          className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                    ) : (
+                      <textarea
+                        rows={2}
+                        placeholder="Text block content"
+                        value={itemDraft.text}
+                        onChange={(e) => setItemDraft({ ...itemDraft, text: e.target.value })}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelItemDraft}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveItemDraft}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer"
+                      >
+                        {editingItemId === null ? 'Save' : 'Update'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <SortableBlockList
+                  items={proposalItems}
+                  section="proposal"
+                  currencyVal={currencyVal}
+                  onEdit={startEditItem}
+                  onDelete={deleteItem}
+                  draggedBlock={draggedBlock}
+                  dragOverBlock={dragOverBlock}
+                  canDragItem={canDragItem}
+                  setCanDragItem={setCanDragItem}
+                  setDraggedBlock={setDraggedBlock}
+                  setDragOverBlock={setDragOverBlock}
+                  reorderBlocks={reorderBlocks}
+                  resetDrag={resetDrag}
+                />
+              </div>
+
+              {/* Rich Text Editor - Proposal Summary */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Proposal Summary
@@ -2574,131 +2702,6 @@ export default function Managequotation() {
                   currencyVal={currencyVal}
                   onEdit={startEditSummaryItem}
                   onDelete={deleteSummaryItem}
-                  draggedBlock={draggedBlock}
-                  dragOverBlock={dragOverBlock}
-                  canDragItem={canDragItem}
-                  setCanDragItem={setCanDragItem}
-                  setDraggedBlock={setDraggedBlock}
-                  setDragOverBlock={setDragOverBlock}
-                  reorderBlocks={reorderBlocks}
-                  resetDrag={resetDrag}
-                />
-              </div>
-
-              {/* Rich Text Editor 2 - Proposal in Detail */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Proposal in Detail
-                </label>
-                <div className={`rounded-lg border overflow-hidden bg-white shadow-2xs ${validationErrors.termsHtml ? 'border-rose-400' : 'border-slate-300'}`}>
-                  <ReactQuill
-                    theme="snow"
-                    className="quill-tall"
-                    value={termsHtml}
-                    onChange={(value) => {
-                      setTermsHtml(value)
-                      clearError('termsHtml')
-                    }}
-                    modules={QUILL_MODULES}
-                    formats={QUILL_FORMATS}
-                    placeholder="Enter detailed technical architecture, module breakdown, milestone roadmap, SLA, warranty, and commercial terms..."
-                  />
-                </div>
-                {validationErrors.termsHtml && (
-                  <p className="mt-1 text-[10px] font-semibold text-rose-600">
-                    {validationErrors.termsHtml}
-                  </p>
-                )}
-              </div>
-
-              {/* Services / Text blocks below the detail editor */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold text-slate-600">
-                    Add services or text blocks below the detail text
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => startAddItem('text')}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-100 cursor-pointer"
-                    >
-                      ＋ Add text
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => startAddItem('service')}
-                      className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-[11px] font-bold text-brand-700 transition hover:bg-brand-100 cursor-pointer"
-                    >
-                      ＋ Add service
-                    </button>
-                  </div>
-                </div>
-
-                {itemDraft && (
-                  <div className="mb-2.5 rounded-lg border border-slate-300 bg-white p-3 space-y-2 animate-in fade-in duration-150">
-                    {itemDraft.type === 'service' ? (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <input
-                            type="text"
-                            placeholder="Title"
-                            value={itemDraft.title}
-                            onChange={(e) => setItemDraft({ ...itemDraft, title: e.target.value })}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                          />
-                          <input
-                            type="text"
-                            placeholder={`Amount ${currencySymbol(currencyVal)}`}
-                            value={itemDraft.amount}
-                            onChange={(e) =>
-                              setItemDraft({ ...itemDraft, amount: e.target.value.replace(/[^0-9.]/g, '') })
-                            }
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                          />
-                        </div>
-                        <textarea
-                          rows={2}
-                          placeholder="Description"
-                          value={itemDraft.description}
-                          onChange={(e) => setItemDraft({ ...itemDraft, description: e.target.value })}
-                          className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                        />
-                      </div>
-                    ) : (
-                      <textarea
-                        rows={2}
-                        placeholder="Text block content"
-                        value={itemDraft.text}
-                        onChange={(e) => setItemDraft({ ...itemDraft, text: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                      />
-                    )}
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={cancelItemDraft}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={saveItemDraft}
-                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer"
-                      >
-                        {editingItemId === null ? 'Save' : 'Update'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <SortableBlockList
-                  items={proposalItems}
-                  section="proposal"
-                  currencyVal={currencyVal}
-                  onEdit={startEditItem}
-                  onDelete={deleteItem}
                   draggedBlock={draggedBlock}
                   dragOverBlock={dragOverBlock}
                   canDragItem={canDragItem}
