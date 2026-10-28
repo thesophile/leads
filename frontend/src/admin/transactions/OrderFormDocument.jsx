@@ -138,7 +138,7 @@ function SectionBox({ title, children, className = '' }) {
 function FinancialBanner({ order, bannerRef }) {
   return (
     <div ref={bannerRef} className="rounded-md border border-black bg-white p-2 text-black mt-1.5 shrink-0">
-      <div className="border-b border-slate-300 pb-1 text-center text-[10.5px] font-bold uppercase tracking-wider text-black">
+      <div className="border-b border-black pb-1 text-center text-[10.5px] font-bold uppercase tracking-wider text-black">
         All Amt In | No Additional Service Or Items | E&amp;O
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-1 px-1 text-[13px]">
@@ -153,7 +153,7 @@ function FinancialBanner({ order, bannerRef }) {
         </div>
       </div>
       {order.amountWords ? (
-        <div className="mt-1.5 border-t border-slate-300 pt-1 text-center text-[12px] font-black uppercase tracking-widest text-black">
+        <div className="mt-1.5 border-t border-black pt-1 text-center text-[12px] font-black uppercase tracking-widest text-black">
           {order.amountWords}
         </div>
       ) : null}

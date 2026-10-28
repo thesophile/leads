@@ -469,7 +469,7 @@ def render_quotation_pdf(quotation):
                 [
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                     ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f1f5f9')),
-                    ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+                    ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
                     ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
                     ('TOPPADDING', (0, 0), (-1, -1), 7),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
@@ -1035,7 +1035,7 @@ def render_order_pdf(order):
             outer.setStyle(
                 TableStyle([
                     ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
-                    ('LINEBELOW', (0, 0), (0, 0), 0.4, colors.HexColor('#cbd5e1')),
+                    ('LINEBELOW', (0, 0), (0, 0), 0.5, colors.black),
                     ('LEFTPADDING', (0, 0), (-1, -1), 4),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 4),
                     ('TOPPADDING', (0, 0), (-1, -1), 3),

@@ -328,8 +328,8 @@ function FinancialBanner({ proposal }) {
   const hasNet = Boolean(proposal?.net && String(proposal.net).trim())
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-300">
-      <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-center text-[11.5px] font-bold uppercase tracking-wider text-slate-700">
+    <div className="overflow-hidden rounded-xl border border-black">
+      <div className="border-b border-black bg-slate-100 px-3 py-2 text-center text-[11.5px] font-bold uppercase tracking-wider text-slate-700">
         All Amt In INR | No Additional Service Or Items | E&amp;O
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-3 text-[14px] font-bold text-slate-900">
@@ -359,7 +359,7 @@ function FinancialBanner({ proposal }) {
           )}
         </span>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-200 bg-slate-100 px-3 py-2 text-[11.5px] font-bold text-slate-700">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-black bg-slate-100 px-3 py-2 text-[11.5px] font-bold text-slate-700">
         <span>{words || '\u00A0'}</span>
         <span>ANNEXURE - A</span>
       </div>
