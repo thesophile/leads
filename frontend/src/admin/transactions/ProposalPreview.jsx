@@ -353,8 +353,8 @@ function approvalCountBy(approvals, status) {
 // box always fits its content (status row + one card per approver + the fully
 // approved signature block) without clipping, while leaving stable empty space
 // when there is less content, which is fine for PDF export.
-const APPROVED_BY_BASE_HEIGHT = 80
-const APPROVED_BY_ROW_HEIGHT = 44
+const APPROVED_BY_BASE_HEIGHT = 110
+const APPROVED_BY_ROW_HEIGHT = 54
 
 export default function ProposalPreview() {
   const navigate = useNavigate()
@@ -1172,7 +1172,7 @@ export default function ProposalPreview() {
 
                   <div ref={approvedByRef}>
                     <SectionBox title="Approved By">
-                      <div style={{ height: APPROVED_BY_BASE_HEIGHT + approvals.length * APPROVED_BY_ROW_HEIGHT }}>
+                      <div style={{ minHeight: APPROVED_BY_BASE_HEIGHT + approvals.length * APPROVED_BY_ROW_HEIGHT }}>
                         {approvals.length === 0 ? (
                           <p className="text-[11px] text-slate-400 py-0.5">No approvers selected yet.</p>
                         ) : (
