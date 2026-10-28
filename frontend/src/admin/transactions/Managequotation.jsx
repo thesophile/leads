@@ -83,6 +83,7 @@ function fmtMoney(n) {
 }
 
 function netFrom(total, discount) {
+  if (!total || !String(total).trim()) return ''
   return fmtMoney(parseMoney(total) - parseMoney(discount))
 }
 
@@ -206,6 +207,15 @@ function UndoIcon({ className = 'h-3.5 w-3.5' }) {
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 7v6h6" />
       <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
+    </svg>
+  )
+}
+
+function RecalculateArrowIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
     </svg>
   )
 }
@@ -768,7 +778,7 @@ export default function Managequotation() {
   
   const [totalVal, setTotalVal] = useState('')
   const [totalOverridden, setTotalOverridden] = useState(false)
-  const [discountVal, setDiscountVal] = useState('10,000')
+  const [discountVal, setDiscountVal] = useState('')
   const [sourceVal, setSourceVal] = useState('Google Search')
   const [currencyVal, setCurrencyVal] = useState('INR (₹)')
   const [remarksVal, setRemarksVal] = useState('')
@@ -1118,7 +1128,7 @@ export default function Managequotation() {
       setTermsHtml('')
       setCategoryName('General')
       setTotalVal('')
-      setDiscountVal('0')
+      setDiscountVal('')
       setCurrencyVal('INR (₹)')
     }
   }
@@ -1192,8 +1202,13 @@ export default function Managequotation() {
       setProposalItems(draftItems)
       setTermsHtml(draftFree)
     }
-    setTotalOverridden(false)
-    if (draft.total !== undefined) setTotalVal(draft.total)
+    if (draft.total !== undefined) {
+      setTotalVal(draft.total)
+      const combined = itemsTotal(draftItems || proposalItems) + itemsTotal(summaryItems)
+      setTotalOverridden(combined > 0 && String(draft.total).trim() !== fmtAmount(combined))
+    } else {
+      setTotalOverridden(false)
+    }
     if (draft.discount !== undefined) setDiscountVal(draft.discount)
     if (draft.source) setSourceVal(draft.source)
     if (draft.currency) setCurrencyVal(draft.currency)
@@ -1227,8 +1242,11 @@ export default function Managequotation() {
       const { items: quoteItems, freeHtml: quoteFree } = proposalItemsFromHtml(quote.termsConditions || '')
       setProposalItems(quoteItems)
       setTermsHtml(quoteFree)
-      setTotalVal(quote.total || quote.amount?.replace('₹', '') || '')
-      setDiscountVal(quote.discount || '0')
+      const rawQuoteTotal = quote.total != null ? String(quote.total).trim() : (quote.amount ? String(quote.amount).replace('₹', '').trim() : '')
+      setTotalVal(rawQuoteTotal)
+      const combined = itemsTotal(quoteItems) + itemsTotal(quoteSummaryItems)
+      setTotalOverridden(combined > 0 && rawQuoteTotal !== fmtAmount(combined))
+      setDiscountVal(quote.discount || '')
       setSourceVal(quote.source || 'Google Search')
       setCurrencyVal(quote.currency || 'INR (₹)')
       setRemarksVal(quote.hasProposal ? (quote.notes || quote.remarks || '') : '')
@@ -1251,7 +1269,7 @@ export default function Managequotation() {
       setProposalItems([])
       setTermsHtml('')
       setTotalVal('')
-      setDiscountVal('0')
+      setDiscountVal('')
       setSourceVal('Google Search')
       setCurrencyVal('INR (₹)')
       setRemarksVal('')
@@ -1277,12 +1295,6 @@ export default function Managequotation() {
       { key: 'customerPerson', label: 'Client Name', value: customerPerson.trim() },
       { key: 'scopeHtml', label: 'Proposal Summary', value: stripHtml(scopeHtml) || (summaryItems.length > 0 ? 'x' : '') },
     ]
-    const combinedTotal = itemsTotal(proposalItems) + itemsTotal(summaryItems)
-    rules.push({
-      key: 'totalVal',
-      label: 'Total',
-      value: totalVal.trim() || (combinedTotal > 0 ? fmtAmount(combinedTotal) : ''),
-    })
     rules.forEach(({ key, label, value }) => {
       if (!value) errors[key] = `${label} is required`
     })
@@ -1302,9 +1314,7 @@ export default function Managequotation() {
 
     const currentScope = buildItemsHtml(summaryItems) + scopeHtml
     const currentTerms = buildItemsHtml(proposalItems) + termsHtml
-    const combinedTotal = itemsTotal(proposalItems) + itemsTotal(summaryItems)
-    const effectiveTotal =
-      totalVal.trim() || (combinedTotal > 0 ? fmtAmount(combinedTotal) : '')
+    const effectiveTotal = totalVal.trim()
     let nextApprovalId = null
     let targetQuote = null
     let persistLeadId = null
@@ -2706,29 +2716,33 @@ export default function Managequotation() {
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
                     Total ({currencySymbol(currencyVal)})
                   </label>
-                  <input
-                    type="text"
-                    placeholder={itemsTotal(proposalItems) + itemsTotal(summaryItems) > 0 ? 'Auto-calculated from services' : 'Total Amount'}
-                    value={totalVal}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      const combined = itemsTotal(proposalItems) + itemsTotal(summaryItems)
-                      if (combined > 0 && v.trim() === '') {
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Total Amount"
+                      value={totalVal}
+                      onChange={(e) => {
+                        setTotalVal(e.target.value)
+                        setTotalOverridden(true)
+                        clearError('totalVal')
+                      }}
+                      className="w-full rounded-lg border border-slate-300 bg-white pl-3 pr-8 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const combined = itemsTotal(proposalItems) + itemsTotal(summaryItems)
+                        setTotalVal(combined > 0 ? fmtAmount(combined) : '')
                         setTotalOverridden(false)
-                        setTotalVal(fmtAmount(combined))
-                      } else {
-                        setTotalVal(v)
-                        setTotalOverridden(combined > 0 && v.trim() !== '')
-                      }
-                      clearError('totalVal')
-                    }}
-                    className={`w-full rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${validationErrors.totalVal ? 'border-rose-400' : 'border-slate-300'}`}
-                  />
-                  {validationErrors.totalVal && (
-                    <p className="mt-1 text-[10px] font-semibold text-rose-600">
-                      {validationErrors.totalVal}
-                    </p>
-                  )}
+                        clearError('totalVal')
+                      }}
+                      title="Recalculate total from services"
+                      aria-label="Recalculate total from services"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                    >
+                      <RecalculateArrowIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div>

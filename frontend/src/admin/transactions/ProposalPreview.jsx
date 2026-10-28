@@ -322,19 +322,45 @@ function amountWords(raw) {
 }
 
 function FinancialBanner({ proposal }) {
-  const words = amountWords(proposal.net) || proposal.amountWords
+  const words = amountWords(proposal?.net) || proposal?.amountWords
+  const hasTotal = Boolean(proposal?.total && String(proposal.total).trim())
+  const hasDiscount = Boolean(proposal?.discount && String(proposal.discount).trim())
+  const hasNet = Boolean(proposal?.net && String(proposal.net).trim())
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-300">
       <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-center text-[11.5px] font-bold uppercase tracking-wider text-slate-700">
         All Amt In INR | No Additional Service Or Items | E&amp;O
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-3 text-[14px] font-bold text-slate-900">
-        <span>Total: {proposal.total}</span>
-        <span className="text-slate-600">(Discount: {proposal.discount})</span>
-        <span className="text-[16px] font-black text-black">Net: {proposal.net}</span>
+        <span>
+          Total:{' '}
+          {hasTotal ? (
+            proposal.total
+          ) : (
+            <span className="inline-block min-w-[80px]">&nbsp;</span>
+          )}
+        </span>
+        <span className="text-slate-600">
+          (Discount:{' '}
+          {hasDiscount ? (
+            proposal.discount
+          ) : (
+            <span className="inline-block min-w-[50px]">&nbsp;</span>
+          )}
+          )
+        </span>
+        <span className="text-[16px] font-black text-black">
+          Net:{' '}
+          {hasNet ? (
+            proposal.net
+          ) : (
+            <span className="inline-block min-w-[80px]">&nbsp;</span>
+          )}
+        </span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-200 bg-slate-100 px-3 py-2 text-[11.5px] font-bold text-slate-700">
-        <span>{words}</span>
+        <span>{words || '\u00A0'}</span>
         <span>ANNEXURE - A</span>
       </div>
     </div>
