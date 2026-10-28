@@ -122,8 +122,8 @@ function SectionBox({ title, children, className = '' }) {
         style={{ height: '32px' }}
       >
         <span
-          className="text-[13px] font-bold uppercase tracking-wider text-white leading-none -translate-y-0.5"
-          style={{ lineHeight: 1, transform: 'translateY(-2px)' }}
+          className="text-[13px] font-bold uppercase tracking-wider text-white leading-none"
+          style={{ lineHeight: 1 }}
         >
           {title}
         </span>
