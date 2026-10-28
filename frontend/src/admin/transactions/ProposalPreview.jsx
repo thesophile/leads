@@ -111,7 +111,7 @@ function ProgramersLogo({ logo, companyName }) {
           src={logo}
           alt={companyName || 'Company logo'}
           crossOrigin="anonymous"
-          className="h-10 w-auto max-w-[200px] object-contain"
+          className="h-12 w-auto max-w-[220px] object-contain"
         />
       ) : (
         <span className="text-right text-[12px] font-black uppercase tracking-wider text-slate-800">
@@ -138,11 +138,11 @@ function GeMBadge() {
 // NPM Generated Barcode Component
 function BarcodeVisual({ code = '' }) {
   return (
-    <div className="flex w-[190px] flex-col items-end overflow-hidden [&_svg]:h-auto [&_svg]:w-full">
+    <div className="flex w-[140px] flex-col items-end overflow-hidden [&_svg]:h-auto [&_svg]:w-full">
       <Barcode
         value={code.replace(/\s+/g, '')}
         width={1.2}
-        height={26}
+        height={18}
         format="CODE128"
         displayValue={false}
         font="monospace"
@@ -240,7 +240,7 @@ function PageHeader({ proposal, company, clientToken = '' }) {
         </div>
       </div>
 
-      <div className="flex flex-col items-end space-y-2 text-right">
+      <div className="flex flex-col items-end space-y-1.5 text-right">
         <ProgramersLogo logo={company?.logo} companyName={company?.name} />
         <BarcodeVisual code={proposal.id} />
         <p className="font-mono text-[9.5px] text-slate-600">
