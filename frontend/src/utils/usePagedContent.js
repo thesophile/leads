@@ -43,9 +43,10 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
   const [showEnd, setShowEnd] = useState(true)
   const [freePx, setFreePx] = useState(0)
   const [endOverflow, setEndOverflow] = useState(false)
+  const [usablePx, setUsablePx] = useState(0)
 
   // Guard against re-render churn: only commit state when values actually change.
-  const committed = useRef({ cap: undefined, part2Html: '', showEnd: true, freePx: 0, endOverflow: false })
+  const committed = useRef({ cap: undefined, part2Html: '', showEnd: true, freePx: 0, endOverflow: false, usablePx: 0 })
 
   // Measured height of the optional end block, captured while it is visible so
   // the page-fitting decision below doesn't depend on its live display state.
@@ -238,20 +239,23 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
 
     // A once-final page stays final.
     const prev = committed.current
+    const nextUsablePx = Math.floor(c)
     if (
       prev.cap !== nextCap ||
       prev.part2Html !== nextPart2 ||
       prev.showEnd !== nextShowEnd ||
       prev.freePx !== nextFreePx ||
-      prev.endOverflow !== nextEndOverflow
+      prev.endOverflow !== nextEndOverflow ||
+      prev.usablePx !== nextUsablePx
     ) {
-      committed.current = { cap: nextCap, part2Html: nextPart2, showEnd: nextShowEnd, freePx: nextFreePx, endOverflow: nextEndOverflow }
+      committed.current = { cap: nextCap, part2Html: nextPart2, showEnd: nextShowEnd, freePx: nextFreePx, endOverflow: nextEndOverflow, usablePx: nextUsablePx }
       if (nextPart2 === '') finalLatchRef.current = true
       setCap(nextCap)
       setPart2Html(nextPart2)
       setShowEnd(nextShowEnd)
       setFreePx(nextFreePx)
       setEndOverflow(nextEndOverflow)
+      setUsablePx(nextUsablePx)
     }
   }, [contentRef, bottomRef])
 
@@ -309,5 +313,5 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     check()
   })
 
-  return { cap, part2Html, showEnd, freePx, endOverflow }
+  return { cap, part2Html, showEnd, freePx, endOverflow, usablePx }
 }

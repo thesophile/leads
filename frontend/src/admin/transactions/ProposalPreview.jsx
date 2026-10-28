@@ -637,17 +637,18 @@ export default function ProposalPreview() {
   // The "Proposal Summary" box and the "Detailed Terms" box are configured
   // as a chain so that, when the Proposal Details overflows page 1, each one
   // follows the previous box inline as long as that box leaves at least
-  // `minFraction` (25%) of the page free; otherwise the section starts fresh.
+  // `minFraction` (10%) of the page free; otherwise the section starts fresh.
   // The Summary box is omitted entirely when there is no summary content.
   const termsInset = hasFullTerms
     ? {
       title: 'Detailed Terms & Conditions',
+      continueTitle: 'Detailed Terms & Conditions (Continued)',
       html: linesToHtml(htmlToPlainLines(proposalData.termsFullHtml).map(escapeHtml)),
       contentClass: 'text-[13px] leading-snug text-slate-800 text-justify',
       boxClass: 'rounded-xl border border-black bg-white',
       titleClass: 'text-center',
       reserve: 64,
-      minFraction: 0.25,
+      minFraction: 0.1,
       pageHeader: proposalPageHeader,
       pageFooter: <PageFooter company={company} />,
       endBlock: acceptanceEnd,
@@ -657,12 +658,13 @@ export default function ProposalPreview() {
   const summaryInset = hasSummary
     ? {
       title: 'Proposal Summary',
+      continueTitle: 'Proposal Summary (Continued)',
       html: composedSummaryHtml,
       contentClass: 'text-[13.5px] leading-snug text-slate-800',
       boxClass: 'rounded-xl border border-black bg-white',
       titleClass: 'text-center',
       reserve: 48,
-      minFraction: 0.25,
+      minFraction: 0.1,
       pageHeader: proposalPageHeader,
       pageFooter: <PageFooter company={company} />,
       endBlock: hasFullTerms ? null : acceptanceEnd,
@@ -1325,14 +1327,16 @@ export default function ProposalPreview() {
           </div>
 
           {/* "Proposal Details (Continued)" page. Proposal Summary and Detailed Terms
-              follow it inline when at least 25% of the page is left free;
+              follow it inline when at least 10% of the page is left free;
               otherwise each starts on a fresh page. */}
           {detailsPaged.part2Html ? (
             <PagedSection
               html={detailsPaged.part2Html}
               reserve={64}
+              minFraction={0.1}
               contentClass="text-[13px] leading-snug text-slate-800"
               sectionTitle="Proposal Details (Continued)"
+              continueTitle="Proposal Details (Continued)"
               boxClass="rounded-xl border border-black bg-white"
               titleClass="text-center"
               pageHeader={proposalPageHeader}
@@ -1345,8 +1349,10 @@ export default function ProposalPreview() {
             <PagedSection
               html={composedSummaryHtml}
               reserve={48}
+              minFraction={0.1}
               contentClass="text-[13.5px] leading-snug text-slate-800"
               sectionTitle="Proposal Summary"
+              continueTitle="Proposal Summary (Continued)"
               boxClass="rounded-xl border border-black bg-white"
               titleClass="text-center"
               pageHeader={proposalPageHeader}
@@ -1359,8 +1365,10 @@ export default function ProposalPreview() {
             <PagedSection
               html={termsInset.html}
               reserve={termsInset.reserve}
+              minFraction={0.1}
               contentClass={termsInset.contentClass}
               sectionTitle={termsInset.title}
+              continueTitle={termsInset.continueTitle}
               boxClass={termsInset.boxClass}
               titleClass={termsInset.titleClass}
               pageHeader={proposalPageHeader}

@@ -12,13 +12,13 @@ import usePagedContent from './usePagedContent'
  *   the recursion terminates once the tail fits on a single page.
  * - `insetSection` (optional): a full-width box that follows the main content.
  *   On the settled final page of the main content it is rendered inline if at
- *   least `minFraction` (default 0.5) of the page is still empty; otherwise it
+ *   least `minFraction` (default 0.1) of the page is still empty; otherwise it
  *   starts on a fresh page. Its own overflow (and optional `endBlock`) flows
  *   onto continuation pages below.
  * - `insetSection.insetSection` (optional): a second box that follows the first
  *   inset by the same rule — inline when the first inset is inline on this page
  *   and leaves at least `minFraction` of its usable height free, else on a fresh
- *   page. This supports a chain such as Summary → Details → Terms.
+ *   page. This supports a chain such as Details -> Summary -> Terms.
  *
  * Recursion is hard-capped at `MAX_CONTINUATION_PAGES` as a safety net — the
  * pagination in `usePagedContent` already stops splitting content that can
@@ -29,8 +29,10 @@ const MAX_CONTINUATION_PAGES = 12
 export default function PagedSection({
   html,
   reserve = 48,
+  minFraction = 0.1,
   contentClass = '',
   sectionTitle = '',
+  continueTitle = '',
   boxClass = 'rounded-md border border-black bg-white',
   titleClass = 'text-center border-b border-black',
   paddingClass = 'p-3.5 pb-4.5',
@@ -53,14 +55,16 @@ export default function PagedSection({
   const showContinue = continueNote && paged.part2Html && !atLimit
 
   const isFinalMain = paged.part2Html === ''
-  const usablePx = paged.cap || 0
-  const freePx = isFinalMain ? paged.freePx || 0 : 0
+  const usablePx = paged.usablePx || 0
+  const freePx = isFinalMain ? (paged.freePx || 0) : 0
   const mainEndOverflow = Boolean(endBlock) && paged.endOverflow
-  const showInsetInline =
+
+  const insetThreshold = insetSection?.minFraction ?? minFraction ?? 0.1
+  const hasSpaceForInset =
     Boolean(insetSection) &&
     isFinalMain &&
     usablePx > 0 &&
-    freePx >= usablePx * (insetSection.minFraction ?? 0.5)
+    freePx >= Math.max(usablePx * insetThreshold, 60)
 
   // Inline inset is measured against this page's own footer so its cap is
   // exactly the free space left by the main content. Its overflow renders on
@@ -73,8 +77,13 @@ export default function PagedSection({
     [],
     insetSection?.reserve ?? reserve,
     insetSection?.endBlock ? insetAcceptRef : null,
-    paged.cap || 0
+    usablePx
   )
+
+  // If the inset was rendered inline but couldn't fit even a single child,
+  // do not show an empty clipped box with 0 height; push the entire inset to a fresh page.
+  const insetFitsAtLeastOne = insetPaged.cap === undefined || insetPaged.cap > 0
+  const showInsetInline = hasSpaceForInset && insetFitsAtLeastOne
 
   // Optional second inset (e.g. Terms after Details after Summary). It follows
   // the outer inset inline when the outer inset leaves at least its
@@ -89,14 +98,19 @@ export default function PagedSection({
     [],
     nested2?.reserve ?? reserve,
     nested2?.endBlock ? inset2AcceptRef : null,
-    paged.cap || 0
+    usablePx
   )
-  const showNestedInline =
+
+  const nested2Threshold = nested2?.minFraction ?? minFraction ?? 0.1
+  const inset2FitsAtLeastOne = inset2Paged.cap === undefined || inset2Paged.cap > 0
+  const hasSpaceForNested =
     Boolean(nested2) &&
     showInsetInline &&
     insetPaged.part2Html === '' &&
-    (insetPaged.cap || 0) > 0 &&
-    (insetPaged.freePx || 0) >= (insetPaged.cap || 0) * (nested2.minFraction ?? 0.5)
+    usablePx > 0 &&
+    (insetPaged.freePx || 0) >= Math.max(usablePx * nested2Threshold, 60)
+
+  const showNestedInline = hasSpaceForNested && inset2FitsAtLeastOne
 
   const insetEndOverflow = Boolean(insetSection?.endBlock) && showInsetInline && insetPaged.endOverflow
   const inset2EndOverflow = Boolean(nested2?.endBlock) && showNestedInline && inset2Paged.endOverflow
@@ -106,11 +120,17 @@ export default function PagedSection({
   const insetBox = insetSection ? (
     <div className={`overflow-hidden ${insetSection.boxClass || boxClass} flex flex-col`}>
       <div
-        className={`shrink-0 bg-black px-3 py-1.5 text-[13px] font-bold uppercase tracking-wider text-white ${
+        className={`shrink-0 flex h-8 items-center justify-center bg-black px-3 text-center ${
           insetSection.titleClass || titleClass
         }`}
+        style={{ height: '32px' }}
       >
-        {insetSection.title}
+        <span
+          className="section-box-header-title text-[13px] font-bold uppercase tracking-wider text-white leading-none"
+          style={{ lineHeight: 1 }}
+        >
+          {insetSection.title}
+        </span>
       </div>
       <div className={`flex-1 flex flex-col justify-start ${insetSection.paddingClass || paddingClass}`}>
         <div
@@ -129,11 +149,17 @@ export default function PagedSection({
   const inset2Box = nested2 ? (
     <div className={`overflow-hidden ${nested2.boxClass || boxClass} flex flex-col`}>
       <div
-        className={`shrink-0 bg-black px-3 py-1.5 text-[13px] font-bold uppercase tracking-wider text-white ${
+        className={`shrink-0 flex h-8 items-center justify-center bg-black px-3 text-center ${
           nested2.titleClass || titleClass
         }`}
+        style={{ height: '32px' }}
       >
-        {nested2.title}
+        <span
+          className="section-box-header-title text-[13px] font-bold uppercase tracking-wider text-white leading-none"
+          style={{ lineHeight: 1 }}
+        >
+          {nested2.title}
+        </span>
       </div>
       <div className={`flex-1 flex flex-col justify-start ${nested2.paddingClass || paddingClass}`}>
         <div
@@ -150,7 +176,7 @@ export default function PagedSection({
   ) : null
 
   const insetChunk = insetSection ? (
-    <div className="mt-3 flex flex-1 flex-col">
+    <div className="mt-3 flex flex-col">
       {insetBox}
       {insetSection.endBlock ? (
         <div ref={insetAcceptRef} className={`pt-4 ${insetPaged.showEnd ? '' : 'hidden'}`}>
@@ -220,8 +246,10 @@ export default function PagedSection({
         <PagedSection
           html={paged.part2Html}
           reserve={reserve}
+          minFraction={minFraction}
           contentClass={contentClass}
-          sectionTitle={sectionTitle}
+          sectionTitle={continueTitle || (sectionTitle.includes('(Continued)') ? sectionTitle : `${sectionTitle} (Continued)`)}
+          continueTitle={continueTitle || (sectionTitle.includes('(Continued)') ? sectionTitle : `${sectionTitle} (Continued)`)}
           boxClass={boxClass}
           titleClass={titleClass}
           paddingClass={paddingClass}
@@ -269,8 +297,10 @@ export default function PagedSection({
         <PagedSection
           html={insetPaged.part2Html}
           reserve={insetSection?.reserve ?? reserve}
+          minFraction={insetSection?.minFraction ?? minFraction}
           contentClass={insetSection?.contentClass || contentClass}
-          sectionTitle={insetSection?.continueTitle || `${insetSection?.title} (CONTINUED)`}
+          sectionTitle={insetSection?.continueTitle || (insetSection?.title?.includes('(Continued)') ? insetSection.title : `${insetSection?.title} (Continued)`)}
+          continueTitle={insetSection?.continueTitle || (insetSection?.title?.includes('(Continued)') ? insetSection.title : `${insetSection?.title} (Continued)`)}
           boxClass={insetSection?.boxClass || boxClass}
           titleClass={insetSection?.titleClass || titleClass}
           paddingClass={insetSection?.paddingClass || paddingClass}
@@ -289,8 +319,10 @@ export default function PagedSection({
         <PagedSection
           html={inset2Paged.part2Html}
           reserve={nested2?.reserve ?? reserve}
+          minFraction={nested2?.minFraction ?? minFraction}
           contentClass={nested2?.contentClass || contentClass}
-          sectionTitle={nested2?.continueTitle || `${nested2?.title} (CONTINUED)`}
+          sectionTitle={nested2?.continueTitle || (nested2?.title?.includes('(Continued)') ? nested2.title : `${nested2?.title} (Continued)`)}
+          continueTitle={nested2?.continueTitle || (nested2?.title?.includes('(Continued)') ? nested2.title : `${nested2?.title} (Continued)`)}
           boxClass={nested2?.boxClass || boxClass}
           titleClass={nested2?.titleClass || titleClass}
           paddingClass={nested2?.paddingClass || paddingClass}
@@ -309,8 +341,10 @@ export default function PagedSection({
         <PagedSection
           html={insetSection.html}
           reserve={insetSection.reserve ?? reserve}
+          minFraction={insetSection.minFraction ?? minFraction}
           contentClass={insetSection.contentClass || contentClass}
           sectionTitle={insetSection.title}
+          continueTitle={insetSection.continueTitle || (insetSection.title?.includes('(Continued)') ? insetSection.title : `${insetSection.title} (Continued)`)}
           boxClass={insetSection.boxClass || boxClass}
           titleClass={insetSection.titleClass || titleClass}
           paddingClass={insetSection.paddingClass || paddingClass}
@@ -328,14 +362,15 @@ export default function PagedSection({
       {nested2 &&
       showInsetInline &&
       insetPaged.part2Html === '' &&
-      (insetPaged.cap || 0) > 0 &&
       !showNestedInline &&
       !atLimit ? (
         <PagedSection
           html={nested2.html}
           reserve={nested2?.reserve ?? reserve}
+          minFraction={nested2?.minFraction ?? minFraction}
           contentClass={nested2?.contentClass || contentClass}
-          sectionTitle={nested2?.title}
+          sectionTitle={nested2.title}
+          continueTitle={nested2?.continueTitle || (nested2.title?.includes('(Continued)') ? nested2.title : `${nested2.title} (Continued)`)}
           boxClass={nested2?.boxClass || boxClass}
           titleClass={nested2?.titleClass || titleClass}
           paddingClass={nested2?.paddingClass || paddingClass}
