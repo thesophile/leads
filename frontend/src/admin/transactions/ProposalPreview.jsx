@@ -197,7 +197,7 @@ function SectionBox({ title, children, className = '', overflowVisible = false, 
         style={{ height: '32px' }}
       >
         <span
-          className="text-[13px] font-bold uppercase tracking-wider text-white leading-none"
+          className="section-box-header-title text-[13px] font-bold uppercase tracking-wider text-white leading-none"
           style={{ lineHeight: 1 }}
         >
           {title}
@@ -850,6 +850,22 @@ export default function ProposalPreview() {
             const imgStyle = clonedDoc.createElement('style')
             imgStyle.textContent = 'img { display: inline-block !important; }'
             clonedDoc.head.appendChild(imgStyle)
+
+            // Vertically centre section box header titles in exported PDF
+            // (Compensates for html2canvas ignoring CSS flexbox cross-axis centering)
+            const pdfHeaderStyle = clonedDoc.createElement('style')
+            pdfHeaderStyle.textContent = `
+              .section-box-header-title {
+                display: inline-block !important;
+                transform: translateY(-3.7px) !important;
+              }
+            `
+            clonedDoc.head.appendChild(pdfHeaderStyle)
+
+            clonedDoc.querySelectorAll('.section-box-header-title').forEach((el) => {
+              el.style.display = 'inline-block'
+              el.style.transform = 'translateY(-3.7px)'
+            })
           },
         })
 
