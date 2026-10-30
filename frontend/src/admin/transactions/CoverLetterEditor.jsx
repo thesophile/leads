@@ -22,9 +22,19 @@ const COVER_LETTER_TOOLBAR = [
   [{ color: [] }, { background: [] }],
   [{ align: [] }],
   [{ list: 'ordered' }, { list: 'bullet' }],
-  ['link', 'image'],
+  ['link', 'image', 'box'],
   ['clean'],
 ]
+
+// Register custom "box" icon in Quill's Snow theme toolbar
+const Quill = ReactQuill?.Quill
+if (Quill) {
+  const icons = Quill.import('ui/icons')
+  if (icons && !icons.box) {
+    icons.box =
+      '<svg viewBox="0 0 18 18"><rect class="ql-stroke" height="12" width="14" x="2" y="3" rx="1.5"></rect><line class="ql-stroke" x1="5" x2="13" y1="7" y2="7"></line><line class="ql-stroke" x1="5" x2="11" y1="11" y2="11"></line></svg>'
+  }
+}
 
 const DATA_URL_RE = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g
 
@@ -68,15 +78,6 @@ function EyeIcon({ className = 'h-4 w-4' }) {
   )
 }
 
-function BoxIcon({ className = 'h-4 w-4' }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <line x1="7" y1="9" x2="17" y2="9" />
-      <line x1="7" y1="13" x2="17" y2="13" />
-    </svg>
-  )
-}
 
 export default function CoverLetterEditor() {
   const navigate = useNavigate()
@@ -192,7 +193,7 @@ export default function CoverLetterEditor() {
   // heading stays a heading and a paragraph stays a paragraph, with all the
   // rich text inside untouched. Consecutive marked lines are drawn as one box
   // by the stylesheet (see index.css).
-  function toggleBox() {
+  const toggleBox = useCallback(() => {
     const quill = quillRef.current?.getEditor?.()
     if (!quill) return
     quill.focus()
@@ -216,7 +217,16 @@ export default function CoverLetterEditor() {
     // 'user' so the change counts as a real edit (not a load-time update).
     quill.format('indent', wasBoxed ? 0 : BOX_INDENT, 'user')
     setCursorInBox(!wasBoxed)
-  }
+  }, [])
+
+  useEffect(() => {
+    const btn = wrapperRef.current?.querySelector('.ql-box')
+    if (btn) {
+      btn.setAttribute('title', 'Box / Callout')
+      btn.setAttribute('aria-label', 'Box')
+      btn.classList.toggle('ql-active', cursorInBox)
+    }
+  }, [cursorInBox])
 
   async function uploadFile(file) {
     const form = new FormData()
@@ -290,10 +300,11 @@ export default function CoverLetterEditor() {
         container: COVER_LETTER_TOOLBAR,
         handlers: {
           image: handlePickImage,
+          box: toggleBox,
         },
       },
     }),
-    [handlePickImage]
+    [handlePickImage, toggleBox]
   )
 
   async function handleSave() {
@@ -392,21 +403,6 @@ export default function CoverLetterEditor() {
           <span className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500">
             Pages: {pageCount}
           </span>
-
-          <button
-            type="button"
-            onClick={toggleBox}
-            disabled={!canEdit}
-            title="Put the text at the cursor inside a bordered box"
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
-              cursorInBox
-                ? 'border-brand-500 bg-brand-50 text-brand-600'
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <BoxIcon className="h-3.5 w-3.5" />
-            Box
-          </button>
 
           <button
             type="button"
