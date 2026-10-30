@@ -251,6 +251,27 @@ def push_access_to_core(user, actor=None, fallback_role='', fallback_permissions
         return False
 
 
+def activate_staff(user, actor=None, access=None):
+    """Reactivate a staff member in SystemSoft and re-enable LEADS access.
+
+    SystemSoft owns the identity status, so the Core identity is flipped back
+    to ``active`` first — without it the staff sync would immediately mark the
+    account inactive again. The LEADS-local deactivation flag is then cleared
+    and the Core LEADS grant is enabled again so the staff member can sign in.
+
+    Returns True when the account was reactivated, False when the user has no
+    Core link.
+    """
+    if user.core_user_id is None:
+        return False
+    core_client.set_user_status(user.core_user_id, 'active', access=access, actor=actor)
+    user.deny_leads_access = False
+    user.is_active = True
+    user.save()
+    push_access_to_core(user, actor=actor, access=access)
+    return True
+
+
 def sync_role_permissions_to_core(company, role, actor=None, access=None):
     """Push a role's (possibly edited) permissions to every staff holding it.
 

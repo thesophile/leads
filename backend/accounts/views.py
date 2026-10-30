@@ -228,6 +228,52 @@ class StaffDetailView(APIView):
         return Response(UserSerializer(user).data)
 
 
+class StaffActivateView(APIView):
+    """Role-managers (admin/manager): reactivate an inactive staff member.
+
+    Activation flips the SystemSoft identity back to active and re-enables the
+    LEADS application grant, so the staff member can sign in again. The
+    LEADS-local deactivation flag is cleared as part of the same operation.
+    """
+
+    permission_classes = [require_permission('staff.manage')]
+
+    def post(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk, company=request.user.company)
+        except User.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        # Same authority rule as the staff edit path: you manage only records
+        # at your own level or below.
+        if not request.user.can_manage(user):
+            return Response(
+                {'detail': 'You cannot manage a user with greater authority than your own.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if user.core_user_id is None:
+            return Response(
+                {'detail': 'This staff member is not linked to SystemSoft.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            services.activate_staff(user, actor=request.user, access=bearer_token(request))
+        except CoreError as exc:
+            logger.warning('Leads: could not activate staff %s in SystemSoft: %s', user.pk, exc)
+            return Response(
+                {'detail': exc.message or 'SystemSoft could not activate this account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        log_activity(
+            request.user,
+            request.user.company,
+            'activated staff',
+            f'{request.user.name} activated staff member {user.name}.',
+            entity_type='staff',
+            entity_id=str(user.pk),
+        )
+        return Response(UserSerializer(user).data)
+
+
 class PermissionCatalogView(APIView):
     """Authenticated users: the catalog of every permission the role editor can assign."""
 

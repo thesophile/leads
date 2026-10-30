@@ -155,6 +155,14 @@ class _FakeCore:
                     break
         return {'id': core_user_id}
 
+    def set_user_status(self, core_user_id, status, access=None, api_key=None, actor=None):
+        self.patched.append({'user_id': core_user_id, 'status': status})
+        for entry in self.users.values():
+            if entry['id'] == core_user_id:
+                entry['status'] = status
+                break
+        return {'id': core_user_id, 'status': status}
+
     def get_user(self, core_user_id, access=None, api_key=None):
         for email, entry in self.users.items():
             if entry['id'] == core_user_id:
@@ -184,6 +192,7 @@ class CoreStubMixin:
         'password_reset_request', 'password_reset_confirm',
         'provision_staff_user', 'get_application', 'list_org_users',
         'list_user_access', 'create_user_access', 'update_user_access',
+        'set_user_status',
     )
 
     def setUp(self):
@@ -683,6 +692,69 @@ class StaffAdminProtectionTests(CoreStubMixin, APITestCase):
             format='json',
         )
         self.assertEqual(resp.status_code, 400)
+
+
+class StaffActivationTests(CoreStubMixin, APITestCase):
+    """An inactive staff member can be reactivated from the Staff screen.
+
+    Activation flips the SystemSoft identity back to active and re-enables the
+    LEADS application grant, so the staff member can sign in again.
+    """
+
+    def setUp(self):
+        super().setUp()
+        company = make_company('Acme')
+        self.admin = User.objects.create_user(
+            email='admin@acme.com', password='x', name='Admin A',
+            role=admin_role(company), company=company,
+        )
+        self.manager = User.objects.create_user(
+            email='mgr@acme.com', password='x', name='Manager A',
+            role=company.roles.get(code='manager'), company=company,
+        )
+        self.staff = User.objects.create_user(
+            email='staff@acme.com', password='x', name='Staff A',
+            company=company, core_user_id=4242, is_active=False,
+            deny_leads_access=True,
+        )
+
+    def test_admin_can_activate_an_inactive_staff_member(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(f'/api/auth/users/{self.staff.pk}/activate/')
+        self.assertEqual(resp.status_code, 200)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.is_active)
+        self.assertFalse(self.staff.deny_leads_access)
+        # The SystemSoft identity status was flipped back to active.
+        self.assertIn({'user_id': 4242, 'status': 'active'}, self.core.patched)
+
+    def test_manager_cannot_activate_the_admin(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(f'/api/auth/users/{self.admin.pk}/activate/')
+        self.assertEqual(resp.status_code, 403)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_activating_a_staff_member_without_a_core_link_is_rejected(self):
+        unlinked = User.objects.create_user(
+            email='unlinked@acme.com', password='x', name='Unlinked',
+            company=self.admin.company, is_active=False,
+        )
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(f'/api/auth/users/{unlinked.pk}/activate/')
+        self.assertEqual(resp.status_code, 400)
+        unlinked.refresh_from_db()
+        self.assertFalse(unlinked.is_active)
+
+    def test_activating_a_staff_member_of_another_company_is_not_found(self):
+        other_company = make_company('Globex')
+        stranger = User.objects.create_user(
+            email='stranger@globex.com', password='x', name='Stranger',
+            company=other_company, core_user_id=7777, is_active=False,
+        )
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(f'/api/auth/users/{stranger.pk}/activate/')
+        self.assertEqual(resp.status_code, 404)
 
 
 class AdminRenamePropagationTests(APITestCase):

@@ -115,6 +115,15 @@ function PowerIcon({ active }) {
   )
 }
 
+function ActivateIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  )
+}
+
 function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -244,6 +253,7 @@ export default function Staff() {
   const [toast, setToast] = useState(null) // { message, type: 'success' | 'error' }
   const [saving, setSaving] = useState(false)
   const [togglingId, setTogglingId] = useState(null)
+  const [activatingId, setActivatingId] = useState(null)
   const toastTimerRef = useRef(null)
 
   // Roles & Permissions editor state
@@ -394,6 +404,20 @@ export default function Staff() {
       showToast(err.message, 'error')
     } finally {
       setTogglingId(null)
+    }
+  }
+
+  async function handleActivate(emp) {
+    if (activatingId) return
+    setActivatingId(emp.id)
+    try {
+      await api.post(`/auth/users/${emp.id}/activate/`, {})
+      showToast(`Activated ${emp.name}.`)
+      await refreshData()
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setActivatingId(null)
     }
   }
 
@@ -782,6 +806,24 @@ export default function Staff() {
                                   <Spinner className="h-3.5 w-3.5 text-emerald-500" />
                                 ) : (
                                   <PowerIcon active={activeInLeads} />
+                                )}
+                              </button>
+                            )}
+                            {!emp.is_active && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleActivate(emp)
+                                }}
+                                title="Activate"
+                                disabled={activatingId !== null}
+                                className="rounded-lg p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                {activatingId === emp.id ? (
+                                  <Spinner className="h-3.5 w-3.5 text-emerald-500" />
+                                ) : (
+                                  <ActivateIcon />
                                 )}
                               </button>
                             )}

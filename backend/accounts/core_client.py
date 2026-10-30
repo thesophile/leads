@@ -318,6 +318,33 @@ def patch_user(core_user_id, data, access=None, actor=None, api_key=None):
     )
 
 
+def set_user_status(core_user_id, status, access=None, api_key=None, actor=None):
+    """Flip a Core identity's status (``active`` / ``inactive``).
+
+    Falls back to the ServiceApp credential when the caller's own token is not
+    allowed to manage that identity.
+    """
+    payload = {'status': status}
+    try:
+        return _request(
+            'PATCH',
+            f'/api/v1/users/{core_user_id}/',
+            json=payload,
+            access=access,
+            actor=actor,
+        )
+    except CoreError:
+        if access and (api_key or _server_key()):
+            return _request(
+                'PATCH',
+                f'/api/v1/users/{core_user_id}/',
+                json=payload,
+                api_key=api_key or _server_key(),
+                actor=actor,
+            )
+        raise
+
+
 def get_user(core_user_id, access=None, api_key=None):
     return _request(
         'GET',
