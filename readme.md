@@ -6,14 +6,16 @@ cd backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
+$env:ENV = "dev"
+python manage.py migrate
 ```
 
 ## Run
 
 Backend
 ```
-$env:ENV = "dev"
 cd $root/backend
+$env:ENV = "dev"
 venv\Scripts\activate
 Python manage.py runserver 8002
 ```

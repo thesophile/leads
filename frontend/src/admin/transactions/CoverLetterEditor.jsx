@@ -115,6 +115,7 @@ export default function CoverLetterEditor() {
   const wrapperRef = useRef(null)
   const fileInputRef = useRef(null)
   const savedTimerRef = useRef(null)
+  const toolbarDockRef = useRef(null)
 
   const canEdit = !!user && (can(user, 'quotation.create') || can(user, 'quotation.edit'))
 
@@ -174,6 +175,32 @@ export default function CoverLetterEditor() {
     }
   }, [measure])
 
+  // Quill builds its own toolbar and drops it above the editor. Move that node
+  // into the dock on the right so the toolbar can stand vertically beside the
+  // page instead of taking room on the printed sheet.
+  useEffect(() => {
+    const dock = toolbarDockRef.current
+    const quill = quillRef.current?.getEditor?.() || quillRef.current?.editor
+    const toolbar = quill?.getModule?.('toolbar')?.container
+    if (!dock || !toolbar) return
+
+    if (toolbar.parentElement !== dock) {
+      dock.replaceChildren(toolbar)
+    } else {
+      Array.from(dock.children).forEach((child) => {
+        if (child !== toolbar) child.remove()
+      })
+    }
+  })
+
+  useEffect(() => {
+    return () => {
+      if (toolbarDockRef.current) {
+        toolbarDockRef.current.innerHTML = ''
+      }
+    }
+  }, [])
+
   useEffect(() => {
     const handler = (e) => {
       if (dirty) {
@@ -230,7 +257,9 @@ export default function CoverLetterEditor() {
   }, [])
 
   useEffect(() => {
-    const btn = wrapperRef.current?.querySelector('.ql-box')
+    const btn =
+      toolbarDockRef.current?.querySelector('.ql-box') ||
+      wrapperRef.current?.querySelector('.ql-box')
     if (btn) {
       btn.setAttribute('title', 'Box / Callout')
       btn.setAttribute('aria-label', 'Box')
@@ -414,7 +443,7 @@ export default function CoverLetterEditor() {
     <Layout>
       <div className="flex flex-col gap-3">
         {/* Toolbar */}
-        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
+        <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
           <button
             type="button"
             onClick={handleBack}
@@ -506,50 +535,55 @@ export default function CoverLetterEditor() {
         ) : (
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
             {/* Editor canvas */}
-            <div className="min-w-0 flex-1 overflow-x-auto rounded-2xl bg-slate-200/60 p-4 sm:p-8">
-              <div
-                className="relative mx-auto w-[210mm] bg-white px-[10mm] pt-[10mm] pb-[10mm] shadow-2xl border border-slate-300 rounded-sm"
-                style={{ boxSizing: 'border-box' }}
-              >
-                <div ref={wrapperRef} className="relative">
-                  <ReactQuill
-                    ref={quillRef}
-                    theme="snow"
-                    className="cover-letter-editor"
-                    value={content}
-                    onChange={(value, delta, source) => {
-                      setContent(value)
-                      // Programmatic updates (loading / saving the letter) must
-                      // not mark the letter as edited.
-                      if (source !== 'api') setDirty(true)
-                    }}
-                    modules={modules}
-                    onChangeSelection={handleSelectionChange}
-                    readOnly={!canEdit}
-                    placeholder="Type your cover letter here — headings, bold text, lists and images are all supported."
-                  />
-                  {/* Page-break guides */}
-                  <div className="pointer-events-none absolute inset-0">
-                    {guides.map((guide) => (
-                      <div
-                        key={guide.page}
-                        className="absolute left-0 right-0 border-t-2 border-dashed border-rose-300"
-                        style={{ top: guide.top }}
-                      >
-                        <span className="absolute -top-4 left-0 rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-400">
-                          Page {guide.page}
-                        </span>
-                      </div>
-                    ))}
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <div className="min-w-0 flex-1 overflow-x-auto rounded-2xl bg-slate-200/60 p-4 sm:p-8">
+                <div
+                  className="relative mx-auto w-[210mm] bg-white px-[10mm] pt-[10mm] pb-[10mm] shadow-2xl border border-slate-300 rounded-sm"
+                  style={{ boxSizing: 'border-box' }}
+                >
+                  <div ref={wrapperRef} className="relative">
+                    <ReactQuill
+                      ref={quillRef}
+                      theme="snow"
+                      className="cover-letter-editor"
+                      value={content}
+                      onChange={(value, delta, source) => {
+                        setContent(value)
+                        // Programmatic updates (loading / saving the letter) must
+                        // not mark the letter as edited.
+                        if (source !== 'api') setDirty(true)
+                      }}
+                      modules={modules}
+                      onChangeSelection={handleSelectionChange}
+                      readOnly={!canEdit}
+                      placeholder="Type your cover letter here — headings, bold text, lists and images are all supported."
+                    />
+                    {/* Page-break guides */}
+                    <div className="pointer-events-none absolute inset-0">
+                      {guides.map((guide) => (
+                        <div
+                          key={guide.page}
+                          className="absolute left-0 right-0 border-t-2 border-dashed border-rose-300"
+                          style={{ top: guide.top }}
+                        >
+                          <span className="absolute -top-4 left-0 rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-400">
+                            Page {guide.page}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                  {uploadingImage ? (
+                    <p className="mt-3 flex items-center gap-2 text-[11px] font-bold text-slate-500">
+                      <Spinner className="h-3.5 w-3.5" />
+                      Uploading image…
+                    </p>
+                  ) : null}
                 </div>
-                {uploadingImage ? (
-                  <p className="mt-3 flex items-center gap-2 text-[11px] font-bold text-slate-500">
-                    <Spinner className="h-3.5 w-3.5" />
-                    Uploading image…
-                  </p>
-                ) : null}
               </div>
+
+              {/* Vertical formatting toolbar. Quill's toolbar is moved here. */}
+              <div ref={toolbarDockRef} className="cover-letter-toolbar-dock print-hidden" />
             </div>
 
             {/* Printed page preview */}

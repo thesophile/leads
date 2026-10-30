@@ -125,7 +125,9 @@ main table.refresh-fading {
   flex-direction: column;
   background: #ffffff;
 }
-.ql-toolbar.ql-snow {
+/* The cover letter dock moves Quill's toolbar out of the editor, so the
+   horizontal bar styling must not reach it. */
+.quill .ql-toolbar.ql-snow {
   border-top-left-radius: 0.5rem !important;
   border-top-right-radius: 0.5rem !important;
   border-color: #cbd5e1 !important;
@@ -235,6 +237,125 @@ main table.refresh-fading {
 }
 :is(.cover-letter-body, .cover-letter-editor .ql-container.ql-snow .ql-editor) .ql-indent-1:not(:has(+ .ql-indent-1)) {
   margin-bottom: 8px;
+}
+
+/* Cover letter: Quill's toolbar is lifted out of the A4 sheet and docked as a
+   slim vertical strip on the right, so it never covers the page and stays on
+   screen while the letter is scrolled. */
+.cover-letter-toolbar-dock {
+  position: sticky;
+  top: 4.5rem;
+  right: auto;
+  z-index: 20;
+  width: 56px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+@media (max-height: 620px) {
+  .cover-letter-toolbar-dock {
+    max-height: calc(100vh - 5.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 12px 30px -18px rgb(15 23 42 / 0.45);
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-formats {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  margin-right: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-formats:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow button {
+  float: none;
+  width: 38px;
+  height: 34px;
+  padding: 4px;
+  border-radius: 6px;
+  color: #475569;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow button:hover {
+  background: #f1f5f9;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow button svg {
+  float: none;
+  display: block;
+  height: 18px;
+  width: 18px;
+  margin: 0 auto;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker {
+  float: none;
+  width: auto;
+  height: 34px;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 34px;
+  padding: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker-label svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+/* The heading picker keeps a short mark so it fits the narrow strip. */
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker.ql-header .ql-picker-label {
+  justify-content: flex-start;
+  padding-left: 6px;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker.ql-header .ql-picker-label svg {
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  right: 3px;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker.ql-header .ql-picker-label::before {
+  content: "\00B6" !important;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker.ql-header .ql-picker-label[data-value="2"]::before {
+  content: "H2" !important;
+  font-size: 12px;
+}
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker.ql-header .ql-picker-label[data-value="3"]::before {
+  content: "H3" !important;
+  font-size: 12px;
+}
+/* Dropdowns open towards the left so they stay on screen. */
+.cover-letter-toolbar-dock .ql-toolbar.ql-snow .ql-picker .ql-picker-options {
+  right: 0;
+  left: auto;
+  z-index: 25;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px -12px rgb(15 23 42 / 0.45);
 }
 
 /* Rich text rendered from stored HTML (cover letters) keeps Quill's utility
