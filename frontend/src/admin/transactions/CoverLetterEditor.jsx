@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import Layout from '../../Layout/Layout'
@@ -78,9 +78,18 @@ function EyeIcon({ className = 'h-4 w-4' }) {
   )
 }
 
+function CheckIcon({ className = 'h-3.5 w-3.5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
 
 export default function CoverLetterEditor() {
   const navigate = useNavigate()
+  const location = useLocation()
   const params = useParams()
   const { user } = useAuth()
   const letterId = params.id || ''
@@ -91,10 +100,10 @@ export default function CoverLetterEditor() {
   const [loading, setLoading] = useState(() => Boolean(params.id))
   const [notFound, setNotFound] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(() => Boolean(location.state?.justSaved))
   const [deleting, setDeleting] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [dirty, setDirty] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -105,6 +114,7 @@ export default function CoverLetterEditor() {
   const quillRef = useRef(null)
   const wrapperRef = useRef(null)
   const fileInputRef = useRef(null)
+  const savedTimerRef = useRef(null)
 
   const canEdit = !!user && (can(user, 'quotation.create') || can(user, 'quotation.edit'))
 
@@ -307,9 +317,19 @@ export default function CoverLetterEditor() {
     [handlePickImage, toggleBox]
   )
 
+  useEffect(() => {
+    if (location.state?.justSaved) {
+      window.history.replaceState({}, document.title)
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+      savedTimerRef.current = setTimeout(() => setSaved(false), 3000)
+    }
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+    }
+  }, [location.state])
+
   async function handleSave() {
     setError('')
-    setNotice('')
     const trimmedName = name.trim()
     if (!trimmedName) {
       setError('Please give the cover letter a name before saving.')
@@ -319,29 +339,49 @@ export default function CoverLetterEditor() {
     try {
       const body = { name: trimmedName, content: await persistInlineImages(content) }
       if (letterId) {
-        const saved = await api.put(
+        const savedData = await api.put(
           `/transactions/cover-letters/${encodeURIComponent(letterId)}/`,
           body
         )
-        setName(saved?.name || trimmedName)
-        setContent(saved?.content || body.content)
+        setName(savedData?.name || trimmedName)
+        setContent(savedData?.content || body.content)
       } else {
-        const saved = await api.post('/transactions/cover-letters/', body)
-        if (saved?.id) {
-          navigate(`/cover-letters/${saved.id}`, { replace: true })
+        const savedData = await api.post('/transactions/cover-letters/', body)
+        if (savedData?.id) {
+          navigate(`/cover-letters/${savedData.id}`, { replace: true, state: { justSaved: true } })
+          return
         }
-        setName(saved?.name || trimmedName)
-        setContent(saved?.content || body.content)
+        setName(savedData?.name || trimmedName)
+        setContent(savedData?.content || body.content)
       }
       setDirty(false)
-      setNotice('✓ Cover letter saved.')
-      setTimeout(() => setNotice(''), 3000)
+      setSaved(true)
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+      savedTimerRef.current = setTimeout(() => setSaved(false), 3000)
     } catch (err) {
       setError(err.message || 'The cover letter could not be saved.')
     } finally {
       setSaving(false)
     }
   }
+
+  const handleSaveRef = useRef(handleSave)
+  useEffect(() => {
+    handleSaveRef.current = handleSave
+  })
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key?.toLowerCase() === 's' || e.code === 'KeyS')) {
+        e.preventDefault()
+        if (!saving && canEdit) {
+          handleSaveRef.current?.()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [saving, canEdit])
 
   async function handleDelete() {
     if (!letterId) return
@@ -433,21 +473,20 @@ export default function CoverLetterEditor() {
             type="button"
             onClick={handleSave}
             disabled={saving || !canEdit}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className={`inline-flex items-center gap-1.5 rounded-lg px-5 py-2 text-xs font-bold text-white shadow-md transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+              saved
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : 'bg-brand-600 hover:bg-brand-700'
+            }`}
           >
-            {saving ? <Spinner className="h-3.5 w-3.5" /> : null}
-            {saving ? 'Saving…' : 'Save Cover Letter'}
+            {saving ? <Spinner className="h-3.5 w-3.5" /> : saved ? <CheckIcon className="h-3.5 w-3.5" /> : null}
+            {saving ? 'Saving…' : saved ? 'Saved' : 'Save Cover Letter'}
           </button>
         </div>
 
         {error ? (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700">
             {error}
-          </div>
-        ) : null}
-        {notice ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-700">
-            {notice}
           </div>
         ) : null}
         {!canEdit ? (
