@@ -195,6 +195,20 @@ main table.refresh-fading {
   height: auto;
 }
 
+/* The "Box" button applies Quill's blockquote format, which is drawn as a
+   bordered panel. The selector is more specific than Quill's own rule
+   (quill.snow.css is bundled after this file). */
+.cover-letter-editor .ql-container.ql-snow .ql-editor blockquote {
+  border: 1px solid #000;
+  border-radius: 4px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #ffffff;
+}
+.cover-letter-editor .ql-container.ql-snow .ql-editor blockquote p + p {
+  margin-top: 6px;
+}
+
 /* Rich text rendered from stored HTML (cover letters) keeps Quill's utility
    classes, which the editor stylesheet does not cover outside the editor. */
 .cover-letter-body .ql-align-center { text-align: center; }
@@ -222,11 +236,13 @@ main table.refresh-fading {
 .cover-letter-body ul { list-style: disc; }
 .cover-letter-body ol { list-style: decimal; }
 .cover-letter-body blockquote {
-  margin: 0 0 0.5em;
-  padding-left: 0.75em;
-  border-left: 3px solid #cbd5e1;
-  color: #475569;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid #000;
+  border-radius: 4px;
+  background: #ffffff;
 }
+.cover-letter-body blockquote p:last-child { margin-bottom: 0; }
 
 .quill-tall .ql-editor.ql-blank::before {
   font-weight: 300;
