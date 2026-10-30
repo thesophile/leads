@@ -7,7 +7,7 @@ import Spinner from '../../components/Spinner'
 import { api } from '../../api/client'
 import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
-import CoverLetterPages from './CoverLetterPages'
+import CoverLetterPages, { coverLetterHasContent } from './CoverLetterPages'
 
 // A4 geometry (mirrors the proposal form pages).
 const A4_HEIGHT_MM = 297
@@ -78,6 +78,15 @@ function EyeIcon({ className = 'h-4 w-4' }) {
   )
 }
 
+function EditIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  )
+}
+
 function CheckIcon({ className = 'h-3.5 w-3.5' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -120,12 +129,14 @@ export default function CoverLetterEditor() {
   const canEdit = !!user && (can(user, 'quotation.create') || can(user, 'quotation.edit'))
 
   useEffect(() => {
+    if (showPreview) return
     api.get('/auth/company/')
       .then((data) => setCompany(data || {}))
       .catch(() => setCompany({}))
   }, [])
 
   useEffect(() => {
+    if (showPreview) return
     if (!letterId) return
     let cancelled = false
     ;(async () => {
@@ -160,6 +171,7 @@ export default function CoverLetterEditor() {
   }, [])
 
   useEffect(() => {
+    if (showPreview) return
     const quill = quillRef.current?.getEditor?.()
     const root = quill?.root
     if (!root) return
@@ -169,16 +181,18 @@ export default function CoverLetterEditor() {
     observer.observe(root)
     window.addEventListener('resize', measure)
     if (document.fonts?.ready) document.fonts.ready.then(() => measure())
+    measure()
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [measure])
+  }, [measure, showPreview])
 
   // Quill builds its own toolbar and drops it above the editor. Move that node
   // into the dock on the right so the toolbar can stand vertically beside the
   // page instead of taking room on the printed sheet.
   useEffect(() => {
+    if (showPreview) return
     const dock = toolbarDockRef.current
     const quill = quillRef.current?.getEditor?.() || quillRef.current?.editor
     const toolbar = quill?.getModule?.('toolbar')?.container
@@ -194,6 +208,7 @@ export default function CoverLetterEditor() {
   })
 
   useEffect(() => {
+    if (showPreview) return
     return () => {
       if (toolbarDockRef.current) {
         toolbarDockRef.current.innerHTML = ''
@@ -202,6 +217,7 @@ export default function CoverLetterEditor() {
   }, [])
 
   useEffect(() => {
+    if (showPreview) return
     const handler = (e) => {
       if (dirty) {
         e.preventDefault()
@@ -257,6 +273,7 @@ export default function CoverLetterEditor() {
   }, [])
 
   useEffect(() => {
+    if (showPreview) return
     const btn =
       toolbarDockRef.current?.querySelector('.ql-box') ||
       wrapperRef.current?.querySelector('.ql-box')
@@ -347,6 +364,7 @@ export default function CoverLetterEditor() {
   )
 
   useEffect(() => {
+    if (showPreview) return
     if (location.state?.justSaved) {
       window.history.replaceState({}, document.title)
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
@@ -396,10 +414,12 @@ export default function CoverLetterEditor() {
 
   const handleSaveRef = useRef(handleSave)
   useEffect(() => {
+    if (showPreview) return
     handleSaveRef.current = handleSave
   })
 
   useEffect(() => {
+    if (showPreview) return
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.key?.toLowerCase() === 's' || e.code === 'KeyS')) {
         e.preventDefault()
@@ -482,8 +502,8 @@ export default function CoverLetterEditor() {
                 : 'border-slate-200 text-slate-600 hover:bg-slate-50'
             }`}
           >
-            <EyeIcon className="h-3.5 w-3.5" />
-            {showPreview ? 'Hide Pages' : 'Show Pages'}
+            {showPreview ? <EditIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
+            {showPreview ? 'Edit' : 'Preview'}
           </button>
 
           {letterId ? (
@@ -533,9 +553,9 @@ export default function CoverLetterEditor() {
             This cover letter could not be found.
           </div>
         ) : (
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+          <div className="w-full">
             {/* Editor canvas */}
-            <div className="flex min-w-0 flex-1 items-start gap-3">
+            <div className={`flex min-w-0 flex-1 items-start gap-3 ${showPreview ? 'hidden' : ''}`}>
               <div className="min-w-0 flex-1 overflow-x-auto rounded-2xl bg-slate-200/60 p-4 sm:p-8">
                 <div
                   className="relative mx-auto w-[210mm] bg-white px-[10mm] pt-[10mm] pb-[10mm] shadow-2xl border border-slate-300 rounded-sm"
@@ -588,11 +608,14 @@ export default function CoverLetterEditor() {
 
             {/* Printed page preview */}
             {showPreview ? (
-              <div className="w-full shrink-0 rounded-2xl bg-slate-200/60 p-4 sm:p-6 xl:w-[auto]">
-                <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Printed pages
-                </p>
-                <CoverLetterPages html={content} company={company} />
+              <div className="overflow-x-auto rounded-2xl bg-slate-200/60 p-4 sm:p-8">
+                {coverLetterHasContent(content) ? (
+                  <CoverLetterPages html={content} company={company} />
+                ) : (
+                  <div className="mx-auto flex h-[297mm] w-full max-w-[210mm] items-center justify-center rounded-sm border border-slate-300 bg-white p-[10mm] shadow-2xl">
+                    <p className="text-xs font-semibold text-slate-400">The cover letter has no content yet.</p>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>

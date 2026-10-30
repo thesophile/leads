@@ -18,7 +18,7 @@ const PAGE_CLASS =
 const MAX_CONTINUATION_PAGES = 12
 
 // True when the letter has anything worth printing (text or an image).
-function coverLetterHasContent(html) {
+export function coverLetterHasContent(html) {
   const raw = String(html || '')
   if (/<img\b/i.test(raw)) return true
   return raw.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim().length > 0
