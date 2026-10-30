@@ -32,6 +32,40 @@ class ProposalTemplate(models.Model):
         return self.name
 
 
+class CoverLetter(models.Model):
+    """A reusable cover letter (rich text + images) attached to proposals.
+
+    The letter is edited on its own A4 page in the app. A proposal keeps a
+    snapshot of the letter's HTML (``Quotation.cover_letter_html``) so editing
+    or deleting a letter never rewrites a proposal that was already approved.
+    """
+
+    name = models.CharField(max_length=200)
+    content = models.TextField(blank=True)
+    tenant = models.ForeignKey(
+        'accounts.Company',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    owner = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='cover_letters',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class ProposalDraft(models.Model):
     """Per-user saved draft of the proposal form content."""
 
@@ -55,6 +89,7 @@ class ProposalDraft(models.Model):
     source = models.CharField(max_length=100, blank=True)
     currency = models.CharField(max_length=30, blank=True)
     remarks = models.TextField(blank=True)
+    cover_letter_id = models.CharField(max_length=60, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -286,6 +321,18 @@ class Quotation(models.Model):
     proposal_scope = models.TextField(blank=True)
     terms_conditions = models.TextField(blank=True)
     remarks = models.TextField(blank=True)
+    # Cover letter printed in front of the proposal form. The HTML is a
+    # snapshot so editing (or deleting) the template never changes a proposal
+    # that was already approved or sent to the client.
+    cover_letter = models.ForeignKey(
+        'CoverLetter',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='quotations',
+    )
+    cover_letter_name = models.CharField(max_length=200, blank=True)
+    cover_letter_html = models.TextField(blank=True)
     # Approval workflow
     submitted_by = models.ForeignKey(
         'accounts.User',

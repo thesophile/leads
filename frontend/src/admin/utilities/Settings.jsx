@@ -14,6 +14,7 @@ import {
 } from '../transactions/orderFormDocumentUtils'
 import { unwrapTermsSummaryHtml } from '../transactions/proposalItemsUtils'
 import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
 import { APP_MAJOR_VERSION, FRONTEND_VERSION } from '../../config'
 
 const LOGO_TARGET_WIDTH = 400
@@ -468,7 +469,7 @@ function Field({ label, required, children }) {
 
 export default function Settings() {
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
   const [activeTab, setActiveTab] = useState('targets')
   const [staffTargets, setStaffTargets] = useState([])
   const [targetsLoading, setTargetsLoading] = useState(false)
@@ -539,6 +540,10 @@ export default function Settings() {
   const [pendingTab, setPendingTab] = useState(null)
   const [unsavedForm, setUnsavedForm] = useState(null)
 
+  const [coverLetters, setCoverLetters] = useState(null)
+  const [coverLetterError, setCoverLetterError] = useState('')
+  const [deletingCoverLetter, setDeletingCoverLetter] = useState(null)
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -596,6 +601,53 @@ export default function Settings() {
   const templatesDirty = templatesBaseline
     ? templatesBaseline.summary !== termsSummaryHtml || templatesBaseline.full !== termsFullHtml
     : false
+
+  const canManageCoverLetters =
+    !!user && (can(user, 'quotation.create') || can(user, 'quotation.edit'))
+
+  async function loadCoverLetters() {
+    try {
+      const data = await api.get('/transactions/cover-letters/')
+      setCoverLetters(Array.isArray(data) ? data : [])
+      setCoverLetterError('')
+    } catch (err) {
+      setCoverLetters([])
+      setCoverLetterError(err.message || 'Cover letters could not be loaded.')
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'templates') return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get('/transactions/cover-letters/')
+        if (cancelled) return
+        setCoverLetters(Array.isArray(data) ? data : [])
+        setCoverLetterError('')
+      } catch (err) {
+        if (cancelled) return
+        setCoverLetters([])
+        setCoverLetterError(err.message || 'Cover letters could not be loaded.')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab])
+
+  async function handleDeleteCoverLetter(letter) {
+    setDeletingCoverLetter(letter.id)
+    setCoverLetterError('')
+    try {
+      await api.del(`/transactions/cover-letters/${encodeURIComponent(letter.id)}/`)
+      await loadCoverLetters()
+    } catch (err) {
+      setCoverLetterError(err.message || 'The cover letter could not be deleted.')
+    } finally {
+      setDeletingCoverLetter(null)
+    }
+  }
 
   async function handleTabChange(tabId) {
     if (tabId === activeTab) return
@@ -789,12 +841,31 @@ export default function Settings() {
     }
   }
 
-  function handleTermsSummaryChange(value) {
+  // The rich text editors rewrite the markup they are given (Quill turns the
+  // stored HTML into its own semantic HTML). That happens when the editor
+  // loads, before the user has touched anything, so the rewritten markup is
+  // adopted as the baseline instead of being treated as an edit.
+  function adoptTemplatesBaseline(field, value) {
+    setTemplatesBaseline((prev) => {
+      const base = prev || { summary: '', full: '' }
+      return { ...base, [field]: value }
+    })
+  }
+
+  function handleTermsSummaryChange(value, delta, source) {
     let next = value
     if (richTextCharCount(next) > TERMS_SUMMARY_MAX_CHARS) {
       next = limitRichHtml(next, TERMS_SUMMARY_MAX_CHARS)
     }
     setTermsSummaryHtml(next)
+    // source === 'api' means the editor rewrote the stored HTML on load.
+    if (source === 'api') adoptTemplatesBaseline('summary', next)
+  }
+
+  function handleTermsFullChange(value, delta, source) {
+    setTermsFullHtml(value)
+    // source === 'api' means the editor rewrote the stored HTML on load.
+    if (source === 'api') adoptTemplatesBaseline('full', value)
   }
 
   async function handleSaveTemplates(e) {
@@ -1128,7 +1199,15 @@ export default function Settings() {
   const summaryCharCount = richTextCharCount(termsSummaryHtml)
   const summaryLineCount = richTextLineCount(termsSummaryHtml)
 
-  const unsavedLabel = activeTab === 'general' ? 'General & Finance' : 'Terms & Conditions'
+  // Name what is actually dirty, so the warning never points at the wrong tab.
+  const unsavedLabels = []
+  if (generalDirty) unsavedLabels.push('General & Finance')
+  if (templatesDirty) unsavedLabels.push('Terms & Conditions')
+  if (logoFile || sealFile) unsavedLabels.push('Company logo & seal')
+  const unsavedLabel =
+    unsavedLabels.length > 1
+      ? `${unsavedLabels.slice(0, -1).join(', ')} & ${unsavedLabels[unsavedLabels.length - 1]}`
+      : unsavedLabels[0] || 'This form'
 
   return (
     <Layout>
@@ -1616,90 +1695,176 @@ export default function Settings() {
         )}
 
         {activeTab === 'templates' && (
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden max-w-5xl">
-            <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                <FileTextIcon className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">Terms &amp; Conditions Templates</h2>
-                <p className="mt-0.5 text-[11px] text-slate-400">
-                  Default text used when generating proposals and order forms. Edit it to suit your company —
-                  most companies can use the defaults as-is.
-                </p>
+          <>
+            {/* Cover Letters */}
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden max-w-5xl">
+              <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-6 py-5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                  <FileTextIcon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-bold text-slate-900">Cover Letters</h2>
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    Write a cover letter on A4 pages with rich text and images, then attach it to a
+                    proposal from the quotation form — the letter is printed in front of the proposal form.
+                  </p>
+                </div>
+                {canManageCoverLetters ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/cover-letters/new')}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer"
+                  >
+                    <FileTextIcon className="h-3.5 w-3.5" />
+                    Create Cover Letter
+                  </button>
+                ) : null}
               </div>
+
+              {coverLetterError ? (
+                <div className="mx-6 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-[11px] font-bold text-rose-700">
+                  {coverLetterError}
+                </div>
+              ) : null}
+
+              {coverLetters === null ? (
+                <div className="flex items-center justify-center gap-2 px-6 py-10 text-xs text-slate-400">
+                  <Spinner className="h-4 w-4" />
+                  Loading cover letters…
+                </div>
+              ) : coverLetters.length === 0 ? (
+                <div className="px-6 py-10 text-center text-xs text-slate-400">
+                  No cover letters yet.{' '}
+                  {canManageCoverLetters ? 'Create one to get started.' : ''}
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {coverLetters.map((letter) => (
+                    <li
+                      key={letter.id}
+                      className="flex flex-wrap items-center gap-3 px-6 py-3.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-bold text-slate-800">{letter.name}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {letter.updatedAt
+                            ? `Last updated ${new Date(letter.updatedAt).toLocaleString()}`
+                            : 'Not saved yet'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/cover-letters/${letter.id}`)}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                      {canManageCoverLetters ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCoverLetter(letter)}
+                          disabled={deletingCoverLetter === letter.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] font-bold text-rose-600 transition hover:bg-rose-100 cursor-pointer disabled:opacity-60"
+                        >
+                          {deletingCoverLetter === letter.id ? (
+                            <Spinner className="h-3 w-3" />
+                          ) : (
+                            <TrashIcon className="h-3 w-3" />
+                          )}
+                          Delete
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
-            <form onSubmit={handleSaveTemplates}>
-              <div className="grid grid-cols-1 items-start gap-8 px-6 py-6 md:px-8 md:py-7 lg:grid-cols-[min-content_minmax(0,1fr)]">
-                <div className="w-fit">
-                  <SectionTitle>Terms &amp; Conditions Summary</SectionTitle>
-                  <p className="mt-1.5 max-w-[340px] text-[11px] text-slate-400">
-                    A short version shown in the "Terms &amp; Conditions" box of the proposal and on the first
-                    page of the order form.
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden max-w-5xl">
+              <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                  <FileTextIcon className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Terms &amp; Conditions Templates</h2>
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    Default text used when generating proposals and order forms. Edit it to suit your company —
+                    most companies can use the defaults as-is.
                   </p>
-                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white" style={{ width: Math.max(340, termsSummaryMaxLinePx() + 60) }}>
-                    <ReactQuill
-                      theme="snow"
-                      className="quill-terms-17"
-                      value={termsSummaryHtml}
-                      onChange={handleTermsSummaryChange}
-                      modules={TERMS_SUMMARY_QUILL_MODULES}
-                      formats={TERMS_SUMMARY_QUILL_FORMATS}
-                      placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
-                    />
-                  </div>
-                  <div className="mt-1 flex items-center justify-between" style={{ width: Math.max(340, termsSummaryMaxLinePx() + 60) }}>
-                    <p className="text-[10px] font-semibold text-slate-400">
-                      Max {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} chars ·{' '}
-                      {TERMS_SUMMARY_MAX_LINES} lines
-                    </p>
-                    <p
-                      className={`font-mono text-[10px] ${
-                        summaryCharCount >= TERMS_SUMMARY_MAX_CHARS ||
-                        summaryLineCount >= TERMS_SUMMARY_MAX_LINES
-                          ? 'font-bold text-rose-600'
-                          : 'text-slate-400'
-                      }`}
-                    >
-                      {summaryLineCount} / {TERMS_SUMMARY_MAX_LINES} lines ·{' '}
-                      {summaryCharCount.toLocaleString()} / {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} chars
-                    </p>
-                  </div>
                 </div>
+              </div>
 
-                <div className="min-w-0">
-                  <SectionTitle>Full Terms &amp; Conditions</SectionTitle>
-                  <p className="mt-1.5 text-[11px] text-slate-400">
-                    The complete legal terms shown on the final page of the order form and used for proposals.
-                  </p>
-                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <form onSubmit={handleSaveTemplates}>
+                <div className="grid grid-cols-1 items-start gap-8 px-6 py-6 md:px-8 md:py-7 lg:grid-cols-[min-content_minmax(0,1fr)]">
+                  <div className="w-fit">
+                    <SectionTitle>Terms &amp; Conditions Summary</SectionTitle>
+                    <p className="mt-1.5 max-w-[340px] text-[11px] text-slate-400">
+                      A short version shown in the "Terms &amp; Conditions" box of the proposal and on the first
+                      page of the order form.
+                    </p>
+                    <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white" style={{ width: Math.max(340, termsSummaryMaxLinePx() + 60) }}>
+                      <ReactQuill
+                        theme="snow"
+                        className="quill-terms-17"
+                        value={termsSummaryHtml}
+                        onChange={handleTermsSummaryChange}
+                        modules={TERMS_SUMMARY_QUILL_MODULES}
+                        formats={TERMS_SUMMARY_QUILL_FORMATS}
+                        placeholder="e.g. 1. Payment Terms: non-refundable advance... 2. Taxes... 3. Delivery timeline... 4. Support..."
+                      />
+                    </div>
+                    <div className="mt-1 flex items-center justify-between" style={{ width: Math.max(340, termsSummaryMaxLinePx() + 60) }}>
+                      <p className="text-[10px] font-semibold text-slate-400">
+                        Max {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} chars ·{' '}
+                        {TERMS_SUMMARY_MAX_LINES} lines
+                      </p>
+                      <p
+                        className={`font-mono text-[10px] ${
+                          summaryCharCount >= TERMS_SUMMARY_MAX_CHARS ||
+                          summaryLineCount >= TERMS_SUMMARY_MAX_LINES
+                            ? 'font-bold text-rose-600'
+                            : 'text-slate-400'
+                        }`}
+                      >
+                        {summaryLineCount} / {TERMS_SUMMARY_MAX_LINES} lines ·{' '}
+                        {summaryCharCount.toLocaleString()} / {TERMS_SUMMARY_MAX_CHARS.toLocaleString()} chars
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <SectionTitle>Full Terms &amp; Conditions</SectionTitle>
+                    <p className="mt-1.5 text-[11px] text-slate-400">
+                      The complete legal terms shown on the final page of the order form and used for proposals.
+                    </p>
+                    <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <ReactQuill
                       theme="snow"
                       className="quill-terms-17"
                       value={termsFullHtml}
-                      onChange={setTermsFullHtml}
+                      onChange={handleTermsFullChange}
                       modules={QUILL_MODULES}
                       formats={QUILL_FORMATS}
                       placeholder="e.g. 1. Acceptance of Order... 2. Payment Terms & Billing... 3. Changes & Variations..."
                     />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
-                <p className="text-[11px] text-slate-400">Changes apply immediately to newly generated proposals and order forms.</p>
-                <button
-                  type="submit"
-                  disabled={savingTemplates}
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {savingTemplates ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon className="h-3.5 w-3.5" />}
-                  {savingTemplates ? 'Saving…' : 'Save Templates'}
+                <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between md:px-8">
+                  <p className="text-[11px] text-slate-400">Changes apply immediately to newly generated proposals and order forms.</p>
+                  <button
+                    type="submit"
+                    disabled={savingTemplates}
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {savingTemplates ? <Spinner className="h-3.5 w-3.5" /> : <CheckIcon className="h-3.5 w-3.5" />}
+                    {savingTemplates ? 'Saving…' : 'Save Templates'}
                 </button>
               </div>
             </form>
-          </div>
+            </div>
+          </>
         )}
 
         {activeTab === 'backup' && (
@@ -2152,7 +2317,7 @@ export default function Settings() {
               </span>
               <div>
                 <h2 className="text-sm font-bold text-slate-900">Unsaved changes</h2>
-                <p className="text-[11px] text-slate-500">{unsavedLabel} has unsaved changes.</p>
+                <p className="text-[11px] text-slate-500">Unsaved changes in {unsavedLabel}.</p>
               </div>
             </div>
             <p className="mt-4 text-xs leading-relaxed text-slate-600">

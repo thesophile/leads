@@ -1,0 +1,500 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import ReactQuill from 'react-quill-new'
+import 'react-quill-new/dist/quill.snow.css'
+import Layout from '../../Layout/Layout'
+import Spinner from '../../components/Spinner'
+import { api } from '../../api/client'
+import { useAuth } from '../../context/auth-context'
+import { can } from '../../utils/permissions'
+import CoverLetterPages from './CoverLetterPages'
+
+// A4 geometry (mirrors the proposal form pages).
+const A4_HEIGHT_MM = 297
+const PAGE_MARGIN_MM = 10
+const MM_TO_PX = 96 / 25.4
+// Printable height of one A4 page: the page height minus its top/bottom margins.
+const PAGE_CONTENT_PX = (A4_HEIGHT_MM - PAGE_MARGIN_MM * 2) * MM_TO_PX
+
+const COVER_LETTER_TOOLBAR = [
+  [{ header: [2, 3, false] }],
+  ['bold', 'italic', 'underline', 'strike'],
+  [{ color: [] }, { background: [] }],
+  [{ align: [] }],
+  [{ list: 'ordered' }, { list: 'bullet' }],
+  ['link', 'image'],
+  ['clean'],
+]
+
+const DATA_URL_RE = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g
+
+function BackIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  )
+}
+
+function TrashIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  )
+}
+
+function EyeIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+export default function CoverLetterEditor() {
+  const navigate = useNavigate()
+  const params = useParams()
+  const { user } = useAuth()
+  const letterId = params.id || ''
+
+  const [name, setName] = useState('')
+  const [content, setContent] = useState('')
+  const [company, setCompany] = useState({})
+  const [loading, setLoading] = useState(() => Boolean(params.id))
+  const [notFound, setNotFound] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [dirty, setDirty] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [pageCount, setPageCount] = useState(1)
+  const [guideTop, setGuideTop] = useState(0)
+
+  const quillRef = useRef(null)
+  const wrapperRef = useRef(null)
+  const fileInputRef = useRef(null)
+
+  const canEdit = !!user && (can(user, 'quotation.create') || can(user, 'quotation.edit'))
+
+  useEffect(() => {
+    api.get('/auth/company/')
+      .then((data) => setCompany(data || {}))
+      .catch(() => setCompany({}))
+  }, [])
+
+  useEffect(() => {
+    if (!letterId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get(`/transactions/cover-letters/${encodeURIComponent(letterId)}/`)
+        if (cancelled) return
+        setName(data?.name || '')
+        setContent(data?.content || '')
+      } catch {
+        if (!cancelled) setNotFound(true)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [letterId])
+
+  // Measure the edited letter so the page-break guides and the page counter
+  // stay in sync with the content while typing.
+  const measure = useCallback(() => {
+    const quill = quillRef.current?.getEditor?.()
+    const root = quill?.root
+    const wrapper = wrapperRef.current
+    if (!root || !wrapper) return
+    const wrapperRect = wrapper.getBoundingClientRect()
+    const rootRect = root.getBoundingClientRect()
+    setGuideTop(Math.max(0, rootRect.top - wrapperRect.top))
+    const height = root.scrollHeight || 0
+    setPageCount(Math.max(1, Math.ceil(height / PAGE_CONTENT_PX)))
+  }, [])
+
+  useEffect(() => {
+    const quill = quillRef.current?.getEditor?.()
+    const root = quill?.root
+    if (!root) return
+    // The observer delivers an initial measurement on the next frame, so the
+    // page guides appear without setting state inside this effect.
+    const observer = new ResizeObserver(() => measure())
+    observer.observe(root)
+    window.addEventListener('resize', measure)
+    if (document.fonts?.ready) document.fonts.ready.then(() => measure())
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [measure])
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (dirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
+
+  async function uploadFile(file) {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post('/transactions/cover-letters/images/', form)
+    if (!res?.url) throw new Error('The image could not be uploaded.')
+    return res.url
+  }
+
+  async function uploadDataUrl(dataUrl) {
+    const [meta, payload] = String(dataUrl).split(',')
+    const mime = (meta.match(/data:(.*?);/) || [])[1] || 'image/png'
+    const extension = (mime.split('/')[1] || 'png').split('+')[0]
+    const binary = atob(payload || '')
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+    const file = new File([bytes], `image.${extension}`, { type: mime })
+    return uploadFile(file)
+  }
+
+  // Images pasted into the editor are stored inline as data URLs. They are
+  // uploaded to the server on save so the letter stays small and the printed
+  // pages can load them.
+  async function persistInlineImages(html) {
+    const matches = String(html || '').match(DATA_URL_RE)
+    if (!matches || !matches.length) return html
+    const uploaded = new Map()
+    for (const dataUrl of Array.from(new Set(matches))) {
+      try {
+        uploaded.set(dataUrl, await uploadDataUrl(dataUrl))
+      } catch {
+        // Keep the inline image when the upload fails.
+      }
+    }
+    let result = String(html || '')
+    for (const [from, to] of uploaded.entries()) {
+      result = result.split(from).join(to)
+    }
+    return result
+  }
+
+  const handlePickImage = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  async function handleImageSelected(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setError('')
+    setUploadingImage(true)
+    try {
+      const url = await uploadFile(file)
+      const quill = quillRef.current?.getEditor?.()
+      if (!quill) return
+      const range = quill.getSelection(true)
+      const index = range ? range.index : quill.getLength() - 1
+      quill.insertEmbed(index, 'image', url, 'user')
+      quill.setSelection(index + 1, 0, 'silent')
+      quill.focus()
+    } catch (err) {
+      setError(err.message || 'The image could not be uploaded.')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const modules = useMemo(
+    () => ({
+      toolbar: {
+        container: COVER_LETTER_TOOLBAR,
+        handlers: {
+          image: handlePickImage,
+        },
+      },
+    }),
+    [handlePickImage]
+  )
+
+  async function handleSave() {
+    setError('')
+    setNotice('')
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      setError('Please give the cover letter a name before saving.')
+      return
+    }
+    setSaving(true)
+    try {
+      const body = { name: trimmedName, content: await persistInlineImages(content) }
+      if (letterId) {
+        const saved = await api.put(
+          `/transactions/cover-letters/${encodeURIComponent(letterId)}/`,
+          body
+        )
+        setName(saved?.name || trimmedName)
+        setContent(saved?.content || body.content)
+      } else {
+        const saved = await api.post('/transactions/cover-letters/', body)
+        if (saved?.id) {
+          navigate(`/cover-letters/${saved.id}`, { replace: true })
+        }
+        setName(saved?.name || trimmedName)
+        setContent(saved?.content || body.content)
+      }
+      setDirty(false)
+      setNotice('✓ Cover letter saved.')
+      setTimeout(() => setNotice(''), 3000)
+    } catch (err) {
+      setError(err.message || 'The cover letter could not be saved.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!letterId) return
+    setDeleting(true)
+    setError('')
+    try {
+      await api.del(`/transactions/cover-letters/${encodeURIComponent(letterId)}/`)
+      setDirty(false)
+      navigate('/settings')
+    } catch (err) {
+      setError(err.message || 'The cover letter could not be deleted.')
+      setDeleting(false)
+    }
+  }
+
+  function handleBack() {
+    if (dirty) {
+      setConfirmDelete(true)
+      return
+    }
+    navigate('/settings')
+  }
+
+  const guides = []
+  for (let i = 1; i < pageCount; i += 1) {
+    guides.push({ top: guideTop + i * PAGE_CONTENT_PX, page: i + 1 })
+  }
+
+  return (
+    <Layout>
+      <div className="flex flex-col gap-3">
+        {/* Toolbar */}
+        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 cursor-pointer"
+          >
+            <BackIcon className="h-3.5 w-3.5" />
+            Back
+          </button>
+
+          <div className="min-w-[200px] flex-1">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Cover Letter Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value)
+                setDirty(true)
+              }}
+              placeholder="e.g. Standard Proposal Cover Letter"
+              className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 placeholder:text-slate-300 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+
+          <span className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500">
+            Pages: {pageCount}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setShowPreview((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition cursor-pointer ${
+              showPreview
+                ? 'border-brand-500 bg-brand-50 text-brand-600'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <EyeIcon className="h-3.5 w-3.5" />
+            {showPreview ? 'Hide Pages' : 'Show Pages'}
+          </button>
+
+          {letterId ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleting}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-100 cursor-pointer disabled:opacity-60"
+            >
+              <TrashIcon className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !canEdit}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {saving ? <Spinner className="h-3.5 w-3.5" /> : null}
+            {saving ? 'Saving…' : 'Save Cover Letter'}
+          </button>
+        </div>
+
+        {error ? (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700">
+            {error}
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-700">
+            {notice}
+          </div>
+        ) : null}
+        {!canEdit ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-700">
+            You do not have permission to create or edit cover letters.
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="flex h-64 items-center justify-center">
+            <Spinner className="h-8 w-8 text-brand-600" />
+          </div>
+        ) : notFound ? (
+          <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-xs text-slate-500 shadow-xs">
+            This cover letter could not be found.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+            {/* Editor canvas */}
+            <div className="min-w-0 flex-1 overflow-x-auto rounded-2xl bg-slate-200/60 p-4 sm:p-8">
+              <div
+                className="relative mx-auto w-[210mm] bg-white px-[10mm] pt-[10mm] pb-[10mm] shadow-2xl border border-slate-300 rounded-sm"
+                style={{ boxSizing: 'border-box' }}
+              >
+                <div ref={wrapperRef} className="relative">
+                  <ReactQuill
+                    ref={quillRef}
+                    theme="snow"
+                    className="cover-letter-editor"
+                    value={content}
+                    onChange={(value, delta, source) => {
+                      setContent(value)
+                      // Programmatic updates (loading / saving the letter) must
+                      // not mark the letter as edited.
+                      if (source !== 'api') setDirty(true)
+                    }}
+                    modules={modules}
+                    readOnly={!canEdit}
+                    placeholder="Type your cover letter here — headings, bold text, lists and images are all supported."
+                  />
+                  {/* Page-break guides */}
+                  <div className="pointer-events-none absolute inset-0">
+                    {guides.map((guide) => (
+                      <div
+                        key={guide.page}
+                        className="absolute left-0 right-0 border-t-2 border-dashed border-rose-300"
+                        style={{ top: guide.top }}
+                      >
+                        <span className="absolute -top-4 left-0 rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-400">
+                          Page {guide.page}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {uploadingImage ? (
+                  <p className="mt-3 flex items-center gap-2 text-[11px] font-bold text-slate-500">
+                    <Spinner className="h-3.5 w-3.5" />
+                    Uploading image…
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Printed page preview */}
+            {showPreview ? (
+              <div className="w-full shrink-0 rounded-2xl bg-slate-200/60 p-4 sm:p-6 xl:w-[auto]">
+                <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Printed pages
+                </p>
+                <CoverLetterPages html={content} company={company} />
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        className="hidden"
+        onChange={handleImageSelected}
+      />
+
+      {confirmDelete ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="absolute inset-0" onClick={() => setConfirmDelete(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <h3 className="text-sm font-bold text-slate-900">
+              {letterId ? 'Delete this cover letter?' : 'Leave without saving?'}
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-slate-600">
+              {letterId
+                ? 'Proposals that already use this letter keep their printed pages, but the letter will no longer be available for new proposals.'
+                : 'Your unsaved changes will be discarded.'}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (letterId) {
+                    setConfirmDelete(false)
+                    handleDelete()
+                  } else {
+                    setDirty(false)
+                    setConfirmDelete(false)
+                    navigate('/settings')
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-rose-700 cursor-pointer"
+              >
+                {letterId ? <TrashIcon className="h-3.5 w-3.5" /> : null}
+                {letterId ? 'Delete Cover Letter' : 'Discard & Leave'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </Layout>
+  )
+}

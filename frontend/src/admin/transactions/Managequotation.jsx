@@ -790,6 +790,11 @@ export default function Managequotation() {
   const [editingSummaryItemId, setEditingSummaryItemId] = useState(null)
   const [validationErrors, setValidationErrors] = useState({})
 
+  // Cover letter attached to the proposal (printed in front of the form).
+  const [coverLetters, setCoverLetters] = useState([])
+  const [includeCoverLetter, setIncludeCoverLetter] = useState(false)
+  const [coverLetterId, setCoverLetterId] = useState('')
+
   const [draggedBlock, setDraggedBlock] = useState(null)
   const [dragOverBlock, setDragOverBlock] = useState(null)
   const [canDragItem, setCanDragItem] = useState(null)
@@ -980,6 +985,41 @@ export default function Managequotation() {
     }
   }, [])
 
+  // Load the cover letters that can be attached to a proposal.
+  const loadCoverLetters = useCallback(async () => {
+    try {
+      const data = await api.get('/transactions/cover-letters/')
+      setCoverLetters(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to load cover letters', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.get('/transactions/cover-letters/')
+        if (!cancelled) setCoverLetters(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error('Failed to load cover letters', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // A cover letter may have been created in the cover letter editor while this
+  // screen was open; pick it up when the user comes back to this tab.
+  useEffect(() => {
+    const onFocus = () => {
+      loadCoverLetters()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [loadCoverLetters])
+
   const { dirty: proposalDirty, reset: resetProposalDirty } = useDirty(
     proposalModalOpen,
     useMemo(
@@ -1003,10 +1043,13 @@ export default function Managequotation() {
         remarksVal,
         proposalItemsKey: JSON.stringify(proposalItems),
         summaryItemsKey: JSON.stringify(summaryItems),
+        includeCoverLetter,
+        coverLetterId,
       }),
       [
         bdm, qtnBy, revisionNo, customerPerson, companyName, mobileNum, email, categoryName, customerType, cityVal,
         scopeHtml, termsHtml, totalVal, discountVal, sourceVal, currencyVal, remarksVal, proposalItems, summaryItems,
+        includeCoverLetter, coverLetterId,
       ]
     )
   )
@@ -1215,6 +1258,10 @@ export default function Managequotation() {
     if (draft.source) setSourceVal(draft.source)
     if (draft.currency) setCurrencyVal(draft.currency)
     if (draft.remarks !== undefined) setRemarksVal(draft.remarks)
+    if (draft.coverLetterId !== undefined) {
+      setCoverLetterId(draft.coverLetterId || '')
+      setIncludeCoverLetter(Boolean(draft.coverLetterId))
+    }
   }
 
   async function handleOpenNewProposalModal(quote = null, asNewVersion = false) {
@@ -1222,6 +1269,9 @@ export default function Managequotation() {
     setSelectedTemplateId('')
     setTotalOverridden(false)
     setEditAsNewVersion(!!asNewVersion)
+    // Refresh the cover letter list: a letter may have been created from the
+    // cover letter editor while this screen was open.
+    loadCoverLetters()
     const nextDraftKey = quote ? `edit-${quote.id}` : `new-${newProposalCounter.current}`
     newProposalCounter.current += 1
     setDraftKey(nextDraftKey)
@@ -1252,6 +1302,8 @@ export default function Managequotation() {
       setSourceVal(quote.source || 'Google Search')
       setCurrencyVal(quote.currency || 'INR (₹)')
       setRemarksVal(quote.hasProposal ? (quote.notes || quote.remarks || '') : '')
+      setCoverLetterId(quote.coverLetterId || '')
+      setIncludeCoverLetter(Boolean(quote.coverLetterId))
     } else {
       // Clean new proposal
       setEditingProposalId(null)
@@ -1275,6 +1327,8 @@ export default function Managequotation() {
       setSourceVal('Google Search')
       setCurrencyVal('INR (₹)')
       setRemarksVal('')
+      setCoverLetterId('')
+      setIncludeCoverLetter(false)
     }
     setProposalModalOpen(true)
     setProposalLoading(true)
@@ -1352,6 +1406,7 @@ export default function Managequotation() {
         hasProposal: true,
         status: isNewVersion ? 'Not Sent' : (existing.status === 'Quotation Requested' ? 'Not Sent' : existing.status),
         remarks: remarksVal,
+        coverLetterId: includeCoverLetter ? coverLetterId : '',
       }
       if (isNewVersion) {
         // Do not touch the locked version; a new copy is added on save.
@@ -1386,6 +1441,7 @@ export default function Managequotation() {
         termsConditions: currentTerms,
         hasProposal: true,
         remarks: remarksVal,
+        coverLetterId: includeCoverLetter ? coverLetterId : '',
       }
       targetQuote = newProposal
       setQuotationsList([newProposal, ...quotationsList])
@@ -1416,6 +1472,7 @@ export default function Managequotation() {
           proposalScope: targetQuote.proposalScope,
           termsConditions: targetQuote.termsConditions,
           remarks: targetQuote.remarks,
+          coverLetterId: targetQuote.coverLetterId || '',
         }
         if (editAsNewVersion) payload.newVersion = true
         const saved = await api.put(`/transactions/quotations/${persistLeadId}/`, payload)
@@ -1500,6 +1557,7 @@ export default function Managequotation() {
       source: sourceVal,
       currency: currencyVal,
       remarks: remarksVal,
+      coverLetterId: includeCoverLetter ? coverLetterId : '',
     }
     setSavingDraft(true)
     try {
@@ -2319,6 +2377,53 @@ export default function Managequotation() {
               className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs"
               style={{ scrollbarGutter: 'stable' }}
             >
+              {/* Cover Letter — printed in front of the proposal form */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3.5 py-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={includeCoverLetter}
+                      onChange={(e) => {
+                        setIncludeCoverLetter(e.target.checked)
+                        if (e.target.checked && !coverLetterId && coverLetters.length > 0) {
+                          setCoverLetterId(String(coverLetters[0].id))
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    />
+                    <span className="text-[11px] font-bold text-slate-700">
+                      Include Cover Letter
+                    </span>
+                  </label>
+
+                  <select
+                    value={coverLetterId}
+                    onChange={(e) => setCoverLetterId(e.target.value)}
+                    disabled={!includeCoverLetter || coverLetters.length === 0}
+                    className="min-w-[220px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    <option value="">Select Cover Letter</option>
+                    {coverLetters.map((letter) => (
+                      <option key={letter.id} value={String(letter.id)}>
+                        {letter.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => window.open('/cover-letters/new', '_blank', 'noopener')}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 cursor-pointer"
+                  >
+                    {coverLetters.length === 0 ? 'Create Cover Letter' : 'New Cover Letter'}
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[10px] text-slate-400">
+                  When checked, the cover letter pages are printed in front of the proposal form.
+                </p>
+              </div>
+
               {/* Row 1: BDM | QTN BY | Client Name in a single row */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>

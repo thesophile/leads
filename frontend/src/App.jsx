@@ -17,6 +17,7 @@ import Telecall from './admin/transactions/Telecall'
 import LeadStatus from './admin/transactions/LeadStatus'
 import Managequotation from './admin/transactions/Managequotation'
 import ProposalPreview from './admin/transactions/ProposalPreview'
+import CoverLetterEditor from './admin/transactions/CoverLetterEditor'
 import ClientQuotation from './admin/transactions/ClientQuotation'
 import PublicApproval from './admin/transactions/PublicApproval'
 import ClientOrder from './admin/transactions/ClientOrder'
@@ -63,6 +64,8 @@ function App() {
         <Route path="/lead-status" element={guard(<LeadStatus />, { perm: 'leads.view' })} />
         <Route path="/quotations" element={guard(<Managequotation />, { perm: 'quotation.view' })} />
         <Route path="/quotations/preview/:id" element={guard(<ProposalPreview />, { perm: 'quotation.view' })} />
+        <Route path="/cover-letters/new" element={guard(<CoverLetterEditor />, { perm: 'quotation.view' })} />
+        <Route path="/cover-letters/:id" element={guard(<CoverLetterEditor />, { perm: 'quotation.view' })} />
         <Route path="/orders" element={guard(<ManageOrder />, { perm: 'order.view' })} />
         <Route path="/orders/preview/:id" element={guard(<OrderPreview />, { perm: 'order.view' })} />
         <Route path="/client-details" element={guard(<ClientDetails />, { perm: 'client.view' })} />

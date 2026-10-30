@@ -9,6 +9,7 @@ from transactions.models import (
     CallHistory,
     ClientDetail,
     ClientPayment,
+    CoverLetter,
     Lead,
     LeadContactHistory,
     Order,
@@ -1149,6 +1150,161 @@ class ProposalTemplateApiTests(APITestCase):
         self.client.force_authenticate(other)
         resp = self.client.delete(f'/api/transactions/proposal-templates/{tpl_id}/')
         self.assertEqual(resp.status_code, 404)
+
+
+class CoverLetterApiTests(APITestCase):
+    def setUp(self):
+        self.company = make_company('Cover Letter Co')
+        self.manager = User.objects.create_user(
+            email='mgr@cl.com', password='x', name='Manager C',
+            role=self.company.roles.get(code='manager'), company=self.company,
+        )
+
+    def _create_letter(self, name='Standard', content='<p>Dear Sir,</p>'):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post('/api/transactions/cover-letters/', {
+            'name': name, 'content': content,
+        }, format='json')
+        return resp
+
+    def test_create_requires_authenticated_user(self):
+        resp = self.client.post('/api/transactions/cover-letters/', {
+            'name': 'Anon',
+        }, format='json')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_create_and_list_cover_letter(self):
+        resp = self._create_letter()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['name'], 'Standard')
+        self.assertEqual(resp.data['content'], '<p>Dear Sir,</p>')
+
+        listing = self.client.get('/api/transactions/cover-letters/')
+        self.assertEqual(listing.status_code, 200)
+        self.assertIn('Standard', {t['name'] for t in listing.data})
+
+    def test_create_requires_name(self):
+        resp = self._create_letter(name='   ')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_cannot_create_duplicate_name(self):
+        self._create_letter(name='Duplicate')
+        resp = self._create_letter(name='duplicate')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('already exists', resp.data['detail'])
+
+    def test_update_and_delete_cover_letter(self):
+        created = self._create_letter(name='Editable')
+        letter_id = created.data['id']
+
+        updated = self.client.put(f'/api/transactions/cover-letters/{letter_id}/', {
+            'name': 'Renamed', 'content': '<p>Updated</p>',
+        }, format='json')
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.data['name'], 'Renamed')
+        self.assertEqual(updated.data['content'], '<p>Updated</p>')
+
+        deleted = self.client.delete(f'/api/transactions/cover-letters/{letter_id}/')
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(CoverLetter.objects.filter(pk=letter_id).exists())
+
+    def test_letters_are_not_visible_to_other_companies(self):
+        created = self._create_letter(name='Private')
+        other_company = make_company('Other Cover Co')
+        other = User.objects.create_user(
+            email='mgr2@cl.com', password='x', name='Manager O',
+            role=other_company.roles.get(code='manager'), company=other_company,
+        )
+        self.client.force_authenticate(other)
+        listing = self.client.get('/api/transactions/cover-letters/')
+        self.assertEqual(listing.status_code, 200)
+        self.assertNotIn('Private', {t['name'] for t in listing.data})
+
+        resp = self.client.get(f"/api/transactions/cover-letters/{created.data['id']}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_image_upload_rejects_non_image(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            '/api/transactions/cover-letters/images/',
+            {'file': SimpleUploadedFile('doc.pdf', b'%PDF-1.4', content_type='application/pdf')},
+            format='multipart',
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_image_upload_returns_url(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            '/api/transactions/cover-letters/images/',
+            {'file': SimpleUploadedFile('logo.png', b'\x89PNG\r\n\x1a\n', content_type='image/png')},
+            format='multipart',
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(resp.data['url'].startswith('/media/cover_letters/'))
+
+
+class QuotationCoverLetterTests(APITestCase):
+    def setUp(self):
+        self.company = make_company('Quotation Cover Co')
+        self.manager = User.objects.create_user(
+            email='mgr@qcl.com', password='x', name='Manager Q',
+            role=self.company.roles.get(code='manager'), company=self.company,
+        )
+        self.lead = make_raw_lead(self.company, 'Cover Ltd', assigned_to='Manager Q')
+        self.lead.status = Lead.STATUS_QUOTATION
+        self.lead.save(update_fields=['status', 'updated_at'])
+        self.letter = CoverLetter.objects.create(
+            name='Standard Letter',
+            content='<p>Dear Sir,</p>',
+            tenant=self.company,
+            owner=self.manager,
+        )
+
+    def test_attaching_cover_letter_snapshots_its_html(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.put(
+            f'/api/transactions/quotations/{self.lead.id}/',
+            {'coverLetterId': self.letter.id},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['coverLetterId'], str(self.letter.id))
+        self.assertEqual(resp.data['coverLetterName'], 'Standard Letter')
+        self.assertEqual(resp.data['coverLetterHtml'], '<p>Dear Sir,</p>')
+
+        # Editing the template later must not change the stored proposal.
+        self.letter.content = '<p>Changed</p>'
+        self.letter.save(update_fields=['content'])
+        quotation = Quotation.objects.get(lead_id=self.lead.id)
+        self.assertEqual(quotation.cover_letter_html, '<p>Dear Sir,</p>')
+
+    def test_clearing_cover_letter(self):
+        self.client.force_authenticate(self.manager)
+        self.client.put(
+            f'/api/transactions/quotations/{self.lead.id}/',
+            {'coverLetterId': self.letter.id},
+            format='json',
+        )
+        resp = self.client.put(
+            f'/api/transactions/quotations/{self.lead.id}/',
+            {'coverLetterId': ''},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['coverLetterId'], '')
+        self.assertEqual(resp.data['coverLetterHtml'], '')
+
+    def test_unknown_cover_letter_is_rejected(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.put(
+            f'/api/transactions/quotations/{self.lead.id}/',
+            {'coverLetterId': 999999},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('cover letter', resp.data['detail'])
 
 
 class ProposalDraftApiTests(APITestCase):

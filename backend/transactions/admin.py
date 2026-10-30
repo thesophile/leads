@@ -6,6 +6,7 @@ from .models import (
     Attachment,
     CallHistory,
     ClientDetail,
+    CoverLetter,
     Lead,
     LeadContactHistory,
     Order,
@@ -29,6 +30,13 @@ class LeadContactHistoryInline(admin.TabularInline):
 @admin.register(ProposalTemplate)
 class ProposalTemplateAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'default_total', 'default_discount')
+
+
+@admin.register(CoverLetter)
+class CoverLetterAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+    company_field = 'tenant'
+    list_display = ('name', 'owner', 'updated_at')
+    search_fields = ('name',)
 
 
 @admin.register(Lead)

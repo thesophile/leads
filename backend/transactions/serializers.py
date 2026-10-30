@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Attachment, CallHistory, ClientDetail, ClientPayment, Lead, LeadContactHistory, Order, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
+from .models import Attachment, CallHistory, ClientDetail, ClientPayment, CoverLetter, Lead, LeadContactHistory, Order, ProposalDraft, ProposalTemplate, Quotation, QuotationApproval
 from .services import order_approval_info
 
 
@@ -106,6 +106,38 @@ class ProposalTemplateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'owner']
 
 
+class CoverLetterSerializer(serializers.ModelSerializer):
+    content = serializers.CharField(required=False, allow_blank=True)
+    createdAt = serializers.SerializerMethodField()
+    updatedAt = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CoverLetter
+        fields = [
+            'id',
+            'name',
+            'content',
+            'owner',
+            'createdAt',
+            'updatedAt',
+        ]
+        read_only_fields = ['id', 'owner', 'createdAt', 'updatedAt']
+
+    def _iso(self, value):
+        if value is None:
+            return None
+        try:
+            return value.isoformat()
+        except AttributeError:
+            return str(value)
+
+    def get_createdAt(self, obj):
+        return self._iso(obj.created_at)
+
+    def get_updatedAt(self, obj):
+        return self._iso(obj.updated_at)
+
+
 class ProposalDraftSerializer(serializers.ModelSerializer):
     proposalId = serializers.CharField(source='proposal_id', required=False, allow_blank=True)
     qtnBy = serializers.CharField(source='qtn_by', required=False, allow_blank=True)
@@ -114,6 +146,7 @@ class ProposalDraftSerializer(serializers.ModelSerializer):
     companyName = serializers.CharField(source='company_name', required=False, allow_blank=True)
     scopeHtml = serializers.CharField(source='scope_html', required=False, allow_blank=True)
     termsHtml = serializers.CharField(source='terms_html', required=False, allow_blank=True)
+    coverLetterId = serializers.CharField(source='cover_letter_id', required=False, allow_blank=True)
 
     class Meta:
         model = ProposalDraft
@@ -133,6 +166,7 @@ class ProposalDraftSerializer(serializers.ModelSerializer):
             'source',
             'currency',
             'remarks',
+            'coverLetterId',
         ]
         read_only_fields = ['user']
 
@@ -209,6 +243,9 @@ class QuotationSerializer(serializers.ModelSerializer):
     clientRespondedAt = serializers.SerializerMethodField()
     sentToClientAt = serializers.SerializerMethodField()
     clientToken = serializers.CharField(source='client_token', read_only=True)
+    coverLetterId = serializers.SerializerMethodField()
+    coverLetterName = serializers.CharField(source='cover_letter_name', required=False, allow_blank=True)
+    coverLetterHtml = serializers.CharField(source='cover_letter_html', required=False, allow_blank=True)
 
     class Meta:
         model = Quotation
@@ -258,6 +295,9 @@ class QuotationSerializer(serializers.ModelSerializer):
             'clientRespondedAt',
             'sentToClientAt',
             'clientToken',
+            'coverLetterId',
+            'coverLetterName',
+            'coverLetterHtml',
         ]
 
     def _iso(self, value):
@@ -315,6 +355,9 @@ class QuotationSerializer(serializers.ModelSerializer):
         if tenant is None:
             return ''
         return tenant.terms_full_html or ''
+
+    def get_coverLetterId(self, obj):
+        return str(obj.cover_letter_id) if obj.cover_letter_id else ''
 
 
 class OrderSerializer(serializers.ModelSerializer):

@@ -10,6 +10,7 @@ import { useAuth } from '../../context/auth-context'
 import { can } from '../../utils/permissions'
 import usePagedContent from '../../utils/usePagedContent'
 import PagedSection from '../../utils/PagedSection'
+import CoverLetterPages from './CoverLetterPages'
 import RefreshButton from '../../components/RefreshButton'
 import Spinner from '../../components/Spinner'
 import { proposalItemsFromHtml, itemsPrintHtml, currencySymbol, htmlToFormattedLines } from './proposalItemsUtils'
@@ -572,6 +573,8 @@ export default function ProposalPreview() {
         termsFullHtml: p.termsFullHtml || '',
         proposalSummaryHtml: p.proposalScope || '',
         proposalInDetailsHtml: p.termsConditions || '',
+        coverLetterHtml: p.coverLetterHtml || '',
+        coverLetterName: p.coverLetterName || '',
         status: p.status || '',
         leadId: p.leadId || p.id,
         approverName: p.approverName || '',
@@ -766,6 +769,24 @@ export default function ProposalPreview() {
 
     if (typeof document !== 'undefined' && document.fonts) {
       await document.fonts.ready
+    }
+
+    // Wait for every image on the pages (e.g. pictures in the cover letter) to
+    // finish loading, otherwise html2canvas can capture a blank picture.
+    const pendingImages = Array.from(root.querySelectorAll('img'))
+      .filter((img) => !img.complete)
+      .map(
+        (img) =>
+          new Promise((resolve) => {
+            img.addEventListener('load', resolve, { once: true })
+            img.addEventListener('error', resolve, { once: true })
+          })
+      )
+    if (pendingImages.length) {
+      await Promise.race([
+        Promise.all(pendingImages),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ])
     }
 
     setExportingPdf(true)
@@ -1132,6 +1153,11 @@ export default function ProposalPreview() {
 
         {/* All pages, continuous vertical scroll */}
         <div className="space-y-8 print:space-y-0" ref={docRef}>
+          {/* -------------------- COVER LETTER (printed in front) -------------------- */}
+          {proposalData.coverLetterHtml ? (
+            <CoverLetterPages html={proposalData.coverLetterHtml} company={company} />
+          ) : null}
+
           {/* -------------------- PAGE 1 (SUMMARY) -------------------- */}
           <div className={PAGE_CLASS}>
             <div className="flex flex-1 flex-col">

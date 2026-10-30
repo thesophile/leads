@@ -12,12 +12,14 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.storage import default_storage
 from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import Count, Max, Q, OuterRef, Subquery
 from django.db.models.functions import TruncDay, TruncMonth, TruncYear
 from django.http import HttpResponse
 from django.utils import timezone
+from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -36,6 +38,7 @@ from .models import (
     CallHistory,
     ClientDetail,
     ClientPayment,
+    CoverLetter,
     Lead,
     LeadContactHistory,
     Order,
@@ -48,6 +51,7 @@ from .serializers import (
     AttachmentSerializer,
     ClientDetailSerializer,
     ClientPaymentSerializer,
+    CoverLetterSerializer,
     LeadSerializer,
     OrderSerializer,
     ProposalDraftSerializer,
@@ -223,6 +227,37 @@ def latest_version_no(lead_id):
             .aggregate(max=Max('version_no'))['max'] or 0) + 1
 
 
+class CoverLetterNotFound(Exception):
+    """Raised when a proposal references a cover letter that does not exist."""
+
+
+def apply_cover_letter(quotation, raw_id, tenant):
+    """Attach or clear the cover letter on ``quotation``.
+
+    The letter's HTML is snapshotted onto the quotation so that later edits
+    to the template never change a proposal that was already approved, and
+    deleting the template never removes the printed pages.
+    """
+    raw = '' if raw_id is None else str(raw_id).strip()
+    if not raw:
+        quotation.cover_letter = None
+        quotation.cover_letter_name = ''
+        quotation.cover_letter_html = ''
+        return
+    letters = CoverLetter.objects.all()
+    if tenant is not None:
+        letters = letters.filter(tenant=tenant)
+    try:
+        letter = letters.filter(pk=raw).first()
+    except (ValueError, TypeError):
+        letter = None
+    if letter is None:
+        raise CoverLetterNotFound('The selected cover letter could not be found.')
+    quotation.cover_letter = letter
+    quotation.cover_letter_name = letter.name
+    quotation.cover_letter_html = letter.content or ''
+
+
 def duplicate_quotation(source, payload):
     """Create a new version row of ``source`` from an edit payload.
 
@@ -258,8 +293,13 @@ def duplicate_quotation(source, payload):
         proposal_scope=payload.get('proposalScope') or source.proposal_scope,
         terms_conditions=payload.get('termsConditions') or source.terms_conditions,
         remarks=payload.get('remarks') or source.remarks,
+        cover_letter=source.cover_letter,
+        cover_letter_name=source.cover_letter_name,
+        cover_letter_html=source.cover_letter_html,
     )
     stamp_codes(quotation, quotation.tenant)
+    if 'coverLetterId' in payload:
+        apply_cover_letter(quotation, payload.get('coverLetterId'), quotation.tenant)
     quotation.save()
     return quotation
 
@@ -1852,6 +1892,10 @@ class QuotationRowsView(APIView):
         data['hasProposal'] = True
         data['leadId'] = data.get('leadId') or (lead.id if lead else '')
         data['submittedByName'] = ''
+        # The cover letter HTML can be large; the list only needs to know
+        # WHICH letter is attached. The full letter is served by the
+        # quotation detail endpoint used by the proposal preview.
+        data.pop('coverLetterHtml', None)
         if lead is not None:
             data['customer'] = data['customer'] or lead.contact
             data['company'] = data['company'] or lead.company
@@ -1908,6 +1952,8 @@ class QuotationRowsView(APIView):
             'approvalsTotal': 0,
             'approvalsApproved': 0,
             'remarks': lead.remarks,
+            'coverLetterId': '',
+            'coverLetterName': '',
             'clientStatus': 'Pending',
             'clientMessage': '',
             'contactHistory': self._lead_history(lead),
@@ -2062,7 +2108,10 @@ class QuotationView(APIView):
         # The edit must spawn a fresh version via the "Edit as New Version"
         # flow (newVersion flag); it will only be sendable after re-approval.
         if is_new_version and not new_row:
-            quotation = duplicate_quotation(source_quotation, request.data)
+            try:
+                quotation = duplicate_quotation(source_quotation, request.data)
+            except CoverLetterNotFound as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             contact_changed = bool(old_contact) and bool(
                 sync_contact_from_quotation(request.user, lead, quotation, old_contact)
             )
@@ -2108,6 +2157,17 @@ class QuotationView(APIView):
             if camel in request.data:
                 value = request.data.get(camel)
                 setattr(quotation, field, value if value is not None else '')
+        # The cover letter is resolved server-side (id -> stored template) and
+        # snapshotted onto the quotation.
+        if 'coverLetterId' in request.data:
+            try:
+                apply_cover_letter(
+                    quotation,
+                    request.data.get('coverLetterId'),
+                    quotation.tenant or request.user.company,
+                )
+            except CoverLetterNotFound as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         stamp_codes(quotation, request.user.company)
 
         # Audit any company/contact change made here and mirror it to the lead.
@@ -3774,6 +3834,175 @@ class ProposalTemplateDetailView(APIView):
             )
         template.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+COVER_LETTER_IMAGE_MIMES = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+}
+COVER_LETTER_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
+
+def scoped_cover_letters(user):
+    """Return the cover letters visible to ``user`` (superusers see all)."""
+    qs = CoverLetter.objects.all()
+    if not user.is_superuser:
+        qs = qs.filter(tenant=user.company)
+    return qs
+
+
+class CoverLetterListCreateView(APIView):
+    """List the company's cover letters, or create a new one."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can(request.user, 'quotation.view'):
+            return Response(
+                {'detail': 'You do not have permission to view cover letters.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        letters = scoped_cover_letters(request.user).order_by('name')
+        return Response(CoverLetterSerializer(letters, many=True).data)
+
+    def post(self, request):
+        if not can(request.user, 'quotation.create', 'quotation.edit'):
+            return Response(
+                {'detail': 'You do not have permission to create cover letters.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response(
+                {'detail': 'name: A cover letter name is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        duplicate = CoverLetter.objects.filter(
+            tenant=request.user.company, name__iexact=name
+        ).first()
+        if duplicate is not None:
+            return Response(
+                {'detail': 'A cover letter with this name already exists. Please choose another name.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = CoverLetterSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        letter = serializer.save(
+            owner=request.user,
+            tenant=request.user.company,
+        )
+        return Response(
+            CoverLetterSerializer(letter).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CoverLetterDetailView(APIView):
+    """Read, update or delete a single cover letter."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, pk):
+        return scoped_cover_letters(request.user).filter(pk=pk).first()
+
+    def get(self, request, pk):
+        if not can(request.user, 'quotation.view'):
+            return Response(
+                {'detail': 'You do not have permission to view cover letters.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        letter = self.get_object(request, pk)
+        if letter is None:
+            return Response({'detail': 'Cover letter not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(CoverLetterSerializer(letter).data)
+
+    def put(self, request, pk):
+        if not can(request.user, 'quotation.create', 'quotation.edit'):
+            return Response(
+                {'detail': 'You do not have permission to edit cover letters.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        letter = self.get_object(request, pk)
+        if letter is None:
+            return Response({'detail': 'Cover letter not found.'}, status=status.HTTP_404_NOT_FOUND)
+        name = (request.data.get('name') or '').strip()
+        if name:
+            duplicate = CoverLetter.objects.filter(
+                tenant=letter.tenant, name__iexact=name
+            ).exclude(pk=letter.pk).first()
+            if duplicate is not None:
+                return Response(
+                    {'detail': 'A cover letter with this name already exists. Please choose another name.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        serializer = CoverLetterSerializer(letter, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        letter = serializer.save()
+        return Response(CoverLetterSerializer(letter).data)
+
+    def delete(self, request, pk):
+        if not can(request.user, 'quotation.create', 'quotation.edit'):
+            return Response(
+                {'detail': 'You do not have permission to delete cover letters.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        letter = self.get_object(request, pk)
+        if letter is None:
+            return Response({'detail': 'Cover letter not found.'}, status=status.HTTP_404_NOT_FOUND)
+        # Proposals keep a snapshot of the letter, so deleting the template
+        # never removes the pages already printed with a proposal.
+        letter.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CoverLetterImageUploadView(APIView):
+    """Upload an image used inside a cover letter.
+
+    The file is stored under ``media/cover_letters/org-<tenant>/`` and the
+    public URL is returned so the editor can embed it in the letter HTML.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not can(request.user, 'quotation.create', 'quotation.edit'):
+            return Response(
+                {'detail': 'You do not have permission to add images to cover letters.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        uploaded = request.FILES.get('file')
+        if uploaded is None:
+            return Response({'detail': 'Please attach an image to upload.'}, status=status.HTTP_400_BAD_REQUEST)
+        mime = (uploaded.content_type or '').lower()
+        extension = COVER_LETTER_IMAGE_MIMES.get(mime)
+        if extension is None:
+            return Response(
+                {'detail': 'Only PNG, JPG, GIF or WEBP images can be uploaded.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if uploaded.size > COVER_LETTER_IMAGE_MAX_BYTES:
+            return Response(
+                {'detail': 'Image exceeds the 5 MB upload limit.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tenant_id = getattr(request.user, 'company_id', None) or 'shared'
+        base_name = slugify(uploaded.name)[:60] or 'image'
+        stamp = secrets.token_hex(6)
+        relative_path = f'cover_letters/org-{tenant_id}/{stamp}-{base_name}.{extension}'
+        stored_path = default_storage.save(relative_path, uploaded)
+        return Response(
+            {
+                'url': default_storage.url(stored_path),
+                'name': uploaded.name,
+                'size': uploaded.size,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ProposalDraftView(APIView):

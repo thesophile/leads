@@ -172,6 +172,62 @@ main table.refresh-fading {
   font-style: normal;
   font-size: 12px;
 }
+
+/* Cover letter editor: a full A4 column with no inner padding, so the text
+   wraps exactly like it does on the printed page. */
+.cover-letter-editor .ql-container.ql-snow {
+  border: none !important;
+  background: transparent;
+  font-family: inherit !important;
+  font-size: 12.5px !important;
+}
+.cover-letter-editor .ql-editor {
+  min-height: 260mm;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  font-size: 12.5px !important;
+  line-height: 1.75;
+  color: #1e293b;
+}
+.cover-letter-editor .ql-editor img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Rich text rendered from stored HTML (cover letters) keeps Quill's utility
+   classes, which the editor stylesheet does not cover outside the editor. */
+.cover-letter-body .ql-align-center { text-align: center; }
+.cover-letter-body .ql-align-right { text-align: right; }
+.cover-letter-body .ql-align-justify { text-align: justify; }
+.cover-letter-body .ql-align-left { text-align: left; }
+.cover-letter-body .ql-indent-1 { padding-left: 3em; }
+.cover-letter-body .ql-indent-2 { padding-left: 6em; }
+.cover-letter-body .ql-indent-3 { padding-left: 9em; }
+.cover-letter-body .ql-indent-4 { padding-left: 12em; }
+.cover-letter-body .ql-indent-5 { padding-left: 15em; }
+.cover-letter-body .ql-indent-6 { padding-left: 18em; }
+.cover-letter-body .ql-indent-7 { padding-left: 21em; }
+.cover-letter-body .ql-indent-8 { padding-left: 24em; }
+.cover-letter-body .ql-size-small { font-size: 0.75em; }
+.cover-letter-body .ql-size-large { font-size: 1.5em; }
+.cover-letter-body .ql-size-huge { font-size: 2.5em; }
+.cover-letter-body .ql-font-serif { font-family: Georgia, 'Times New Roman', serif; }
+.cover-letter-body .ql-font-monospace { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cover-letter-body img { max-width: 100%; height: auto; }
+.cover-letter-body p { margin: 0 0 0.5em; }
+.cover-letter-body h2 { font-size: 1.35em; font-weight: 700; margin: 0 0 0.4em; }
+.cover-letter-body h3 { font-size: 1.15em; font-weight: 700; margin: 0 0 0.35em; }
+.cover-letter-body ul, .cover-letter-body ol { margin: 0 0 0.5em; padding-left: 1.5em; }
+.cover-letter-body ul { list-style: disc; }
+.cover-letter-body ol { list-style: decimal; }
+.cover-letter-body blockquote {
+  margin: 0 0 0.5em;
+  padding-left: 0.75em;
+  border-left: 3px solid #cbd5e1;
+  color: #475569;
+}
+
 .quill-tall .ql-editor.ql-blank::before {
   font-weight: 300;
   color: #cbd5e1;
