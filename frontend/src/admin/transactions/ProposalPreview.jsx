@@ -465,33 +465,41 @@ export default function ProposalPreview() {
     fetchApprovers()
   }, [fetchApprovers])
 
-  // If we arrived without navigation state (e.g. from a notification link)
-  // or the loaded proposal does not match the active route ID, fetch by id.
+  // Always fetch the authoritative quotation detail by ID so that cover letters,
+  // approvers, client tokens, and status are completely accurate and persisted.
   useEffect(() => {
     if (!params.id) return
-    if (proposal && proposal.id === params.id) return
     let cancelled = false
-    setLoadingQuote(true)
-      ; (async () => {
-        try {
-          const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
-          if (!cancelled) {
-            setProposal(data || null)
-            if (!data) setNotFound(true)
-          }
-        } catch (err) {
-          if (!cancelled) {
+    if (!proposal || String(proposal.id) !== String(params.id)) {
+      setLoadingQuote(true)
+    }
+    ;(async () => {
+      try {
+        const data = await api.get(`/transactions/quotations/${encodeURIComponent(params.id)}/`)
+        if (!cancelled) {
+          if (data) {
+            setProposal(data)
+            if (data.clientToken) setClientToken(data.clientToken)
+            setNotFound(false)
+          } else {
             setNotFound(true)
-            setActionError(err.message)
           }
-        } finally {
-          if (!cancelled) setLoadingQuote(false)
         }
-      })()
+      } catch (err) {
+        if (!cancelled) {
+          if (!proposal || String(proposal.id) !== String(params.id)) {
+            setNotFound(true)
+          }
+          setActionError(err.message)
+        }
+      } finally {
+        if (!cancelled) setLoadingQuote(false)
+      }
+    })()
     return () => {
       cancelled = true
     }
-  }, [params.id, proposal])
+  }, [params.id])
 
   // Safety net: if we were handed navigation state that is missing the approver
   // list for a pending proposal, refetch the authoritative quotation once.
