@@ -195,18 +195,46 @@ main table.refresh-fading {
   height: auto;
 }
 
-/* The "Box" button applies Quill's blockquote format, which is drawn as a
-   bordered panel. The selector is more specific than Quill's own rule
-   (quill.snow.css is bundled after this file). */
-.cover-letter-editor .ql-container.ql-snow .ql-editor blockquote {
+/* A boxed section is a run of lines marked with Quill's block-scope class
+   format ("ql-indent-1"). The class is added to the block element, so a
+   heading stays a heading and a paragraph stays a paragraph. Consecutive
+   marked lines form ONE contiguous box without dividing lines between them. */
+:is(.cover-letter-body, .cover-letter-editor .ql-container.ql-snow .ql-editor) .ql-indent-1 {
   border: 1px solid #000;
-  border-radius: 4px;
-  margin: 8px 0;
+  margin: 0;
   padding: 8px 12px;
   background: #ffffff;
 }
-.cover-letter-editor .ql-container.ql-snow .ql-editor blockquote p + p {
-  margin-top: 6px;
+/* Continuation lines: no top border, and spacing comes from padding. */
+:is(.cover-letter-body, .cover-letter-editor .ql-container.ql-snow .ql-editor) .ql-indent-1 + .ql-indent-1 {
+  border-top: 0;
+  padding-top: 3px;
+}
+/* Preceding lines: no bottom border, so consecutive lines are not divided. */
+:is(.cover-letter-body, .cover-letter-editor .ql-container.ql-snow .ql-editor) .ql-indent-1:has(+ .ql-indent-1) {
+  border-bottom: 0;
+  padding-bottom: 3px;
+}
+/* An unformatted line inside a box keeps the box's sides without adding borders. */
+:is(.cover-letter-body, .cover-letter-editor .ql-container.ql-snow .ql-editor) .ql-indent-1 + :not(.ql-indent-1):has(+ .ql-indent-1) {
+  border-left: 1px solid #000;
+  border-right: 1px solid #000;
+  border-top: 0;
+  border-bottom: 0;
+  margin: 0;
+  padding: 3px 12px;
+  background: #ffffff;
+}
+:is(.cover-letter-body, .cover-letter-editor .ql-container.ql-snow .ql-editor) .ql-indent-1:has(+ :not(.ql-indent-1) + .ql-indent-1) {
+  border-bottom: 0;
+  padding-bottom: 3px;
+}
+/* Space around the box, but not between its lines. */
+:is(.cover-letter-body, .cover-letter-editor .ql-container.ql-snow .ql-editor) :not(.ql-indent-1) + .ql-indent-1 {
+  margin-top: 8px;
+}
+:is(.cover-letter-body, .cover-letter-editor .ql-container.ql-snow .ql-editor) .ql-indent-1:not(:has(+ .ql-indent-1)) {
+  margin-bottom: 8px;
 }
 
 /* Rich text rendered from stored HTML (cover letters) keeps Quill's utility
@@ -215,7 +243,6 @@ main table.refresh-fading {
 .cover-letter-body .ql-align-right { text-align: right; }
 .cover-letter-body .ql-align-justify { text-align: justify; }
 .cover-letter-body .ql-align-left { text-align: left; }
-.cover-letter-body .ql-indent-1 { padding-left: 3em; }
 .cover-letter-body .ql-indent-2 { padding-left: 6em; }
 .cover-letter-body .ql-indent-3 { padding-left: 9em; }
 .cover-letter-body .ql-indent-4 { padding-left: 12em; }
@@ -235,14 +262,13 @@ main table.refresh-fading {
 .cover-letter-body ul, .cover-letter-body ol { margin: 0 0 0.5em; padding-left: 1.5em; }
 .cover-letter-body ul { list-style: disc; }
 .cover-letter-body ol { list-style: decimal; }
+/* Pasted quotes (the Box button uses the indent marker, not a quote). */
 .cover-letter-body blockquote {
-  margin: 8px 0;
-  padding: 8px 12px;
-  border: 1px solid #000;
-  border-radius: 4px;
-  background: #ffffff;
+  margin: 0 0 0.5em;
+  padding-left: 0.75em;
+  border-left: 3px solid #cbd5e1;
+  color: #475569;
 }
-.cover-letter-body blockquote p:last-child { margin-bottom: 0; }
 
 .quill-tall .ql-editor.ql-blank::before {
   font-weight: 300;

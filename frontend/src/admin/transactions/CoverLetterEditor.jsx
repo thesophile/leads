@@ -28,6 +28,19 @@ const COVER_LETTER_TOOLBAR = [
 
 const DATA_URL_RE = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g
 
+// The box marker is Quill's block-scope class format "indent" (class
+// "ql-indent-1"), which is added to the block element so the line keeps its
+// own type (heading stays a heading, paragraph stays a paragraph).
+const BOX_INDENT = 1
+
+function isBoxed(format) {
+  if (!format || format.indent == null) return false
+  if (Array.isArray(format.indent)) {
+    return format.indent.every((v) => Number(v) === BOX_INDENT)
+  }
+  return Number(format.indent) === BOX_INDENT
+}
+
 function BackIcon({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -169,20 +182,40 @@ export default function CoverLetterEditor() {
       setCursorInBox(false)
       return
     }
-    setCursorInBox(Boolean(quill.getFormat(range).blockquote))
+    setCursorInBox(isBoxed(quill.getFormat(range)))
   }, [])
 
-  // Put the current paragraph in a bordered box (or take it out again).
-  // The box is Quill's built-in block format, styled as a panel in index.css.
+  // Put the selected lines in a bordered box (or take them out again).
+  //
+  // The box is marked with Quill's block-scope class format ("indent"), which
+  // is added to the block element and therefore keeps the line's own type: a
+  // heading stays a heading and a paragraph stays a paragraph, with all the
+  // rich text inside untouched. Consecutive marked lines are drawn as one box
+  // by the stylesheet (see index.css).
   function toggleBox() {
     const quill = quillRef.current?.getEditor?.()
     if (!quill) return
     quill.focus()
     const range = quill.getSelection()
     if (!range) return
-    const current = quill.getFormat(range)
+
+    // Expand the selection to whole lines, so the marker lands on the block
+    // element of every selected line (a partial line would get the marker on
+    // its text instead).
+    const lines = quill.getLines(range.index, Math.max(range.length, 1))
+    if (!lines || lines.length === 0) return
+    const first = lines[0]
+    const last = lines[lines.length - 1]
+    const start = quill.getIndex(first)
+    const end = quill.getIndex(last) + last.length()
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      quill.setSelection(start, end - start, 'silent')
+    }
+
+    const wasBoxed = isBoxed(quill.getFormat(range))
     // 'user' so the change counts as a real edit (not a load-time update).
-    quill.format('blockquote', !current.blockquote, 'user')
+    quill.format('indent', wasBoxed ? 0 : BOX_INDENT, 'user')
+    setCursorInBox(!wasBoxed)
   }
 
   async function uploadFile(file) {
