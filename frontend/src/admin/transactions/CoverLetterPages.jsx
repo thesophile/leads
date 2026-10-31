@@ -12,7 +12,7 @@ import usePagedContent from '../../utils/usePagedContent'
  */
 
 const PAGE_CLASS =
-  'print-page mx-auto flex w-full max-w-[210mm] flex-col h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm'
+  'print-page mx-auto flex w-full max-w-[210mm] flex-col justify-between h-[297mm] overflow-hidden bg-white p-[10mm] shadow-2xl border border-slate-300 rounded-sm'
 
 // Hard cap on the continuation pages of one letter (safety net only).
 const MAX_CONTINUATION_PAGES = 12
@@ -26,7 +26,7 @@ export function coverLetterHasContent(html) {
 
 function LetterHeader({ company }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b-2 border-slate-900 pb-3">
+    <div className="shrink-0 flex items-start justify-between gap-4 border-b-2 border-slate-900 pb-3">
       <div className="min-w-0">
         <p className="text-[13px] font-black uppercase tracking-[0.18em] text-slate-900">
           Cover Letter
@@ -76,7 +76,7 @@ function LetterPage({ html, company, pageIndex = 0 }) {
   return (
     <>
       <div className={PAGE_CLASS} style={{ boxSizing: 'border-box' }}>
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-1 flex-col min-h-0">
           <LetterHeader company={company} />
           <div
             ref={contentRef}
@@ -94,7 +94,7 @@ function LetterPage({ html, company, pageIndex = 0 }) {
             </p>
           ) : null}
         </div>
-        <div ref={footerRef} className="mt-4">
+        <div ref={footerRef} className="shrink-0 mt-auto pt-4">
           <LetterFooter company={company} />
         </div>
       </div>
