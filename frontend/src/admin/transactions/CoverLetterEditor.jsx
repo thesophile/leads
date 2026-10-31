@@ -116,6 +116,7 @@ export default function CoverLetterEditor() {
   const [dirty, setDirty] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const [pageCount, setPageCount] = useState(1)
   const [guideTop, setGuideTop] = useState(0)
   const [cursorInBox, setCursorInBox] = useState(false)
@@ -375,12 +376,13 @@ export default function CoverLetterEditor() {
     }
   }, [location.state])
 
-  async function handleSave() {
+  async function handleSave(opts = {}) {
+    const andLeave = opts?.andLeave === true
     setError('')
     const trimmedName = name.trim()
     if (!trimmedName) {
       setError('Please give the cover letter a name before saving.')
-      return
+      return false
     }
     setSaving(true)
     try {
@@ -394,19 +396,30 @@ export default function CoverLetterEditor() {
         setContent(savedData?.content || body.content)
       } else {
         const savedData = await api.post('/transactions/cover-letters/', body)
+        if (andLeave) {
+          setDirty(false)
+          navigate('/settings')
+          return true
+        }
         if (savedData?.id) {
           navigate(`/cover-letters/${savedData.id}`, { replace: true, state: { justSaved: true } })
-          return
+          return true
         }
         setName(savedData?.name || trimmedName)
         setContent(savedData?.content || body.content)
       }
       setDirty(false)
       setSaved(true)
+      if (andLeave) {
+        navigate('/settings')
+        return true
+      }
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
       savedTimerRef.current = setTimeout(() => setSaved(false), 3000)
+      return true
     } catch (err) {
       setError(err.message || 'The cover letter could not be saved.')
+      return false
     } finally {
       setSaving(false)
     }
@@ -439,16 +452,18 @@ export default function CoverLetterEditor() {
     try {
       await api.del(`/transactions/cover-letters/${encodeURIComponent(letterId)}/`)
       setDirty(false)
+      setConfirmDelete(false)
       navigate('/settings')
     } catch (err) {
       setError(err.message || 'The cover letter could not be deleted.')
       setDeleting(false)
+      setConfirmDelete(false)
     }
   }
 
   function handleBack() {
     if (dirty) {
-      setConfirmDelete(true)
+      setConfirmLeave(true)
       return
     }
     navigate('/settings')
@@ -632,41 +647,89 @@ export default function CoverLetterEditor() {
 
       {confirmDelete ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="absolute inset-0" onClick={() => setConfirmDelete(false)} />
+          <div className="absolute inset-0" onClick={() => !deleting && setConfirmDelete(false)} />
           <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <h3 className="text-sm font-bold text-slate-900">
-              {letterId ? 'Delete this cover letter?' : 'Leave without saving?'}
+              Delete this cover letter?
             </h3>
             <p className="mt-2 text-xs leading-relaxed text-slate-600">
-              {letterId
-                ? 'Proposals that already use this letter keep their printed pages, but the letter will no longer be available for new proposals.'
-                : 'Your unsaved changes will be discarded.'}
+              Proposals that already use this letter keep their printed pages, but the letter will no longer be available for new proposals.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
+                disabled={deleting}
                 onClick={() => setConfirmDelete(false)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 cursor-pointer"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 cursor-pointer disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (letterId) {
-                    setConfirmDelete(false)
-                    handleDelete()
-                  } else {
-                    setDirty(false)
-                    setConfirmDelete(false)
-                    navigate('/settings')
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-rose-700 cursor-pointer"
+                disabled={deleting}
+                onClick={handleDelete}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-rose-700 cursor-pointer disabled:opacity-60"
               >
-                {letterId ? <TrashIcon className="h-3.5 w-3.5" /> : null}
-                {letterId ? 'Delete Cover Letter' : 'Discard & Leave'}
+                {deleting ? <Spinner className="h-3.5 w-3.5" /> : <TrashIcon className="h-3.5 w-3.5" />}
+                {deleting ? 'Deleting…' : 'Delete Cover Letter'}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmLeave ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="absolute inset-0" onClick={() => !saving && setConfirmLeave(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <h3 className="text-sm font-bold text-slate-900">
+              Leave without saving?
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-slate-600">
+              You have unsaved changes. Are you sure you want to discard them and leave?
+            </p>
+            {error ? (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                {error}
+              </div>
+            ) : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setConfirmLeave(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 cursor-pointer disabled:opacity-60"
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setDirty(false)
+                  setConfirmLeave(false)
+                  navigate('/settings')
+                }}
+                className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100 cursor-pointer disabled:opacity-60"
+              >
+                Discard & Leave
+              </button>
+              {canEdit ? (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={async () => {
+                    const ok = await handleSave({ andLeave: true })
+                    if (ok) {
+                      setConfirmLeave(false)
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand-700 cursor-pointer disabled:opacity-60"
+                >
+                  {saving ? <Spinner className="h-3.5 w-3.5" /> : null}
+                  {saving ? 'Saving…' : 'Save & Leave'}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
