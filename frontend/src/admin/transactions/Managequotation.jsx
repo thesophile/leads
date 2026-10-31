@@ -1020,6 +1020,13 @@ export default function Managequotation() {
     return () => window.removeEventListener('focus', onFocus)
   }, [loadCoverLetters])
 
+  // If user enabled cover letter or opened an edit modal before cover letters finished loading
+  useEffect(() => {
+    if (includeCoverLetter && !coverLetterId && coverLetters.length > 0) {
+      setCoverLetterId(String(coverLetters[0].id))
+    }
+  }, [includeCoverLetter, coverLetterId, coverLetters])
+
   const { dirty: proposalDirty, reset: resetProposalDirty } = useDirty(
     proposalModalOpen,
     useMemo(
@@ -1302,8 +1309,9 @@ export default function Managequotation() {
       setSourceVal(quote.source || 'Google Search')
       setCurrencyVal(quote.currency || 'INR (₹)')
       setRemarksVal(quote.hasProposal ? (quote.notes || quote.remarks || '') : '')
-      setCoverLetterId(quote.coverLetterId || '')
-      setIncludeCoverLetter(Boolean(quote.coverLetterId))
+      const existingLetterId = quote.coverLetterId ? String(quote.coverLetterId) : ''
+      setCoverLetterId(existingLetterId)
+      setIncludeCoverLetter(Boolean(existingLetterId || quote.coverLetterHtml || quote.coverLetterName))
     } else {
       // Clean new proposal
       setEditingProposalId(null)
@@ -1372,6 +1380,9 @@ export default function Managequotation() {
     const currentScope = buildItemsHtml(summaryItems) + scopeHtml
     const currentTerms = buildItemsHtml(proposalItems) + termsHtml
     const effectiveTotal = totalVal.trim()
+    const effectiveCoverLetterId = includeCoverLetter
+      ? (coverLetterId || (coverLetters.length > 0 ? String(coverLetters[0].id) : ''))
+      : ''
     let nextApprovalId = null
     let targetQuote = null
     let persistLeadId = null
@@ -1406,7 +1417,7 @@ export default function Managequotation() {
         hasProposal: true,
         status: isNewVersion ? 'Not Sent' : (existing.status === 'Quotation Requested' ? 'Not Sent' : existing.status),
         remarks: remarksVal,
-        coverLetterId: includeCoverLetter ? coverLetterId : '',
+        coverLetterId: effectiveCoverLetterId,
       }
       if (isNewVersion) {
         // Do not touch the locked version; a new copy is added on save.
@@ -1441,7 +1452,7 @@ export default function Managequotation() {
         termsConditions: currentTerms,
         hasProposal: true,
         remarks: remarksVal,
-        coverLetterId: includeCoverLetter ? coverLetterId : '',
+        coverLetterId: effectiveCoverLetterId,
       }
       targetQuote = newProposal
       setQuotationsList([newProposal, ...quotationsList])
@@ -1472,7 +1483,7 @@ export default function Managequotation() {
           proposalScope: targetQuote.proposalScope,
           termsConditions: targetQuote.termsConditions,
           remarks: targetQuote.remarks,
-          coverLetterId: targetQuote.coverLetterId || '',
+          coverLetterId: effectiveCoverLetterId,
         }
         if (editAsNewVersion) payload.newVersion = true
         const saved = await api.put(`/transactions/quotations/${persistLeadId}/`, payload)
@@ -1500,6 +1511,16 @@ export default function Managequotation() {
           setQuotationsList((prev) => [newRow, ...prev])
         } else if (saved) {
           targetQuote = { ...targetQuote, ...saved }
+          setQuotationsList((prev) =>
+            prev.map((item) =>
+              item.id === (editingProposalId || targetQuote.id)
+                ? { ...item, ...targetQuote }
+                : item
+            )
+          )
+        }
+        if (draftKey) {
+          api.del(`/transactions/proposal-drafts/?proposal_id=${encodeURIComponent(draftKey)}`).catch(() => {})
         }
         if (saved && saved.contactChanged && saved.wasGenerated) {
           showToast(
@@ -1557,7 +1578,9 @@ export default function Managequotation() {
       source: sourceVal,
       currency: currencyVal,
       remarks: remarksVal,
-      coverLetterId: includeCoverLetter ? coverLetterId : '',
+      coverLetterId: includeCoverLetter
+        ? (coverLetterId || (coverLetters.length > 0 ? String(coverLetters[0].id) : ''))
+        : '',
     }
     setSavingDraft(true)
     try {
@@ -2409,6 +2432,11 @@ export default function Managequotation() {
                         {letter.name}
                       </option>
                     ))}
+                    {coverLetterId && !coverLetters.some((l) => String(l.id) === String(coverLetterId)) && (
+                      <option value={String(coverLetterId)}>
+                        Attached Cover Letter
+                      </option>
+                    )}
                   </select>
 
                   <button

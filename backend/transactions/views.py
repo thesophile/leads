@@ -252,6 +252,8 @@ def apply_cover_letter(quotation, raw_id, tenant):
     except (ValueError, TypeError):
         letter = None
     if letter is None:
+        if quotation.cover_letter_id and str(quotation.cover_letter_id) == raw and quotation.cover_letter_html:
+            return
         raise CoverLetterNotFound('The selected cover letter could not be found.')
     quotation.cover_letter = letter
     quotation.cover_letter_name = letter.name
@@ -1895,7 +1897,7 @@ class QuotationRowsView(APIView):
         # The cover letter HTML can be large; the list only needs to know
         # WHICH letter is attached. The full letter is served by the
         # quotation detail endpoint used by the proposal preview.
-        data.pop('coverLetterHtml', None)
+        # Preserve cover letter HTML so proposals keep their cover letter when viewed from the list
         if lead is not None:
             data['customer'] = data['customer'] or lead.contact
             data['company'] = data['company'] or lead.company
