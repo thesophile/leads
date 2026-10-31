@@ -95,31 +95,6 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
       }
     }
 
-    const contentTop = contentEl.getBoundingClientRect().top
-    // The footer element normally marks the lower boundary, but overflowing
-    // flex content can push it down and balloon the cap (making pagination
-    // think everything fits). Anchor the boundary to the fixed `.print-page`
-    // edge instead — the footer's pinned position — so measurements are stable
-    // regardless of what is mounted beneath the content.
-    let bottom = bottomEl.getBoundingClientRect().top
-    try {
-      const pageEl = bottomEl && bottomEl.closest ? bottomEl.closest('.print-page') : null
-      if (pageEl) {
-        const pr = pageEl.getBoundingClientRect()
-        const pinned = pr.bottom - 38 - (bottomEl.offsetHeight || 0)
-        if (pinned < bottom) bottom = pinned
-      }
-    } catch {
-      // measurement is best-effort; fall back to the raw footer position
-    }
-    const below = (belowRef.current || []).reduce((sum, r) => {
-      const el = r && r.current
-      return sum + (el && el.offsetHeight ? el.offsetHeight : 0)
-    }, 0)
-    const gaps = (belowRef.current?.length || 0) * 14
-    const reserve = typeof reserveRef.current === 'number' ? reserveRef.current : 16
-    const c = Math.max(0, bottom - 16 - contentTop - below - gaps - reserve)
-
     // Measure the end block's real height while it is visible (it mounts
     // visible on every page, so the first pass always captures it). Stored so
     // later passes keep the same math even once the block is display:none.
@@ -133,16 +108,51 @@ export default function usePagedContent(contentRef, bottomRef, belowBlocks = [],
     contentEl.style.maxHeight = 'none'
     contentEl.style.overflow = 'visible'
 
+    const contentTop = contentEl.getBoundingClientRect().top
+    const base = contentTop
+    // The footer element normally marks the lower boundary, but overflowing
+    // flex content can push it down and balloon the cap (making pagination
+    // think everything fits). Anchor the boundary to the fixed .print-page
+    // edge instead — the footer's pinned position — so measurements are stable
+    // regardless of what is mounted beneath the content.
+    let bottom = bottomEl.getBoundingClientRect().top
+    try {
+      const pageEl = bottomEl && bottomEl.closest ? bottomEl.closest('.print-page') : null
+      if (pageEl) {
+        const pr = pageEl.getBoundingClientRect()
+        const pageStyle = window.getComputedStyle ? window.getComputedStyle(pageEl) : null
+        const padB = pageStyle ? (parseFloat(pageStyle.paddingBottom) || 38) : 38
+        const pinned = pr.bottom - padB - (bottomEl.offsetHeight || 0)
+        bottom = pinned
+      }
+    } catch {
+      // measurement is best-effort; fall back to the raw footer position
+    }
+    const below = (belowRef.current || []).reduce((sum, r) => {
+      const el = r && r.current
+      return sum + (el && el.offsetHeight ? el.offsetHeight : 0)
+    }, 0)
+    const gaps = (belowRef.current?.length || 0) * 14
+    const reserve = typeof reserveRef.current === 'number' ? reserveRef.current : 16
+    const c = Math.max(0, bottom - 16 - contentTop - below - gaps - reserve)
+
     const isHeadingChild = (el) => {
       if (!el) return false
+      // Lines inside a boxed callout (.ql-indent-1) are list/table rows, not standalone headings
+      if (el.classList && el.classList.contains('ql-indent-1')) return false
       const text = (el.innerText || el.textContent || '').trim()
       if (!text || text.length > 70) return false
-      if (/^(\d+[\.\)]|\([0-9]+\))\s+[A-Za-z]/.test(text)) return true
-      if (el.querySelector && el.querySelector('strong, b, h1, h2, h3, h4, h5, h6') && text.length < 50) return true
+      if (/^(\d+[.)]|\([0-9]+\))\s+[A-Za-z]/.test(text)) return true
+      if (/^H[1-6]$/i.test(el.tagName)) return true
+      if (el.querySelector && el.querySelector('h1, h2, h3, h4, h5, h6')) return true
+      if (el.querySelector && el.querySelector('strong, b') && (text.length < 35 || text.endsWith(':'))) {
+        const boldEl = el.querySelector('strong, b')
+        const boldText = (boldEl.innerText || boldEl.textContent || '').trim()
+        if (boldText === text && (text.endsWith(':') || text.length < 35)) return true
+      }
       return false
     }
 
-    const base = contentEl.getBoundingClientRect().top
     // `limit` is the max distance from the content top a block may reach.
     const splitAt = (limit) => {
       let last = 0
